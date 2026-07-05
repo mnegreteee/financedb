@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
 /* ── THEMES ── */
 :root[data-theme="dark"]{
@@ -45,6 +47,12 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .nav-tab.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
 .nav-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .last-updated{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:4px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);}
+.sync-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;flex-shrink:0;}
+.sync-ok{background:var(--green);}
+.sync-saving{background:var(--amber);animation:pulse .8s infinite;}
+.sync-err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.sync-status{display:flex;align-items:center;font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px;}
 .eye-btn{width:34px;height:34px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s;flex-shrink:0;}
 .eye-btn:hover{background:var(--bg4);border-color:var(--border2);}
 .eye-btn.hidden-active{background:var(--amber-bg);border-color:var(--amber);}
@@ -338,6 +346,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
     <div class="last-updated" id="last-updated-wrap">
       <div class="last-updated-label">Última actualización</div>
       <div class="last-updated-val" id="last-updated-val">—</div>
+      <div class="sync-status"><span class="sync-dot sync-ok" id="sync-dot"></span><span id="sync-label">sincronizado</span></div>
     </div>
     <div class="config-wrap" id="config-wrap">
       <button class="config-btn" onclick="toggleConfig(event)">⚙ Config <span id="config-arrow">▾</span></button>
@@ -784,10 +793,51 @@ let historicoData=null;
 let editingBudgetCat=null;
 
 // ── PERSIST ──────────────────────────────────────────
+// ── FIREBASE ─────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyDxszRWIYlIPckVf3QM6E9u9seFw1evp3s",
+  authDomain: "financedb-3bcff.firebaseapp.com",
+  projectId: "financedb-3bcff",
+  storageBucket: "financedb-3bcff.firebasestorage.app",
+  messagingSenderId: "237237834861",
+  appId: "1:237237834861:web:a6bb3e59c4691127029b64"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const DOC_REF = db.collection('users').doc('mnegreteee');
+
+function setSyncStatus(status){
+  // status: 'saving' | 'ok' | 'error' | 'loading'
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-label');
+  if(!dot||!lbl)return;
+  dot.className='sync-dot';
+  if(status==='saving'){dot.classList.add('sync-saving');lbl.textContent='guardando...';}
+  else if(status==='ok'){dot.classList.add('sync-ok');lbl.textContent='sincronizado';}
+  else if(status==='error'){dot.classList.add('sync-err');lbl.textContent='error de red';}
+  else if(status==='loading'){dot.classList.add('sync-saving');lbl.textContent='cargando...';}
+}
+
+let saveTimer=null;
 function saveState(){
-  state.lastUpdated = new Date().toISOString();
+  state.lastUpdated=new Date().toISOString();
+  // Save to localStorage immediately as backup
   localStorage.setItem('mf_v5',JSON.stringify(state));
   updateLastUpdated();
+  // Debounce Firestore writes (wait 800ms after last change)
+  setSyncStatus('saving');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    // Split state into chunks to avoid Firestore 1MB doc limit
+    const{movimientos,...meta}=state;
+    DOC_REF.set({
+      meta: JSON.stringify(meta),
+      movimientos: JSON.stringify(movimientos),
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    })
+    .then(()=>setSyncStatus('ok'))
+    .catch(err=>{console.error('Firestore save error:',err);setSyncStatus('error');});
+  },800);
 }
 function updateLastUpdated(){
   const el = document.getElementById('last-updated-val');
@@ -801,11 +851,45 @@ function updateLastUpdated(){
 }
 function loadState(){
   ['mf_state_v2','mf_state_v3','mf_state_v4'].forEach(k=>localStorage.removeItem(k));
+  // Load from localStorage first for instant render
   const s=localStorage.getItem('mf_v5');
   if(s){try{const p=JSON.parse(s);state={...state,...p};}catch(e){}}
   const t=new Date();
   state.currentYear=t.getFullYear();state.currentMonth=t.getMonth();
   document.getElementById('f-date').value=t.toISOString().slice(0,10);
+  // Then load from Firestore (overrides localStorage if newer)
+  setSyncStatus('loading');
+  DOC_REF.get().then(doc=>{
+    if(doc.exists){
+      const data=doc.data();
+      try{
+        const meta=JSON.parse(data.meta||'{}');
+        const movimientos=JSON.parse(data.movimientos||'[]');
+        const remote={...meta,movimientos};
+        // Use remote if it's newer than local
+        const localTs=state.lastUpdated?new Date(state.lastUpdated):new Date(0);
+        const remoteTs=data.savedAt?data.savedAt.toDate():new Date(0);
+        if(remoteTs>localTs||!state.lastUpdated){
+          state={...state,...remote};
+          // Restore current month/year to today
+          const now=new Date();
+          state.currentYear=now.getFullYear();
+          state.currentMonth=now.getMonth();
+          localStorage.setItem('mf_v5',JSON.stringify(state));
+          render();
+          updateLastUpdated();
+        }
+        setSyncStatus('ok');
+      }catch(e){console.error('Parse error:',e);setSyncStatus('error');}
+    } else {
+      // No cloud data yet — first time, push local data
+      setSyncStatus('ok');
+      if(state.movimientos.length>0) saveState();
+    }
+  }).catch(err=>{
+    console.warn('Firestore offline, using local data:',err);
+    setSyncStatus('error');
+  });
 }
 
 // ── THEME ─────────────────────────────────────────────
@@ -1812,6 +1896,7 @@ document.addEventListener('click', e => {
 function deleteAllData(){
   if(!confirm('⚠️ ¿Estás seguro? Se eliminarán TODOS los movimientos, snapshots, servicios y presupuestos. Esta acción no se puede deshacer.')) return;
   localStorage.removeItem('mf_v5');
+  DOC_REF.delete().catch(()=>{});
   location.reload();
 }
 
