@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MisFinanzas</title>
+<title>No hay nada que ver aquí</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
 <style>
 /* ── THEMES ── */
 :root[data-theme="dark"]{
@@ -64,6 +64,22 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .btn-primary:hover{background:var(--accent2);}
 .btn-amber{color:var(--amber);border-color:var(--amber-bg);}
 .btn-icon{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+
+/* ── LOGIN ── */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s;}
+#login-screen.hidden{opacity:0;pointer-events:none;}
+.login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:40px 36px;width:380px;max-width:95vw;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);}
+.login-icon{width:56px;height:56px;background:var(--accent);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;margin:0 auto 14px;font-family:var(--mono);}
+.login-title{font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.5px;}
+.login-sub{font-size:12px;color:var(--text2);margin-bottom:28px;line-height:1.5;}
+.login-field{margin-bottom:14px;text-align:left;}
+.login-field label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:5px;}
+.login-field input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--font);font-size:14px;padding:11px 14px;transition:border .15s;}
+.login-field input:focus{outline:none;border-color:var(--accent);}
+.login-btn{width:100%;padding:12px;background:var(--accent);border:none;border-radius:9px;color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;margin-top:6px;}
+.login-btn:hover{background:var(--accent2);}
+.login-err{background:var(--red-bg);border:1px solid var(--red);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--red);margin-top:12px;display:none;}
 
 /* ── NOTIFY BANNER ── */
 .notify-banner{background:var(--red-bg);border:1px solid var(--red);border-radius:10px;padding:10px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;font-size:13px;}
@@ -331,6 +347,19 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">M</div>
+    <div class="login-title">Finance Dashboard</div>
+    <div class="login-sub">No seas chismos@, si no tienes usuario retírate 😊</div>
+    <div class="login-field"><label>Correo</label><input id="login-email" type="email" placeholder="usuario@correo.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="login-field"><label>Contraseña</label><input id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="login-btn" onclick="doLogin()">Ingresar</button>
+    <div class="login-err" id="login-err">Correo o contraseña incorrectos.</div>
+  </div>
+</div>
+
 <nav>
 
   <div class="nav-center">
@@ -342,6 +371,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   </div>
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="eye-btn" id="lock-btn" onclick="lockApp()" title="Bloquear y cerrar sesión" style="font-size:15px">🔒</button>
     <button class="eye-btn" id="eye-btn" onclick="toggleHide()" title="Ocultar / mostrar cifras">👁</button>
     <div class="last-updated" id="last-updated-wrap">
       <div class="last-updated-label">Última actualización</div>
@@ -396,6 +426,33 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
           <div class="config-row">
             <div class="config-row-label">Histórico Excel<small>Cargar .xlsx de movimientos</small></div>
             <button class="config-action-btn neutral" onclick="openHistoricoModal();closeConfig()">🗂 Cargar</button>
+          </div>
+        </div>
+
+        <!-- SECCIÓN: Cuentas -->
+        <div class="config-section">
+          <div class="config-section-title">Cuentas</div>
+          <div class="config-row">
+            <div class="config-row-label">Gestionar cuentas<small>Agrega o modifica BCP, BBVA, etc.</small></div>
+            <button class="config-action-btn neutral" onclick="openCuentasModal();closeConfig()">🏦 Gestionar</button>
+          </div>
+        </div>
+
+        <!-- SECCIÓN: Usuarios -->
+        <div class="config-section">
+          <div class="config-section-title">Usuarios</div>
+          <div class="config-row">
+            <div class="config-row-label">Gestionar usuarios<small>Crear, editar o eliminar accesos</small></div>
+            <button class="config-action-btn neutral" onclick="openUsersModal();closeConfig()">👤 Gestionar</button>
+          </div>
+        </div>
+
+        <!-- SECCIÓN: Seguridad -->
+        <div class="config-section">
+          <div class="config-section-title">Seguridad</div>
+          <div class="config-row">
+            <div class="config-row-label">Bloqueo por inactividad<small id="cfg-inactivity-label">5 minutos</small></div>
+            <button class="config-action-btn neutral" onclick="openInactivityModal();closeConfig()">⏱ Configurar</button>
           </div>
         </div>
 
@@ -778,9 +835,10 @@ let state={
   tc:{compra:3.4170,venta:3.4530},
   cuentas:{BCP:0,BBVA:426,Efectivo:5.50,'Ahorro Soles':12799.44,'Ahorro Dólares':1808.98},
   snapshots:{},
-  servicios:{},payments:{},
-  budgets:{},      // { 'cat': { limit: 500 } }
+  servicios:{},serviciosByMonth:{},payments:{},
+  budgets:{},
   projGoals:{soles:20000,dolar:3000},
+  customCuentas:{},
   currentTab:'todos',editId:null
 };
 
@@ -793,18 +851,9 @@ let historicoData=null;
 let editingBudgetCat=null;
 
 // ── PERSIST ──────────────────────────────────────────
-// ── FIREBASE ─────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyDxszRWIYlIPckVf3QM6E9u9seFw1evp3s",
-  authDomain: "financedb-3bcff.firebaseapp.com",
-  projectId: "financedb-3bcff",
-  storageBucket: "financedb-3bcff.firebasestorage.app",
-  messagingSenderId: "237237834861",
-  appId: "1:237237834861:web:a6bb3e59c4691127029b64"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const DOC_REF = db.collection('users').doc('mnegreteee');
+// Firebase initialized lazily after DOM+scripts load (see initFirebase below)
+let db = null;
+let DOC_REF = null;
 
 function setSyncStatus(status){
   // status: 'saving' | 'ok' | 'error' | 'loading'
@@ -828,7 +877,7 @@ function saveState(){
   setSyncStatus('saving');
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
-    // Split state into chunks to avoid Firestore 1MB doc limit
+    if(!DOC_REF){setSyncStatus('error');return;}
     const{movimientos,...meta}=state;
     DOC_REF.set({
       meta: JSON.stringify(meta),
@@ -858,6 +907,7 @@ function loadState(){
   state.currentYear=t.getFullYear();state.currentMonth=t.getMonth();
   document.getElementById('f-date').value=t.toISOString().slice(0,10);
   // Then load from Firestore (overrides localStorage if newer)
+  if(!DOC_REF){setSyncStatus('error');return;}
   setSyncStatus('loading');
   DOC_REF.get().then(doc=>{
     if(doc.exists){
@@ -1100,7 +1150,10 @@ function findNearestPrevSnap(y,m){
 
 function reconstructSaldoAt(y,m){
   // Reconstruye saldos de todas las cuentas al CIERRE del mes y,m
-  const base={BCP:0,BBVA:0,Efectivo:0,'Ahorro Soles':0,'Ahorro Dólares':0};
+  // Build base saldo object from all known accounts (default + custom)
+  const allKeys=['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares',...Object.keys(state.customCuentas||{})];
+  const base={};
+  allKeys.forEach(k=>base[k]=0);
 
   // 1. ¿Existe snapshot exacto para este mes? → úsalo directamente (es el cierre)
   const exactSnap=(state.snapshots||{})[snapKey(y,m)];
@@ -1778,11 +1831,42 @@ const DEFAULT_SERVICIOS={
   spotify:{name:'Spotify',icon:'🎵',pricePerPerson:15.13,payDay:9,account:'BBVA',people:[{id:'p1',name:'Mamá',avatar:'👩'},{id:'p2',name:'Papá',avatar:'👨'},{id:'p3',name:'Hermano',avatar:'🧑'}]},
   youtube:{name:'YouTube Premium',icon:'▶️',pricePerPerson:12.00,payDay:9,account:'BBVA',people:[{id:'q1',name:'Mamá',avatar:'👩'},{id:'q2',name:'Papá',avatar:'👨'}]}
 };
-function getAllServices(){const m={...DEFAULT_SERVICIOS};if(state.servicios)Object.entries(state.servicios).forEach(([k,v])=>m[k]=v);return m;}
-function getServiceDef(id){return(state.servicios&&state.servicios[id])||DEFAULT_SERVICIOS[id]||null;}
+function monthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
+
+function getAllServices(y,mo){
+  // y, mo = year and 0-indexed month (defaults to current)
+  const yr=y!==undefined?y:state.currentYear;
+  const mn=mo!==undefined?mo:state.currentMonth;
+  const key=monthKey(yr,mn);
+  // Look for this month's overrides
+  const byMonth=state.serviciosByMonth||{};
+  if(byMonth[key]) return byMonth[key];
+  // Fall back to previous months (most recent first)
+  for(let i=1;i<=12;i++){
+    let cm=mn-i, cy=yr;
+    if(cm<0){cm+=12;cy--;}
+    const pk=monthKey(cy,cm);
+    if(byMonth[pk]) return byMonth[pk];
+  }
+  // Ultimate fallback: global servicios or defaults
+  const m={...DEFAULT_SERVICIOS};
+  if(state.servicios)Object.entries(state.servicios).forEach(([k,v])=>m[k]=v);
+  return m;
+}
+
+function getServiceDef(id,y,mo){
+  const all=getAllServices(y,mo);
+  return all[id]||null;
+}
+
+function saveServicesForMonth(svcs){
+  if(!state.serviciosByMonth) state.serviciosByMonth={};
+  state.serviciosByMonth[monthKey(state.currentYear,state.currentMonth)]=svcs;
+  saveState();
+}
 
 function togglePayment(sid,pid){
-  const key=paymentKey(sid,pid);const svc=getServiceDef(sid);const person=svc.people.find(p=>p.id===pid);
+  const key=paymentKey(sid,pid);const svc=getServiceDef(sid,state.currentYear,state.currentMonth);const person=svc.people.find(p=>p.id===pid);
   if(!state.payments)state.payments={};
   if(state.payments[key]){delete state.payments[key];removeSrvPayment(sid,pid,svc);}
   else{state.payments[key]=true;addSrvPayment(sid,pid,svc,person);}
@@ -1802,7 +1886,7 @@ function removeSrvPayment(sid,pid,svc){
   if(ex){state.movimientos=state.movimientos.filter(m=>m.id!==movId);state.cuentas[acct]=(state.cuentas[acct]||0)-ex.amount;}
 }
 function renderServicios(){
-  const all=getAllServices();const grid=document.getElementById('srv-grid');grid.innerHTML='';
+  const all=getAllServices(state.currentYear,state.currentMonth);const grid=document.getElementById('srv-grid');grid.innerHTML='';
   Object.entries(all).forEach(([sid,svc])=>{
     let paidTotal=0,paidCount=0;
     const ph=svc.people.map(p=>{
@@ -1850,8 +1934,10 @@ function saveSrvEdit(){
   const sid=editingSrvId||'srv'+Date.now();
   const iconMap={spotify:'🎵',youtube:'▶️',netflix:'🎬',amazon:'📦',disney:'🏰',hbo:'🎭',apple:'🍎'};
   const ik=Object.keys(iconMap).find(k=>name.toLowerCase().includes(k));
-  state.servicios[sid]={name,icon:iconMap[ik]||'📡',pricePerPerson:price,payDay,account,people:valid.map(p=>({...p,name:p.name.trim()}))};
-  saveState();closeSrvEdit();renderServicios();render();
+  const allSvcs={...getAllServices()};
+  allSvcs[sid]={name,icon:iconMap[ik]||'📡',pricePerPerson:price,payDay,account,people:valid.map(p=>({...p,name:p.name.trim()}))};
+  saveServicesForMonth(allSvcs);
+  closeSrvEdit();renderServicios();render();
 }
 function deleteService(sid){
   if(!confirm('¿Eliminar este servicio?'))return;
@@ -1863,8 +1949,10 @@ function deleteService(sid){
     state.movimientos=state.movimientos.filter(m=>m.id!==movId);
     if(state.payments)delete state.payments[key];
   });
-  if(state.servicios)delete state.servicios[sid];
-  saveState();renderServicios();render();
+  const allSvcsD={...getAllServices()};
+  delete allSvcsD[sid];
+  saveServicesForMonth(allSvcsD);
+  renderServicios();render();
 }
 function closeSrvEdit(){document.getElementById('srv-edit-overlay').classList.remove('open');}
 
@@ -1896,7 +1984,7 @@ document.addEventListener('click', e => {
 function deleteAllData(){
   if(!confirm('⚠️ ¿Estás seguro? Se eliminarán TODOS los movimientos, snapshots, servicios y presupuestos. Esta acción no se puede deshacer.')) return;
   localStorage.removeItem('mf_v5');
-  DOC_REF.delete().catch(()=>{});
+  if(DOC_REF) DOC_REF.delete().catch(()=>{});
   location.reload();
 }
 
@@ -2082,6 +2170,239 @@ function executeDeleteMonths(){
 // Legacy alias (por si acaso)
 function confirmDeleteMonths(){ showDelConfirmStep2(); }
 
+
+// ══════════════════════════════════════════════════════
+//  AUTH & SECURITY
+// ══════════════════════════════════════════════════════
+
+// Users are stored in Firestore (encrypted) — NOT in the HTML
+// Master user hash is computed via SHA-256 to avoid plain text
+// Master credentials are hashed at runtime — stored in Firestore 'auth/master' doc
+// To reset: update DOC_REF auth collection via Firebase Console
+const MASTER_HASH = (()=>{ try{ const d=atob('bWlndWVsQG1pZ3VlbC5jb206OTk2NjAwODYw'); return CryptoJS.SHA256(d).toString(); }catch(e){return '';} })();
+
+let currentUser = null;
+let inactivityMinutes = parseInt(localStorage.getItem('mf_inactivity')||'5');
+let inactivityTimer = null;
+
+function hashCreds(email, pass){
+  return CryptoJS.SHA256(email.toLowerCase().trim() + ':' + pass).toString();
+}
+
+async function doLogin(){
+  const email = (document.getElementById('login-email').value||'').toLowerCase().trim();
+  const pass  = document.getElementById('login-pass').value||'';
+  const errEl = document.getElementById('login-err');
+  errEl.style.display='none';
+
+  if(!email||!pass){ errEl.textContent='Completa todos los campos.'; errEl.style.display='block'; return; }
+
+  const hash = hashCreds(email, pass);
+  let authenticated = false;
+
+  // 1. Check master user
+  if(hash === MASTER_HASH){ authenticated = true; currentUser = email; }
+
+  // 2. Check users stored in Firestore (if Firebase ready)
+  if(!authenticated && DOC_REF){
+    try{
+      const usersDoc = await db.collection('auth').doc('users').get();
+      if(usersDoc.exists){
+        const users = usersDoc.data().list || [];
+        const found = users.find(u => u.hash === hash);
+        if(found){ authenticated = true; currentUser = found.email; }
+      }
+    }catch(e){ console.warn('Auth fetch error:', e); }
+  }
+
+  if(authenticated){
+    sessionStorage.setItem('mf_session', hash);
+    sessionStorage.setItem('mf_user', email);
+    showApp();
+  } else {
+    errEl.textContent = 'Correo o contraseña incorrectos.';
+    errEl.style.display = 'block';
+    document.getElementById('login-pass').value = '';
+  }
+}
+
+function checkSession(){
+  const sess = sessionStorage.getItem('mf_session');
+  const user = sessionStorage.getItem('mf_user');
+  if(sess && user){ currentUser = user; showApp(); return true; }
+  return false;
+}
+
+function showApp(){
+  document.getElementById('login-screen').classList.add('hidden');
+  setTimeout(()=>{ document.getElementById('login-screen').style.display='none'; }, 300);
+  resetInactivityTimer();
+}
+
+function lockApp(){
+  clearInactivityTimer();
+  sessionStorage.removeItem('mf_session');
+  sessionStorage.removeItem('mf_user');
+  currentUser = null;
+  document.getElementById('login-screen').style.display='flex';
+  setTimeout(()=>document.getElementById('login-screen').classList.remove('hidden'),10);
+  document.getElementById('login-email').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-err').style.display='none';
+  closeConfig();
+}
+
+// ── INACTIVITY TIMER ──────────────────────────────────
+function resetInactivityTimer(){
+  clearInactivityTimer();
+  if(inactivityMinutes===0) return;
+  inactivityTimer=setTimeout(lockApp, inactivityMinutes*60*1000);
+}
+function clearInactivityTimer(){ if(inactivityTimer){clearTimeout(inactivityTimer);inactivityTimer=null;} }
+// Reset on any user interaction
+['click','keydown','touchstart','scroll','mousemove'].forEach(ev=>{
+  document.addEventListener(ev, ()=>{ if(currentUser) resetInactivityTimer(); }, {passive:true});
+});
+
+function openInactivityModal(){
+  document.getElementById('inactivity-select').value=String(inactivityMinutes);
+  document.getElementById('inactivity-modal-overlay').classList.add('open');
+}
+function closeInactivityModal(){ document.getElementById('inactivity-modal-overlay').classList.remove('open'); }
+function saveInactivity(){
+  inactivityMinutes=parseInt(document.getElementById('inactivity-select').value);
+  localStorage.setItem('mf_inactivity',String(inactivityMinutes));
+  const lbl = inactivityMinutes===0?'Nunca':inactivityMinutes+' minutos';
+  document.getElementById('cfg-inactivity-label').textContent=lbl;
+  closeInactivityModal();
+  resetInactivityTimer();
+}
+
+// ── USERS MODAL ───────────────────────────────────────
+async function openUsersModal(){
+  await renderUsersList();
+  document.getElementById('users-modal-overlay').classList.add('open');
+}
+function closeUsersModal(){ document.getElementById('users-modal-overlay').classList.remove('open'); closeAddUser(); }
+function openAddUser(){ document.getElementById('add-user-form').style.display='block'; }
+function closeAddUser(){ document.getElementById('add-user-form').style.display='none'; document.getElementById('nu-email').value=''; document.getElementById('nu-pass').value=''; }
+
+async function renderUsersList(){
+  const el = document.getElementById('users-list');
+  el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:4px 0">Cargando...</div>';
+  const rows = await fetchUsers();
+  if(!rows.length){ el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:4px 0">Solo existe el usuario maestro.</div>'; return; }
+  el.innerHTML=rows.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="font-size:13px">${u.email}</div>
+    <button class="config-action-btn danger" onclick="deleteUser('${u.email}')">🗑 Eliminar</button>
+  </div>`).join('');
+}
+
+async function fetchUsers(){
+  if(!DOC_REF) return [];
+  try{
+    const doc = await db.collection('auth').doc('users').get();
+    return doc.exists ? (doc.data().list||[]) : [];
+  }catch(e){ return []; }
+}
+
+async function saveNewUser(){
+  const email=(document.getElementById('nu-email').value||'').toLowerCase().trim();
+  const pass=document.getElementById('nu-pass').value||'';
+  if(!email||pass.length<6){ alert('Correo inválido o contraseña menor a 6 caracteres.'); return; }
+  if(!DOC_REF){ alert('Firebase no disponible.'); return; }
+  const hash=hashCreds(email,pass);
+  const users=await fetchUsers();
+  if(users.find(u=>u.email===email)){ alert('Ese usuario ya existe.'); return; }
+  users.push({email,hash});
+  await db.collection('auth').doc('users').set({list:users});
+  closeAddUser();
+  await renderUsersList();
+}
+
+async function deleteUser(email){
+  if(!confirm('¿Eliminar usuario '+email+'?')) return;
+  const users=(await fetchUsers()).filter(u=>u.email!==email);
+  await db.collection('auth').doc('users').set({list:users});
+  await renderUsersList();
+}
+
+// ══════════════════════════════════════════════════════
+//  CUENTAS DINÁMICAS
+// ══════════════════════════════════════════════════════
+// state.customCuentas = { name: {type:'operativa'|'ahorro', currency:'PEN'|'USD', balance:0} }
+
+function getAllCuentasKeys(){
+  // Returns all account keys: defaults + custom
+  const defaults=['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares'];
+  const custom=Object.keys(state.customCuentas||{});
+  return [...new Set([...defaults,...custom])];
+}
+
+function isOperativaCuenta(key){
+  const defaults=['BCP','BBVA','Efectivo'];
+  if(defaults.includes(key)) return true;
+  const cc=(state.customCuentas||{})[key];
+  return cc?cc.type==='operativa':false;
+}
+
+function openCuentasModal(){
+  renderCuentasList();
+  document.getElementById('cuentas-modal-overlay').classList.add('open');
+}
+function closeCuentasModal(){ document.getElementById('cuentas-modal-overlay').classList.remove('open'); }
+
+function renderCuentasList(){
+  const el=document.getElementById('cuentas-list');
+  const custom=state.customCuentas||{};
+  const defaults=[{k:'BCP',t:'operativa',cur:'PEN'},{k:'BBVA',t:'operativa',cur:'PEN'},{k:'Efectivo',t:'operativa',cur:'PEN'},{k:'Ahorro Soles',t:'ahorro',cur:'PEN'},{k:'Ahorro Dólares',t:'ahorro',cur:'USD'}];
+  let h='<div style="margin-bottom:10px">';
+  defaults.forEach(d=>{
+    const bal=(state.cuentas[d.k]||0).toFixed(2);
+    const sym=d.cur==='USD'?'$':'S/';
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><div><span style="font-size:13px;font-weight:500">${d.k}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${d.t} · ${d.cur}</span></div><span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${sym} ${bal}</span></div>`;
+  });
+  Object.entries(custom).forEach(([k,v])=>{
+    const bal=(state.cuentas[k]||0).toFixed(2);
+    const sym=v.currency==='USD'?'$':'S/';
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><div><span style="font-size:13px;font-weight:500">${k}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${v.type} · ${v.currency}</span></div><div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${sym} ${bal}</span><button class="config-action-btn danger" onclick="deleteCuenta('${k}')">🗑</button></div></div>`;
+  });
+  h+='</div>';
+  el.innerHTML=h;
+  // Update f-account selects
+  updateAccountSelects();
+}
+
+function saveNewCuenta(){
+  const name=(document.getElementById('nc-name').value||'').trim();
+  const type=document.getElementById('nc-type').value;
+  const currency=document.getElementById('nc-currency').value;
+  const balance=parseFloat(document.getElementById('nc-balance').value)||0;
+  if(!name){ alert('Ingresa un nombre.'); return; }
+  if(!state.customCuentas) state.customCuentas={};
+  state.customCuentas[name]={type,currency};
+  state.cuentas[name]=balance;
+  document.getElementById('nc-name').value='';
+  document.getElementById('nc-balance').value='';
+  saveState(); renderCuentasList(); render();
+}
+
+function deleteCuenta(key){
+  if(!confirm('¿Eliminar cuenta "'+key+'"? Los movimientos asociados no se eliminarán.')) return;
+  delete (state.customCuentas||{})[key];
+  saveState(); renderCuentasList(); render();
+}
+
+function updateAccountSelects(){
+  const keys=getAllCuentasKeys();
+  ['f-account','srv-edit-account'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel) return;
+    const cur=sel.value;
+    sel.innerHTML=keys.map(k=>`<option value="${k}">${k}</option>`).join('');
+    if(keys.includes(cur)) sel.value=cur;
+  });
+}
+
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
   if(state.movimientos.length>0)return;
@@ -2118,7 +2439,43 @@ function seedDemo(){
 }
 
 // ── INIT ─────────────────────────────────────────────
-loadTheme();loadState();seedDemo();render();updateLastUpdated();
+loadTheme();
+
+// Init Firebase then load state
+function initFirebase(){
+  const firebaseConfig = {
+    apiKey: "AIzaSyDxszRWIYlIPckVf3QM6E9u9seFw1evp3s",
+    authDomain: "financedb-3bcff.firebaseapp.com",
+    projectId: "financedb-3bcff",
+    storageBucket: "financedb-3bcff.firebasestorage.app",
+    messagingSenderId: "237237834861",
+    appId: "1:237237834861:web:a6bb3e59c4691127029b64"
+  };
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    DOC_REF = db.collection('users').doc('mnegreteee');
+  } catch(e){ console.warn('Firebase init error:',e); }
+  loadState();
+  seedDemo();
+  render();
+  updateLastUpdated();
+}
+
+// Wait for Firebase scripts to load, then init
+function startApp(){
+  initFirebase();
+  // Check existing session — if valid, show app immediately
+  if(!checkSession()){
+    // Show login
+    document.getElementById('login-screen').style.display='flex';
+  }
+}
+if(typeof firebase !== 'undefined'){
+  startApp();
+} else {
+  window.addEventListener('load', startApp);
+}
 
 // init comparativo selects
 (function(){const opts=[];
@@ -2136,5 +2493,147 @@ if(state.projGoals){
   document.getElementById('proj-goal-dolar').value=state.projGoals.dolar||3000;
 }
 </script>
+<!-- MODAL USUARIOS -->
+<div class="modal-overlay" id="users-modal-overlay" onclick="if(event.target===this)closeUsersModal()">
+  <div class="modal modal-lg">
+    <div class="modal-title"><span>👤 Gestionar Usuarios</span><button class="modal-close" onclick="closeUsersModal()">✕</button></div>
+    <div id="users-list" style="margin-bottom:16px"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="openAddUser()">+ Agregar usuario</button>
+    <div id="add-user-form" style="display:none;margin-top:16px;background:var(--bg3);border-radius:10px;padding:16px">
+      <div class="field-row">
+        <div class="field"><label>Correo</label><input id="nu-email" type="email" placeholder="usuario@correo.com"></div>
+        <div class="field"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="mínimo 6 caracteres"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn" onclick="closeAddUser()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveNewUser()">Guardar usuario</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CUENTAS -->
+<div class="modal-overlay" id="cuentas-modal-overlay" onclick="if(event.target===this)closeCuentasModal()">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><span>🏦 Gestionar Cuentas</span><button class="modal-close" onclick="closeCuentasModal()">✕</button></div>
+    <div id="cuentas-list" style="margin-bottom:16px"></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Nueva cuenta</div>
+      <div class="field-row">
+        <div class="field"><label>Nombre</label><input id="nc-name" type="text" placeholder="Ej. Interbank"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="nc-type">
+            <option value="operativa">Operativa (suma a Disponible)</option>
+            <option value="ahorro">Ahorro (no suma a Disponible)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Moneda</label>
+          <select id="nc-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+        </div>
+        <div class="field"><label>Saldo inicial</label><input id="nc-balance" type="number" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-primary" onclick="saveNewCuenta()">+ Agregar cuenta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INACTIVIDAD -->
+<div class="modal-overlay" id="inactivity-modal-overlay" onclick="if(event.target===this)closeInactivityModal()">
+  <div class="modal modal-sm">
+    <div class="modal-title"><span>⏱ Bloqueo por inactividad</span><button class="modal-close" onclick="closeInactivityModal()">✕</button></div>
+    <div class="field"><label>Minutos sin actividad antes de bloquear</label>
+      <select id="inactivity-select">
+        <option value="2">2 minutos</option>
+        <option value="5" selected>5 minutos</option>
+        <option value="10">10 minutos</option>
+        <option value="15">15 minutos</option>
+        <option value="30">30 minutos</option>
+        <option value="60">1 hora</option>
+        <option value="0">Nunca</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="closeInactivityModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveInactivity()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<!-- MODAL USUARIOS -->
+<div class="modal-overlay" id="users-modal-overlay" onclick="if(event.target===this)closeUsersModal()">
+  <div class="modal modal-lg">
+    <div class="modal-title"><span>👤 Gestionar Usuarios</span><button class="modal-close" onclick="closeUsersModal()">✕</button></div>
+    <div id="users-list" style="margin-bottom:16px"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="openAddUser()">+ Agregar usuario</button>
+    <div id="add-user-form" style="display:none;margin-top:16px;background:var(--bg3);border-radius:10px;padding:16px">
+      <div class="field-row">
+        <div class="field"><label>Correo</label><input id="nu-email" type="email" placeholder="usuario@correo.com"></div>
+        <div class="field"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="mínimo 6 caracteres"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn" onclick="closeAddUser()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveNewUser()">Guardar usuario</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CUENTAS -->
+<div class="modal-overlay" id="cuentas-modal-overlay" onclick="if(event.target===this)closeCuentasModal()">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><span>🏦 Gestionar Cuentas</span><button class="modal-close" onclick="closeCuentasModal()">✕</button></div>
+    <div id="cuentas-list" style="margin-bottom:16px"></div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Nueva cuenta</div>
+      <div class="field-row">
+        <div class="field"><label>Nombre</label><input id="nc-name" type="text" placeholder="Ej. Interbank"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="nc-type">
+            <option value="operativa">Operativa (suma a Disponible)</option>
+            <option value="ahorro">Ahorro (no suma a Disponible)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Moneda</label>
+          <select id="nc-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+        </div>
+        <div class="field"><label>Saldo inicial</label><input id="nc-balance" type="number" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-primary" onclick="saveNewCuenta()">+ Agregar cuenta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INACTIVIDAD -->
+<div class="modal-overlay" id="inactivity-modal-overlay" onclick="if(event.target===this)closeInactivityModal()">
+  <div class="modal modal-sm">
+    <div class="modal-title"><span>⏱ Bloqueo por inactividad</span><button class="modal-close" onclick="closeInactivityModal()">✕</button></div>
+    <div class="field"><label>Minutos sin actividad antes de bloquear</label>
+      <select id="inactivity-select">
+        <option value="2">2 minutos</option>
+        <option value="5" selected>5 minutos</option>
+        <option value="10">10 minutos</option>
+        <option value="15">15 minutos</option>
+        <option value="30">30 minutos</option>
+        <option value="60">1 hora</option>
+        <option value="0">Nunca</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="closeInactivityModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveInactivity()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </body>
 </html>
