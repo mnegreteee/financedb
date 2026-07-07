@@ -1357,16 +1357,20 @@ function reconstructSaldoAt(y,m){
   // 1. Snapshot exacto para este mes
   const exactSnap=(state.snapshots||{})[snapKey(y,m)];
   if(exactSnap){
-    Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
-    // If snapshot is marked as "end_of_month" (from cerrarMes), it already includes the month's movs
-    // If it came from the Excel parser (start-of-month baseline), apply this month's movs on top
-    if(!exactSnap._endOfMonth){
-      const thisMonthMovs=state.movimientos.filter(mv=>{
-        const d=new Date(mv.date+'T12:00:00');
-        return d.getFullYear()===y&&d.getMonth()===m;
-      });
-      applyMovsToSaldo(base,thisMonthMovs);
+    if(exactSnap._endOfMonth){
+      // Full end-of-month snapshot (from cerrarMes) — use directly, no movs needed
+      Object.keys(exactSnap).forEach(k=>{if(k!=='_endOfMonth')base[k]=exactSnap[k];});
+      return base;
     }
+    // Partial or Excel-parser snapshot:
+    // Only set the accounts that ARE in the snapshot; others start from 0
+    // Then apply ALL movimientos for this month on top
+    Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
+    const thisMonthMovs=state.movimientos.filter(mv=>{
+      const d=new Date(mv.date+'T12:00:00');
+      return d.getFullYear()===y&&d.getMonth()===m;
+    });
+    applyMovsToSaldo(base,thisMonthMovs);
     return base;
   }
 
@@ -2272,8 +2276,15 @@ document.addEventListener('click', e => {
 // ── BORRAR DATOS ──────────────────────────────────────
 function deleteAllData(){
   if(!confirm('⚠️ ¿Estás seguro? Se eliminarán TODOS los movimientos, snapshots, servicios y presupuestos. Esta acción no se puede deshacer.')) return;
-  localStorage.removeItem('mf_v5');
-  if(DOC_REF) DOC_REF.delete().catch(()=>{});
+  // Clear localStorage completely (all versions)
+  ['mf_v5','mf_state_v2','mf_state_v3','mf_state_v4','mf_theme','mf_inactivity'].forEach(k=>localStorage.removeItem(k));
+  // Set a flag so seedDemo doesn't run after reload
+  localStorage.setItem('mf_cleared','1');
+  // Clear Firestore
+  if(DOC_REF){
+    DOC_REF.delete().catch(()=>{});
+    db.collection('auth').doc('users').delete().catch(()=>{});
+  }
   location.reload();
 }
 
@@ -2759,12 +2770,20 @@ function saveNewCuenta(){
   if(!name){alert('Ingresa un nombre.');return;}
   if(!state.customCuentas) state.customCuentas={};
   state.customCuentas[name]={type,currency,startYear:year,startMonth:month};
+  // Set current balance in state.cuentas
   state.cuentas[name]=balance;
-  // If the start month is not current, also add a snapshot entry for that month
-  const curKey=snapKey(year,month);
+  // Add this account's initial balance ONLY to the snapshot of the selected start month
+  // WITHOUT touching any other account values in that snapshot
   if(!state.snapshots) state.snapshots={};
-  if(!state.snapshots[curKey]) state.snapshots[curKey]={BCP:0,BBVA:0,Efectivo:0,'Ahorro Soles':0,'Ahorro Dólares':0};
-  state.snapshots[curKey][name]=balance;
+  const startKey=snapKey(year,month);
+  if(!state.snapshots[startKey]){
+    // Create a minimal snapshot with only this new account — other accounts will be
+    // reconstructed from their own movimientos when needed
+    state.snapshots[startKey]={[name]:balance};
+  } else {
+    // Snapshot already exists — just add/update this account's entry
+    state.snapshots[startKey][name]=balance;
+  }
   document.getElementById('nc-name').value='';
   document.getElementById('nc-balance').value='';
   saveState(); renderCuentasList(); render();
@@ -3230,6 +3249,11 @@ function renderTCGlobal(){
 
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
+  // Don't seed if user explicitly cleared all data
+  if(localStorage.getItem('mf_cleared')==='1'){
+    localStorage.removeItem('mf_cleared');
+    return;
+  }
   if(state.movimientos.length>0)return;
   state.movimientos=[
     {id:'m01',type:'expense',desc:'Café',amount:2.20,account:'BBVA',date:'2026-05-10',currency:'PEN',cat:'🍔 Comida'},
