@@ -1358,19 +1358,39 @@ function reconstructSaldoAt(y,m){
   const exactSnap=(state.snapshots||{})[snapKey(y,m)];
   if(exactSnap){
     if(exactSnap._endOfMonth){
-      // Full end-of-month snapshot (from cerrarMes) — use directly, no movs needed
+      // Full end-of-month snapshot (cerrarMes) — use directly
       Object.keys(exactSnap).forEach(k=>{if(k!=='_endOfMonth')base[k]=exactSnap[k];});
       return base;
     }
-    // Partial or Excel-parser snapshot:
-    // Only set the accounts that ARE in the snapshot; others start from 0
-    // Then apply ALL movimientos for this month on top
-    Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
-    const thisMonthMovs=state.movimientos.filter(mv=>{
-      const d=new Date(mv.date+'T12:00:00');
-      return d.getFullYear()===y&&d.getMonth()===m;
-    });
-    applyMovsToSaldo(base,thisMonthMovs);
+    // Partial snapshot (e.g. new account added, or Excel parser start-of-month):
+    // For accounts NOT in this snapshot, fall back to the nearest previous snapshot
+    // then accumulate movimientos from there forward.
+    const nearest2=findNearestPrevSnap(y,m-1);
+    if(nearest2){
+      // Start from previous snapshot for all accounts
+      Object.keys(base).forEach(k=>{if(nearest2.snap[k]!==undefined)base[k]=nearest2.snap[k];});
+      // Then override with any values explicitly set in the partial snapshot
+      Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
+      // Apply all movimientos from after the prev snapshot up to end of this month
+      const snapNextY=nearest2.month===11?nearest2.year+1:nearest2.year;
+      const snapNextM=nearest2.month===11?0:nearest2.month+1;
+      const cutoff=new Date(y,m+1,0,23,59,59);
+      const fromDate=new Date(snapNextY,snapNextM,1,0,0,0);
+      const relevantMovs=state.movimientos.filter(mv=>{
+        const d=new Date(mv.date+'T12:00:00');
+        return d>=fromDate&&d<=cutoff;
+      });
+      applyMovsToSaldo(base,relevantMovs);
+    } else {
+      // No previous snapshot — apply partial snap values then all movs up to this month
+      Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
+      const cutoff=new Date(y,m+1,0,23,59,59);
+      const relevantMovs=state.movimientos.filter(mv=>{
+        const d=new Date(mv.date+'T12:00:00');
+        return d<=cutoff;
+      });
+      applyMovsToSaldo(base,relevantMovs);
+    }
     return base;
   }
 
