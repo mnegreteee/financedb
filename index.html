@@ -2968,15 +2968,31 @@ function closeTCDetail(){
 }
 
 function renderTCMonthSelector(t){
-  // Show last 6 months + next 2
   const sel=document.getElementById('tc-month-sel');
   const now=new Date();
-  const months=[];
-  for(let i=-5;i<=2;i++){
+
+  // Collect months that have actual data for this tarjeta
+  const dataMonths=new Set(Object.keys(t.movs||{}));
+
+  // Always show: months with data + a rolling window of current-2 to current+2
+  const windowMonths=new Set();
+  for(let i=-2;i<=2;i++){
     let m=now.getMonth()+i, y=now.getFullYear();
     while(m<0){m+=12;y--;} while(m>11){m-=12;y++;}
-    months.push({key:tcMonthKey(y,m),label:tcMesesLong()[m].slice(0,3)+' '+String(y).slice(2)});
+    windowMonths.add(tcMonthKey(y,m));
   }
+
+  // Also include currentTCMonth even if it has no data yet
+  if(currentTCMonth) windowMonths.add(currentTCMonth);
+
+  // Merge and sort all months to show
+  const allKeys=[...new Set([...dataMonths,...windowMonths])].sort();
+
+  const months=allKeys.map(key=>{
+    const[yr,mo]=key.split('-');
+    return{key,label:tcMesesLong()[parseInt(mo)-1].slice(0,3)+' '+String(yr).slice(2)};
+  });
+
   sel.innerHTML=months.map(mo=>`<button class="tc-month-btn ${mo.key===currentTCMonth?'active':''}" onclick="switchTCMonth('${mo.key}')">${mo.label}</button>`).join('');
 }
 
@@ -3019,7 +3035,7 @@ function renderTCDetail(){
     <td>${m.desc}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${m.fecha}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
-    <td style="text-align:right;font-family:var(--mono)">${M(fmtTCD(m.monto))}</td>
+    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(fmtTCD(Math.abs(m.monto)))}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
       <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
@@ -3160,7 +3176,7 @@ function saveTCMov(){
   const fecha=document.getElementById('tc-m-fecha').value;
   const monto=parseFloat(document.getElementById('tc-m-monto').value)||0;
   const pagado=document.getElementById('tc-m-pagado').value==='si';
-  if(!desc||!fecha||monto<=0){alert('Completa todos los campos.');return;}
+  if(!desc||!fecha||monto===0){alert('Completa todos los campos. El monto puede ser negativo para devoluciones.');return;}
   const t=getTarjeta(currentTCId); if(!t) return;
   if(!t.movs) t.movs={};
 
@@ -3453,7 +3469,7 @@ function parseTCExcel(wb){
     const estado = (row['ESTADO']||row['Estado']||row['estado']||'Pendiente').toString().trim();
     const banco  = (row['Banco'] ||row['BANCO']  ||row['banco']  ||'').toString().trim();
 
-    if(!desc || !banco || monto === 0) return;
+    if(!desc || !banco || isNaN(monto) || monto === 0) return;
     const fecha = parseDate(rawDate, rawDateR);
     if(!fecha) return;
 
@@ -3895,7 +3911,7 @@ if(state.projGoals){
     <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..."></div>
     <div class="field-row">
       <div class="field"><label>Fecha</label><input id="tc-m-fecha" type="date"></div>
-      <div class="field"><label>Monto (S/)</label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Monto (S/) <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
     </div>
     <div class="field"><label>Estado</label>
       <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
@@ -4071,7 +4087,7 @@ if(state.projGoals){
     <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..."></div>
     <div class="field-row">
       <div class="field"><label>Fecha</label><input id="tc-m-fecha" type="date"></div>
-      <div class="field"><label>Monto (S/)</label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Monto (S/) <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
     </div>
     <div class="field"><label>Estado</label>
       <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
