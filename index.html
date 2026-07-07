@@ -2907,16 +2907,30 @@ function renderTarjetas(){
 }
 
 function buildTCCard(t){
-  const {label}=calcTCMes(t);
-  const movs=getAllTCMovs(t.id);
-  const deudaTotal=movs.reduce((s,m)=>s+m.monto,0);
-  const pagado=movs.filter(m=>m.pagado).reduce((s,m)=>s+m.monto,0);
-  const pendiente=deudaTotal-pagado;
-  const linea=parseFloat(t.linea)||0;
-  const usadoPct=linea>0?Math.min(100,(deudaTotal/linea)*100):0;
-  const col=t.color||'#5b8def';
-  const sym=t.currency==='USD'?'$':'S/';
-  const fmtTC=v=>sym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const {label, pagoMes, pagoAnio} = calcTCMes(t);
+  const allMovs = getAllTCMovs(t.id);
+  const linea   = parseFloat(t.linea) || 0;
+  const col     = t.color || '#5b8def';
+  const sym     = t.currency === 'USD' ? '$' : 'S/';
+  const fmtTC   = v => sym + ' ' + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  // 1. DEUDA TOTAL = suma de todos los montos NO pagados de todos los meses
+  const deudaTotal = allMovs
+    .filter(m => !m.pagado)
+    .reduce((s, m) => s + m.monto, 0);
+
+  // 2. PENDIENTE = deuda del mes de pago actual (el período que se está facturando ahora)
+  //    = monthKey correspondiente al próximo pago según calcTCMes
+  const pendienteMk = tcMonthKey(pagoAnio, pagoMes);
+  const movsDelPeriodo = (t.movs && t.movs[pendienteMk]) || [];
+  const pendiente = movsDelPeriodo
+    .filter(m => !m.pagado)
+    .reduce((s, m) => s + m.monto, 0);
+
+  // 3. % de uso = deuda total / línea de crédito
+  const usadoPct = linea > 0 ? Math.min(100, (deudaTotal / linea) * 100) : 0;
+  const barColor = usadoPct >= 90 ? 'var(--red)' : usadoPct >= 70 ? 'var(--amber)' : col;
+
   return `<div class="tc-card-item" id="tc-card-${t.id}" onclick="openTCDetail('${t.id}')" style="--tc-color:${col}">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col};border-radius:var(--radius) var(--radius) 0 0"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
@@ -2932,11 +2946,11 @@ function buildTCCard(t){
       <div class="tc-info-cell"><div class="tc-info-cell-label">Cierre</div><div class="tc-info-cell-val">día ${t.cierre||'—'}</div></div>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:10px;margin-bottom:4px">
-      <span style="color:var(--text2)">Deuda: <strong style="color:var(--red)">${M(tcFmtS(deudaTotal))}</strong></span>
-      <span style="color:var(--text2)">Pendiente: <strong style="color:var(--amber)">${M(tcFmtS(pendiente))}</strong></span>
+      <span style="color:var(--text2)">Deuda total: <strong style="color:var(--red)">${M(fmtTC(deudaTotal))}</strong></span>
+      <span style="color:var(--text2)">A pagar ${label}: <strong style="color:var(--amber)">${M(fmtTC(pendiente))}</strong></span>
     </div>
-    <div class="tc-line-bar"><div class="tc-line-bar-fill" style="width:${usadoPct}%;background:${col}"></div></div>
-    <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea: ${M(tcFmtS(linea))} — ${usadoPct.toFixed(0)}% usado</div>
+    <div class="tc-line-bar"><div class="tc-line-bar-fill" style="width:${usadoPct}%;background:${barColor}"></div></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea: ${M(fmtTC(linea))} — ${usadoPct.toFixed(0)}% usado</div>
   </div>`;
 }
 
