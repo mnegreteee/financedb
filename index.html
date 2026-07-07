@@ -2911,6 +2911,8 @@ function buildTCCard(t){
   const linea=parseFloat(t.linea)||0;
   const usadoPct=linea>0?Math.min(100,(deudaTotal/linea)*100):0;
   const col=t.color||'#5b8def';
+  const sym=t.currency==='USD'?'$':'S/';
+  const fmtTC=v=>sym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
   return `<div class="tc-card-item" id="tc-card-${t.id}" onclick="openTCDetail('${t.id}')" style="--tc-color:${col}">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col};border-radius:var(--radius) var(--radius) 0 0"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
@@ -2991,9 +2993,12 @@ function renderTCDetail(){
   const linea=parseFloat(t&&t.linea)||0;
   const usadoPct=linea>0?Math.min(100,(deuda/linea)*100):0;
 
-  document.getElementById('tc-sum-deuda').textContent=M(tcFmtS(deuda));
-  document.getElementById('tc-sum-pagado').textContent=M(tcFmtS(pagado));
-  document.getElementById('tc-sum-pendiente').textContent=M(tcFmtS(pendiente));
+  const tCard=getTarjeta(currentTCId);
+  const tcSym=tCard&&tCard.currency==='USD'?'$':'S/';
+  const fmtTCD=v=>tcSym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  document.getElementById('tc-sum-deuda').textContent=M(fmtTCD(deuda));
+  document.getElementById('tc-sum-pagado').textContent=M(fmtTCD(pagado));
+  document.getElementById('tc-sum-pendiente').textContent=M(fmtTCD(pendiente));
   document.getElementById('tc-sum-linea').textContent=usadoPct.toFixed(1)+'%';
 
   const parts=currentTCMonth.split('-');
@@ -3010,7 +3015,7 @@ function renderTCDetail(){
     <td>${m.desc}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${m.fecha}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado"></td>
-    <td style="text-align:right;font-family:var(--mono)">${M(tcFmtS(m.monto))}</td>
+    <td style="text-align:right;font-family:var(--mono)">${M(fmtTCD(m.monto))}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
       <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
@@ -3039,7 +3044,9 @@ function updateTCSelectionTotal(){
   const total=cbs.reduce((s,c)=>s+parseFloat(c.dataset.monto||0),0);
   const bar=document.getElementById('tc-sel-total');
   bar.style.display=cbs.length?'flex':'none';
-  document.getElementById('tc-sel-amount').textContent=M(tcFmtS(total));
+  const tCardSel=getTarjeta(currentTCId);
+  const fmtSel=v=>(tCardSel&&tCardSel.currency==='USD'?'$ ':'S/ ')+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  document.getElementById('tc-sel-amount').textContent=M(fmtSel(total));
   document.getElementById('tc-sel-count').textContent=cbs.length+' consumo'+(cbs.length===1?'':'s');
   pendingPayMovIds=cbs.map(c=>c.dataset.id);
 }
@@ -3063,7 +3070,9 @@ function pagarSeleccionados(){
   const total=pendingPayMovIds.reduce((s,id)=>{
     const m=movs.find(x=>x.id===id); return s+(m?m.monto:0);
   },0);
-  document.getElementById('tc-pago-monto').textContent=M(tcFmtS(total));
+  const tCardPago=getTarjeta(currentTCId);
+  const fmtPago=v=>(tCardPago&&tCardPago.currency==='USD'?'$ ':'S/ ')+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  document.getElementById('tc-pago-monto').textContent=M(fmtPago(total));
   document.getElementById('tc-pago-tipo').value='total';
   document.getElementById('tc-pago-parcial-field').style.display='none';
   document.getElementById('tc-pago-parcial-val').value='';
@@ -3165,6 +3174,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-inicio').value=t.inicio||'';
     document.getElementById('tc-f-cierre').value=t.cierre||'';
     document.getElementById('tc-f-linea').value=t.linea||'';
+    document.getElementById('tc-f-currency').value=t.currency||'PEN';
     selectedTCColor=t.color||'#5b8def';
     document.getElementById('tc-f-color').value=selectedTCColor;
     document.getElementById('tc-delete-btn').style.display='inline-flex';
@@ -3172,6 +3182,7 @@ function openTCConfigModal(tid){
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
     ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('tc-f-currency').value='PEN';
     selectedTCColor='#5b8def';
     document.getElementById('tc-delete-btn').style.display='none';
   }
@@ -3202,6 +3213,7 @@ function saveTCCard(){
     inicio:parseInt(document.getElementById('tc-f-inicio').value)||1,
     cierre:parseInt(document.getElementById('tc-f-cierre').value)||25,
     linea:parseFloat(document.getElementById('tc-f-linea').value)||0,
+    currency:document.getElementById('tc-f-currency').value||'PEN',
     color:document.getElementById('tc-f-color').value||'#5b8def'
   };
   if(!state.tarjetas) state.tarjetas=[];
@@ -3244,12 +3256,15 @@ function renderTCGlobal(){
     const[y,mo]=mk.split('-');
     const mesLabel=tcMesesLong()[parseInt(mo)-1]+' '+y;
     let totalDeuda=0,totalPagado=0;
-    const pcts=tarjetas.map(t=>{
+    const pcts=[];
+    tarjetas.forEach(t=>{
       const movs=(t.movs&&t.movs[mk])||[];
-      const d=movs.reduce((s,m)=>s+m.monto,0);
-      const p=movs.filter(m=>m.pagado).reduce((s,m)=>s+m.monto,0);
+      const rate=(state.tc&&state.tc.venta)||3.45;
+      const toSoles=v=>t.currency==='USD'?v*rate:v;
+      const d=movs.reduce((s,m)=>s+toSoles(m.monto),0);
+      const p=movs.filter(m=>m.pagado).reduce((s,m)=>s+toSoles(m.monto),0);
       totalDeuda+=d; totalPagado+=p;
-      return{banco:t.banco,deuda:d,color:t.color||'#5b8def'};
+      pcts.push({banco:t.banco,deuda:d,color:t.color||'#5b8def'});
     });
     const pendiente=totalDeuda-totalPagado;
     const pctBars=pcts.filter(p=>p.deuda>0).map(p=>{
@@ -3476,7 +3491,18 @@ if(state.projGoals){
     </div>
     <div class="field-row">
       <div class="field"><label>Cierre de ciclo</label><input id="tc-f-cierre" type="number" min="1" max="31" placeholder="25"></div>
-      <div class="field"><label>Línea de crédito (S/)</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
+      <div class="field"><label>Línea de crédito</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Moneda</label>
+        <select id="tc-f-currency">
+          <option value="PEN">Soles (S/)</option>
+          <option value="USD">Dólares ($)</option>
+        </select>
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <div style="font-size:11px;color:var(--text2);padding-bottom:8px">La moneda afecta cómo se muestran los montos y el cálculo del total.</div>
+      </div>
     </div>
     <div class="field"><label>Color</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="tc-color-picker">
@@ -3605,7 +3631,18 @@ if(state.projGoals){
     </div>
     <div class="field-row">
       <div class="field"><label>Cierre de ciclo</label><input id="tc-f-cierre" type="number" min="1" max="31" placeholder="25"></div>
-      <div class="field"><label>Línea de crédito (S/)</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
+      <div class="field"><label>Línea de crédito</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Moneda</label>
+        <select id="tc-f-currency">
+          <option value="PEN">Soles (S/)</option>
+          <option value="USD">Dólares ($)</option>
+        </select>
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <div style="font-size:11px;color:var(--text2);padding-bottom:8px">La moneda afecta cómo se muestran los montos y el cálculo del total.</div>
+      </div>
     </div>
     <div class="field"><label>Color</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="tc-color-picker">
