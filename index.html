@@ -3018,7 +3018,7 @@ function renderTCDetail(){
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" onchange="onTCSelChange()"></td>
     <td>${m.desc}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${m.fecha}</td>
-    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado"></td>
+    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
     <td style="text-align:right;font-family:var(--mono)">${M(fmtTCD(m.monto))}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
@@ -3079,6 +3079,7 @@ function pagarSeleccionados(){
   document.getElementById('tc-pago-monto').textContent=M(fmtPago(total));
   document.getElementById('tc-pago-tipo').value='total';
   document.getElementById('tc-pago-parcial-field').style.display='none';
+  const cw=document.getElementById('tc-pago-cuenta-wrap');if(cw)cw.style.display='block';
   document.getElementById('tc-pago-parcial-val').value='';
   // Populate account selector
   const cuentaSel=document.getElementById('tc-pago-cuenta');
@@ -3088,16 +3089,29 @@ function pagarSeleccionados(){
 }
 
 function onPagoTipoChange(){
-  const parcial=document.getElementById('tc-pago-tipo').value==='parcial';
-  document.getElementById('tc-pago-parcial-field').style.display=parcial?'block':'none';
+  const tipo=document.getElementById('tc-pago-tipo').value;
+  document.getElementById('tc-pago-parcial-field').style.display=tipo==='parcial'?'block':'none';
+  // Hide "Descontar de cuenta" when paying with points (no real money deducted)
+  const cuentaWrap=document.getElementById('tc-pago-cuenta-wrap');
+  if(cuentaWrap) cuentaWrap.style.display=tipo==='puntos'?'none':'block';
 }
 
 function closePagoModal(){ document.getElementById('tc-pago-overlay').classList.remove('open'); }
 
 function confirmarPago(){
   const tipo=document.getElementById('tc-pago-tipo').value;
-  const cuenta=document.getElementById('tc-pago-cuenta').value;
   const movs=getTCMovs(currentTCId,currentTCMonth);
+
+  if(tipo==='puntos'){
+    // Puntos: mark as paid but DO NOT deduct from any account
+    pendingPayMovIds.forEach(id=>{
+      const m=movs.find(x=>x.id===id);
+      if(m){ m.pagado=true; m.metodoPago='puntos'; }
+    });
+    saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas();
+    return;
+  }
+
   let montoAPagar;
   if(tipo==='total'){
     montoAPagar=pendingPayMovIds.reduce((s,id)=>{const m=movs.find(x=>x.id===id);return s+(m?m.monto:0);},0);
@@ -3106,11 +3120,12 @@ function confirmarPago(){
     if(montoAPagar<=0){alert('Ingresa un monto válido.');return;}
   }
   // Descontar de la cuenta seleccionada
+  const cuenta=document.getElementById('tc-pago-cuenta').value;
   state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-montoAPagar;
   // Marcar movimientos como pagados
   pendingPayMovIds.forEach(id=>{
     const m=movs.find(x=>x.id===id);
-    if(m) m.pagado=true;
+    if(m){ m.pagado=true; m.metodoPago='dinero'; }
   });
   saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas();
 }
@@ -3148,12 +3163,39 @@ function saveTCMov(){
   if(!desc||!fecha||monto<=0){alert('Completa todos los campos.');return;}
   const t=getTarjeta(currentTCId); if(!t) return;
   if(!t.movs) t.movs={};
-  if(!t.movs[currentTCMonth]) t.movs[currentTCMonth]=[];
+
   if(editingTCMovId){
-    const m=t.movs[currentTCMonth].find(x=>x.id===editingTCMovId);
-    if(m){m.desc=desc;m.fecha=fecha;m.monto=monto;m.pagado=pagado;}
+    // Find the mov in ANY month (it may have been in a different period)
+    let foundInMonth=null, foundMov=null;
+    Object.entries(t.movs).forEach(([mk,movs])=>{
+      const m=movs.find(x=>x.id===editingTCMovId);
+      if(m){foundInMonth=mk; foundMov=m;}
+    });
+    if(foundMov&&foundInMonth){
+      // Recalculate target month based on new date and tarjeta cycle
+      const newMk=getBillingMonthKey(fecha, t);
+      // Update the mov data
+      foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado;
+      if(newMk!==foundInMonth){
+        // Move to the new billing month
+        t.movs[foundInMonth]=t.movs[foundInMonth].filter(x=>x.id!==editingTCMovId);
+        if(!t.movs[newMk]) t.movs[newMk]=[];
+        t.movs[newMk].push(foundMov);
+        // Switch view to the new month so user sees where it moved
+        currentTCMonth=newMk;
+        renderTCMonthSelector(t);
+      }
+    }
   } else {
-    t.movs[currentTCMonth].push({id:'tcm'+Date.now(),desc,fecha,monto,pagado});
+    // New mov: calculate billing month from date
+    const newMk=getBillingMonthKey(fecha, t);
+    if(!t.movs[newMk]) t.movs[newMk]=[];
+    t.movs[newMk].push({id:'tcm'+Date.now(),desc,fecha,monto,pagado});
+    // If adding to a different month than currently viewing, switch to it
+    if(newMk!==currentTCMonth){
+      currentTCMonth=newMk;
+      renderTCMonthSelector(t);
+    }
   }
   saveState(); closeTCMovModal(); renderTCDetail();
 }
@@ -3877,13 +3919,14 @@ if(state.projGoals){
       <select id="tc-pago-tipo" onchange="onPagoTipoChange()">
         <option value="total">Total</option>
         <option value="parcial">Parcial</option>
+        <option value="puntos">🎁 Puntos (sin descuento)</option>
       </select>
     </div>
     <div class="field" id="tc-pago-parcial-field" style="display:none">
       <label>Monto parcial (S/)</label>
       <input id="tc-pago-parcial-val" type="number" step="0.01" placeholder="0.00">
     </div>
-    <div class="field"><label>Descontar de cuenta</label>
+    <div class="field" id="tc-pago-cuenta-wrap"><label>Descontar de cuenta</label>
       <select id="tc-pago-cuenta"></select>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
@@ -4052,13 +4095,14 @@ if(state.projGoals){
       <select id="tc-pago-tipo" onchange="onPagoTipoChange()">
         <option value="total">Total</option>
         <option value="parcial">Parcial</option>
+        <option value="puntos">🎁 Puntos (sin descuento)</option>
       </select>
     </div>
     <div class="field" id="tc-pago-parcial-field" style="display:none">
       <label>Monto parcial (S/)</label>
       <input id="tc-pago-parcial-val" type="number" step="0.01" placeholder="0.00">
     </div>
-    <div class="field"><label>Descontar de cuenta</label>
+    <div class="field" id="tc-pago-cuenta-wrap"><label>Descontar de cuenta</label>
       <select id="tc-pago-cuenta"></select>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
