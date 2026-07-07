@@ -494,6 +494,10 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
             <div class="config-row-label">Gestionar tarjetas<small>Agregar, editar o quitar tarjetas</small></div>
             <button class="config-action-btn neutral" onclick="showPage('tarjetas');closeConfig()">💳 Gestionar</button>
           </div>
+          <div class="config-row">
+            <div class="config-row-label">Cargar histórico TC<small>Importar movimientos desde Excel</small></div>
+            <button class="config-action-btn neutral" onclick="openTCHistoricoModal();closeConfig()">📂 Cargar Excel</button>
+          </div>
         </div>
 
         <!-- SECCIÓN: Cuentas -->
@@ -3282,6 +3286,288 @@ function renderTCGlobal(){
   }).join('');
 }
 
+
+// ══════════════════════════════════════════════════════
+//  HISTÓRICO TARJETAS DE CRÉDITO
+// ══════════════════════════════════════════════════════
+let tcHistoricoData = null; // parsed result ready to apply
+
+function openTCHistoricoModal(){
+  tcHistoricoData = null;
+  document.getElementById('tc-hist-filename').textContent = '';
+  document.getElementById('tc-hist-preview').style.display = 'none';
+  document.getElementById('tc-hist-warn').style.display = 'none';
+  document.getElementById('tc-hist-apply-btn').style.display = 'none';
+  document.getElementById('tc-hist-drop').style.borderColor = 'var(--border2)';
+  document.getElementById('tc-historico-overlay').classList.add('open');
+}
+function closeTCHistorico(){ document.getElementById('tc-historico-overlay').classList.remove('open'); }
+function handleTCHistDrop(e){
+  e.preventDefault();
+  document.getElementById('tc-hist-drop').style.borderColor = 'var(--border2)';
+  const f = e.dataTransfer.files[0];
+  if(f) loadTCHistoricoFile(f);
+}
+function previewTCHistorico(e){
+  const f = e.target.files[0];
+  if(f) loadTCHistoricoFile(f);
+  e.target.value = '';
+}
+
+function getBillingMonthKey(fechaStr, tarjeta){
+  // Given a purchase date and a tarjeta's cycle (inicio, cierre),
+  // determine which monthKey (YYYY-MM) this purchase belongs to in the dashboard.
+  //
+  // Logic:
+  //   The cycle runs from "inicio" of month N to "cierre" of month N
+  //   (or crosses months if inicio > cierre, e.g. 26-25 means 26-nov to 25-dec)
+  //   The payment month = month AFTER the cycle closes.
+  //
+  // Example BBVA: inicio=26, cierre=25
+  //   Purchase 10-jun → falls in cycle 26-may to 25-jun → closes jun → pago = jul → monthKey "2026-07"
+  //   Purchase 01-jul → falls in cycle 26-jun to 25-jul → closes jul → pago = aug → monthKey "2026-08"
+
+  const d      = new Date(fechaStr + 'T12:00:00');
+  const dia    = d.getDate();
+  const mes    = d.getMonth();   // 0-indexed
+  const anio   = d.getFullYear();
+  const inicio = parseInt(tarjeta.inicio) || 1;
+  const cierre = parseInt(tarjeta.cierre) || 25;
+
+  let cicloCloseMonth, cicloCloseYear;
+
+  if(inicio <= cierre){
+    // Simple cycle within a single month: e.g. 1-25
+    // Purchase falls in current month's cycle if dia >= inicio && dia <= cierre
+    if(dia >= inicio && dia <= cierre){
+      // In this month's cycle → closes this month → pago = next month
+      cicloCloseMonth = mes;
+      cicloCloseYear  = anio;
+    } else if(dia > cierre){
+      // After cierre → in next month's cycle → closes next month → pago = month after next
+      cicloCloseMonth = (mes + 1) % 12;
+      cicloCloseYear  = mes === 11 ? anio + 1 : anio;
+    } else {
+      // Before inicio → in previous month's cycle → closes previous month → pago = this month
+      cicloCloseMonth = (mes - 1 + 12) % 12;
+      cicloCloseYear  = mes === 0 ? anio - 1 : anio;
+    }
+  } else {
+    // Cycle crosses month boundary: e.g. inicio=26, cierre=25
+    // Cycle is: dia >= inicio (in month N) OR dia <= cierre (in month N+1)
+    if(dia >= inicio){
+      // In the first part of the cycle (month N) → cycle closes in month N+1
+      cicloCloseMonth = (mes + 1) % 12;
+      cicloCloseYear  = mes === 11 ? anio + 1 : anio;
+    } else {
+      // dia <= cierre: in the second part of cycle (month N+1, still closing this month)
+      cicloCloseMonth = mes;
+      cicloCloseYear  = anio;
+    }
+  }
+
+  // Payment month = month AFTER ciclo closes
+  const pagoMonth = (cicloCloseMonth + 1) % 12;
+  const pagoYear  = cicloCloseMonth === 11 ? cicloCloseYear + 1 : cicloCloseYear;
+
+  return tcMonthKey(pagoYear, pagoMonth);
+}
+
+function parseTCExcel(wb){
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows  = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:false});
+  const rowsR = XLSX.utils.sheet_to_json(sheet, {defval:'', raw:true});
+  const tarjetas = state.tarjetas || [];
+
+  // Result: { bancoName: { monthKey: [movs] } }
+  const result = {};
+
+  function parseDate(sv, rv){
+    if(typeof rv === 'number' && rv > 36526 && rv < 73050){
+      return new Date(Math.round((rv-25569)*86400*1000)).toISOString().slice(0,10);
+    }
+    const s = String(sv||'').trim();
+    if(!s) return null;
+    let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if(m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if(m) return `${m[3]}-${m[2]}-${m[1]}`;
+    return null;
+  }
+
+  function titleCaseTC(s){
+    return s.toLowerCase().replace(/(^|\s)(\S)/g,(_,a,b)=>a+b.toUpperCase());
+  }
+
+  rows.forEach((row, idx) => {
+    const rawR   = rowsR[idx] || {};
+    const desc   = (row['DESCRIPCION']||row['Descripcion']||row['descripcion']||'').toString().trim();
+    const rawDate= row['FECHA']  ||row['Fecha']  ||row['fecha']  ||'';
+    const rawDateR=rawR['FECHA'] ||rawR['Fecha'] ||rawR['fecha'] ||'';
+    const montoS = String(row['MONTO'] ||row['Monto'] ||row['monto'] ||0).replace(',','.');
+    const monto  = parseFloat(montoS)||0;
+    const estado = (row['ESTADO']||row['Estado']||row['estado']||'Pendiente').toString().trim();
+    const banco  = (row['Banco'] ||row['BANCO']  ||row['banco']  ||'').toString().trim();
+
+    if(!desc || !banco || monto === 0) return;
+    const fecha = parseDate(rawDate, rawDateR);
+    if(!fecha) return;
+
+    // Find matching tarjeta to get its cycle (inicio/cierre)
+    const tarjeta = tarjetas.find(t =>
+      t.banco.trim().toLowerCase() === banco.trim().toLowerCase()
+    );
+
+    // Determine the dashboard monthKey using the billing cycle
+    // If tarjeta not found yet, fall back to calendar month (will be filtered later)
+    const mk = tarjeta
+      ? getBillingMonthKey(fecha, tarjeta)
+      : fecha.slice(0, 7); // fallback: YYYY-MM of purchase date
+
+    if(!result[banco]) result[banco] = {};
+    if(!result[banco][mk]) result[banco][mk] = [];
+
+    result[banco][mk].push({
+      id: 'tch-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).slice(2,6),
+      desc: titleCaseTC(desc),
+      fecha,
+      monto: Math.abs(monto),
+      pagado: estado.toLowerCase() === 'pagado' || estado.toLowerCase() === 'si' || estado.toLowerCase() === 'paid'
+    });
+  });
+
+  return result;
+}
+
+function loadTCHistoricoFile(file){
+  document.getElementById('tc-hist-filename').textContent = '📄 ' + file.name;
+  const r = new FileReader();
+  r.onload = ev => {
+    try{
+      const wb = XLSX.read(ev.target.result, {type:'array', raw:false});
+      const parsed = parseTCExcel(wb);
+      tcHistoricoData = parsed;
+      showTCHistoricoPreview(parsed);
+    } catch(err){
+      console.error(err);
+      alert('Error al leer el Excel: ' + err.message);
+    }
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function showTCHistoricoPreview(parsed){
+  const tarjetas = state.tarjetas || [];
+  const preview  = document.getElementById('tc-hist-preview');
+  const warn     = document.getElementById('tc-hist-warn');
+  const applyBtn = document.getElementById('tc-hist-apply-btn');
+
+  preview.style.display = 'block';
+  warn.style.display    = 'none';
+
+  // For each banco in Excel, find matching tarjeta (case-insensitive)
+  const bancosExcel = Object.keys(parsed);
+  const matches  = [];
+  const noMatch  = [];
+
+  bancosExcel.forEach(banco => {
+    const tarjeta = tarjetas.find(t =>
+      t.banco.trim().toLowerCase() === banco.trim().toLowerCase()
+    );
+    const meses  = Object.keys(parsed[banco]);
+    const total  = Object.values(parsed[banco]).flat().length;
+    if(tarjeta){
+      matches.push({banco, tarjeta, meses, total});
+    } else {
+      noMatch.push({banco, meses, total});
+    }
+  });
+
+  // Build preview HTML
+  let html = '';
+  if(matches.length){
+    html += `<div style="margin-bottom:8px;font-weight:600;color:var(--text)">✅ Tarjetas encontradas:</div>`;
+    matches.forEach(m => {
+      const mesesLabel = m.meses.map(k => {
+        const [y,mo] = k.split('-');
+        return tcMesesLong()[parseInt(mo)-1]+' '+y;
+      }).join(', ');
+      html += `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600">${m.banco}</span>
+        <span style="color:var(--text2);margin-left:8px">${m.total} movimientos</span>
+        <span style="color:var(--text3);font-size:11px;margin-left:8px">meses: ${mesesLabel}</span>
+      </div>`;
+    });
+  }
+  if(noMatch.length){
+    html += `<div style="margin-top:10px;margin-bottom:6px;font-weight:600;color:var(--amber)">⚠️ Sin coincidencia (no se importarán):</div>`;
+    noMatch.forEach(m => {
+      html += `<div style="padding:4px 0;font-size:12px;color:var(--amber)">${m.banco} — ${m.total} movimientos</div>`;
+    });
+    warn.style.display = 'block';
+    warn.textContent   = `Los bancos sin coincidencia (${noMatch.map(m=>m.banco).join(', ')}) no se importarán porque no hay tarjetas registradas con esos nombres. Crea las tarjetas primero o verifica que el nombre coincida exactamente.`;
+  }
+
+  if(!matches.length){
+    html = '<div style="color:var(--red)">❌ Ningún banco del Excel coincide con las tarjetas registradas. Verifica los nombres.</div>';
+    applyBtn.style.display = 'none';
+  } else {
+    applyBtn.style.display = 'inline-block';
+  }
+
+  preview.innerHTML = html;
+}
+
+function applyTCHistorico(){
+  if(!tcHistoricoData) return;
+  const tarjetas = state.tarjetas || [];
+  let totalImported = 0;
+
+  Object.entries(tcHistoricoData).forEach(([banco, monthData]) => {
+    // Find matching tarjeta (case-insensitive)
+    const tarjeta = tarjetas.find(t =>
+      t.banco.trim().toLowerCase() === banco.trim().toLowerCase()
+    );
+    if(!tarjeta) return; // skip unmatched
+
+    if(!tarjeta.movs) tarjeta.movs = {};
+
+    // Replace each month's data
+    Object.entries(monthData).forEach(([mk, movs]) => {
+      tarjeta.movs[mk] = movs; // replace entirely
+      totalImported += movs.length;
+    });
+  });
+
+  saveState();
+  closeTCHistorico();
+
+  // Refresh tarjetas view if visible
+  if(document.getElementById('page-tarjetas') &&
+     document.getElementById('page-tarjetas').classList.contains('active')){
+    if(currentTCId){
+      renderTCDetail();
+    }
+    renderTarjetas();
+  }
+
+  // Show success notification
+  const nb = document.getElementById('notify-banner');
+  const nt = document.getElementById('notify-text');
+  nt.innerHTML = `<strong>✅ Histórico TC importado:</strong> ${totalImported} movimientos cargados en ${Object.keys(tcHistoricoData).length} tarjeta(s).`;
+  nb.style.background  = 'var(--green-bg)';
+  nb.style.borderColor = 'var(--green)';
+  nb.style.display     = 'flex';
+  setTimeout(() => {
+    nb.style.display     = 'none';
+    nb.style.background  = '';
+    nb.style.borderColor = '';
+    checkNotifications();
+  }, 5000);
+}
+
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
   // Don't seed if user explicitly cleared all data
@@ -3477,6 +3763,41 @@ if(state.projGoals){
   </div>
 </div>
 
+<!-- MODAL HISTÓRICO TARJETAS DE CRÉDITO -->
+<div class="modal-overlay" id="tc-historico-overlay" onclick="if(event.target===this)closeTCHistorico()">
+  <div class="modal modal-lg">
+    <div class="modal-title">
+      <span>📂 Cargar Histórico — Tarjetas de Crédito</span>
+      <button class="modal-close" onclick="closeTCHistorico()">✕</button>
+    </div>
+    <p style="color:var(--text2);font-size:12px;margin-bottom:14px;line-height:1.7">
+      El Excel debe tener las columnas: <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">DESCRIPCION, FECHA, MONTO, ESTADO, Banco</code><br>
+      La columna <strong style="color:var(--text)">Banco</strong> debe coincidir exactamente con el banco registrado en tus tarjetas.<br>
+      Los meses detectados reemplazarán la data existente de esa tarjeta.
+    </p>
+    <div class="hist-drop" id="tc-hist-drop"
+      onclick="document.getElementById('tc-historico-file').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+      ondragleave="this.style.borderColor='var(--border2)'"
+      ondrop="handleTCHistDrop(event)">
+      <div style="font-size:28px;margin-bottom:6px">📊</div>
+      <div style="font-size:13px;color:var(--text2)">.xlsx con movimientos de tarjeta — clic o arrastra aquí</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px" id="tc-hist-filename"></div>
+    </div>
+    <input type="file" id="tc-historico-file" accept=".xlsx,.xls" style="display:none" onchange="previewTCHistorico(event)">
+
+    <div id="tc-hist-preview" style="display:none;margin-top:14px;background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2)"></div>
+
+    <div id="tc-hist-warn" style="display:none;margin-top:10px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:7px;padding:10px 12px;font-size:12px;color:var(--amber)"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeTCHistorico()">Cancelar</button>
+      <button class="btn btn-primary" id="tc-hist-apply-btn" style="display:none" onclick="applyTCHistorico()">Aplicar histórico</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- MODAL CONFIG TARJETA -->
 <div class="modal-overlay" id="tc-config-overlay" onclick="if(event.target===this)closeTCConfigModal()">
   <div class="modal" style="width:480px">
@@ -3616,6 +3937,41 @@ if(state.projGoals){
     </div>
   </div>
 </div>
+
+<!-- MODAL HISTÓRICO TARJETAS DE CRÉDITO -->
+<div class="modal-overlay" id="tc-historico-overlay" onclick="if(event.target===this)closeTCHistorico()">
+  <div class="modal modal-lg">
+    <div class="modal-title">
+      <span>📂 Cargar Histórico — Tarjetas de Crédito</span>
+      <button class="modal-close" onclick="closeTCHistorico()">✕</button>
+    </div>
+    <p style="color:var(--text2);font-size:12px;margin-bottom:14px;line-height:1.7">
+      El Excel debe tener las columnas: <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">DESCRIPCION, FECHA, MONTO, ESTADO, Banco</code><br>
+      La columna <strong style="color:var(--text)">Banco</strong> debe coincidir exactamente con el banco registrado en tus tarjetas.<br>
+      Los meses detectados reemplazarán la data existente de esa tarjeta.
+    </p>
+    <div class="hist-drop" id="tc-hist-drop"
+      onclick="document.getElementById('tc-historico-file').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+      ondragleave="this.style.borderColor='var(--border2)'"
+      ondrop="handleTCHistDrop(event)">
+      <div style="font-size:28px;margin-bottom:6px">📊</div>
+      <div style="font-size:13px;color:var(--text2)">.xlsx con movimientos de tarjeta — clic o arrastra aquí</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px" id="tc-hist-filename"></div>
+    </div>
+    <input type="file" id="tc-historico-file" accept=".xlsx,.xls" style="display:none" onchange="previewTCHistorico(event)">
+
+    <div id="tc-hist-preview" style="display:none;margin-top:14px;background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2)"></div>
+
+    <div id="tc-hist-warn" style="display:none;margin-top:10px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:7px;padding:10px 12px;font-size:12px;color:var(--amber)"></div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeTCHistorico()">Cancelar</button>
+      <button class="btn btn-primary" id="tc-hist-apply-btn" style="display:none" onclick="applyTCHistorico()">Aplicar histórico</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- MODAL CONFIG TARJETA -->
 <div class="modal-overlay" id="tc-config-overlay" onclick="if(event.target===this)closeTCConfigModal()">
