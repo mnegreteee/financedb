@@ -1509,6 +1509,18 @@ function loadState(){
   const t=new Date();
   state.currentYear=t.getFullYear();state.currentMonth=t.getMonth();
   document.getElementById('f-date').value=t.toISOString().slice(0,10);
+
+  // If the user just cleared all data, skip fetching from Firestore entirely
+  // (even if the delete hasn't fully propagated yet, we want a blank slate).
+  if(localStorage.getItem('mf_cleared')==='1'){
+    setSyncStatus('ok');
+    // Push the fresh blank state to Firestore to guarantee it's clean there too
+    if(DOC_REF){
+      saveState();
+    }
+    return;
+  }
+
   // Then load from Firestore (overrides localStorage if newer)
   if(!DOC_REF){setSyncStatus('error');return;}
   setSyncStatus('loading');
@@ -2755,16 +2767,20 @@ document.addEventListener('click', e => {
 });
 
 // ── BORRAR DATOS ──────────────────────────────────────
-function deleteAllData(){
+async function deleteAllData(){
   if(!confirm('⚠️ ¿Estás seguro? Se eliminarán TODOS los movimientos, snapshots, servicios y presupuestos. Esta acción no se puede deshacer.')) return;
+  // Set the cleared flag FIRST so loadState() skips any Firestore fetch on reload,
+  // regardless of whether the delete below has fully propagated yet.
+  localStorage.setItem('mf_cleared','1');
   // Clear localStorage completely (all versions)
   ['mf_v5','mf_state_v2','mf_state_v3','mf_state_v4','mf_theme','mf_inactivity'].forEach(k=>localStorage.removeItem(k));
-  // Set a flag so seedDemo doesn't run after reload
-  localStorage.setItem('mf_cleared','1');
-  // Clear Firestore
+  // AWAIT Firestore deletion before reloading — prevents the old race condition
+  // where reload happened before the delete finished, pulling old data back.
   if(DOC_REF){
-    DOC_REF.delete().catch(()=>{});
-    db.collection('auth').doc('users').delete().catch(()=>{});
+    try{
+      await DOC_REF.delete();
+      await db.collection('auth').doc('users').delete();
+    }catch(e){ console.warn('Error borrando Firestore:', e); }
   }
   location.reload();
 }
