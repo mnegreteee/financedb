@@ -1660,27 +1660,52 @@ function setSyncStatus(status){
 }
 
 let saveTimer=null;
-function saveState(){
+function _doFirestoreWrite(){
+  if(!DOC_REF){setSyncStatus('error');return;}
+  const{movimientos,...meta}=state;
+  DOC_REF.set({
+    meta: JSON.stringify(meta),
+    movimientos: JSON.stringify(movimientos),
+    savedAt: firebase.firestore.FieldValue.serverTimestamp()
+  })
+  .then(()=>setSyncStatus('ok'))
+  .catch(err=>{console.error('Firestore save error:',err);setSyncStatus('error');});
+}
+
+// immediate=true escribe a Firestore de inmediato (sin esperar el debounce de 800ms).
+// Úsalo para acciones grandes/poco frecuentes (importar JSON, cargar histórico, etc.)
+// donde el usuario podría recargar la página antes de que el debounce normal dispare,
+// perdiendo el guardado en la nube.
+function saveState(immediate){
   state.lastUpdated=new Date().toISOString();
   clearSaldoCache(); // invalidate saldo cache on any state change
   // Save to localStorage immediately as backup
   localStorage.setItem('mf_v5',JSON.stringify(state));
   updateLastUpdated();
-  // Debounce Firestore writes (wait 800ms after last change)
   setSyncStatus('saving');
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{
-    if(!DOC_REF){setSyncStatus('error');return;}
-    const{movimientos,...meta}=state;
-    DOC_REF.set({
-      meta: JSON.stringify(meta),
-      movimientos: JSON.stringify(movimientos),
-      savedAt: firebase.firestore.FieldValue.serverTimestamp()
-    })
-    .then(()=>setSyncStatus('ok'))
-    .catch(err=>{console.error('Firestore save error:',err);setSyncStatus('error');});
-  },800);
+  if(immediate){
+    _doFirestoreWrite();
+    return;
+  }
+  // Debounce Firestore writes (wait 800ms after last change)
+  saveTimer=setTimeout(_doFirestoreWrite, 800);
 }
+
+// Si hay un guardado pendiente (debounce activo) cuando la página se oculta o se va a
+// cerrar/recargar, lo disparamos de inmediato para no perder cambios recientes.
+function flushPendingSave(){
+  if(saveTimer){
+    clearTimeout(saveTimer);
+    saveTimer=null;
+    _doFirestoreWrite();
+  }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='hidden') flushPendingSave();
+});
+window.addEventListener('pagehide', flushPendingSave);
+window.addEventListener('beforeunload', flushPendingSave);
 function updateLastUpdated(){
   const el = document.getElementById('last-updated-val');
   if(!el) return;
@@ -2668,7 +2693,7 @@ function exportXLSX(){
 function importData(e){
   const file=e.target.files[0];if(!file)return;
   const r=new FileReader();
-  r.onload=ev=>{try{state={...state,...JSON.parse(ev.target.result)};saveState();render();alert('¡Datos importados!');}catch(err){alert('Error al importar.');}};
+  r.onload=ev=>{try{state={...state,...JSON.parse(ev.target.result)};saveState(true);render();alert('¡Datos importados!');}catch(err){alert('Error al importar.');}};
   r.readAsText(file);e.target.value='';
 }
 
@@ -2855,7 +2880,7 @@ function applyHistorico(){
     });
   }
   if(historicoData.tc)state.tc=historicoData.tc;
-  saveState();closeHistorico();render();
+  saveState(true);closeHistorico();render();
   alert('✅ Histórico aplicado correctamente. '+incoming.length+' movimientos cargados.');
 }
 
@@ -4391,7 +4416,7 @@ function applyTCHistorico(){
     });
   });
 
-  saveState();
+  saveState(true);
   closeTCHistorico();
 
   // Refresh tarjetas view if visible
