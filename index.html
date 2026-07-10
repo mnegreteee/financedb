@@ -2468,6 +2468,29 @@ function classifyExcelRow(desc,banco,monto){
   // Cuentas operativas BCP/BBVA/EFECTIVO: positivo=ingreso, negativo=gasto
   return monto>=0?'income':'expense';
 }
+// Parser de fechas de Excel compartido — usado por parseExcelToHistorico y parseTCExcel
+function parseExcelDate(strVal,rawVal){
+  // 1. Número serial de Excel (raw:true) — rango válido ~2000-2100
+  if(typeof rawVal==='number'&&rawVal>36526&&rawVal<73050){
+    const d=new Date(Math.round((rawVal-25569)*86400*1000));
+    return d.toISOString().slice(0,10);
+  }
+  const s=String(strVal||'').trim();
+  if(!s)return null;
+  // 2. "2026-01-24" o "2026-01-24T00:00:00.000Z"
+  let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  // 3. "24/01/2026" o "1/24/2026" (M/D/YYYY de SheetJS raw:false)
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m){
+    const mo=m[1].padStart(2,'0'),dy=m[2].padStart(2,'0'),yr=m[3];
+    return yr+'-'+mo+'-'+dy;
+  }
+  // 4. "24-01-2026"
+  m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if(m)return m[3]+'-'+m[2]+'-'+m[1];
+  return null;
+}
 function parseExcelToHistorico(wb){
   const sheet=wb.Sheets[wb.SheetNames[0]];
   // raw:false → SheetJS convierte fechas a string "M/D/YYYY" o "YYYY-MM-DD"
@@ -2477,30 +2500,7 @@ function parseExcelToHistorico(wb){
   const movimientos=[],snapshots={},cuentasSaldo={};
   const discoveredAccounts=new Map(); // auto-discovered custom accounts
 
-  function parseDate(strVal,rawVal){
-    // 1. Número serial de Excel (raw:true) — rango válido ~2000-2100
-    if(typeof rawVal==='number'&&rawVal>36526&&rawVal<73050){
-      const d=new Date(Math.round((rawVal-25569)*86400*1000));
-      return d.toISOString().slice(0,10);
-    }
-    const s=String(strVal||'').trim();
-    if(!s)return null;
-    // 2. "2026-01-24" o "2026-01-24T00:00:00.000Z"
-    let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if(m)return m[1]+'-'+m[2]+'-'+m[3];
-    // 3. "24/01/2026" o "1/24/2026" (M/D/YYYY de SheetJS raw:false)
-    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if(m){
-      // SheetJS devuelve M/D/YYYY para fechas de Excel
-      const mo=m[1].padStart(2,'0'),dy=m[2].padStart(2,'0'),yr=m[3];
-      return yr+'-'+mo+'-'+dy;
-    }
-    // 4. "24-01-2026"
-    m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-    if(m)return m[3]+'-'+m[2]+'-'+m[1];
-    return null;
-  }
-
+  // Usa parseExcelDate global (compartida con parseTCExcel)
   function titleCase(s){
     return s.toLowerCase().replace(/(^|\s|-)(\S)/g,(_,a,b)=>a+b.toUpperCase());
   }
@@ -2518,7 +2518,7 @@ function parseExcelToHistorico(wb){
     const categoria=(row['CATEGORIA']||row['Categoria']||row['categoria']||row['CATEGORÍA']||row['Categoría']||'').toString().trim();
 
     if(!desc||isNaN(monto))return;
-    const date=parseDate(rawDate,rawDateR);
+    const date=parseExcelDate(rawDate,rawDateR);
     if(!date){console.warn('Fecha no reconocida en fila',idx,rawDate,rawDateR);return;}
 
     const account =excelBancoToAccount(banco,moneda);
@@ -3926,7 +3926,7 @@ function parseTCExcel(wb){
     const banco  = (row['Banco'] ||row['BANCO']  ||row['banco']  ||'').toString().trim();
 
     if(!desc || !banco || isNaN(monto) || monto === 0) return;
-    const fecha = parseDate(rawDate, rawDateR);
+    const fecha = parseExcelDate(rawDate, rawDateR);
     if(!fecha) return;
 
     // Find matching tarjeta to get its cycle (inicio/cierre)
@@ -3948,7 +3948,7 @@ function parseTCExcel(wb){
       desc: titleCaseTC(desc),
       fecha,
       monto: Math.abs(monto),
-      pagado: estado.toLowerCase() === 'pagado' || estado.toLowerCase() === 'si' || estado.toLowerCase() === 'paid'
+      pagado: !/pendient|no\s*pagad|sin\s*pagar/i.test(estado) && /pagad|paid|^si$/i.test(estado)
     });
   });
 
