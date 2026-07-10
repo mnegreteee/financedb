@@ -4525,7 +4525,9 @@ function computeFuelRows(rows){
     if(i>0 && !r.fInicialManual){
       r.fInicial = rows[i-1].fFinal || r.fInicial || '';
     }
-    if(i>0) r.kmInicial =rows[i-1].kmFinal  ||r.kmInicial ||'';
+    if(i>0 && !r.kmInicialManual){
+      r.kmInicial = rows[i-1].kmFinal || r.kmInicial || '';
+    }
     const kmI=parseFloat(r.kmInicial), kmF=parseFloat(r.kmFinal);
     const gal=parseFloat(r.galones),   pxg=parseFloat(r.pxg);
     const hasKm=!isNaN(kmI)&&!isNaN(kmF)&&r.kmInicial!==''&&r.kmFinal!=='';
@@ -4568,7 +4570,7 @@ function renderFuelSection(type){
       return `<tr id="fuel-row-${type}-${r.id}" style="${isLast?'background:rgba(91,141,239,.04)':''}">
         <td><input class="fuel-inp date-inp" type="date" value="${r.fInicial||''}" onchange="updateFuelField('${type}','${r.id}','fInicial',this.value)" title="F. Inicial (editable, por defecto hereda del F. Final anterior)"></td>
         <td><input class="fuel-inp date-inp" type="date" value="${r.fFinal||''}" onchange="updateFuelField('${type}','${r.id}','fFinal',this.value)"></td>
-        <td style="color:var(--text2)">${(r.kmInicial!==undefined&&r.kmInicial!=='')?fuelFmt(parseFloat(r.kmInicial),0):'<span style="color:var(--text3)">—</span>'}</td>
+        <td><input class="fuel-inp" type="number" value="${r.kmInicial||''}" onchange="updateFuelField('${type}','${r.id}','kmInicial',this.value)" style="width:75px" placeholder="KM" title="KM Inicial (editable, por defecto hereda del KM Final anterior)"></td>
         <td><input class="fuel-inp" type="number" value="${r.kmFinal||''}" onchange="updateFuelField('${type}','${r.id}','kmFinal',this.value)" style="width:75px" placeholder="KM"></td>
         <td style="color:var(--teal)">${r.kmUsado!==null?fuelFmt(r.kmUsado,0):'—'}</td>
         <td>${r.dt!==null?r.dt:'—'}</td>
@@ -4679,19 +4681,22 @@ function updateFuelField(type, id, field, value){
   if(!row) return;
   row[field]=value;
 
-  // Si el usuario edita F.INICIAL manualmente, marcar el override
-  // para que no se sobreescriba automáticamente con la cadena.
+  // Si el usuario edita F.INICIAL o KM INICIAL manualmente, marcar el override
+  // para que no se sobreescriban automáticamente con la cadena.
   if(field==='fInicial'){
     row.fInicialManual = true;
+  }
+  if(field==='kmInicial'){
+    row.kmInicialManual = true;
   }
 
   const idx=(state[key]||[]).findIndex(r=>r.id===id);
   if(idx>=0&&idx<state[key].length-1){
     const next=state[key][idx+1];
-    // Solo propagar F.FINAL → F.INICIAL de la siguiente fila si esa fila
-    // NO tiene un override manual establecido por el usuario.
-    if(field==='fFinal' && !next.fInicialManual) next.fInicial = value;
-    if(field==='kmFinal') next.kmInicial = value;
+    // Solo propagar F.FINAL → F.INICIAL / KM FINAL → KM INICIAL de la siguiente fila
+    // si esa fila NO tiene un override manual establecido por el usuario.
+    if(field==='fFinal'  && !next.fInicialManual)  next.fInicial  = value;
+    if(field==='kmFinal' && !next.kmInicialManual) next.kmInicial = value;
   }
   saveState();
   renderFuelSection(type);
