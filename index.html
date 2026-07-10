@@ -1604,9 +1604,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = 'v1.1.1';
 const APP_VERSION_DATE = '10 jul 2026';
-const APP_VERSION_NOTE = 'Indicador de versión';
+const APP_VERSION_NOTE = 'Fix: sincronización de movimientos agregados por el bot';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -1669,16 +1669,65 @@ function setSyncStatus(status){
 }
 
 let saveTimer=null;
+
+// Snapshot de los movimientos tal como están en Firestore (id -> JSON serializado).
+// Se usa para detectar qué movimientos cambiaron (agregados/editados/eliminados)
+// y escribir SOLO esos, en vez de reescribir todo el historial cada vez.
+let _lastSyncedMovs = {};
+
+// Sincroniza state.movimientos con la subcolección users/{uid}/movimientos/{movId}.
+// Cada movimiento es su propio documento — así un bot/atajo externo puede
+// agregar UNO sin tener que leer y reescribir todo el historial.
+function syncMovimientosSubcollection(){
+  if(!DOC_REF) return Promise.resolve();
+  const movsRef = DOC_REF.collection('movimientos');
+  const currentIds = new Set();
+  const ops = []; // [{type:'set'|'delete', id, data?}]
+
+  state.movimientos.forEach(mv=>{
+    if(!mv.id) return; // seguridad: ignorar movimientos sin id
+    currentIds.add(mv.id);
+    const serialized = JSON.stringify(mv);
+    if(_lastSyncedMovs[mv.id] !== serialized){
+      ops.push({type:'set', id:mv.id, data:mv});
+    }
+  });
+  Object.keys(_lastSyncedMovs).forEach(id=>{
+    if(!currentIds.has(id)) ops.push({type:'delete', id});
+  });
+
+  if(!ops.length) return Promise.resolve();
+
+  // Firestore permite máx. 500 operaciones por batch — se agrupan en lotes por seguridad.
+  const chunks = [];
+  for(let i=0;i<ops.length;i+=450) chunks.push(ops.slice(i,i+450));
+
+  return chunks.reduce((chain, chunk)=>chain.then(()=>{
+    const batch = db.batch();
+    chunk.forEach(op=>{
+      const ref = movsRef.doc(op.id);
+      if(op.type==='set') batch.set(ref, op.data);
+      else batch.delete(ref);
+    });
+    return batch.commit();
+  }), Promise.resolve()).then(()=>{
+    const snap={};
+    state.movimientos.forEach(mv=>{ if(mv.id) snap[mv.id]=JSON.stringify(mv); });
+    _lastSyncedMovs = snap;
+  });
+}
+
 function _doFirestoreWrite(){
   if(!DOC_REF){setSyncStatus('error');return;}
   const{movimientos,...meta}=state;
-  DOC_REF.set({
+  const mainDocWrite = DOC_REF.set({
     meta: JSON.stringify(meta),
-    movimientos: JSON.stringify(movimientos),
     savedAt: firebase.firestore.FieldValue.serverTimestamp()
-  })
-  .then(()=>setSyncStatus('ok'))
-  .catch(err=>{console.error('Firestore save error:',err);setSyncStatus('error');});
+  }, {merge:true});
+  const movsWrite = syncMovimientosSubcollection();
+  Promise.all([mainDocWrite, movsWrite])
+    .then(()=>setSyncStatus('ok'))
+    .catch(err=>{console.error('Firestore save error:',err);setSyncStatus('error');});
 }
 
 // immediate=true escribe a Firestore de inmediato (sin esperar el debounce de 800ms).
@@ -1795,22 +1844,61 @@ function loadState(){
       const data=doc.data();
       try{
         const meta=JSON.parse(data.meta||'{}');
-        const movimientos=JSON.parse(data.movimientos||'[]');
-        const remote={...meta,movimientos};
-        // Use remote if it's newer than local
+        // Formato antiguo: movimientos guardados como un solo bloque JSON en el doc principal.
+        // Se mantiene como referencia de migración; si ya existe la subcolección, se ignora.
+        const legacyMovimientos = JSON.parse(data.movimientos||'[]');
         const localTs=state.lastUpdated?new Date(state.lastUpdated):new Date(0);
         const remoteTs=data.savedAt?data.savedAt.toDate():new Date(0);
-        if(remoteTs>localTs||!state.lastUpdated){
-          state={...state,...remote};
-          migrateState();
-          clearSaldoCache();
-          // Restore current month/year to today
-          const now=new Date();
-          state.currentYear=now.getFullYear();
-          state.currentMonth=now.getMonth();
-          localStorage.setItem('mf_v5',JSON.stringify(state));
-        }
-        setSyncStatus('ok');
+        const shouldMerge = remoteTs>localTs||!state.lastUpdated;
+
+        // Los movimientos ahora viven en users/{uid}/movimientos/{id} (un doc por movimiento),
+        // así una escritura externa (bot, atajo) puede agregar uno solo sin reescribir todo.
+        return DOC_REF.collection('movimientos').get().then(movSnap=>{
+          const subMovs = movSnap.docs.map(d=>d.data());
+
+          if(subMovs.length>0){
+            // La subcolección es SIEMPRE la fuente de verdad para movimientos, sin importar
+            // shouldMerge: un escritor externo (bot de Telegram, un atajo) solo actualiza el
+            // timestamp savedAt del documento principal, no el lastUpdated embebido dentro de
+            // meta — así que depender solo de esa comparación podía dejar movimientos nuevos
+            // sin mostrarse aunque remoteTs sí fuera más reciente. Leer la subcolección es
+            // barato (un solo query) y siempre seguro de adoptar.
+            state.movimientos = subMovs;
+            if(shouldMerge){
+              state={...state,...meta,movimientos:subMovs};
+              // meta.lastUpdated puede venir desactualizado si quien escribió por última vez
+              // fue un proceso externo que no lo actualiza (el bot solo toca meta.cuentas).
+              // remoteTs (el savedAt real del documento) es la fuente de verdad correcta aquí.
+              state.lastUpdated = remoteTs.toISOString();
+              migrateState();
+              clearSaldoCache();
+              const now=new Date();
+              state.currentYear=now.getFullYear();
+              state.currentMonth=now.getMonth();
+            }
+            localStorage.setItem('mf_v5',JSON.stringify(state));
+            const snap={};
+            subMovs.forEach(mv=>{ if(mv.id) snap[mv.id]=JSON.stringify(mv); });
+            _lastSyncedMovs = snap;
+          } else {
+            // Subcolección vacía: cuenta nueva, o falta migrar desde el formato antiguo.
+            if(shouldMerge){
+              state={...state,...meta,movimientos:legacyMovimientos.length>0?legacyMovimientos:(state.movimientos||[])};
+              state.lastUpdated = remoteTs.toISOString();
+              migrateState();
+              clearSaldoCache();
+              const now=new Date();
+              state.currentYear=now.getFullYear();
+              state.currentMonth=now.getMonth();
+              localStorage.setItem('mf_v5',JSON.stringify(state));
+            }
+            // Forzar que la próxima sincronización suba TODOS los movimientos actuales
+            // como documentos individuales (migración transparente, no destructiva).
+            _lastSyncedMovs = {};
+            syncMovimientosSubcollection().catch(e=>console.warn('Migración de movimientos falló:',e));
+          }
+          setSyncStatus('ok');
+        });
       }catch(e){console.error('Parse error:',e);setSyncStatus('error');}
     } else {
       // No cloud data yet — cuenta nueva, nunca sincronizada
@@ -3048,6 +3136,19 @@ document.addEventListener('click', e => {
 });
 
 // ── BORRAR DATOS ──────────────────────────────────────
+// Borra todos los documentos de una subcolección en lotes (Firestore no borra
+// subcolecciones automáticamente al borrar el documento padre).
+async function deleteSubcollection(collRef){
+  const snap = await collRef.get();
+  if(snap.empty) return;
+  const docs = snap.docs;
+  for(let i=0;i<docs.length;i+=450){
+    const batch = db.batch();
+    docs.slice(i,i+450).forEach(d=>batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
 async function deleteAllData(){
   if(!confirm('⚠️ ¿Estás seguro? Se eliminarán TODOS los movimientos, snapshots, servicios y presupuestos. Esta acción no se puede deshacer.')) return;
   // Set the cleared flag FIRST so loadState() skips any Firestore fetch on reload,
@@ -3059,8 +3160,12 @@ async function deleteAllData(){
   // where reload happened before the delete finished, pulling old data back.
   if(DOC_REF){
     try{
+      // Borrar la subcolección de movimientos explícitamente — borrar el doc
+      // padre NO elimina sus subcolecciones en Firestore.
+      await deleteSubcollection(DOC_REF.collection('movimientos'));
       await DOC_REF.delete();
       await db.collection('auth').doc('users').delete();
+      _lastSyncedMovs = {};
     }catch(e){ console.warn('Error borrando Firestore:', e); }
   }
   location.reload();
