@@ -414,6 +414,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-kpi-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 
 .dash-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+.dash-split-auto{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:22px;}
 .dash-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);margin-bottom:12px;}
 .dash-mov-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .dash-mov-row:last-child{border-bottom:none;}
@@ -442,7 +443,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   .srv-grid{grid-template-columns:1fr;}
   /* Dashboard */
   .dash-kpi-grid{grid-template-columns:repeat(2,1fr);}
-  .dash-split{grid-template-columns:1fr;}
+  .dash-split,.dash-split-auto{grid-template-columns:1fr;}
   .dash-shortcut-grid{grid-template-columns:repeat(2,1fr);}
   .dash-patrimonio-val{font-size:30px;}
   /* Nav */
@@ -459,7 +460,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   .container{padding:12px;}
   /* Dashboard */
   .dash-kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
-  .dash-split{grid-template-columns:1fr;gap:10px;}
+  .dash-split,.dash-split-auto{grid-template-columns:1fr;gap:10px;}
   .dash-shortcut-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
   .dash-hero{padding:18px 16px;}
   .dash-patrimonio-val{font-size:26px;}
@@ -503,7 +504,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 /* ══ MODO COMPACTO (forzado por usuario) ══ */
 body.compact-mode .dash-kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important;}
-body.compact-mode .dash-split{grid-template-columns:1fr!important;}
+body.compact-mode .dash-split,body.compact-mode .dash-split-auto{grid-template-columns:1fr!important;}
 body.compact-mode .dash-shortcut-grid{grid-template-columns:repeat(2,1fr)!important;}
 body.compact-mode .dash-hero{padding:16px!important;}
 body.compact-mode .dash-patrimonio-val{font-size:26px!important;}
@@ -840,6 +841,20 @@ body.compact-mode .anual-table{font-size:11px;}
       <div class="dash-section-title">Estado tarjetas de crédito</div>
       <div id="dash-tc-list"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('tarjetas')">Ver detalle →</button></div>
+    </div>
+  </div>
+
+  <!-- Deudas: solo visible si hay deudas mayores activas o préstamos por cobrar pendientes -->
+  <div class="dash-split-auto" id="dash-debts-split" style="display:none">
+    <div class="card" style="padding:18px;display:none" id="dash-dm-card">
+      <div class="dash-section-title">🏛️ Deudas Mayores</div>
+      <div id="dash-dm-list"></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
+    </div>
+    <div class="card" style="padding:18px;display:none" id="dash-dp-card">
+      <div class="dash-section-title">🤝 Préstamos por Cobrar</div>
+      <div id="dash-dp-list"></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
     </div>
   </div>
 
@@ -4502,6 +4517,75 @@ function renderDashboard(){
       }).join('');
     }
   }
+
+  renderDashDebts();
+}
+
+// ── DASHBOARD: Deudas Mayores + Préstamos por Cobrar ──
+// Solo se muestran si hay información relevante (deudas activas / préstamos pendientes)
+function renderDashDebts(){
+  const wrap = document.getElementById('dash-debts-split');
+  if(!wrap) return;
+
+  // ── Deudas Mayores (préstamos bancarios con saldo pendiente > 0) ──
+  const dmActivas = (state.deudasMayores||[])
+    .map(d=>({d, r:getDMResumen(d)}))
+    .filter(x=>x.r.saldoPendiente>0.01);
+
+  const dmCard = document.getElementById('dash-dm-card');
+  const dmList = document.getElementById('dash-dm-list');
+  if(dmActivas.length){
+    dmCard.style.display='block';
+    dmList.innerHTML = dmActivas.map(({d,r})=>{
+      const pct = r.total>0 ? (r.pagadas/r.total)*100 : 0;
+      const proxLabel = r.proximaFecha
+        ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})
+        : '—';
+      return `<div class="dash-tc-row" onclick="showPage('deudas')" style="cursor:pointer">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="font-size:13px;font-weight:600">${d.nombre}</div>
+            <div style="font-family:var(--mono);font-size:12px;color:var(--amber);flex-shrink:0;margin-left:8px">${M(dmFmt(r.saldoPendiente,d.currency))}</div>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">Próx. pago: ${proxLabel} · ${r.restantes} cuota${r.restantes===1?'':'s'} restante${r.restantes===1?'':'s'}</div>
+          <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:5px">
+            <div style="height:3px;border-radius:2px;width:${pct}%;background:var(--purple);transition:width .4s"></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    dmCard.style.display='none';
+  }
+
+  // ── Préstamos por cobrar (deudas personales aún pendientes) ──
+  const dpPend = (state.deudas||[]).filter(d=>d.status==='pendiente');
+  const dpCard = document.getElementById('dash-dp-card');
+  const dpList = document.getElementById('dash-dp-list');
+  if(dpPend.length){
+    dpCard.style.display='block';
+    const sorted = [...dpPend].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+    dpList.innerHTML = sorted.slice(0,5).map(d=>{
+      const sym = d.currency==='USD'?'$':'S/';
+      const dias = Math.floor((new Date()-new Date(d.fecha+'T12:00:00'))/(1000*60*60*24));
+      const diasLabel = dias<=0 ? 'hoy' : dias===1 ? 'hace 1 día' : 'hace '+dias+' días';
+      return `<div class="dash-mov-row" onclick="showPage('deudas')" style="cursor:pointer">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <div class="dash-mov-dot" style="background:var(--amber)"></div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${d.nombre}</div>
+            <div style="font-size:10px;color:${dias>30?'var(--red)':'var(--text3)'}">${diasLabel}</div>
+          </div>
+        </div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--amber);flex-shrink:0;margin-left:8px">${M(sym+' '+Math.abs(d.monto).toFixed(2))}</div>
+      </div>`;
+    }).join('') + (dpPend.length>5 ? `<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${dpPend.length-5} más</div>` : '');
+  } else {
+    dpCard.style.display='none';
+  }
+
+  // Ocultar todo el bloque si ninguna de las dos secciones tiene datos
+  wrap.style.display = (dmActivas.length || dpPend.length) ? 'grid' : 'none';
 }
 
 
