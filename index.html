@@ -4510,6 +4510,14 @@ function fuelFmt(n, dec=2){
   if(v===null||v===undefined||isNaN(v)) return '—';
   return v.toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 }
+// Formatea un valor numérico con separador de miles para mostrarlo en un <input>.
+// Devuelve '' (no '—') cuando no hay valor, ya que se usa como value= de un input.
+function fuelInputFmt(v){
+  if(v===undefined||v===null||v==='') return '';
+  const n = typeof v==='string' ? parseFloat(v) : v;
+  if(isNaN(n)) return '';
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
 function fuelDateLabel(d){
   if(!d) return '—';
   return new Date(d+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
@@ -4570,8 +4578,8 @@ function renderFuelSection(type){
       return `<tr id="fuel-row-${type}-${r.id}" style="${isLast?'background:rgba(91,141,239,.04)':''}">
         <td><input class="fuel-inp date-inp" type="date" value="${r.fInicial||''}" onchange="updateFuelField('${type}','${r.id}','fInicial',this.value)" title="F. Inicial (editable, por defecto hereda del F. Final anterior)"></td>
         <td><input class="fuel-inp date-inp" type="date" value="${r.fFinal||''}" onchange="updateFuelField('${type}','${r.id}','fFinal',this.value)"></td>
-        <td><input class="fuel-inp" type="number" value="${r.kmInicial||''}" onchange="updateFuelField('${type}','${r.id}','kmInicial',this.value)" style="width:75px" placeholder="KM" title="KM Inicial (editable, por defecto hereda del KM Final anterior)"></td>
-        <td><input class="fuel-inp" type="number" value="${r.kmFinal||''}" onchange="updateFuelField('${type}','${r.id}','kmFinal',this.value)" style="width:75px" placeholder="KM"></td>
+        <td><input class="fuel-inp" type="text" inputmode="numeric" value="${fuelInputFmt(r.kmInicial)}" onchange="updateFuelField('${type}','${r.id}','kmInicial',this.value.replace(/,/g,''))" style="width:75px" placeholder="KM" title="KM Inicial (editable, por defecto hereda del KM Final anterior)"></td>
+        <td><input class="fuel-inp" type="text" inputmode="numeric" value="${fuelInputFmt(r.kmFinal)}" onchange="updateFuelField('${type}','${r.id}','kmFinal',this.value.replace(/,/g,''))" style="width:75px" placeholder="KM"></td>
         <td style="color:var(--teal)">${r.kmUsado!==null?fuelFmt(r.kmUsado,0):'—'}</td>
         <td>${r.dt!==null?r.dt:'—'}</td>
         <td style="color:var(--accent)">${r.kmDiarios!==null?fuelFmt(r.kmDiarios,1):'—'}</td>
