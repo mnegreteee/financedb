@@ -626,6 +626,34 @@ body.compact-mode .anual-table{font-size:11px;}
 .dm-preview-box{background:var(--bg3);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;}
 @media(max-width:600px){.dm-summary{grid-template-columns:1fr 1fr;}.dm-tipo-choice{grid-template-columns:1fr;}}
 
+
+/* ══ CALENDARIO ══ */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
+.cal-dow{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:6px 0;}
+.cal-day{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px;min-height:84px;cursor:pointer;transition:all .12s;display:flex;flex-direction:column;gap:3px;}
+.cal-day:hover{border-color:var(--border2);background:var(--bg3);}
+.cal-day.cal-outside{opacity:.3;}
+.cal-day.cal-today{border-color:var(--accent);border-width:2px;}
+.cal-day-num{font-size:11px;font-weight:600;color:var(--text2);}
+.cal-day.cal-today .cal-day-num{color:var(--accent);font-weight:700;}
+.cal-event-chip{font-size:9px;font-weight:600;padding:2px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;cursor:pointer;}
+.cal-event-more{font-size:9px;color:var(--text3);padding:1px 5px;}
+.cal-legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+.cal-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);}
+.cal-legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+@media(max-width:700px){
+  .cal-grid{gap:3px;}
+  .cal-day{min-height:52px;padding:3px;}
+  .cal-day-num{font-size:10px;}
+  .cal-event-chip{font-size:8px;padding:1px 3px;}
+  .cal-dow{font-size:8px;padding:3px 0;}
+}
+
+/* ══ DASHBOARD: Próximos eventos (cuenta regresiva) ══ */
+.dash-event-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+.dash-event-row:last-child{border-bottom:none;}
+.dash-event-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;color:#fff;white-space:nowrap;}
+
 </style>
 </head>
 <body>
@@ -656,6 +684,7 @@ body.compact-mode .anual-table{font-size:11px;}
     <button class="nav-tab" id="nav-deudas" onclick="showPage('deudas')">🤝 Deudas</button>
     <button class="nav-tab" id="nav-combustible" onclick="showPage('combustible')">⛽ Combustible</button>
     <button class="nav-tab" id="nav-tc-tracker" onclick="showPage('tc-tracker')">💱 TC</button>
+    <button class="nav-tab" id="nav-calendario" onclick="showPage('calendario')">📅 Calendario</button>
   </div>
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
@@ -855,6 +884,11 @@ body.compact-mode .anual-table{font-size:11px;}
       <div class="dash-section-title">🤝 Préstamos por Cobrar</div>
       <div id="dash-dp-list"></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
+    </div>
+    <div class="card" style="padding:18px;display:none" id="dash-events-card">
+      <div class="dash-section-title">📅 Próximos Eventos</div>
+      <div id="dash-events-list"></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('calendario')">Ver calendario →</button></div>
     </div>
   </div>
 
@@ -1090,6 +1124,26 @@ body.compact-mode .anual-table{font-size:11px;}
       <tbody id="tct-tbody"></tbody>
     </table>
   </div>
+
+</div>
+</div>
+
+<!-- ══ PAGE: CALENDARIO ══ -->
+<div class="page" id="page-calendario">
+<div class="container">
+
+  <div class="month-nav" style="margin-bottom:16px">
+    <button class="month-btn" onclick="changeCalMonth(-1)">‹</button>
+    <h1 id="cal-month-title">Julio 2026</h1>
+    <button class="month-btn" onclick="changeCalMonth(1)">›</button>
+    <button class="btn" style="font-size:11px;margin-left:12px" onclick="goToCalToday()">Hoy</button>
+    <button class="btn btn-primary" style="font-size:11px;margin-left:auto" onclick="openCalEventModal(null, todayISO())">+ Nuevo evento</button>
+  </div>
+
+  <div class="cal-legend" id="cal-legend"></div>
+
+  <div class="cal-grid" id="cal-dow-row"></div>
+  <div class="cal-grid" id="cal-grid"></div>
 
 </div>
 </div>
@@ -1576,6 +1630,7 @@ let state={
   ],
   tcTracker:[],            // [{id,fecha,rates:{empresaId:{compra,venta}}}]
   deudasMayores:[],        // [{id,tipo,nombre,currency,...,cuotas:[]}]
+  calendarEvents:[],       // [{id,titulo,fecha,tipo,recurrente,notas}]
   currentTab:'todos',editId:null
 };
 
@@ -1653,7 +1708,10 @@ function migrateState(){
   if(!Array.isArray(state.deudas))         state.deudas=[];
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
   state.deudasMayores=[];
+  state.calendarEvents=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
+  state.calendarEvents=[];
+  if(!Array.isArray(state.calendarEvents))  state.calendarEvents=[];
   if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
     {id:'kambista',   nombre:'Kambista',   color:'#2f6fd1'},
     {id:'rextie',     nombre:'Rextie',     color:'#f0a53c'},
@@ -1776,6 +1834,7 @@ function showPage(name){
   if(name==='deudas')     { renderDeudas(); renderDeudasMayores(); }
   if(name==='combustible') renderCombustible();
   if(name==='tc-tracker')  renderTCTracker();
+  if(name==='calendario')  renderCalendario();
 }
 
 // ── HELPERS ───────────────────────────────────────────
@@ -1827,6 +1886,7 @@ function render(){
   if(active('deudas'))     { renderDeudas(); renderDeudasMayores(); }
   if(active('combustible')) renderCombustible();
   if(active('tc-tracker'))  renderTCTracker();
+  if(active('calendario'))  renderCalendario();
 }
 function updateTitles(){
   const label=MONTHS[state.currentMonth]+' '+state.currentYear;
@@ -4584,8 +4644,30 @@ function renderDashDebts(){
     dpCard.style.display='none';
   }
 
-  // Ocultar todo el bloque si ninguna de las dos secciones tiene datos
-  wrap.style.display = (dmActivas.length || dpPend.length) ? 'grid' : 'none';
+  // ── Próximos eventos del calendario (mes actual) ──
+  const upcomingEvents = getUpcomingCalEventsThisMonth();
+  const evCard = document.getElementById('dash-events-card');
+  const evList = document.getElementById('dash-events-list');
+  if(upcomingEvents.length){
+    evCard.style.display='block';
+    evList.innerHTML = upcomingEvents.slice(0,5).map(o=>{
+      const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
+      const dateLabel = new Date(o.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'});
+      const countdownLabel = o.diffDays===0 ? '¡Hoy!' : o.diffDays===1 ? 'Mañana' : 'en '+o.diffDays+' días';
+      return `<div class="dash-event-row" onclick="showPage('calendario')" style="cursor:pointer">
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${t.icon} ${o.event.titulo}</div>
+          <div style="font-size:10px;color:var(--text3)">${dateLabel}</div>
+        </div>
+        <span class="dash-event-badge" style="background:${t.color}">${countdownLabel}</span>
+      </div>`;
+    }).join('');
+  } else {
+    evCard.style.display='none';
+  }
+
+  // Ocultar todo el bloque si NINGUNA de las tres secciones tiene datos
+  wrap.style.display = (dmActivas.length || dpPend.length || upcomingEvents.length) ? 'grid' : 'none';
 }
 
 
@@ -5600,6 +5682,203 @@ function updateDMCuotaFecha(numero, value){
   if(c){ c.fecha=value; saveState(); renderDMDetail(); }
 }
 
+
+// ══════════════════════════════════════════════════════
+//  MÓDULO CALENDARIO
+// ══════════════════════════════════════════════════════
+const CAL_TIPOS = {
+  sueldo:        {icon:'💰', label:'Sueldo',              color:'#3ec96e'},
+  gratificacion: {icon:'🎁', label:'Gratificación',        color:'#f0a53c'},
+  cts:           {icon:'🏦', label:'CTS',                  color:'#5b8def'},
+  evento:        {icon:'📌', label:'Evento importante',    color:'#a78bfa'},
+  otro:          {icon:'📝', label:'Otro',                 color:'#6b7280'},
+};
+const CAL_DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+let calViewYear  = new Date().getFullYear();
+let calViewMonth = new Date().getMonth();
+let editingCalEventId = null;
+
+function todayISO(){
+  const t = new Date();
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+}
+
+// Días en un mes dado (0-indexed month)
+function daysInMonth(y,m){ return new Date(y, m+1, 0).getDate(); }
+
+// Devuelve todas las ocurrencias (evento + fecha concreta) que caen en un año/mes dado,
+// resolviendo eventos recurrentes al día-del-mes correspondiente (con clamp si el mes es más corto).
+function getEventOccurrencesForMonth(year, month){
+  const events = state.calendarEvents || [];
+  const occurrences = [];
+  events.forEach(ev=>{
+    const evDate = new Date(ev.fecha+'T12:00:00');
+    if(ev.recurrente){
+      const day = Math.min(evDate.getDate(), daysInMonth(year,month));
+      const dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+      occurrences.push({event:ev, fecha:dateStr});
+    } else {
+      if(evDate.getFullYear()===year && evDate.getMonth()===month){
+        occurrences.push({event:ev, fecha:ev.fecha});
+      }
+    }
+  });
+  return occurrences;
+}
+
+// ── RENDER CALENDARIO ──────────────────────────────────
+function renderCalendario(){
+  const titleEl = document.getElementById('cal-month-title');
+  if(titleEl) titleEl.textContent = MONTHS[calViewMonth]+' '+calViewYear;
+
+  // Leyenda
+  const legendEl = document.getElementById('cal-legend');
+  if(legendEl){
+    legendEl.innerHTML = Object.entries(CAL_TIPOS).map(([key,t])=>
+      `<div class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.color}"></span>${t.icon} ${t.label}</div>`
+    ).join('');
+  }
+
+  // Encabezado días de semana
+  const dowEl = document.getElementById('cal-dow-row');
+  if(dowEl) dowEl.innerHTML = CAL_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  // Grid de días
+  const gridEl = document.getElementById('cal-grid');
+  if(!gridEl) return;
+
+  const firstDow = new Date(calViewYear, calViewMonth, 1).getDay(); // 0=Dom
+  const totalDays = daysInMonth(calViewYear, calViewMonth);
+  const prevMonthDays = daysInMonth(calViewYear, calViewMonth-1<0?11:calViewMonth-1);
+  const today = todayISO();
+
+  const occurrences = getEventOccurrencesForMonth(calViewYear, calViewMonth);
+  const bySDay = {}; // día(1-31) -> [occurrences]
+  occurrences.forEach(o=>{
+    const day = parseInt(o.fecha.split('-')[2]);
+    if(!bySDay[day]) bySDay[day]=[];
+    bySDay[day].push(o);
+  });
+
+  const cells = [];
+  // Días del mes anterior (relleno)
+  for(let i=firstDow-1;i>=0;i--){
+    cells.push({day: prevMonthDays-i, outside:true});
+  }
+  // Días del mes actual
+  for(let d=1; d<=totalDays; d++){
+    cells.push({day:d, outside:false});
+  }
+  // Completar hasta múltiplo de 7
+  while(cells.length % 7 !== 0){
+    cells.push({day: cells.length - (firstDow+totalDays) + 1, outside:true});
+  }
+
+  gridEl.innerHTML = cells.map(cell=>{
+    if(cell.outside){
+      return `<div class="cal-day cal-outside"><div class="cal-day-num">${cell.day}</div></div>`;
+    }
+    const dateStr = calViewYear+'-'+String(calViewMonth+1).padStart(2,'0')+'-'+String(cell.day).padStart(2,'0');
+    const isToday = dateStr===today;
+    const dayEvents = bySDay[cell.day] || [];
+    const maxShow = 3;
+    const chips = dayEvents.slice(0,maxShow).map(o=>{
+      const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
+      return `<div class="cal-event-chip" style="background:${t.color}" onclick="event.stopPropagation();openCalEventModal('${o.event.id}')" title="${o.event.titulo}">${t.icon} ${o.event.titulo}</div>`;
+    }).join('');
+    const more = dayEvents.length>maxShow ? `<div class="cal-event-more">+${dayEvents.length-maxShow} más</div>` : '';
+    return `<div class="cal-day ${isToday?'cal-today':''}" onclick="openCalEventModal(null,'${dateStr}')">
+      <div class="cal-day-num">${cell.day}</div>
+      ${chips}${more}
+    </div>`;
+  }).join('');
+}
+
+function changeCalMonth(delta){
+  calViewMonth += delta;
+  if(calViewMonth<0){calViewMonth=11;calViewYear--;}
+  if(calViewMonth>11){calViewMonth=0;calViewYear++;}
+  renderCalendario();
+}
+function goToCalToday(){
+  const t=new Date();
+  calViewYear=t.getFullYear(); calViewMonth=t.getMonth();
+  renderCalendario();
+}
+
+// ── CRUD EVENTOS ────────────────────────────────────────
+function openCalEventModal(id, prefillDate){
+  editingCalEventId = id || null;
+  const delBtn = document.getElementById('cal-e-delete-btn');
+  if(id){
+    const ev = (state.calendarEvents||[]).find(e=>e.id===id);
+    if(!ev) return;
+    document.getElementById('cal-event-modal-title').textContent = 'Editar Evento';
+    document.getElementById('cal-e-titulo').value = ev.titulo;
+    document.getElementById('cal-e-fecha').value = ev.fecha;
+    document.getElementById('cal-e-tipo').value = ev.tipo;
+    document.getElementById('cal-e-recurrente').checked = !!ev.recurrente;
+    document.getElementById('cal-e-notas').value = ev.notas||'';
+    delBtn.style.display='inline-flex';
+  } else {
+    document.getElementById('cal-event-modal-title').textContent = 'Nuevo Evento';
+    document.getElementById('cal-e-titulo').value = '';
+    document.getElementById('cal-e-fecha').value = prefillDate || todayISO();
+    document.getElementById('cal-e-tipo').value = 'evento';
+    document.getElementById('cal-e-recurrente').checked = false;
+    document.getElementById('cal-e-notas').value = '';
+    delBtn.style.display='none';
+  }
+  document.getElementById('cal-event-overlay').classList.add('open');
+}
+function closeCalEventModal(){
+  document.getElementById('cal-event-overlay').classList.remove('open');
+}
+
+function saveCalEvent(){
+  const titulo = (document.getElementById('cal-e-titulo').value||'').trim();
+  const fecha = document.getElementById('cal-e-fecha').value;
+  const tipo = document.getElementById('cal-e-tipo').value;
+  const recurrente = document.getElementById('cal-e-recurrente').checked;
+  const notas = (document.getElementById('cal-e-notas').value||'').trim();
+  if(!titulo || !fecha){ alert('Completa el título y la fecha.'); return; }
+
+  if(!state.calendarEvents) state.calendarEvents=[];
+  if(editingCalEventId){
+    const ev = state.calendarEvents.find(e=>e.id===editingCalEventId);
+    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.notas=notas; }
+  } else {
+    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, notas});
+  }
+  saveState();
+  closeCalEventModal();
+  renderCalendario();
+}
+
+function deleteCalEvent(){
+  if(!editingCalEventId || !confirm('¿Eliminar este evento?')) return;
+  state.calendarEvents = (state.calendarEvents||[]).filter(e=>e.id!==editingCalEventId);
+  saveState();
+  closeCalEventModal();
+  renderCalendario();
+}
+
+// ── DASHBOARD: Próximos eventos del mes actual (cuenta regresiva) ──
+function getUpcomingCalEventsThisMonth(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const y = today.getFullYear(), m = today.getMonth();
+  const occurrences = getEventOccurrencesForMonth(y, m);
+  return occurrences
+    .map(o=>{
+      const d = new Date(o.fecha+'T00:00:00');
+      const diffDays = Math.round((d-today)/(1000*60*60*24));
+      return {...o, diffDays};
+    })
+    .filter(o=>o.diffDays>=0)
+    .sort((a,b)=>a.diffDays-b.diffDays);
+}
+
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
   // Don't seed if user explicitly cleared all data
@@ -5642,6 +5921,7 @@ function seedDemo(){
   state.combustibleGas=[];
   state.tcTracker=[];
   state.deudasMayores=[];
+  state.calendarEvents=[];
   state.snapshots={'2026-05':{BCP:0,BBVA:426.00,Efectivo:0,'Ahorro Soles':12799.44,'Ahorro Dólares':1805.52}};
   state.budgets={'🍔 Comida':{limit:300},'👗 Ropa':{limit:200},'🏦 Finanzas':{limit:4500},'📱 Servicios':{limit:50}};
   state.projGoals={soles:20000,dolar:3000};
@@ -5974,6 +6254,40 @@ if(state.projGoals){
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeDeudaPago()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarDeudaPago()">✅ Confirmar cobro</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EVENTO CALENDARIO -->
+<div class="modal-overlay" id="cal-event-overlay" onclick="if(event.target===this)closeCalEventModal()">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><span id="cal-event-modal-title">Nuevo Evento</span><button class="modal-close" onclick="closeCalEventModal()">✕</button></div>
+    <div class="field"><label>Título</label><input id="cal-e-titulo" type="text" placeholder="Ej. Pago de sueldo"></div>
+    <div class="field-row">
+      <div class="field"><label>Fecha</label><input id="cal-e-fecha" type="date"></div>
+      <div class="field"><label>Tipo</label>
+        <select id="cal-e-tipo">
+          <option value="sueldo">💰 Sueldo</option>
+          <option value="gratificacion">🎁 Gratificación</option>
+          <option value="cts">🏦 CTS</option>
+          <option value="evento">📌 Evento importante</option>
+          <option value="otro">📝 Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
+      <input id="cal-e-recurrente" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
+      <label style="margin:0;font-size:12px;font-weight:500;color:var(--text)">Se repite cada mes (mismo día)</label>
+    </div>
+    <div class="field"><label>Notas <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+      <input id="cal-e-notas" type="text" placeholder="Detalles adicionales...">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
+      <button class="config-action-btn danger" id="cal-e-delete-btn" style="display:none" onclick="deleteCalEvent()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="closeCalEventModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveCalEvent()">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
