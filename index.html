@@ -668,6 +668,7 @@ body.compact-mode .anual-table{font-size:11px;}
     <div class="login-field"><label>Contraseña</label><input id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="login-btn" onclick="doLogin()">Ingresar</button>
     <div class="login-err" id="login-err">Correo o contraseña incorrectos.</div>
+    <div id="app-version-label" style="text-align:center;font-size:10px;color:var(--text3);margin-top:18px;letter-spacing:.3px"></div>
   </div>
 </div>
 
@@ -1599,6 +1600,14 @@ body.compact-mode .anual-table{font-size:11px;}
 
 
 <script>
+// ══════════════════════════════════════════════════════
+//  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
+//  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
+// ══════════════════════════════════════════════════════
+const APP_VERSION = 'v1.0.0';
+const APP_VERSION_DATE = '10 jul 2026';
+const APP_VERSION_NOTE = 'Indicador de versión';
+
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
 // ══════════════════════════════════════════════════════
@@ -5978,6 +5987,10 @@ function seedDemo(){
 
 // ── INIT ─────────────────────────────────────────────
 loadTheme();loadCompact();
+(function(){
+  const el = document.getElementById('app-version-label');
+  if(el) el.textContent = 'Versión '+APP_VERSION+' · '+APP_VERSION_DATE;
+})();
 
 // Init Firebase then load state
 function initFirebase(){
