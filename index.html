@@ -6,7 +6,6 @@
 <title>No hay nada que ver aquí</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
@@ -1604,9 +1603,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.1.1';
+const APP_VERSION = 'v1.2.0';
 const APP_VERSION_DATE = '10 jul 2026';
-const APP_VERSION_NOTE = 'Fix: sincronización de movimientos agregados por el bot';
+const APP_VERSION_NOTE = 'Autenticación real con Firebase Auth';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3164,7 +3163,6 @@ async function deleteAllData(){
       // padre NO elimina sus subcolecciones en Firestore.
       await deleteSubcollection(DOC_REF.collection('movimientos'));
       await DOC_REF.delete();
-      await db.collection('auth').doc('users').delete();
       _lastSyncedMovs = {};
     }catch(e){ console.warn('Error borrando Firestore:', e); }
   }
@@ -3358,79 +3356,57 @@ function confirmDeleteMonths(){ showDelConfirmStep2(); }
 //  AUTH & SECURITY
 // ══════════════════════════════════════════════════════
 
-// Users are stored in Firestore (encrypted) — NOT in the HTML
-// Master user hash is computed via SHA-256 to avoid plain text
-// Master credentials are hashed at runtime — stored in Firestore 'auth/master' doc
-// To reset: update DOC_REF auth collection via Firebase Console
-const MASTER_HASH = (()=>{ try{ const d=atob('bWlndWVsQG1pZ3VlbC5jb206OTk2NjAwODYw'); return CryptoJS.SHA256(d).toString(); }catch(e){return '';} })();
-
+// ── AUTENTICACIÓN REAL (Firebase Auth) ────────────────
+// Ya no se guardan contraseñas ni hashes en Firestore/HTML — Firebase Auth
+// verifica las credenciales del lado del servidor. Las reglas de Firestore
+// exigen request.auth != null, así que sin sesión iniciada no se puede leer
+// ni escribir nada (ver README de reglas).
 let currentUser = null;
 let inactivityMinutes = parseInt(localStorage.getItem('mf_inactivity')||'5');
 let inactivityTimer = null;
 
-function hashCreds(email, pass){
-  return CryptoJS.SHA256(email.toLowerCase().trim() + ':' + pass).toString();
-}
-
 async function doLogin(){
-  const email = (document.getElementById('login-email').value||'').toLowerCase().trim();
+  const email = (document.getElementById('login-email').value||'').trim();
   const pass  = document.getElementById('login-pass').value||'';
   const errEl = document.getElementById('login-err');
   errEl.style.display='none';
 
   if(!email||!pass){ errEl.textContent='Completa todos los campos.'; errEl.style.display='block'; return; }
 
-  const hash = hashCreds(email, pass);
-  let authenticated = false;
+  const btn = document.querySelector('.login-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Ingresando...'; }
 
-  // 1. Check master user
-  if(hash === MASTER_HASH){ authenticated = true; currentUser = email; }
-
-  // 2. Check users stored in Firestore (if Firebase ready)
-  if(!authenticated && DOC_REF){
-    try{
-      const usersDoc = await db.collection('auth').doc('users').get();
-      if(usersDoc.exists){
-        const users = usersDoc.data().list || [];
-        const found = users.find(u => u.hash === hash);
-        if(found){ authenticated = true; currentUser = found.email; }
-      }
-    }catch(e){ console.warn('Auth fetch error:', e); }
-  }
-
-  if(authenticated){
-    sessionStorage.setItem('mf_session', hash);
-    sessionStorage.setItem('mf_user', email);
-    showApp();
-  } else {
-    errEl.textContent = 'Correo o contraseña incorrectos.';
+  try{
+    await firebase.auth().signInWithEmailAndPassword(email, pass);
+    // onAuthStateChanged (registrado en initFirebase) se encarga de mostrar la app.
+  }catch(e){
+    console.warn('Login error:', e.code);
+    const msgs = {
+      'auth/invalid-email':'Correo inválido.',
+      'auth/user-not-found':'Correo o contraseña incorrectos.',
+      'auth/wrong-password':'Correo o contraseña incorrectos.',
+      'auth/invalid-credential':'Correo o contraseña incorrectos.',
+      'auth/too-many-requests':'Demasiados intentos. Espera un momento e intenta de nuevo.',
+    };
+    errEl.textContent = msgs[e.code] || 'Error al iniciar sesión.';
     errEl.style.display = 'block';
     document.getElementById('login-pass').value = '';
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='Ingresar'; }
   }
-}
-
-function checkSession(){
-  const sess = sessionStorage.getItem('mf_session');
-  const user = sessionStorage.getItem('mf_user');
-  if(sess && user){ currentUser = user; showApp(); return true; }
-  return false;
 }
 
 function showApp(){
   document.getElementById('login-screen').classList.add('hidden');
   setTimeout(()=>{ document.getElementById('login-screen').style.display='none'; }, 300);
   resetInactivityTimer();
-  render();
   showPage('dashboard');
 }
 
 function lockApp(){
   clearInactivityTimer();
-  sessionStorage.removeItem('mf_session');
-  sessionStorage.removeItem('mf_user');
-  currentUser = null;
-  document.getElementById('login-screen').style.display='flex';
-  setTimeout(()=>document.getElementById('login-screen').classList.remove('hidden'),10);
+  firebase.auth().signOut().catch(e=>console.warn('signOut error:',e));
+  // onAuthStateChanged detecta el signOut y muestra la pantalla de login.
   document.getElementById('login-email').value='';
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').style.display='none';
@@ -3464,53 +3440,12 @@ function saveInactivity(){
 }
 
 // ── USERS MODAL ───────────────────────────────────────
-async function openUsersModal(){
-  await renderUsersList();
+// La gestión real de usuarios ahora vive en Firebase Console (Authentication).
+// Este modal es solo informativo — ver HTML de users-modal-overlay.
+function openUsersModal(){
   document.getElementById('users-modal-overlay').classList.add('open');
 }
-function closeUsersModal(){ document.getElementById('users-modal-overlay').classList.remove('open'); closeAddUser(); }
-function openAddUser(){ document.getElementById('add-user-form').style.display='block'; }
-function closeAddUser(){ document.getElementById('add-user-form').style.display='none'; document.getElementById('nu-email').value=''; document.getElementById('nu-pass').value=''; }
-
-async function renderUsersList(){
-  const el = document.getElementById('users-list');
-  el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:4px 0">Cargando...</div>';
-  const rows = await fetchUsers();
-  if(!rows.length){ el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:4px 0">Solo existe el usuario maestro.</div>'; return; }
-  el.innerHTML=rows.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-    <div style="font-size:13px">${u.email}</div>
-    <button class="config-action-btn danger" onclick="deleteUser('${u.email}')">🗑 Eliminar</button>
-  </div>`).join('');
-}
-
-async function fetchUsers(){
-  if(!DOC_REF) return [];
-  try{
-    const doc = await db.collection('auth').doc('users').get();
-    return doc.exists ? (doc.data().list||[]) : [];
-  }catch(e){ return []; }
-}
-
-async function saveNewUser(){
-  const email=(document.getElementById('nu-email').value||'').toLowerCase().trim();
-  const pass=document.getElementById('nu-pass').value||'';
-  if(!email||pass.length<6){ alert('Correo inválido o contraseña menor a 6 caracteres.'); return; }
-  if(!DOC_REF){ alert('Firebase no disponible.'); return; }
-  const hash=hashCreds(email,pass);
-  const users=await fetchUsers();
-  if(users.find(u=>u.email===email)){ alert('Ese usuario ya existe.'); return; }
-  users.push({email,hash});
-  await db.collection('auth').doc('users').set({list:users});
-  closeAddUser();
-  await renderUsersList();
-}
-
-async function deleteUser(email){
-  if(!confirm('¿Eliminar usuario '+email+'?')) return;
-  const users=(await fetchUsers()).filter(u=>u.email!==email);
-  await db.collection('auth').doc('users').set({list:users});
-  await renderUsersList();
-}
+function closeUsersModal(){ document.getElementById('users-modal-overlay').classList.remove('open'); }
 
 // ══════════════════════════════════════════════════════
 //  CUENTAS DINÁMICAS
@@ -6110,31 +6045,41 @@ function initFirebase(){
     DOC_REF = db.collection('users').doc('mnegreteee');
   } catch(e){ console.warn('Firebase init error:',e); }
 
-  // IMPORTANTE: esperar a que loadState() termine de consultar Firestore
-  // antes de decidir si hay que sembrar datos demo. Esto evita que un
-  // dispositivo nuevo (sin caché local) sobreescriba la sincronización
-  // real con datos de ejemplo mientras la respuesta de la nube aún viaja.
-  loadState().then(()=>{
-    seedDemo();
-    updateLoginBranding();
-    render();
-    updateLastUpdated();
-    // Si la cuenta nunca se sincronizó antes (no había documento en Firestore),
-    // subimos el estado resultante (local + demo si se sembró) una sola vez.
-    if(DOC_REF && _remoteDocExisted===false){
-      saveState();
+  // onAuthStateChanged es la ÚNICA puerta de entrada a los datos: mientras no
+  // haya una sesión real de Firebase Auth, nunca se consulta Firestore (y las
+  // reglas de seguridad tampoco lo permitirían aunque se intentara). Se
+  // dispara automáticamente al iniciar sesión, al restaurar una sesión previa
+  // (Firebase Auth persiste la sesión solo, sin sessionStorage manual), y al
+  // cerrar sesión.
+  firebase.auth().onAuthStateChanged(user=>{
+    if(user){
+      currentUser = user.email;
+      // IMPORTANTE: esperar a que loadState() termine de consultar Firestore
+      // antes de decidir si hay que sembrar datos demo, para no sobreescribir
+      // la sincronización real con datos de ejemplo mientras la nube responde.
+      loadState().then(()=>{
+        seedDemo();
+        updateLoginBranding();
+        render();
+        updateLastUpdated();
+        // Si la cuenta nunca se sincronizó antes (no había documento en Firestore),
+        // subimos el estado resultante (local + demo si se sembró) una sola vez.
+        if(DOC_REF && _remoteDocExisted===false){
+          saveState();
+        }
+        showApp();
+      });
+    } else {
+      currentUser = null;
+      const scr = document.getElementById('login-screen');
+      scr.style.display='flex';
+      scr.classList.remove('hidden');
     }
   });
 }
 
-// Wait for Firebase scripts to load, then init
 function startApp(){
   initFirebase();
-  // Check existing session — if valid, show app immediately
-  if(!checkSession()){
-    // Show login
-    document.getElementById('login-screen').style.display='flex';
-  }
 }
 if(typeof firebase !== 'undefined'){
   startApp();
@@ -6162,18 +6107,19 @@ if(state.projGoals){
 <div class="modal-overlay" id="users-modal-overlay" onclick="if(event.target===this)closeUsersModal()">
   <div class="modal modal-lg">
     <div class="modal-title"><span>👤 Gestionar Usuarios</span><button class="modal-close" onclick="closeUsersModal()">✕</button></div>
-    <div id="users-list" style="margin-bottom:16px"></div>
-    <button class="btn btn-primary" style="width:100%" onclick="openAddUser()">+ Agregar usuario</button>
-    <div id="add-user-form" style="display:none;margin-top:16px;background:var(--bg3);border-radius:10px;padding:16px">
-      <div class="field-row">
-        <div class="field"><label>Correo</label><input id="nu-email" type="email" placeholder="usuario@correo.com"></div>
-        <div class="field"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="mínimo 6 caracteres"></div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button class="btn" onclick="closeAddUser()">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveNewUser()">Guardar usuario</button>
-      </div>
+    <p style="color:var(--text2);font-size:12px;line-height:1.7;margin-bottom:14px">
+      El acceso ahora usa <strong>Firebase Authentication</strong> real — las contraseñas se verifican
+      del lado del servidor, no en este código. Para agregar o quitar personas con acceso al dashboard,
+      hazlo directamente en la consola de Firebase (todos los usuarios que crees ahí ven la misma
+      información, ya que comparten el mismo documento de datos):
+    </p>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:12px;line-height:1.8">
+      1. Ve a <a href="https://console.firebase.google.com/project/financedb-3bcff/authentication/users" target="_blank" style="color:var(--accent)">Firebase Console → Authentication → Users</a><br>
+      2. Clic en <strong>"Add user"</strong><br>
+      3. Ingresa el correo y una contraseña (mínimo 6 caracteres)<br>
+      4. Comparte esas credenciales con la persona — ya puede ingresar al dashboard
     </div>
+    <button class="btn btn-primary" style="width:100%" onclick="window.open('https://console.firebase.google.com/project/financedb-3bcff/authentication/users','_blank')">Abrir Firebase Console →</button>
   </div>
 </div>
 
@@ -6542,6 +6488,7 @@ if(state.projGoals){
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </body>
 </html>
