@@ -1731,6 +1731,8 @@ function migrateState(){
   if(state.ownerName===undefined) state.ownerName='';
 }
 
+let _remoteDocExisted = null; // null=desconocido/offline, true=había doc, false=no había doc (cuenta nueva)
+
 function loadState(){
   ['mf_state_v2','mf_state_v3','mf_state_v4'].forEach(k=>localStorage.removeItem(k));
   // Load from localStorage first for instant render
@@ -1750,14 +1752,15 @@ function loadState(){
     if(DOC_REF){
       saveState();
     }
-    return;
+    return Promise.resolve();
   }
 
   // Then load from Firestore (overrides localStorage if newer)
-  if(!DOC_REF){setSyncStatus('error');return;}
+  if(!DOC_REF){setSyncStatus('error');return Promise.resolve();}
   setSyncStatus('loading');
-  DOC_REF.get().then(doc=>{
+  return DOC_REF.get().then(doc=>{
     if(doc.exists){
+      _remoteDocExisted = true;
       const data=doc.data();
       try{
         const meta=JSON.parse(data.meta||'{}');
@@ -1775,18 +1778,17 @@ function loadState(){
           state.currentYear=now.getFullYear();
           state.currentMonth=now.getMonth();
           localStorage.setItem('mf_v5',JSON.stringify(state));
-          render();
-          updateLastUpdated();
         }
         setSyncStatus('ok');
       }catch(e){console.error('Parse error:',e);setSyncStatus('error');}
     } else {
-      // No cloud data yet — first time, push local data
+      // No cloud data yet — cuenta nueva, nunca sincronizada
+      _remoteDocExisted = false;
       setSyncStatus('ok');
-      if(state.movimientos.length>0) saveState();
     }
   }).catch(err=>{
     console.warn('Firestore offline, using local data:',err);
+    _remoteDocExisted = null; // desconocido — no forzar push mientras esté offline
     setSyncStatus('error');
   });
 }
@@ -5967,11 +5969,22 @@ function initFirebase(){
     db = firebase.firestore();
     DOC_REF = db.collection('users').doc('mnegreteee');
   } catch(e){ console.warn('Firebase init error:',e); }
-  loadState();
-  seedDemo();
-  updateLoginBranding();
-  render();
-  updateLastUpdated();
+
+  // IMPORTANTE: esperar a que loadState() termine de consultar Firestore
+  // antes de decidir si hay que sembrar datos demo. Esto evita que un
+  // dispositivo nuevo (sin caché local) sobreescriba la sincronización
+  // real con datos de ejemplo mientras la respuesta de la nube aún viaja.
+  loadState().then(()=>{
+    seedDemo();
+    updateLoginBranding();
+    render();
+    updateLastUpdated();
+    // Si la cuenta nunca se sincronizó antes (no había documento en Firestore),
+    // subimos el estado resultante (local + demo si se sembró) una sola vez.
+    if(DOC_REF && _remoteDocExisted===false){
+      saveState();
+    }
+  });
 }
 
 // Wait for Firebase scripts to load, then init
