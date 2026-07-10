@@ -568,6 +568,63 @@ body.compact-mode .anual-table{font-size:11px;}
 .fuel-highlight{background:rgba(240,165,60,.08)!important;}
 @media(max-width:600px){.fuel-summary{grid-template-columns:repeat(2,1fr);}}
 
+
+/* ══ TC TRACKER (Comparador Casas de Cambio) ══ */
+.tct-table-wrap{overflow-x:auto;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius);}
+.tct-table{width:100%;border-collapse:collapse;font-size:11px;min-width:1400px;}
+.tct-table th{padding:6px 8px;text-align:center;white-space:nowrap;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.tct-table td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:var(--mono);white-space:nowrap;}
+.tct-table tr:hover td{background:var(--bg3);}
+.tct-group-header{color:#fff;font-weight:700;padding:7px 8px!important;}
+.tct-sub-header{background:var(--bg3);color:var(--text3);border-bottom:2px solid var(--border);}
+.tct-inp{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;text-align:center;width:64px;padding:2px 3px;outline:none;}
+.tct-inp:focus{border-bottom-color:var(--accent);}
+.tct-inp.date-inp{width:96px;}
+.tct-monto{font-weight:600;}
+.tct-best-cell{font-weight:700;}
+.tct-empresa-mgmt{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.tct-empresa-chip{display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px;}
+.tct-empresa-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.tct-empresa-del{width:18px;height:18px;border-radius:50%;background:var(--bg3);border:none;color:var(--text3);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;}
+.tct-empresa-del:hover{background:var(--red-bg);color:var(--red);}
+@media(max-width:600px){.tct-table{min-width:1200px;}}
+
+
+/* ══ DEUDAS MAYORES (préstamos largos con cuotas) ══ */
+.dm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-bottom:20px;}
+.dm-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
+.dm-card:hover{border-color:var(--border2);transform:translateY(-1px);}
+.dm-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);}
+.dm-card.dm-fijo::before{background:var(--teal);}
+.dm-card.dm-amortizado::before{background:var(--purple);}
+.dm-tipo-badge{font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px;}
+.dm-tipo-badge.fijo{background:rgba(45,212,191,.15);color:var(--teal);}
+.dm-tipo-badge.amortizado{background:rgba(167,139,250,.15);color:var(--purple);}
+.dm-progress-bar{height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;margin:10px 0 4px;}
+.dm-progress-fill{height:100%;border-radius:3px;transition:width .4s;}
+.dm-table-wrap{overflow-x:auto;max-height:520px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);}
+.dm-table{width:100%;border-collapse:collapse;font-size:12px;}
+.dm-table th{position:sticky;top:0;background:var(--bg3);padding:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);text-align:center;border-bottom:2px solid var(--border);z-index:2;}
+.dm-table td{padding:7px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:var(--mono);}
+.dm-table tr.dm-row-paid td{opacity:.5;}
+.dm-table tr:hover td{background:var(--bg3);}
+.dm-check{width:16px;height:16px;cursor:pointer;accent-color:var(--green);}
+.dm-fecha-inp{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;text-align:center;padding:2px;outline:none;width:96px;}
+.dm-fecha-inp:focus{border-bottom-color:var(--accent);}
+.dm-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+.dm-sum-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+.dm-sum-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:3px;}
+.dm-sum-val{font-family:var(--mono);font-size:17px;font-weight:500;}
+.dm-tipo-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;}
+.dm-tipo-opt{border:2px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;text-align:center;transition:all .15s;}
+.dm-tipo-opt:hover{border-color:var(--border2);background:var(--bg3);}
+.dm-tipo-opt.selected{border-color:var(--accent);background:rgba(91,141,239,.08);}
+.dm-tipo-opt-icon{font-size:26px;margin-bottom:6px;}
+.dm-tipo-opt-title{font-size:13px;font-weight:700;margin-bottom:3px;}
+.dm-tipo-opt-desc{font-size:10px;color:var(--text2);line-height:1.4;}
+.dm-preview-box{background:var(--bg3);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;}
+@media(max-width:600px){.dm-summary{grid-template-columns:1fr 1fr;}.dm-tipo-choice{grid-template-columns:1fr;}}
+
 </style>
 </head>
 <body>
@@ -597,6 +654,7 @@ body.compact-mode .anual-table{font-size:11px;}
     <button class="nav-tab" id="nav-tarjetas" onclick="showPage('tarjetas')">💳 Tarjetas</button>
     <button class="nav-tab" id="nav-deudas" onclick="showPage('deudas')">🤝 Deudas</button>
     <button class="nav-tab" id="nav-combustible" onclick="showPage('combustible')">⛽ Combustible</button>
+    <button class="nav-tab" id="nav-tc-tracker" onclick="showPage('tc-tracker')">💱 TC</button>
   </div>
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
@@ -991,6 +1049,36 @@ body.compact-mode .anual-table{font-size:11px;}
 </div>
 </div>
 
+<!-- ══ PAGE: TC TRACKER (Comparador Casas de Cambio) ══ -->
+<div class="page" id="page-tc-tracker">
+<div class="container">
+
+  <div class="month-nav" style="margin-bottom:6px">
+    <h1>💱 Comparador de Tipo de Cambio</h1>
+  </div>
+  <p style="color:var(--text2);font-size:12px;margin-bottom:16px">
+    Registra el tipo de cambio de cada casa de cambio por fecha y descubre automáticamente cuál te conviene más para comprar o vender dólares con tu ahorro actual.
+  </p>
+
+  <!-- Gestión de empresas -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px">
+    <div class="tct-empresa-mgmt" id="tct-empresa-chips"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="font-size:11px" onclick="addTCEmpresa()">+ Casa de cambio</button>
+      <button class="btn btn-primary" style="font-size:11px" onclick="addTCTrackerRow()">+ Nueva fecha</button>
+    </div>
+  </div>
+
+  <div class="tct-table-wrap">
+    <table class="tct-table">
+      <thead id="tct-thead"></thead>
+      <tbody id="tct-tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+</div>
+
 <!-- ══ PAGE: COMBUSTIBLE ══ -->
 <div class="page" id="page-combustible">
 <div class="container">
@@ -1116,6 +1204,50 @@ body.compact-mode .anual-table{font-size:11px;}
 
   <div class="deuda-grid" id="deuda-grid">
     <div class="empty"><div class="empty-icon">🤝</div>Sin préstamos registrados.</div>
+  </div>
+
+  <!-- ══ SECCIÓN: DEUDAS MAYORES ══ -->
+  <div style="border-top:1px solid var(--border);margin:32px 0 20px;padding-top:24px">
+    <div class="month-nav" style="margin-bottom:16px">
+      <h1 style="font-size:18px">🏛️ Deudas Mayores</h1>
+      <button class="btn btn-primary" style="font-size:11px;padding:5px 14px" onclick="openDMTipoModal()">+ Nueva Deuda Mayor</button>
+    </div>
+    <p style="color:var(--text2);font-size:12px;margin-bottom:16px">
+      Préstamos de largo plazo: financiamientos con cuota fija sin interés, o préstamos amortizados con interés (sistema francés).
+    </p>
+
+    <!-- LIST VIEW -->
+    <div id="dm-list-view">
+      <div class="dm-grid" id="dm-grid">
+        <div class="empty"><div class="empty-icon">🏛️</div>Sin deudas mayores registradas.</div>
+      </div>
+    </div>
+
+    <!-- DETAIL VIEW -->
+    <div id="dm-detail-view" style="display:none">
+      <div class="tc-detail-header">
+        <button class="tc-back-btn" onclick="closeDMDetail()">← Volver</button>
+        <div>
+          <div class="tc-detail-title" id="dm-detail-title">—</div>
+          <div class="tc-detail-sub" id="dm-detail-sub">—</div>
+        </div>
+        <button class="btn" style="margin-left:auto;font-size:11px" onclick="deleteDeudaMayor(currentDMId)">🗑 Eliminar</button>
+      </div>
+
+      <div class="dm-summary">
+        <div class="dm-sum-card" style="border-top:2px solid var(--accent)"><div class="dm-sum-label">Saldo Pendiente</div><div class="dm-sum-val" id="dm-sum-saldo" style="color:var(--accent)">—</div></div>
+        <div class="dm-sum-card" style="border-top:2px solid var(--green)"><div class="dm-sum-label">Cuotas Pagadas</div><div class="dm-sum-val" id="dm-sum-pagadas" style="color:var(--green)">—</div></div>
+        <div class="dm-sum-card" style="border-top:2px solid var(--amber)"><div class="dm-sum-label">Cuotas Restantes</div><div class="dm-sum-val" id="dm-sum-restantes" style="color:var(--amber)">—</div></div>
+        <div class="dm-sum-card" style="border-top:2px solid var(--purple)"><div class="dm-sum-label">Próximo Pago</div><div class="dm-sum-val" id="dm-sum-proximo" style="color:var(--purple);font-size:13px">—</div></div>
+      </div>
+
+      <div class="dm-table-wrap">
+        <table class="dm-table">
+          <thead id="dm-detail-thead"></thead>
+          <tbody id="dm-detail-tbody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1420,6 +1552,15 @@ let state={
   deudas:[],        // [{id,nombre,monto,currency,fecha,nota,status,fechaPago,cuentaPago}]
   combustibleGlp:[],      // recargas GLP
   combustibleGas:[],      // recargas gasolina
+  tcEmpresas:[             // casas de cambio configurables
+    {id:'kambista',   nombre:'Kambista',   color:'#2f6fd1'},
+    {id:'rextie',     nombre:'Rextie',     color:'#f0a53c'},
+    {id:'securex',    nombre:'Securex',    color:'#8bc34a'},
+    {id:'tucambista', nombre:'Tucambista', color:'#6b7280'},
+    {id:'dinnersfx',  nombre:'Dinners FX', color:'#7fa8d9'}
+  ],
+  tcTracker:[],            // [{id,fecha,rates:{empresaId:{compra,venta}}}]
+  deudasMayores:[],        // [{id,tipo,nombre,currency,...,cuotas:[]}]
   currentTab:'todos',editId:null
 };
 
@@ -1495,6 +1636,16 @@ function migrateState(){
   if(!Array.isArray(state.combustibleGas)) state.combustibleGas=[];
   if(!Array.isArray(state.tarjetas))       state.tarjetas=[];
   if(!Array.isArray(state.deudas))         state.deudas=[];
+  if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
+  state.deudasMayores=[];
+  if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
+  if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
+    {id:'kambista',   nombre:'Kambista',   color:'#2f6fd1'},
+    {id:'rextie',     nombre:'Rextie',     color:'#f0a53c'},
+    {id:'securex',    nombre:'Securex',    color:'#8bc34a'},
+    {id:'tucambista', nombre:'Tucambista', color:'#6b7280'},
+    {id:'dinnersfx',  nombre:'Dinners FX', color:'#7fa8d9'}
+  ];
   if(!Array.isArray(state.movimientos))    state.movimientos=[];
   if(!state.customCuentas)    state.customCuentas={};
   if(!state.serviciosByMonth) state.serviciosByMonth={};
@@ -1607,8 +1758,9 @@ function showPage(name){
   if(name==='proyeccion') renderProyeccion();
   if(name==='comparativo') renderComparativo();
   if(name==='tarjetas')   renderTarjetas();
-  if(name==='deudas')     renderDeudas();
+  if(name==='deudas')     { renderDeudas(); renderDeudasMayores(); }
   if(name==='combustible') renderCombustible();
+  if(name==='tc-tracker')  renderTCTracker();
 }
 
 // ── HELPERS ───────────────────────────────────────────
@@ -1657,8 +1809,9 @@ function render(){
   if(active('proyeccion')) renderProyeccion();
   if(active('servicios'))  renderServicios();
   if(active('tarjetas'))   renderTarjetas();
-  if(active('deudas'))     renderDeudas();
+  if(active('deudas'))     { renderDeudas(); renderDeudasMayores(); }
   if(active('combustible')) renderCombustible();
+  if(active('tc-tracker'))  renderTCTracker();
 }
 function updateTitles(){
   const label=MONTHS[state.currentMonth]+' '+state.currentYear;
@@ -1812,6 +1965,18 @@ function findNearestPrevSnap(y,m){
 // Cache for reconstructSaldoAt — cleared on saveState/loadState
 let _saldoCache = {};
 function clearSaldoCache(){ _saldoCache = {}; }
+
+// Devuelve el saldo actual TOTAL de Ahorro en Soles (cuenta default + custom tipo ahorro en PEN)
+// Usa el mes/año actuales del sistema (hoy), no el mes seleccionado en el nav.
+function getTotalAhorroSoles(){
+  const now = new Date();
+  const saldo = reconstructSaldoAt(now.getFullYear(), now.getMonth());
+  let aS = saldo['Ahorro Soles'] || 0;
+  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
+    if(v.type==='ahorro' && v.currency!=='USD') aS += (saldo[k]||0);
+  });
+  return aS;
+}
 
 function reconstructSaldoAt(y,m){
   const ckey = y+'-'+m;
@@ -4840,6 +5005,517 @@ function editOwnerName(){
   closeConfig();
 }
 
+
+// ══════════════════════════════════════════════════════
+//  MÓDULO TC TRACKER (Comparador de Casas de Cambio)
+// ══════════════════════════════════════════════════════
+const TCT_PALETTE = ['#2f6fd1','#f0a53c','#8bc34a','#6b7280','#7fa8d9','#a78bfa','#f05c5c','#2dd4bf','#ec4899','#eab308'];
+
+function tctFmtSoles(v){ return (v===null||v===undefined||isNaN(v)) ? '—' : 'S/ '+fuelFmt(v,2); }
+function tctFmtUSD(v){   return (v===null||v===undefined||isNaN(v)) ? '—' : '$'+fuelFmt(v,2); }
+function tctFmtTC(v){    return (v===null||v===undefined||isNaN(v)) ? '—' : 'S/ '+fuelFmt(v,4); }
+
+// ── CÁLCULO POR FILA ───────────────────────────────────
+function computeTCRow(row, empresas, ahorroActual){
+  const r = {...row};
+  r.montoPorEmpresa = {};
+
+  let mejorCompraEmp = null, mejorCompraVenta = Infinity;
+  let mejorVentaEmp   = null, mejorVentaCompra = -Infinity;
+
+  empresas.forEach(e=>{
+    const rate = (row.rates && row.rates[e.id]) || {};
+    const compra = parseFloat(rate.compra);
+    const venta  = parseFloat(rate.venta);
+    r.montoPorEmpresa[e.id] = (!isNaN(venta) && venta>0) ? ahorroActual/venta : null;
+
+    // Mejor compra: la empresa con la VENTA más baja (te da más dólares por tus soles)
+    if(!isNaN(venta) && venta>0 && venta<mejorCompraVenta){
+      mejorCompraVenta = venta;
+      mejorCompraEmp = e;
+    }
+    // Mejor venta: la empresa con la COMPRA más alta (te paga más soles por dólar)
+    if(!isNaN(compra) && compra>0 && compra>mejorVentaCompra){
+      mejorVentaCompra = compra;
+      mejorVentaEmp = e;
+    }
+  });
+
+  r.mejorCompra = mejorCompraEmp ? {
+    empresa: mejorCompraEmp,
+    monto: ahorroActual / mejorCompraVenta // dólares obtenidos
+  } : null;
+
+  r.mejorVenta = mejorVentaEmp ? {
+    empresa: mejorVentaEmp,
+    tc: mejorVentaCompra,
+    // Soles resultantes de vender de vuelta los dólares obtenidos en la mejor compra
+    monto: r.mejorCompra ? r.mejorCompra.monto * mejorVentaCompra : null
+  } : null;
+
+  return r;
+}
+
+// ── RENDER ────────────────────────────────────────────
+function renderTCTracker(){
+  const empresas = state.tcEmpresas || [];
+  const ahorroActual = getTotalAhorroSoles();
+
+  renderTCEmpresaChips();
+  renderTCTrackerHeader(empresas);
+
+  const tbody = document.getElementById('tct-tbody');
+  if(!tbody) return;
+
+  const rows = (state.tcTracker||[]).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+
+  if(!rows.length){
+    const totalCols = 2 + empresas.length*3 + 2 + 3 + 1;
+    tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">
+      Sin registros. Agrega una fecha con el botón de arriba.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(row=>{
+    const r = computeTCRow(row, empresas, ahorroActual);
+    const empresaCells = empresas.map(e=>{
+      const rate = (row.rates && row.rates[e.id]) || {};
+      const monto = r.montoPorEmpresa[e.id];
+      return `
+        <td><input class="tct-inp" type="number" step="0.0001" value="${rate.compra||''}" placeholder="Compra"
+          onchange="updateTCTrackerField('${row.id}','${e.id}','compra',this.value)"></td>
+        <td><input class="tct-inp" type="number" step="0.0001" value="${rate.venta||''}" placeholder="Venta"
+          onchange="updateTCTrackerField('${row.id}','${e.id}','venta',this.value)"></td>
+        <td class="tct-monto">${tctFmtUSD(monto)}</td>`;
+    }).join('');
+
+    const mcEmpresaLabel = r.mejorCompra ? r.mejorCompra.empresa.nombre : '—';
+    const mcColor        = r.mejorCompra ? r.mejorCompra.empresa.color  : 'var(--text3)';
+    const mvEmpresaLabel = r.mejorVenta  ? r.mejorVenta.empresa.nombre  : '—';
+    const mvColor        = r.mejorVenta  ? r.mejorVenta.empresa.color   : 'var(--text3)';
+
+    return `<tr id="tct-row-${row.id}">
+      <td><input class="tct-inp date-inp" type="date" value="${row.fecha||''}"
+        onchange="updateTCTrackerDate('${row.id}',this.value)"></td>
+      <td style="color:var(--purple);font-weight:600">${tctFmtSoles(ahorroActual)}</td>
+      ${empresaCells}
+      <td class="tct-best-cell" style="color:${mcColor}">${mcEmpresaLabel}</td>
+      <td class="tct-monto" style="color:var(--green)">${tctFmtUSD(r.mejorCompra?r.mejorCompra.monto:null)}</td>
+      <td class="tct-best-cell" style="color:${mvColor}">${mvEmpresaLabel}</td>
+      <td>${tctFmtTC(r.mejorVenta?r.mejorVenta.tc:null)}</td>
+      <td class="tct-monto" style="color:var(--accent)">${tctFmtSoles(r.mejorVenta?r.mejorVenta.monto:null)}</td>
+      <td><button onclick="deleteTCTrackerRow('${row.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTCTrackerHeader(empresas){
+  const thead = document.getElementById('tct-thead');
+  if(!thead) return;
+  const groupRow = `<tr>
+    <th rowspan="2" style="background:var(--bg3);color:var(--text3)">FECHA</th>
+    <th rowspan="2" style="background:var(--bg3);color:var(--text3)">AHORRO</th>
+    ${empresas.map(e=>`<th colspan="3" class="tct-group-header" style="background:${e.color}">${e.nombre}</th>`).join('')}
+    <th colspan="2" class="tct-group-header" style="background:#0d9488">MEJOR COMPRA</th>
+    <th colspan="3" class="tct-group-header" style="background:#6d28d9">MEJOR VENTA</th>
+    <th rowspan="2" style="background:var(--bg3)"></th>
+  </tr>`;
+  const subRow = `<tr>
+    ${empresas.map(()=>`
+      <th class="tct-sub-header">COMPRA</th>
+      <th class="tct-sub-header">VENTA</th>
+      <th class="tct-sub-header">MONTO</th>`).join('')}
+    <th class="tct-sub-header">M.EMPRESA</th>
+    <th class="tct-sub-header">M.MONTO</th>
+    <th class="tct-sub-header">M.EMPRESA</th>
+    <th class="tct-sub-header">M.TC</th>
+    <th class="tct-sub-header">M.MONTO</th>
+  </tr>`;
+  thead.innerHTML = groupRow + subRow;
+}
+
+function renderTCEmpresaChips(){
+  const wrap = document.getElementById('tct-empresa-chips');
+  if(!wrap) return;
+  const empresas = state.tcEmpresas || [];
+  wrap.innerHTML = empresas.map(e=>`
+    <div class="tct-empresa-chip">
+      <span class="tct-empresa-dot" style="background:${e.color}"></span>
+      <span onclick="renameTCEmpresa('${e.id}')" style="cursor:pointer" title="Clic para renombrar">${e.nombre}</span>
+      <button class="tct-empresa-del" onclick="deleteTCEmpresa('${e.id}')" title="Eliminar casa de cambio">✕</button>
+    </div>`).join('');
+}
+
+// ── CRUD FILAS ─────────────────────────────────────────
+function addTCTrackerRow(){
+  if(!state.tcTracker) state.tcTracker=[];
+  state.tcTracker.push({
+    id: 'tct-'+Date.now(),
+    fecha: new Date().toISOString().slice(0,10),
+    rates: {}
+  });
+  saveState();
+  renderTCTracker();
+}
+
+function updateTCTrackerDate(id, value){
+  const row=(state.tcTracker||[]).find(r=>r.id===id);
+  if(!row) return;
+  row.fecha=value;
+  saveState();
+  renderTCTracker();
+}
+
+function updateTCTrackerField(id, empresaId, field, value){
+  const row=(state.tcTracker||[]).find(r=>r.id===id);
+  if(!row) return;
+  if(!row.rates) row.rates={};
+  if(!row.rates[empresaId]) row.rates[empresaId]={};
+  row.rates[empresaId][field]=value;
+  saveState();
+  renderTCTracker();
+}
+
+function deleteTCTrackerRow(id){
+  if(!confirm('¿Eliminar este registro?')) return;
+  state.tcTracker=(state.tcTracker||[]).filter(r=>r.id!==id);
+  saveState();
+  renderTCTracker();
+}
+
+// ── CRUD EMPRESAS ───────────────────────────────────────
+function addTCEmpresa(){
+  const nombre = prompt('Nombre de la nueva casa de cambio:');
+  if(!nombre || !nombre.trim()) return;
+  if(!state.tcEmpresas) state.tcEmpresas=[];
+  const usedColors = new Set(state.tcEmpresas.map(e=>e.color));
+  const color = TCT_PALETTE.find(c=>!usedColors.has(c)) || TCT_PALETTE[state.tcEmpresas.length % TCT_PALETTE.length];
+  state.tcEmpresas.push({id:'emp-'+Date.now(), nombre:nombre.trim(), color});
+  saveState();
+  renderTCTracker();
+}
+
+function renameTCEmpresa(id){
+  const e=(state.tcEmpresas||[]).find(x=>x.id===id);
+  if(!e) return;
+  const nuevo = prompt('Nuevo nombre para "'+e.nombre+'":', e.nombre);
+  if(nuevo===null || !nuevo.trim()) return;
+  e.nombre = nuevo.trim();
+  saveState();
+  renderTCTracker();
+}
+
+function deleteTCEmpresa(id){
+  const e=(state.tcEmpresas||[]).find(x=>x.id===id);
+  if(!e) return;
+  if(!confirm('¿Eliminar "'+e.nombre+'"? Se borrarán sus tipos de cambio registrados en todas las fechas.')) return;
+  state.tcEmpresas=(state.tcEmpresas||[]).filter(x=>x.id!==id);
+  (state.tcTracker||[]).forEach(row=>{
+    if(row.rates && row.rates[id]) delete row.rates[id];
+  });
+  saveState();
+  renderTCTracker();
+}
+
+
+// ══════════════════════════════════════════════════════
+//  MÓDULO DEUDAS MAYORES (préstamos largo plazo)
+// ══════════════════════════════════════════════════════
+let currentDMId = null;
+let currentDMFormTipo = null; // 'fijo' | 'amortizado', para saber qué modal cerrar
+
+function dmFmt(v, currency){
+  if(v===null||v===undefined||isNaN(v)) return '—';
+  const sym = currency==='USD' ? '$' : 'S/';
+  return sym+' '+fuelFmt(v,2);
+}
+
+// Suma n meses a una fecha ISO ("YYYY-MM-DD"), ajustando al último día del mes
+// destino si el día original no existe ahí (ej. 31-ene + 1 mes → 28/29-feb).
+function dmAddMonths(dateStr, n){
+  const d = new Date(dateStr+'T12:00:00');
+  const targetMonth = d.getMonth()+n;
+  const targetDate = new Date(d.getFullYear(), targetMonth, 1);
+  const daysInTarget = new Date(targetDate.getFullYear(), targetDate.getMonth()+1, 0).getDate();
+  const day = Math.min(d.getDate(), daysInTarget);
+  targetDate.setDate(day);
+  return targetDate.toISOString().slice(0,10);
+}
+
+// ── GENERACIÓN DE CUOTAS ──────────────────────────────
+function generateCuotasFijas(fechaInicio, numCuotas, monto){
+  const cuotas=[];
+  for(let i=0;i<numCuotas;i++){
+    cuotas.push({
+      numero: i+1,
+      fecha: dmAddMonths(fechaInicio, i),
+      monto: monto,
+      pagado: false
+    });
+  }
+  return cuotas;
+}
+
+// Sistema francés (cuota fija con interés): Factor = i/(1-(1+i)^-n); Cuota = Importe*Factor
+function generateAmortizacion(importe, tasaPct, plazo, fechaInicio){
+  const i = tasaPct/100;
+  const n = plazo;
+  const factor = i / (1 - Math.pow(1+i, -n));
+  const cuotaMonto = importe * factor;
+
+  const cuotas=[];
+  let saldo = importe;
+  for(let k=1;k<=n;k++){
+    const interes = saldo * i;
+    let amort = cuotaMonto - interes;
+    let saldoNuevo = saldo - amort;
+    // Ajuste en la última cuota para que el saldo cierre exactamente en 0
+    if(k===n){ amort = saldo; saldoNuevo = 0; }
+    cuotas.push({
+      numero: k,
+      fecha: dmAddMonths(fechaInicio, k-1),
+      saldoInicial: saldo,
+      interes: interes,
+      amort: amort,
+      monto: (k===n) ? (amort+interes) : cuotaMonto,
+      saldoFinal: saldoNuevo,
+      pagado: false
+    });
+    saldo = saldoNuevo;
+  }
+  return { factor, cuota: cuotaMonto, cuotas };
+}
+
+// ── MODALES: ELEGIR TIPO ──────────────────────────────
+function openDMTipoModal(){
+  document.getElementById('dm-tipo-overlay').classList.add('open');
+}
+function closeDMTipoModal(){
+  document.getElementById('dm-tipo-overlay').classList.remove('open');
+}
+
+function openDMFormModal(tipo){
+  closeDMTipoModal();
+  currentDMFormTipo = tipo;
+  if(tipo==='fijo'){
+    document.getElementById('dmf-nombre').value='';
+    document.getElementById('dmf-monto').value='';
+    document.getElementById('dmf-currency').value='USD';
+    document.getElementById('dmf-fecha').value=new Date().toISOString().slice(0,10);
+    document.getElementById('dmf-numcuotas').value='';
+    document.getElementById('dm-form-fijo-overlay').classList.add('open');
+  } else {
+    document.getElementById('dma-nombre').value='';
+    document.getElementById('dma-importe').value='';
+    document.getElementById('dma-currency').value='PEN';
+    document.getElementById('dma-tasa').value='';
+    document.getElementById('dma-plazo').value='';
+    document.getElementById('dma-fecha').value=new Date().toISOString().slice(0,10);
+    document.getElementById('dm-preview-box').style.display='none';
+    document.getElementById('dm-form-amort-overlay').classList.add('open');
+  }
+}
+function closeDMFormModal(){
+  document.getElementById('dm-form-fijo-overlay').classList.remove('open');
+  document.getElementById('dm-form-amort-overlay').classList.remove('open');
+}
+
+function updateDMPreview(){
+  const importe = parseFloat(document.getElementById('dma-importe').value);
+  const tasa    = parseFloat(document.getElementById('dma-tasa').value);
+  const plazo   = parseInt(document.getElementById('dma-plazo').value);
+  const box = document.getElementById('dm-preview-box');
+  if(isNaN(importe)||isNaN(tasa)||isNaN(plazo)||importe<=0||tasa<=0||plazo<=0){
+    box.style.display='none';
+    return;
+  }
+  const {factor, cuota} = generateAmortizacion(importe, tasa, plazo, new Date().toISOString().slice(0,10));
+  const currency = document.getElementById('dma-currency').value;
+  document.getElementById('dm-preview-factor').textContent = factor.toFixed(6);
+  document.getElementById('dm-preview-cuota').textContent = dmFmt(cuota, currency);
+  box.style.display='block';
+}
+
+// ── GUARDAR ────────────────────────────────────────────
+function saveDMFijo(){
+  const nombre = (document.getElementById('dmf-nombre').value||'').trim();
+  const monto = parseFloat(document.getElementById('dmf-monto').value);
+  const currency = document.getElementById('dmf-currency').value;
+  const fecha = document.getElementById('dmf-fecha').value;
+  const numCuotas = parseInt(document.getElementById('dmf-numcuotas').value);
+  if(!nombre||isNaN(monto)||monto<=0||!fecha||isNaN(numCuotas)||numCuotas<=0){
+    alert('Completa todos los campos correctamente.'); return;
+  }
+  if(!state.deudasMayores) state.deudasMayores=[];
+  state.deudasMayores.push({
+    id: 'dm-'+Date.now(),
+    tipo: 'fijo',
+    nombre, currency,
+    montoCuota: monto,
+    fechaInicio: fecha,
+    numCuotas,
+    cuotas: generateCuotasFijas(fecha, numCuotas, monto)
+  });
+  saveState();
+  closeDMFormModal();
+  renderDeudasMayores();
+}
+
+function saveDMAmortizado(){
+  const nombre = (document.getElementById('dma-nombre').value||'').trim();
+  const importe = parseFloat(document.getElementById('dma-importe').value);
+  const currency = document.getElementById('dma-currency').value;
+  const tasa = parseFloat(document.getElementById('dma-tasa').value);
+  const plazo = parseInt(document.getElementById('dma-plazo').value);
+  const fecha = document.getElementById('dma-fecha').value;
+  if(!nombre||isNaN(importe)||importe<=0||isNaN(tasa)||tasa<=0||isNaN(plazo)||plazo<=0||!fecha){
+    alert('Completa todos los campos correctamente.'); return;
+  }
+  const {factor, cuota, cuotas} = generateAmortizacion(importe, tasa, plazo, fecha);
+  if(!state.deudasMayores) state.deudasMayores=[];
+  state.deudasMayores.push({
+    id: 'dm-'+Date.now(),
+    tipo: 'amortizado',
+    nombre, currency,
+    importe, tasa, plazo, factor, cuotaCalc: cuota,
+    fechaInicio: fecha,
+    cuotas
+  });
+  saveState();
+  closeDMFormModal();
+  renderDeudasMayores();
+}
+
+function deleteDeudaMayor(id){
+  if(!id) return;
+  if(!confirm('¿Eliminar esta deuda mayor y todo su historial de cuotas?')) return;
+  state.deudasMayores=(state.deudasMayores||[]).filter(d=>d.id!==id);
+  saveState();
+  if(currentDMId===id){ closeDMDetail(); } else { renderDeudasMayores(); }
+}
+
+// ── RESUMEN DE UNA DEUDA ──────────────────────────────
+function getDMResumen(d){
+  const total = d.cuotas.length;
+  const pagadas = d.cuotas.filter(c=>c.pagado).length;
+  const restantes = total-pagadas;
+  const saldoPendiente = d.tipo==='fijo'
+    ? d.cuotas.filter(c=>!c.pagado).reduce((s,c)=>s+c.monto,0)
+    : (d.importe - d.cuotas.filter(c=>c.pagado).reduce((s,c)=>s+c.amort,0));
+  const proxima = d.cuotas.filter(c=>!c.pagado).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha))[0];
+  return { total, pagadas, restantes, saldoPendiente, proximaFecha: proxima?proxima.fecha:null };
+}
+
+// ── RENDER: GRID DE TARJETAS ───────────────────────────
+function renderDeudasMayores(){
+  const grid = document.getElementById('dm-grid');
+  if(!grid) return;
+  const deudas = state.deudasMayores || [];
+  if(!deudas.length){
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🏛️</div>Sin deudas mayores registradas.</div>';
+    return;
+  }
+  grid.innerHTML = deudas.map(d=>{
+    const r = getDMResumen(d);
+    const pct = r.total>0 ? (r.pagadas/r.total)*100 : 0;
+    const proxLabel = r.proximaFecha
+      ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})
+      : '✅ Completado';
+    return `<div class="dm-card dm-${d.tipo}" onclick="openDMDetail('${d.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="font-size:15px;font-weight:700">${d.nombre}</div>
+        <span class="dm-tipo-badge ${d.tipo}">${d.tipo==='fijo'?'Cuota Fija':'Amortizado'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2)">
+        ${d.tipo==='fijo'
+          ? `${dmFmt(d.montoCuota,d.currency)} / mes × ${d.numCuotas} cuotas`
+          : `${dmFmt(d.importe,d.currency)} · ${d.tasa}% mensual · ${d.plazo} meses`}
+      </div>
+      <div class="dm-progress-bar"><div class="dm-progress-fill" style="width:${pct}%;background:${d.tipo==='fijo'?'var(--teal)':'var(--purple)'}"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:10px">
+        <span>${r.pagadas}/${r.total} pagadas</span><span>${pct.toFixed(0)}%</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span style="color:var(--text2)">Saldo: <strong style="color:var(--amber)">${dmFmt(r.saldoPendiente,d.currency)}</strong></span>
+        <span style="color:var(--text2)">Próx: <strong>${proxLabel}</strong></span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── DETALLE ────────────────────────────────────────────
+function openDMDetail(id){
+  currentDMId = id;
+  const d = (state.deudasMayores||[]).find(x=>x.id===id);
+  if(!d) return;
+  document.getElementById('dm-list-view').style.display='none';
+  document.getElementById('dm-detail-view').style.display='block';
+  document.getElementById('dm-detail-title').textContent = d.nombre;
+  document.getElementById('dm-detail-sub').textContent = d.tipo==='fijo'
+    ? `Cuota fija · ${dmFmt(d.montoCuota,d.currency)}/mes · ${d.numCuotas} cuotas`
+    : `Amortizado · Importe ${dmFmt(d.importe,d.currency)} · Tasa ${d.tasa}% mensual · ${d.plazo} meses`;
+  renderDMDetail();
+}
+function closeDMDetail(){
+  currentDMId=null;
+  document.getElementById('dm-list-view').style.display='block';
+  document.getElementById('dm-detail-view').style.display='none';
+  renderDeudasMayores();
+}
+
+function renderDMDetail(){
+  const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
+  if(!d) return;
+  const r = getDMResumen(d);
+
+  document.getElementById('dm-sum-saldo').textContent = dmFmt(r.saldoPendiente, d.currency);
+  document.getElementById('dm-sum-pagadas').textContent = r.pagadas+' / '+r.total;
+  document.getElementById('dm-sum-restantes').textContent = r.restantes;
+  document.getElementById('dm-sum-proximo').textContent = r.proximaFecha
+    ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})
+    : '✅ Completado';
+
+  const thead = document.getElementById('dm-detail-thead');
+  const tbody = document.getElementById('dm-detail-tbody');
+
+  if(d.tipo==='fijo'){
+    thead.innerHTML = `<tr><th>#</th><th>Vencimiento</th><th>Monto</th><th>Pagado</th></tr>`;
+    tbody.innerHTML = d.cuotas.map(c=>`
+      <tr class="${c.pagado?'dm-row-paid':''}">
+        <td>${c.numero}</td>
+        <td><input class="dm-fecha-inp" type="date" value="${c.fecha}" onchange="updateDMCuotaFecha('${c.numero}',this.value)"></td>
+        <td>${dmFmt(c.monto,d.currency)}</td>
+        <td><input class="dm-check" type="checkbox" ${c.pagado?'checked':''} onchange="toggleDMCuotaPagado('${c.numero}',this.checked)"></td>
+      </tr>`).join('');
+  } else {
+    thead.innerHTML = `<tr><th>#</th><th>Fecha</th><th>Saldo</th><th>Interés</th><th>Amort.</th><th>Cuota</th><th>Pagado</th></tr>`;
+    tbody.innerHTML = d.cuotas.map(c=>`
+      <tr class="${c.pagado?'dm-row-paid':''}">
+        <td>${c.numero}</td>
+        <td><input class="dm-fecha-inp" type="date" value="${c.fecha}" onchange="updateDMCuotaFecha('${c.numero}',this.value)"></td>
+        <td>${dmFmt(c.saldoInicial,d.currency)}</td>
+        <td style="color:var(--red)">${dmFmt(c.interes,d.currency)}</td>
+        <td style="color:var(--green)">${dmFmt(c.amort,d.currency)}</td>
+        <td style="font-weight:600">${dmFmt(c.monto,d.currency)}</td>
+        <td><input class="dm-check" type="checkbox" ${c.pagado?'checked':''} onchange="toggleDMCuotaPagado('${c.numero}',this.checked)"></td>
+      </tr>`).join('');
+  }
+}
+
+function toggleDMCuotaPagado(numero, checked){
+  const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
+  if(!d) return;
+  const c = d.cuotas.find(x=>x.numero==numero);
+  if(c){ c.pagado=checked; saveState(); renderDMDetail(); }
+}
+
+function updateDMCuotaFecha(numero, value){
+  const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
+  if(!d) return;
+  const c = d.cuotas.find(x=>x.numero==numero);
+  if(c){ c.fecha=value; saveState(); renderDMDetail(); }
+}
+
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
   // Don't seed if user explicitly cleared all data
@@ -4880,6 +5556,8 @@ function seedDemo(){
   state.serviciosByMonth={};
   state.combustibleGlp=[];
   state.combustibleGas=[];
+  state.tcTracker=[];
+  state.deudasMayores=[];
   state.snapshots={'2026-05':{BCP:0,BBVA:426.00,Efectivo:0,'Ahorro Soles':12799.44,'Ahorro Dólares':1805.52}};
   state.budgets={'🍔 Comida':{limit:300},'👗 Ropa':{limit:200},'🏦 Finanzas':{limit:4500},'📱 Servicios':{limit:50}};
   state.projGoals={soles:20000,dolar:3000};
@@ -5096,6 +5774,74 @@ if(state.projGoals){
 </div>
 
 
+<!-- MODAL ELEGIR TIPO DE DEUDA MAYOR -->
+<div class="modal-overlay" id="dm-tipo-overlay" onclick="if(event.target===this)closeDMTipoModal()">
+  <div class="modal" style="width:480px">
+    <div class="modal-title"><span>🏛️ Nueva Deuda Mayor</span><button class="modal-close" onclick="closeDMTipoModal()">✕</button></div>
+    <div class="dm-tipo-choice">
+      <div class="dm-tipo-opt" id="dm-opt-fijo" onclick="openDMFormModal('fijo')">
+        <div class="dm-tipo-opt-icon">📋</div>
+        <div class="dm-tipo-opt-title">Cuota Fija</div>
+        <div class="dm-tipo-opt-desc">Monto mensual fijo por N cuotas, sin interés. Ej. financiamiento de un producto o servicio.</div>
+      </div>
+      <div class="dm-tipo-opt" id="dm-opt-amortizado" onclick="openDMFormModal('amortizado')">
+        <div class="dm-tipo-opt-icon">🏦</div>
+        <div class="dm-tipo-opt-title">Amortizado (con interés)</div>
+        <div class="dm-tipo-opt-desc">Préstamo con tasa de interés mensual. Se calcula la cuota y el detalle de amortización automáticamente.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FORMULARIO: CUOTA FIJA -->
+<div class="modal-overlay" id="dm-form-fijo-overlay" onclick="if(event.target===this)closeDMFormModal()">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><span>📋 Deuda Mayor — Cuota Fija</span><button class="modal-close" onclick="closeDMFormModal()">✕</button></div>
+    <div class="field"><label>Nombre del préstamo</label><input id="dmf-nombre" type="text" placeholder="Ej. Financiamiento laptop"></div>
+    <div class="field-row">
+      <div class="field"><label>Monto de cada cuota</label><input id="dmf-monto" type="number" step="0.01" placeholder="61.90"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="dmf-currency"><option value="USD">Dólares ($)</option><option value="PEN">Soles (S/)</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha de la 1ª cuota</label><input id="dmf-fecha" type="date"></div>
+      <div class="field"><label>Número de cuotas</label><input id="dmf-numcuotas" type="number" step="1" min="1" placeholder="24"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="closeDMFormModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveDMFijo()">Crear préstamo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FORMULARIO: AMORTIZADO -->
+<div class="modal-overlay" id="dm-form-amort-overlay" onclick="if(event.target===this)closeDMFormModal()">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><span>🏦 Deuda Mayor — Amortizado</span><button class="modal-close" onclick="closeDMFormModal()">✕</button></div>
+    <div class="field"><label>Nombre del préstamo</label><input id="dma-nombre" type="text" placeholder="Ej. Préstamo personal BBVA"></div>
+    <div class="field-row">
+      <div class="field"><label>Importe (monto prestado)</label><input id="dma-importe" type="number" step="0.01" placeholder="40000.00" oninput="updateDMPreview()"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="dma-currency" onchange="updateDMPreview()"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Tasa % mensual</label><input id="dma-tasa" type="number" step="0.0001" placeholder="1.5734" oninput="updateDMPreview()"></div>
+      <div class="field"><label>Plazo (meses)</label><input id="dma-plazo" type="number" step="1" min="1" placeholder="48" oninput="updateDMPreview()"></div>
+    </div>
+    <div class="field"><label>Fecha de la 1ª cuota</label><input id="dma-fecha" type="date"></div>
+    <div class="dm-preview-box" id="dm-preview-box" style="display:none">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text2)">Factor</span><strong id="dm-preview-factor">—</strong></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text2)">Cuota mensual</span><strong id="dm-preview-cuota" style="color:var(--accent)">—</strong></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="closeDMFormModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveDMAmortizado()">Crear préstamo</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NUEVA / EDITAR DEUDA -->
 <div class="modal-overlay" id="deuda-modal-overlay" onclick="if(event.target===this)closeDeudaModal()">
   <div class="modal" style="width:460px">
@@ -5245,233 +5991,6 @@ if(state.projGoals){
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<!-- MODAL USUARIOS -->
-<div class="modal-overlay" id="users-modal-overlay" onclick="if(event.target===this)closeUsersModal()">
-  <div class="modal modal-lg">
-    <div class="modal-title"><span>👤 Gestionar Usuarios</span><button class="modal-close" onclick="closeUsersModal()">✕</button></div>
-    <div id="users-list" style="margin-bottom:16px"></div>
-    <button class="btn btn-primary" style="width:100%" onclick="openAddUser()">+ Agregar usuario</button>
-    <div id="add-user-form" style="display:none;margin-top:16px;background:var(--bg3);border-radius:10px;padding:16px">
-      <div class="field-row">
-        <div class="field"><label>Correo</label><input id="nu-email" type="email" placeholder="usuario@correo.com"></div>
-        <div class="field"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="mínimo 6 caracteres"></div>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button class="btn" onclick="closeAddUser()">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveNewUser()">Guardar usuario</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL CUENTAS -->
-
-
-<!-- MODAL INACTIVIDAD -->
-<div class="modal-overlay" id="inactivity-modal-overlay" onclick="if(event.target===this)closeInactivityModal()">
-  <div class="modal modal-sm">
-    <div class="modal-title"><span>⏱ Bloqueo por inactividad</span><button class="modal-close" onclick="closeInactivityModal()">✕</button></div>
-    <div class="field"><label>Minutos sin actividad antes de bloquear</label>
-      <select id="inactivity-select">
-        <option value="2">2 minutos</option>
-        <option value="5" selected>5 minutos</option>
-        <option value="10">10 minutos</option>
-        <option value="15">15 minutos</option>
-        <option value="30">30 minutos</option>
-        <option value="60">1 hora</option>
-        <option value="0">Nunca</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn" onclick="closeInactivityModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveInactivity()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL HISTÓRICO TARJETAS DE CRÉDITO -->
-<div class="modal-overlay" id="tc-historico-overlay" onclick="if(event.target===this)closeTCHistorico()">
-  <div class="modal modal-lg">
-    <div class="modal-title">
-      <span>📂 Cargar Histórico — Tarjetas de Crédito</span>
-      <button class="modal-close" onclick="closeTCHistorico()">✕</button>
-    </div>
-    <p style="color:var(--text2);font-size:12px;margin-bottom:14px;line-height:1.7">
-      El Excel debe tener las columnas: <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">DESCRIPCION, FECHA, MONTO, ESTADO, Banco</code><br>
-      La columna <strong style="color:var(--text)">Banco</strong> debe coincidir exactamente con el banco registrado en tus tarjetas.<br>
-      Los meses detectados reemplazarán la data existente de esa tarjeta.
-    </p>
-    <div class="hist-drop" id="tc-hist-drop"
-      onclick="document.getElementById('tc-historico-file').click()"
-      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
-      ondragleave="this.style.borderColor='var(--border2)'"
-      ondrop="handleTCHistDrop(event)">
-      <div style="font-size:28px;margin-bottom:6px">📊</div>
-      <div style="font-size:13px;color:var(--text2)">.xlsx con movimientos de tarjeta — clic o arrastra aquí</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px" id="tc-hist-filename"></div>
-    </div>
-    <input type="file" id="tc-historico-file" accept=".xlsx,.xls" style="display:none" onchange="previewTCHistorico(event)">
-
-    <div id="tc-hist-preview" style="display:none;margin-top:14px;background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2)"></div>
-
-    <div id="tc-hist-warn" style="display:none;margin-top:10px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:7px;padding:10px 12px;font-size:12px;color:var(--amber)"></div>
-
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn" onclick="closeTCHistorico()">Cancelar</button>
-      <button class="btn btn-primary" id="tc-hist-apply-btn" style="display:none" onclick="applyTCHistorico()">Aplicar histórico</button>
-    </div>
-  </div>
-</div>
-
-
-<!-- MODAL NUEVA / EDITAR DEUDA -->
-<div class="modal-overlay" id="deuda-modal-overlay" onclick="if(event.target===this)closeDeudaModal()">
-  <div class="modal" style="width:460px">
-    <div class="modal-title">
-      <span id="deuda-modal-title">Nueva Deuda / Préstamo</span>
-      <button class="modal-close" onclick="closeDeudaModal()">✕</button>
-    </div>
-    <div class="field"><label>Nombre del deudor</label><input id="d-nombre" type="text" placeholder="Ej. Pepito García"></div>
-    <div class="field-row">
-      <div class="field"><label>Monto prestado</label><input id="d-monto" type="number" step="0.01" placeholder="0.00"></div>
-      <div class="field"><label>Moneda</label>
-        <select id="d-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
-      </div>
-    </div>
-    <div class="field"><label>Fecha del préstamo</label><input id="d-fecha" type="date"></div>
-    <div class="field"><label>Nota / Motivo <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
-      <input id="d-nota" type="text" placeholder="Ej. Para gastos de viaje, préstamo personal...">
-    </div>
-    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
-      <button class="config-action-btn danger" id="d-delete-btn" style="display:none" onclick="deleteDeuda()">🗑 Eliminar</button>
-      <div style="display:flex;gap:8px;margin-left:auto">
-        <button class="btn" onclick="closeDeudaModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveDeuda()">Guardar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL MARCAR COMO PAGADO -->
-<div class="modal-overlay" id="deuda-pago-overlay" onclick="if(event.target===this)closeDeudaPago()">
-  <div class="modal modal-sm" style="width:400px">
-    <div class="modal-title"><span>✅ Registrar cobro</span><button class="modal-close" onclick="closeDeudaPago()">✕</button></div>
-    <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:2px">Deudor</div>
-      <div style="font-size:15px;font-weight:700" id="dp-nombre">—</div>
-      <div style="font-family:var(--mono);font-size:20px;font-weight:500;color:var(--amber);margin-top:4px" id="dp-monto">S/ 0.00</div>
-    </div>
-    <div class="field"><label>Fecha de cobro</label><input id="dp-fecha" type="date"></div>
-    <div class="field"><label>Depositar en cuenta</label>
-      <select id="dp-cuenta"></select>
-    </div>
-    <div class="field" id="dp-parcial-wrap">
-      <label>¿Cobro parcial? <span style="font-size:10px;color:var(--text3)">(dejar en blanco = monto completo)</span></label>
-      <input id="dp-parcial" type="number" step="0.01" placeholder="Monto cobrado">
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn" onclick="closeDeudaPago()">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarDeudaPago()">✅ Confirmar cobro</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL CONFIG TARJETA -->
-<div class="modal-overlay" id="tc-config-overlay" onclick="if(event.target===this)closeTCConfigModal()">
-  <div class="modal" style="width:480px">
-    <div class="modal-title"><span id="tc-config-title">Nueva Tarjeta</span><button class="modal-close" onclick="closeTCConfigModal()">✕</button></div>
-    <div class="field-row">
-      <div class="field"><label>Banco</label><input id="tc-f-banco" type="text" placeholder="BCP, BBVA, Interbank..."></div>
-      <div class="field"><label>Categoría</label><input id="tc-f-cat" type="text" placeholder="Visa Gold, MC Platinum..."></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Día de pago</label><input id="tc-f-pago" type="number" min="1" max="31" placeholder="25"></div>
-      <div class="field"><label>Inicio de ciclo</label><input id="tc-f-inicio" type="number" min="1" max="31" placeholder="26"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Cierre de ciclo</label><input id="tc-f-cierre" type="number" min="1" max="31" placeholder="25"></div>
-      <div class="field"><label>Línea de crédito</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Moneda</label>
-        <select id="tc-f-currency">
-          <option value="PEN">Soles (S/)</option>
-          <option value="USD">Dólares ($)</option>
-        </select>
-      </div>
-      <div class="field" style="display:flex;align-items:flex-end">
-        <div style="font-size:11px;color:var(--text2);padding-bottom:8px">La moneda afecta cómo se muestran los montos y el cálculo del total.</div>
-      </div>
-    </div>
-    <div class="field"><label>Color</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="tc-color-picker">
-        <div class="tc-color-opt" style="background:#5b8def" onclick="selectTCColor('#5b8def')"></div>
-        <div class="tc-color-opt" style="background:#3ec96e" onclick="selectTCColor('#3ec96e')"></div>
-        <div class="tc-color-opt" style="background:#f05c5c" onclick="selectTCColor('#f05c5c')"></div>
-        <div class="tc-color-opt" style="background:#f0a53c" onclick="selectTCColor('#f0a53c')"></div>
-        <div class="tc-color-opt" style="background:#a78bfa" onclick="selectTCColor('#a78bfa')"></div>
-        <div class="tc-color-opt" style="background:#2dd4bf" onclick="selectTCColor('#2dd4bf')"></div>
-      </div>
-    </div>
-    <input type="hidden" id="tc-f-color" value="#5b8def">
-    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
-      <button class="config-action-btn danger" id="tc-delete-btn" style="display:none" onclick="deleteTCCard()">🗑 Eliminar tarjeta</button>
-      <div style="display:flex;gap:8px;margin-left:auto">
-        <button class="btn" onclick="closeTCConfigModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveTCCard()">Guardar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL AGREGAR CONSUMO -->
-<div class="modal-overlay" id="tc-mov-overlay" onclick="if(event.target===this)closeTCMovModal()">
-  <div class="modal modal-sm" style="width:380px">
-    <div class="modal-title"><span id="tc-mov-modal-title">Agregar consumo</span><button class="modal-close" onclick="closeTCMovModal()">✕</button></div>
-    <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..."></div>
-    <div class="field-row">
-      <div class="field"><label>Fecha</label><input id="tc-m-fecha" type="date"></div>
-      <div class="field"><label>Monto (S/) <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
-    </div>
-    <div class="field"><label>Estado</label>
-      <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn" onclick="closeTCMovModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveTCMov()">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL PAGAR -->
-<div class="modal-overlay" id="tc-pago-overlay" onclick="if(event.target===this)closePagoModal()">
-  <div class="pago-modal">
-    <div class="modal-title"><span>💳 Registrar Pago</span><button class="modal-close" onclick="closePagoModal()">✕</button></div>
-    <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Monto a pagar</div>
-      <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--red)" id="tc-pago-monto">S/ 0.00</div>
-    </div>
-    <div class="field"><label>Tipo de pago</label>
-      <select id="tc-pago-tipo" onchange="onPagoTipoChange()">
-        <option value="total">Total</option>
-        <option value="parcial">Parcial</option>
-        <option value="puntos">🎁 Puntos (sin descuento)</option>
-      </select>
-    </div>
-    <div class="field" id="tc-pago-parcial-field" style="display:none">
-      <label>Monto parcial (S/)</label>
-      <input id="tc-pago-parcial-val" type="number" step="0.01" placeholder="0.00">
-    </div>
-    <div class="field" id="tc-pago-cuenta-wrap"><label>Descontar de cuenta</label>
-      <select id="tc-pago-cuenta"></select>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn" onclick="closePagoModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarPago()">✓ Confirmar pago</button>
-    </div>
-  </div>
-</div>
-
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </body>
 </html>
