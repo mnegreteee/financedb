@@ -569,8 +569,8 @@ body.compact-mode .anual-table{font-size:11px;}
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-icon">M</div>
-    <div class="login-title">Finance Dashboard</div>
+    <div class="login-icon" id="login-logo-letter">M</div>
+    <div class="login-title" id="login-title">Finance Dashboard</div>
     <div class="login-sub">No seas chismos@, si no tienes usuario retírate 😊</div>
     <div class="login-field"><label>Correo</label><input id="login-email" type="email" placeholder="usuario@correo.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="login-field"><label>Contraseña</label><input id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
@@ -609,6 +609,10 @@ body.compact-mode .anual-table{font-size:11px;}
         <!-- SECCIÓN: Apariencia -->
         <div class="config-section">
           <div class="config-section-title">Apariencia</div>
+          <div class="config-row">
+            <div class="config-row-label">Nombre del dueño<small id="cfg-owner-name-display">Sin configurar</small></div>
+            <button class="config-action-btn neutral" onclick="editOwnerName()">✏ Editar</button>
+          </div>
           <div class="config-row">
             <div class="config-row-label">Tema<small>Oscuro / Claro</small></div>
             <button class="config-action-btn neutral" onclick="toggleTheme()">🌙 / ☀️ Cambiar tema</button>
@@ -1397,6 +1401,7 @@ let state={
   budgets:{},
   projGoals:{soles:20000,dolar:3000},
   customCuentas:{},
+  ownerName:'',     // nombre del dueño configurable — vacío = usa currentUser
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
   deudas:[],        // [{id,nombre,monto,currency,fecha,nota,status,fechaPago,cuentaPago}]
   combustibleGlp:[],      // recargas GLP
@@ -1485,6 +1490,7 @@ function migrateState(){
   if(!state.cuentas)          state.cuentas={};
   if(!state.tc)               state.tc={compra:3.42,venta:3.45};
   if(!state.projGoals)        state.projGoals={soles:20000,dolar:3000};
+  if(state.ownerName===undefined) state.ownerName='';
 }
 
 function loadState(){
@@ -4067,7 +4073,7 @@ function renderDashboard(){
   // ── Greeting ──────────────────────────────────────
   const hour = now.getHours();
   const greet = hour<12?'Buenos días':hour<18?'Buenas tardes':'Buenas noches';
-  const name  = currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '';
+  const name  = (state.ownerName||'').trim() || (currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
   const el=document.getElementById('dash-greeting');
   if(el) el.textContent = greet+' '+name+' 👋';
 
@@ -4664,6 +4670,34 @@ function deleteFuelRow(type, id){
   renderFuelSection(type);
 }
 
+
+// ── NOMBRE DEL DUEÑO / BRANDING ───────────────────────
+function updateLoginBranding(){
+  const name = (state.ownerName||'').trim();
+  const letter = name ? name.charAt(0).toUpperCase() : 'M';
+  const logoEl = document.getElementById('login-logo-letter');
+  const titleEl = document.getElementById('login-title');
+  if(logoEl) logoEl.textContent = letter;
+  if(titleEl) titleEl.textContent = name ? name+"'s Dashboard" : 'Finance Dashboard';
+  // Update config display
+  const cfgEl = document.getElementById('cfg-owner-name-display');
+  if(cfgEl) cfgEl.textContent = name || 'Sin configurar';
+}
+
+function editOwnerName(){
+  const current = state.ownerName || '';
+  const name = prompt('Nombre del dueño del dashboard:', current);
+  if(name===null) return; // cancelled
+  state.ownerName = name.trim();
+  saveState();
+  updateLoginBranding();
+  // Refresh dashboard greeting if visible
+  if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')){
+    renderDashboard();
+  }
+  closeConfig();
+}
+
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
   // Don't seed if user explicitly cleared all data
@@ -4710,6 +4744,27 @@ function seedDemo(){
   saveState();
 }
 
+
+// Show login branding instantly from localStorage cache (before Firebase loads)
+(function(){
+  try{
+    const cached = localStorage.getItem('mf_v5');
+    if(cached){
+      const parsed = JSON.parse(cached);
+      const name = (parsed.ownerName||'').trim();
+      if(name){
+        const letter = name.charAt(0).toUpperCase();
+        document.addEventListener('DOMContentLoaded', function(){
+          const logoEl = document.getElementById('login-logo-letter');
+          const titleEl = document.getElementById('login-title');
+          if(logoEl) logoEl.textContent = letter;
+          if(titleEl) titleEl.textContent = name+"'s Dashboard";
+        });
+      }
+    }
+  } catch(e){}
+})();
+
 // ── INIT ─────────────────────────────────────────────
 loadTheme();loadCompact();
 
@@ -4730,6 +4785,7 @@ function initFirebase(){
   } catch(e){ console.warn('Firebase init error:',e); }
   loadState();
   seedDemo();
+  updateLoginBranding();
   render();
   updateLastUpdated();
 }
