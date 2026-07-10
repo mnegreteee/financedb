@@ -1153,6 +1153,14 @@ body.compact-mode .anual-table{font-size:11px;}
         <tbody id="tc-global-tbody"></tbody>
       </table>
     </div>
+
+    <!-- Gráfico de deuda mensual por tarjeta -->
+    <div class="card" style="padding:18px;margin-bottom:32px" id="tc-chart-wrap">
+      <div class="section-header">
+        <div class="section-title">Evolución de Deuda por Tarjeta</div>
+      </div>
+      <div style="height:260px"><canvas id="tc-evolution-chart"></canvas></div>
+    </div>
   </div>
 
   <!-- DETAIL VIEW (shown when a card is selected) -->
@@ -3775,20 +3783,32 @@ function renderTCGlobal(){
   const tbody=document.getElementById('tc-global-tbody');
   if(!tbody) return;
   const tarjetas=state.tarjetas||[];
-  if(!tarjetas.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin tarjetas registradas.</td></tr>';return;}
+  if(!tarjetas.length){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin tarjetas registradas.</td></tr>';
+    renderTCEvolutionChart([],[]);
+    return;
+  }
 
   // Collect all months with data
   const allMonths=new Set();
   tarjetas.forEach(t=>{Object.keys(t.movs||{}).forEach(k=>allMonths.add(k));});
   const sortedMonths=[...allMonths].sort();
 
-  if(!sortedMonths.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin consumos registrados.</td></tr>';return;}
+  if(!sortedMonths.length){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin consumos registrados.</td></tr>';
+    renderTCEvolutionChart([],tarjetas);
+    return;
+  }
+
+  // Guardamos la deuda total por mes de cada tarjeta para reusar en el gráfico
+  const chartData = []; // [{mk, mesLabel, porTarjeta:{bancoKey:deuda}, total}]
 
   tbody.innerHTML=sortedMonths.map(mk=>{
     const[y,mo]=mk.split('-');
     const mesLabel=tcMesesLong()[parseInt(mo)-1]+' '+y;
     let totalDeuda=0,totalPagado=0;
     const pcts=[];
+    const porTarjeta={};
     tarjetas.forEach(t=>{
       const movs=(t.movs&&t.movs[mk])||[];
       const rate=(state.tc&&state.tc.venta)||3.45;
@@ -3797,6 +3817,7 @@ function renderTCGlobal(){
       const p=movs.filter(m=>m.pagado).reduce((s,m)=>s+toSoles(m.monto),0);
       totalDeuda+=d; totalPagado+=p;
       pcts.push({banco:t.banco,deuda:d,color:t.color||'#5b8def'});
+      porTarjeta[t.id]=d;
     });
     const pendiente=totalDeuda-totalPagado;
     const pctBars=pcts.filter(p=>p.deuda>0).map(p=>{
@@ -3804,6 +3825,7 @@ function renderTCGlobal(){
       return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px;font-size:10px">
         <span style="width:8px;height:8px;border-radius:2px;background:${p.color};display:inline-block"></span>${p.banco} ${pct}%</span>`;
     }).join('');
+    chartData.push({mk,mesLabel,porTarjeta,total:totalDeuda});
     return `<tr>
       <td>${mesLabel}</td>
       <td style="color:var(--red)">${M(tcFmtS(totalDeuda))}</td>
@@ -3812,6 +3834,78 @@ function renderTCGlobal(){
       <td>${pctBars||'—'}</td>
     </tr>`;
   }).join('');
+
+  renderTCEvolutionChart(chartData, tarjetas);
+}
+
+// ── GRÁFICO: Evolución de deuda mensual por tarjeta + línea total ──
+let tcEvolutionChart = null;
+function renderTCEvolutionChart(chartData, tarjetas){
+  const el = document.getElementById('tc-evolution-chart');
+  if(!el) return;
+  if(tcEvolutionChart){ tcEvolutionChart.destroy(); tcEvolutionChart=null; }
+  if(!chartData.length || !tarjetas.length) return;
+
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  const tickColor = isDark?'#e0e0e2':'#3a3b44';
+  const gridColor = isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)';
+
+  const labels = chartData.map(d=>d.mesLabel);
+
+  // Una línea por tarjeta
+  const datasets = tarjetas.map(t=>({
+    label: t.banco + (t.cat?' '+t.cat:''),
+    data: chartData.map(d=>d.porTarjeta[t.id]||0),
+    borderColor: t.color||'#5b8def',
+    backgroundColor: (t.color||'#5b8def')+'22',
+    tension: .35,
+    fill: false,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    pointBackgroundColor: t.color||'#5b8def',
+    borderWidth: 2,
+  }));
+
+  // Línea de la suma total (más gruesa, punteada, blanca/gris)
+  datasets.push({
+    label: 'Total (todas las tarjetas)',
+    data: chartData.map(d=>d.total),
+    borderColor: isDark?'#f0f0f2':'#1a1b1e',
+    backgroundColor: 'transparent',
+    tension: .35,
+    fill: false,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    pointBackgroundColor: isDark?'#f0f0f2':'#1a1b1e',
+    borderWidth: 3,
+    borderDash: [6,4],
+  });
+
+  tcEvolutionChart = new Chart(el, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true, position: 'bottom',
+          labels: { color: tickColor, font:{size:10}, boxWidth:10, padding:12 }
+        },
+        tooltip: {
+          backgroundColor: isDark?'#1e2028':'#fff',
+          borderColor: isDark?'rgba(255,255,255,.12)':'rgba(0,0,0,.12)',
+          borderWidth: 1,
+          titleColor: isDark?'#9899a6':'#6b6c78',
+          bodyColor: isDark?'#f0f0f2':'#1a1b1e',
+          callbacks: { label: ctx => ctx.dataset.label+': S/ '+ctx.parsed.y.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',') }
+        }
+      },
+      scales: {
+        x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10}} },
+        y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10},callback:v=>'S/'+(v/1000).toFixed(1)+'k'} }
+      }
+    }
+  });
 }
 
 
