@@ -1741,11 +1741,8 @@ function migrateState(){
   if(!Array.isArray(state.tarjetas))       state.tarjetas=[];
   if(!Array.isArray(state.deudas))         state.deudas=[];
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
-  state.deudasMayores=[];
-  state.calendarEvents=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
-  state.calendarEvents=[];
-  if(!Array.isArray(state.calendarEvents))  state.calendarEvents=[];
+  if(!Array.isArray(state.calendarEvents)) state.calendarEvents=[];
   if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
     {id:'kambista',   nombre:'Kambista',   color:'#2f6fd1'},
     {id:'rextie',     nombre:'Rextie',     color:'#f0a53c'},
