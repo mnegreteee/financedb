@@ -4520,7 +4520,11 @@ function fuelStateKey(type){ return type==='glp'?'combustibleGlp':'combustibleGa
 function computeFuelRows(rows){
   return rows.map((row,i)=>{
     const r={...row};
-    if(i>0) r.fInicial  =rows[i-1].fFinal   ||r.fInicial  ||'';
+    // F.INICIAL: por defecto hereda el F.FINAL de la fila anterior,
+    // pero si el usuario lo editó manualmente (fInicialManual=true), se respeta su valor.
+    if(i>0 && !r.fInicialManual){
+      r.fInicial = rows[i-1].fFinal || r.fInicial || '';
+    }
     if(i>0) r.kmInicial =rows[i-1].kmFinal  ||r.kmInicial ||'';
     const kmI=parseFloat(r.kmInicial), kmF=parseFloat(r.kmFinal);
     const gal=parseFloat(r.galones),   pxg=parseFloat(r.pxg);
@@ -4562,7 +4566,7 @@ function renderFuelSection(type){
       const pxgCol=r.pxgVar===null?'fuel-pxg-nt':r.pxgVar>0?'fuel-pxg-up':'fuel-pxg-dn';
       const pxgStr=r.pxgVar===null?'—':(r.pxgVar>0?'+':'')+fuelFmt(r.pxgVar,1)+'%';
       return `<tr id="fuel-row-${type}-${r.id}" style="${isLast?'background:rgba(91,141,239,.04)':''}">
-        <td>${r.fInicial?fuelDateLabel(r.fInicial):'<span style="color:var(--text3)">—</span>'}</td>
+        <td><input class="fuel-inp date-inp" type="date" value="${r.fInicial||''}" onchange="updateFuelField('${type}','${r.id}','fInicial',this.value)" title="F. Inicial (editable, por defecto hereda del F. Final anterior)"></td>
         <td><input class="fuel-inp date-inp" type="date" value="${r.fFinal||''}" onchange="updateFuelField('${type}','${r.id}','fFinal',this.value)"></td>
         <td style="color:var(--text2)">${(r.kmInicial!==undefined&&r.kmInicial!=='')?fuelFmt(parseFloat(r.kmInicial),0):'<span style="color:var(--text3)">—</span>'}</td>
         <td><input class="fuel-inp" type="number" value="${r.kmFinal||''}" onchange="updateFuelField('${type}','${r.id}','kmFinal',this.value)" style="width:75px" placeholder="KM"></td>
@@ -4674,11 +4678,20 @@ function updateFuelField(type, id, field, value){
   const row=(state[key]||[]).find(r=>r.id===id);
   if(!row) return;
   row[field]=value;
+
+  // Si el usuario edita F.INICIAL manualmente, marcar el override
+  // para que no se sobreescriba automáticamente con la cadena.
+  if(field==='fInicial'){
+    row.fInicialManual = true;
+  }
+
   const idx=(state[key]||[]).findIndex(r=>r.id===id);
   if(idx>=0&&idx<state[key].length-1){
     const next=state[key][idx+1];
-    if(field==='fFinal')  next.fInicial =value;
-    if(field==='kmFinal') next.kmInicial=value;
+    // Solo propagar F.FINAL → F.INICIAL de la siguiente fila si esa fila
+    // NO tiene un override manual establecido por el usuario.
+    if(field==='fFinal' && !next.fInicialManual) next.fInicial = value;
+    if(field==='kmFinal') next.kmInicial = value;
   }
   saveState();
   renderFuelSection(type);
