@@ -1603,9 +1603,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.2.0';
-const APP_VERSION_DATE = '10 jul 2026';
-const APP_VERSION_NOTE = 'Autenticación real con Firebase Auth';
+const APP_VERSION = 'v1.2.1';
+const APP_VERSION_DATE = '11 jul 2026';
+const APP_VERSION_NOTE = 'Fix: cuentas tipo "otras" no aparecían en Nuevo movimiento';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2530,6 +2530,7 @@ function openModal(){
   document.getElementById('f-currency').value='PEN';
   document.getElementById('f-cat').value='';
   document.getElementById('f-date').value=new Date().toISOString().slice(0,10);
+  updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
   setType('income');
   document.getElementById('modal-overlay').classList.add('open');
 }
@@ -2550,6 +2551,7 @@ function editMovimiento(id){
   document.getElementById('modal-title-text').textContent='Editar movimiento';
   document.getElementById('f-desc').value=m.desc;
   document.getElementById('f-amount').value=m.amount;
+  updateAccountSelects(); // asegura que la cuenta del movimiento (aunque sea tipo "otras") esté en la lista
   document.getElementById('f-account').value=m.account;
   document.getElementById('f-date').value=m.date;
   document.getElementById('f-currency').value=m.currency||'PEN';
