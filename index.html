@@ -1603,9 +1603,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.3.1';
+const APP_VERSION = 'v1.3.2';
 const APP_VERSION_DATE = '11 jul 2026';
-const APP_VERSION_NOTE = 'Fix: cuentas nuevas no aparecían en el desplegable de Servicios';
+const APP_VERSION_NOTE = 'Auditoría general: sin más bugs de desplegables encontrados';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -1800,6 +1800,7 @@ function migrateState(){
   ];
   if(!Array.isArray(state.movimientos))    state.movimientos=[];
   if(!state.customCuentas)    state.customCuentas={};
+  if(!state.servicios)        state.servicios={};
   if(!state.serviciosByMonth) state.serviciosByMonth={};
   if(!state.snapshots)        state.snapshots={};
   if(!state.payments)         state.payments={};
