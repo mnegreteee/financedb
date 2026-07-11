@@ -1603,9 +1603,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.3.1';
 const APP_VERSION_DATE = '11 jul 2026';
-const APP_VERSION_NOTE = 'Reescritura del motor de saldos: resuelve cada cuenta independientemente mes a mes';
+const APP_VERSION_NOTE = 'Fix: cuentas nuevas no aparecían en el desplegable de Servicios';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3074,7 +3074,9 @@ function openNewServiceModal(){
   editingSrvId=null;
   document.getElementById('srv-edit-title').textContent='➕ Nuevo Servicio';
   document.getElementById('srv-edit-name').value='';document.getElementById('srv-edit-price').value='';
-  document.getElementById('srv-edit-day').value='9';document.getElementById('srv-edit-account').value='BBVA';
+  document.getElementById('srv-edit-day').value='9';
+  updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
+  document.getElementById('srv-edit-account').value='BBVA';
   tempPeople=[{id:'np'+Date.now(),name:'',avatar:randomAvatar()}];renderPeopleFields();
   document.getElementById('srv-edit-overlay').classList.add('open');
 }
@@ -3083,7 +3085,9 @@ function openEditService(sid){
   editingSrvId=sid;
   document.getElementById('srv-edit-title').textContent='✏️ Editar: '+svc.name;
   document.getElementById('srv-edit-name').value=svc.name;document.getElementById('srv-edit-price').value=svc.pricePerPerson.toFixed(2);
-  document.getElementById('srv-edit-day').value=svc.payDay||9;document.getElementById('srv-edit-account').value=svc.account||'BBVA';
+  document.getElementById('srv-edit-day').value=svc.payDay||9;
+  updateAccountSelects(); // asegura que la cuenta del servicio (aunque sea tipo "otras") esté en la lista
+  document.getElementById('srv-edit-account').value=svc.account||'BBVA';
   tempPeople=svc.people.map(p=>({...p}));renderPeopleFields();
   document.getElementById('srv-edit-overlay').classList.add('open');
 }
