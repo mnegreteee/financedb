@@ -1603,9 +1603,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.2.1';
+const APP_VERSION = 'v1.3.0';
 const APP_VERSION_DATE = '11 jul 2026';
-const APP_VERSION_NOTE = 'Fix: cuentas tipo "otras" no aparecían en Nuevo movimiento';
+const APP_VERSION_NOTE = 'Reescritura del motor de saldos: resuelve cada cuenta independientemente mes a mes';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2181,7 +2181,7 @@ function reconstructSaldoAt(y,m){
   return result;
 }
 function _reconstructSaldoAtRaw(y,m){
-  // Reconstruye saldos de todas las cuentas al CIERRE del mes y,m
+  // Reconstruye saldos de todas las cuentas al CIERRE del mes y,m.
   // Include ALL accounts: defaults + custom (including "otras")
   const knownFromMovs=new Set(state.movimientos.map(mv=>mv.account));
   const allKeys=[
@@ -2194,71 +2194,87 @@ function _reconstructSaldoAtRaw(y,m){
   const base={};
   allKeys.forEach(k=>base[k]=0);
 
-  // 1. Snapshot exacto para este mes
+  // 1. Cierre de mes completo (_endOfMonth) EXACTO en el mes pedido → autoritativo,
+  // ya incluye todos los saldos y movimientos de ese mes.
   const exactSnap=(state.snapshots||{})[snapKey(y,m)];
-  if(exactSnap){
-    if(exactSnap._endOfMonth){
-      // Full end-of-month snapshot (cerrarMes) — use directly
-      Object.keys(exactSnap).forEach(k=>{if(k!=='_endOfMonth')base[k]=exactSnap[k];});
-      return base;
-    }
-    // Partial snapshot (e.g. new account added, or Excel parser start-of-month):
-    // For accounts NOT in this snapshot, fall back to the nearest previous snapshot
-    // then accumulate movimientos from there forward.
-    const nearest2=findNearestPrevSnap(y,m-1);
-    if(nearest2){
-      // Start from previous snapshot for all accounts
-      Object.keys(base).forEach(k=>{if(nearest2.snap[k]!==undefined)base[k]=nearest2.snap[k];});
-      // Then override with any values explicitly set in the partial snapshot
-      Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
-      // Apply all movimientos from after the prev snapshot up to end of this month
-      const snapNextY=nearest2.month===11?nearest2.year+1:nearest2.year;
-      const snapNextM=nearest2.month===11?0:nearest2.month+1;
-      const cutoff=new Date(y,m+1,0,23,59,59);
-      const fromDate=new Date(snapNextY,snapNextM,1,0,0,0);
-      const relevantMovs=state.movimientos.filter(mv=>{
-        const d=new Date(mv.date+'T12:00:00');
-        return d>=fromDate&&d<=cutoff;
-      });
-      applyMovsToSaldo(base,relevantMovs);
-    } else {
-      // No previous snapshot — apply partial snap values then all movs up to this month
-      Object.keys(exactSnap).forEach(k=>{base[k]=exactSnap[k];});
-      const cutoff=new Date(y,m+1,0,23,59,59);
-      const relevantMovs=state.movimientos.filter(mv=>{
-        const d=new Date(mv.date+'T12:00:00');
-        return d<=cutoff;
-      });
-      applyMovsToSaldo(base,relevantMovs);
-    }
+  if(exactSnap && exactSnap._endOfMonth){
+    Object.keys(exactSnap).forEach(k=>{if(k!=='_endOfMonth')base[k]=exactSnap[k];});
     return base;
   }
 
-  // 2. Buscar snapshot más cercano anterior como punto de partida
-  const nearest=findNearestPrevSnap(y,m-1); // mes anterior al pedido
-  // (cache is stored at end of function)
-  if(nearest){
-    // Copiar saldo del snapshot encontrado
-    Object.keys(base).forEach(k=>{if(nearest.snap[k]!==undefined)base[k]=nearest.snap[k];});
-    // Sumar todos los movimientos desde el mes siguiente al snapshot hasta el mes pedido
-    const snapNextY=nearest.month===11?nearest.year+1:nearest.year;
-    const snapNextM=nearest.month===11?0:nearest.month+1;
-    const cutoff=new Date(y,m+1,0,23,59,59);
-    const fromDate=new Date(snapNextY,snapNextM,1,0,0,0);
-    const relevantMovs=state.movimientos.filter(mv=>{
-      const d=new Date(mv.date+'T12:00:00');
-      return d>=fromDate && d<=cutoff;
+  // 2. Recorrido hacia atrás, mes por mes (hasta 24 meses), resolviendo CADA
+  // cuenta con el snapshot más reciente que la mencione. Esto evita que un
+  // snapshot parcial de una sola cuenta (ej. al crearla) bloquee la búsqueda
+  // de las demás cuentas más atrás en el tiempo — antes, un solo snapshot
+  // "más cercano" se usaba como base única, y cuentas ausentes de ese
+  // snapshot puntual se perdían (quedaban en 0) aunque tuvieran historial
+  // más antiguo perfectamente válido.
+  //
+  // Además: si una cuenta ya tiene un snapshot o movimiento ANTERIOR al mes
+  // de un snapshot parcial, ese snapshot se considera viejo/duplicado y se
+  // ignora para esa cuenta específica (protección contra snapshots fantasma
+  // dejados por versiones anteriores de la app, ej. al crear una cuenta).
+  const primeraApCache={};
+  function primeraAparicionDe(k){
+    if(k in primeraApCache) return primeraApCache[k];
+    let min=null;
+    Object.entries(state.snapshots||{}).forEach(([key,snap])=>{
+      if(!(k in snap)) return;
+      const [yy,mm]=key.split('-');
+      const d=new Date(parseInt(yy),parseInt(mm)-1,1);
+      if(min===null||d<min) min=d;
     });
-    applyMovsToSaldo(base, relevantMovs);
-  } else {
-    // 3. Sin ningún snapshot: acumular todos los movimientos hasta el cierre del mes
-    const cutoff=new Date(y,m+1,0,23,59,59);
-    const relevantMovs=state.movimientos.filter(mv=>{
+    state.movimientos.forEach(mv=>{
+      if(mv.account!==k) return;
       const d=new Date(mv.date+'T12:00:00');
-      return d<=cutoff;
+      if(min===null||d<min) min=d;
     });
-    applyMovsToSaldo(base, relevantMovs);
+    primeraApCache[k]=min;
+    return min;
   }
+
+  const resolved={};   // key -> saldo ya resuelto por el snapshot más reciente que lo menciona
+  const fromDate={};   // key -> fecha desde la cual sumar sus propios movimientos
+  let cy=y, cm=m;
+  for(let i=0;i<24;i++){
+    const snap=(state.snapshots||{})[snapKey(cy,cm)];
+    if(snap){
+      const esCierre=!!snap._endOfMonth;
+      const mesSnapInicio=new Date(cy,cm,1);
+      Object.keys(snap).forEach(k=>{
+        if(k==='_endOfMonth'||(k in resolved)) return;
+        if(!esCierre){
+          // Snapshot parcial: solo confiar si esta es la primera vez que esta
+          // cuenta aparece en toda la historia (si hay algo más antiguo, es
+          // un duplicado/fantasma y se ignora, dejando que la búsqueda siga
+          // más atrás o que sus propios movimientos reconstruyan el saldo).
+          const primera=primeraAparicionDe(k);
+          if(primera && primera<mesSnapInicio) return;
+        }
+        resolved[k]=snap[k];
+        // Un cierre de mes completo YA incluye los movimientos de ese mes →
+        // sumar desde el mes SIGUIENTE. Un snapshot parcial (recién creado)
+        // aún no incluye los suyos → sumar desde ESE MISMO mes.
+        const nm=cm===11?0:cm+1, ny=cm===11?cy+1:cy;
+        fromDate[k]= esCierre ? new Date(ny,nm,1) : mesSnapInicio;
+      });
+    }
+    if(Object.keys(resolved).length>=allKeys.length) break;
+    cm--; if(cm<0){cm=11;cy--;}
+  }
+
+  allKeys.forEach(k=>{
+    if(k in resolved) base[k]=resolved[k];
+    if(!(k in fromDate)) fromDate[k]=new Date(0); // sin snapshot: acumula desde siempre
+  });
+
+  const cutoff=new Date(y,m+1,0,23,59,59);
+  const relevantMovs=state.movimientos.filter(mv=>{
+    const d=new Date(mv.date+'T12:00:00');
+    const from=fromDate[mv.account]||new Date(0);
+    return d>=from && d<=cutoff;
+  });
+  applyMovsToSaldo(base, relevantMovs);
 
   return base;
 }
