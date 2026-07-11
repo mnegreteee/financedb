@@ -854,7 +854,7 @@ body.compact-mode .anual-table{font-size:11px;}
     </div>
     <div class="dash-kpi kpi-amber">
       <div class="dash-kpi-icon">📅</div>
-      <div class="dash-kpi-label">A pagar este mes</div>
+      <div class="dash-kpi-label">A pagar próximo mes</div>
       <div class="dash-kpi-val money" id="kpi-pagar-mes">—</div>
       <div class="dash-kpi-sub" id="kpi-pagar-mes-sub">período actual tarjetas</div>
     </div>
@@ -1603,9 +1603,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.3.2';
+const APP_VERSION = 'v1.4.0';
 const APP_VERSION_DATE = '11 jul 2026';
-const APP_VERSION_NOTE = 'Auditoría general: sin más bugs de desplegables encontrados';
+const APP_VERSION_NOTE = '"A pagar" en tarjetas ahora es uniforme: siempre el mes calendario siguiente';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3669,6 +3669,9 @@ function calcTCMes(tarjeta){
   // El mes de pago "activo" = el período al que pertenecería una compra hecha HOY.
   // Delegamos en getBillingMonthKey para que calcTCMes y la asignación de
   // consumos sean SIEMPRE consistentes entre sí (misma lógica de ciclo).
+  // NOTA: esta función se mantiene para uso interno (asignar nuevos consumos),
+  // pero "A pagar" en las tarjetas usa getSiguienteMesCalendario() en su lugar
+  // — ver esa función para la lógica que sí se muestra al usuario.
   const hoy=new Date();
   const hoyStr=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
   const mk=getBillingMonthKey(hoyStr, tarjeta);
@@ -3676,6 +3679,17 @@ function calcTCMes(tarjeta){
   const pagoAnio=parseInt(parts[0]);
   const pagoMes=parseInt(parts[1])-1;
   return{pagoMes, pagoAnio, label:tcMesesLong()[pagoMes]};
+}
+
+// "A pagar" siempre muestra el MES CALENDARIO siguiente al actual, igual para
+// todas las tarjetas (sin importar el día de inicio/cierre de cada una) — así
+// todas las tarjetas quedan consistentes entre sí. Ej: si hoy es cualquier día
+// de julio, "A pagar" siempre se refiere al período de agosto.
+function getSiguienteMesCalendario(){
+  const hoy=new Date();
+  let mes=hoy.getMonth()+1, anio=hoy.getFullYear();
+  if(mes>11){ mes=0; anio++; }
+  return{pagoMes:mes, pagoAnio:anio, label:tcMesesLong()[mes]};
 }
 
 function tcMonthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
@@ -3707,7 +3721,7 @@ function renderTarjetas(){
 }
 
 function buildTCCard(t){
-  const {label, pagoMes, pagoAnio} = calcTCMes(t);
+  const {label, pagoMes, pagoAnio} = getSiguienteMesCalendario();
   const allMovs = getAllTCMovs(t.id);
   const linea   = parseFloat(t.linea) || 0;
   const col     = t.color || '#5b8def';
@@ -3768,7 +3782,7 @@ function openTCDetail(tid){
   document.getElementById('tc-detail-title').textContent=t.banco+' '+t.cat;
   document.getElementById('tc-detail-sub').textContent=`Ciclo: ${t.inicio} al ${t.cierre} de cada mes | Pago: día ${t.pago}`;
   // Set current month to the payment month for today
-  const {pagoMes,pagoAnio}=calcTCMes(t);
+  const {pagoMes,pagoAnio}=getSiguienteMesCalendario();
   currentTCMonth=tcMonthKey(pagoAnio,pagoMes);
   renderTCMonthSelector(t);
   renderTCDetail();
@@ -4554,14 +4568,14 @@ function renderDashboard(){
   const tarjetas = state.tarjetas || [];
   const rate = state.tc?.venta || 3.45;
   let deudaTCTotal = 0, pagarEsteMes = 0;
+  const siguienteMes = getSiguienteMesCalendario();
   tarjetas.forEach(t => {
     const allMovs   = getAllTCMovs(t.id);
     const toS = v => t.currency==='USD' ? v*rate : v;
     // Deuda total: todos los no pagados
     deudaTCTotal += allMovs.filter(m=>!m.pagado).reduce((s,m)=>s+toS(m.monto),0);
-    // A pagar este mes: consumos del período actual no pagados
-    const {pagoMes,pagoAnio} = calcTCMes(t);
-    const mk = tcMonthKey(pagoAnio, pagoMes);
+    // A pagar próximo mes: consumos del período (mes calendario siguiente) no pagados
+    const mk = tcMonthKey(siguienteMes.pagoAnio, siguienteMes.pagoMes);
     ((t.movs&&t.movs[mk])||[]).filter(m=>!m.pagado).forEach(m=>pagarEsteMes+=toS(m.monto));
   });
 
@@ -4611,7 +4625,7 @@ function renderDashboard(){
   const ahorroSubtxt = aD>0 ? fmtS(aS)+' + '+fmtD(aD) : fmtS(aS);
   setKpi('kpi-ahorro', fmtS(ahorroTotalCur), ahorroSubtxt, 'var(--purple)');
   setKpi('kpi-deuda-tc', deudaTCTotal>0?fmtS(deudaTCTotal):'S/ 0.00', deudaTCTotal>0?tarjetas.length+' tarjeta(s)':'sin deuda pendiente', deudaTCTotal>0?'var(--red)':'var(--green)');
-  setKpi('kpi-pagar-mes', pagarEsteMes>0?fmtS(pagarEsteMes):'S/ 0.00', pagarEsteMes>0?'próximo ciclo':'al día 🎉', pagarEsteMes>0?'var(--amber)':'var(--green)');
+  setKpi('kpi-pagar-mes', pagarEsteMes>0?fmtS(pagarEsteMes):'S/ 0.00', pagarEsteMes>0?siguienteMes.label:'al día 🎉', pagarEsteMes>0?'var(--amber)':'var(--green)');
 
   // ── Últimos movimientos ────────────────────────────
   const movsList = document.getElementById('dash-movs-list');
@@ -4655,7 +4669,7 @@ function renderDashboard(){
         const linea=parseFloat(t.linea)||0;
         const pct=linea>0?Math.min(100,(unpaid/linea)*100):0;
         const barCol=pct>=90?'var(--red)':pct>=70?'var(--amber)':t.color||'var(--accent)';
-        const {label}=calcTCMes(t);
+        const {label}=getSiguienteMesCalendario();
         return`<div class="dash-tc-row" onclick="showPage('tarjetas');setTimeout(()=>openTCDetail('${t.id}'),50)" style="cursor:pointer">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;justify-content:space-between">
