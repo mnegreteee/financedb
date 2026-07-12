@@ -55,6 +55,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .eye-btn{width:34px;height:34px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s;flex-shrink:0;}
 .eye-btn:hover{background:var(--bg4);border-color:var(--border2);}
 .eye-btn.hidden-active{background:var(--amber-bg);border-color:var(--amber);}
+.eye-btn.demo-active{background:rgba(167,139,250,.18);border-color:#a78bfa;}
 .last-updated-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);}
 .last-updated-val{font-family:var(--mono);font-size:11px;color:var(--text2);}
 .btn{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);padding:6px 12px;font-family:var(--font);font-size:12px;cursor:pointer;transition:all .15s;font-weight:500;}
@@ -689,6 +690,7 @@ body.compact-mode .anual-table{font-size:11px;}
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
     <button class="eye-btn" id="compact-btn" onclick="toggleCompact()" title="Adaptar vista al dispositivo" style="font-size:15px">📱</button>
+    <button class="eye-btn" id="demo-btn" onclick="toggleDemoMode()" title="Modo demo (números aleatorios)" style="font-size:15px">🎭</button>
     <button class="eye-btn" id="lock-btn" onclick="lockApp()" title="Bloquear y cerrar sesión" style="font-size:15px">🔒</button>
     <button class="eye-btn" id="eye-btn" onclick="toggleHide()" title="Ocultar / mostrar cifras">👁</button>
     <div class="last-updated" id="last-updated-wrap">
@@ -809,6 +811,11 @@ body.compact-mode .anual-table{font-size:11px;}
     <button class="btn btn-primary" onclick="openModal()">+ Agregar</button>
   </div>
 </nav>
+
+<div id="demo-banner" style="display:none;position:sticky;top:0;z-index:500;background:linear-gradient(90deg,#7c3aed,#a78bfa);color:#fff;padding:8px 20px;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3)">
+  <span>🎭 MODO DEMO — estás viendo números aleatorios, no tus datos reales. Nada de lo que hagas aquí se guarda.</span>
+  <button onclick="toggleDemoMode()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Salir</button>
+</div>
 
 <!-- ══ PAGE: DASHBOARD ══ -->
 <div class="page active" id="page-dashboard">
@@ -1603,9 +1610,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.5.0';
 const APP_VERSION_DATE = '11 jul 2026';
-const APP_VERSION_NOTE = '"A pagar" en tarjetas ahora es uniforme: siempre el mes calendario siguiente';
+const APP_VERSION_NOTE = 'Nuevo: Modo Demo (🎭) con números aleatorios para mostrar el dashboard sin exponer datos reales';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -1644,6 +1651,7 @@ let state={
 
 let mainChart=null,projChart=null;
 let hiddenMode=false,ahorroMoneda='PEN';
+let demoMode=false, realStateBackup=null;
 let selectedAccounts=new Set();
 let currentChartTab=0,currentTCField=null;
 let editingSrvId=null,tempPeople=[];
@@ -1717,6 +1725,8 @@ function syncMovimientosSubcollection(){
 }
 
 function _doFirestoreWrite(){
+  // Segunda capa de protección — jamás escribir a Firestore en modo demo.
+  if(demoMode){ console.warn('_doFirestoreWrite() bloqueado: modo demo activo.'); return; }
   if(!DOC_REF){setSyncStatus('error');return;}
   const{movimientos,...meta}=state;
   const mainDocWrite = DOC_REF.set({
@@ -1734,6 +1744,10 @@ function _doFirestoreWrite(){
 // donde el usuario podría recargar la página antes de que el debounce normal dispare,
 // perdiendo el guardado en la nube.
 function saveState(immediate){
+  // 🎭 GUARDA CRÍTICA: mientras el modo demo esté activo, NUNCA se guarda nada
+  // — ni en localStorage ni en Firestore — para que jamás se pueda sobreescribir
+  // tu data real con los números aleatorios de la demo.
+  if(demoMode){ console.warn('saveState() bloqueado: modo demo activo, no se guarda nada.'); return; }
   state.lastUpdated=new Date().toISOString();
   clearSaldoCache(); // invalidate saldo cache on any state change
   // Save to localStorage immediately as backup
@@ -1773,6 +1787,108 @@ function updateLastUpdated(){
   const time = d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
   el.textContent = date + ' ' + time;
 }
+
+// ══════════════════════════════════════════════════════
+//  MODO DEMO — muestra números aleatorios (pero plausibles) en vez de tus
+//  datos reales, para poder mostrarle el dashboard a alguien sin exponer tu
+//  información financiera real. Nunca se guarda nada mientras está activo
+//  (ver las guardas en saveState()/_doFirestoreWrite()).
+// ══════════════════════════════════════════════════════
+
+// Genera una copia del estado con TODOS los montos monetarios escalados por
+// el MISMO factor aleatorio — así se preserva cualquier relación matemática
+// entre ellos (saldos, sumas, tablas de amortización, etc. siguen "cuadrando"
+// entre sí), pero ningún número coincide con el real.
+function generateDemoState(real){
+  const factor = 0.5 + Math.random()*1.5; // entre 0.5x y 2x
+  const scale = (v) => {
+    if(v===null||v===undefined||v==='') return v;
+    const num = typeof v==='string' ? parseFloat(v) : v;
+    if(isNaN(num)) return v;
+    const scaled = num*factor;
+    return typeof v==='string' ? scaled.toFixed(2) : Math.round(scaled*100)/100;
+  };
+  const clone = JSON.parse(JSON.stringify(real));
+
+  // Cuentas y snapshots (saldos)
+  if(clone.cuentas) Object.keys(clone.cuentas).forEach(k=>{ clone.cuentas[k]=scale(clone.cuentas[k]); });
+  if(clone.snapshots) Object.values(clone.snapshots).forEach(snap=>{
+    Object.keys(snap).forEach(k=>{ if(k!=='_endOfMonth') snap[k]=scale(snap[k]); });
+  });
+
+  // Movimientos
+  (clone.movimientos||[]).forEach(m=>{
+    m.amount=scale(m.amount);
+    if(m.signedAmount!==undefined) m.signedAmount=scale(m.signedAmount);
+  });
+
+  // Tarjetas de crédito (línea + cada consumo)
+  (clone.tarjetas||[]).forEach(t=>{
+    if(t.linea!==undefined) t.linea=scale(t.linea);
+    Object.values(t.movs||{}).forEach(arr=>arr.forEach(mv=>{ mv.monto=scale(mv.monto); }));
+  });
+
+  // Deudas (préstamos que le deben a él)
+  (clone.deudas||[]).forEach(d=>{ d.monto=scale(d.monto); });
+
+  // Deudas Mayores (préstamos que él debe) — se escala TODO por igual, así la
+  // tabla de amortización sigue siendo matemáticamente consistente
+  (clone.deudasMayores||[]).forEach(d=>{
+    if(d.importe!==undefined)    d.importe=scale(d.importe);
+    if(d.montoCuota!==undefined) d.montoCuota=scale(d.montoCuota);
+    if(d.cuotaCalc!==undefined)  d.cuotaCalc=scale(d.cuotaCalc);
+    (d.cuotas||[]).forEach(c=>{
+      if(c.monto!==undefined)        c.monto=scale(c.monto);
+      if(c.saldoInicial!==undefined) c.saldoInicial=scale(c.saldoInicial);
+      if(c.interes!==undefined)      c.interes=scale(c.interes);
+      if(c.amort!==undefined)        c.amort=scale(c.amort);
+      if(c.saldoFinal!==undefined)   c.saldoFinal=scale(c.saldoFinal);
+    });
+  });
+
+  // Presupuestos
+  if(clone.budgets) Object.values(clone.budgets).forEach(b=>{ if(b&&b.limit!==undefined) b.limit=scale(b.limit); });
+
+  // Metas de proyección
+  if(clone.projGoals){
+    if(clone.projGoals.soles!==undefined) clone.projGoals.soles=scale(clone.projGoals.soles);
+    if(clone.projGoals.dolar!==undefined) clone.projGoals.dolar=scale(clone.projGoals.dolar);
+  }
+
+  // Servicios compartidos (precio por persona)
+  function scaleServiciosDict(dict){
+    if(!dict) return;
+    Object.values(dict).forEach(svc=>{ if(svc&&svc.pricePerPerson!==undefined) svc.pricePerPerson=scale(svc.pricePerPerson); });
+  }
+  scaleServiciosDict(clone.servicios);
+  if(clone.serviciosByMonth) Object.values(clone.serviciosByMonth).forEach(scaleServiciosDict);
+
+  return clone;
+}
+
+function toggleDemoMode(){
+  const btn = document.getElementById('demo-btn');
+  const banner = document.getElementById('demo-banner');
+  if(!demoMode){
+    // Activar: guardar los datos reales aparte (solo en memoria, nunca se
+    // persiste) y reemplazar el estado en pantalla por la versión demo.
+    realStateBackup = state;
+    state = generateDemoState(realStateBackup);
+    demoMode = true;
+    if(btn){ btn.classList.add('demo-active'); btn.title='Salir del modo demo'; }
+    if(banner) banner.style.display='flex';
+  } else {
+    // Desactivar: restaurar los datos reales tal cual estaban.
+    state = realStateBackup;
+    realStateBackup = null;
+    demoMode = false;
+    if(btn){ btn.classList.remove('demo-active'); btn.title='Modo demo (números aleatorios)'; }
+    if(banner) banner.style.display='none';
+  }
+  clearSaldoCache();
+  render();
+}
+
 
 // ── MIGRACIÓN DE ESTADO (compatibilidad con versiones anteriores) ──
 function migrateState(){
