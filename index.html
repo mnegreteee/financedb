@@ -108,7 +108,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .mc-pos{color:var(--green);}.mc-neg{color:var(--red);}.mc-zero{color:var(--text3);}
 
 /* ── CARDS ── */
-.main-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
+.main-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden;box-shadow:var(--card-shadow);}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .card.c-green::before{background:var(--green);}
@@ -968,6 +968,11 @@ body.compact-mode .anual-table{font-size:11px;}
       <div class="card-sub" id="sub-ahorro-dolar">cuenta ahorro</div>
       <div class="card-equiv money" id="equiv-ahorro-dolar"></div>
     </div>
+    <div class="card c-accent">
+      <div class="card-label">Total Soles</div>
+      <div class="card-value money" id="sum-total-soles">S/ 0.00</div>
+      <div class="card-sub" id="sub-total-soles">disponible + ahorro soles</div>
+    </div>
     <div class="card c-teal">
       <div class="card-label">Total Ahorros</div>
       <div class="currency-toggle">
@@ -1610,9 +1615,9 @@ body.compact-mode .anual-table{font-size:11px;}
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.5.0';
-const APP_VERSION_DATE = '11 jul 2026';
-const APP_VERSION_NOTE = 'Nuevo: Modo Demo (🎭) con números aleatorios para mostrar el dashboard sin exponer datos reales';
+const APP_VERSION = 'v1.5.1';
+const APP_VERSION_DATE = '12 jul 2026';
+const APP_VERSION_NOTE = 'Nuevo recuadro "Total Soles" (Disponible actual + Ahorro Soles) en Finanzas';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2227,6 +2232,11 @@ function renderSummaryCards(){
   )).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
   document.getElementById('sub-ahorro-dolar').innerHTML=intD>0?`<span style="color:var(--green)">${M('+'+fmtD(intD))}</span> este mes`:'cuenta ahorro';
   document.getElementById('equiv-ahorro-dolar').textContent=M('≈ '+fmtS(aD*state.tc.compra));
+
+  // Total Soles = Disponible actual + Ahorro Soles
+  const totalSoles = dc + aS;
+  document.getElementById('sum-total-soles').textContent=M(fmtS(totalSoles));
+  document.getElementById('sum-total-soles').style.color=totalSoles>=0?'var(--accent)':'var(--red)';
 
   if(ahorroMoneda==='PEN'){
     const t=aS+(aD*state.tc.compra);
