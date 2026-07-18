@@ -878,14 +878,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
     </div>
   </div>
 
-  <div class="card" style="padding:18px;margin-bottom:22px;display:none" id="fecha-imp-card-wrap">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div class="dash-section-title" style="margin:0">📅 Fechas Importantes</div>
-      <button class="btn btn-primary" style="font-size:11px" onclick="openCalEventModal(null, todayISO())">+ Agregar</button>
-    </div>
-    <div class="fecha-imp-grid" id="fecha-imp-grid"></div>
-  </div>
-
   <div class="dash-split">
     <div class="card" style="padding:18px">
       <div class="dash-section-title">Últimos movimientos</div>
@@ -911,11 +903,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
       <div id="dash-dp-list"></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
     </div>
-    <div class="card" style="padding:18px;display:none" id="dash-events-card">
-      <div class="dash-section-title">📅 Próximos Eventos</div>
-      <div id="dash-events-list"></div>
-      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('calendario')">Ver calendario →</button></div>
+  </div>
+
+  <div class="card" style="padding:18px;margin-bottom:22px;display:none" id="fecha-imp-card-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="dash-section-title" style="margin:0">📅 Fechas Importantes</div>
+      <button class="btn btn-primary" style="font-size:11px" onclick="openCalEventModal(null, todayISO())">+ Agregar</button>
     </div>
+    <div class="fecha-imp-grid" id="fecha-imp-grid"></div>
   </div>
 
   <div class="dash-section-title">Accesos rápidos</div>
@@ -1634,9 +1629,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.6.0';
+const APP_VERSION = 'v1.6.2';
 const APP_VERSION_DATE = '18 jul 2026';
-const APP_VERSION_NOTE = 'Nueva sección "Fechas Importantes" en el dashboard, con conteo de días (D-XX) y tiempo transcurrido';
+const APP_VERSION_NOTE = 'Dashboard: eliminado "Próximos Eventos", "Fechas Importantes" movido debajo de Deudas/Préstamos';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4899,32 +4894,11 @@ function renderDashDebts(){
     dpCard.style.display='none';
   }
 
-  // ── Próximos eventos del calendario (mes actual) ──
+  // ── Fechas Importantes (todas, no solo las del mes actual) ──
   renderFechasImportantes();
 
-  const upcomingEvents = getUpcomingCalEventsThisMonth();
-  const evCard = document.getElementById('dash-events-card');
-  const evList = document.getElementById('dash-events-list');
-  if(upcomingEvents.length){
-    evCard.style.display='block';
-    evList.innerHTML = upcomingEvents.slice(0,5).map(o=>{
-      const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
-      const dateLabel = new Date(o.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'});
-      const countdownLabel = o.diffDays===0 ? '¡Hoy!' : o.diffDays===1 ? 'Mañana' : 'en '+o.diffDays+' días';
-      return `<div class="dash-event-row" onclick="showPage('calendario')" style="cursor:pointer">
-        <div style="min-width:0">
-          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">${t.icon} ${o.event.titulo}</div>
-          <div style="font-size:10px;color:var(--text3)">${dateLabel}</div>
-        </div>
-        <span class="dash-event-badge" style="background:${t.color}">${countdownLabel}</span>
-      </div>`;
-    }).join('');
-  } else {
-    evCard.style.display='none';
-  }
-
-  // Ocultar todo el bloque si NINGUNA de las tres secciones tiene datos
-  wrap.style.display = (dmActivas.length || dpPend.length || upcomingEvents.length) ? 'grid' : 'none';
+  // Ocultar todo el bloque si NINGUNA de las dos secciones tiene datos
+  wrap.style.display = (dmActivas.length || dpPend.length) ? 'grid' : 'none';
 }
 
 
@@ -6020,7 +5994,9 @@ function renderFechasImportantes(){
   const wrap = document.getElementById('fecha-imp-card-wrap');
   const grid = document.getElementById('fecha-imp-grid');
   if(!wrap||!grid) return;
-  const items = getEventCountdowns();
+  // Solo mostrar próximos/hoy — los que ya pasaron se ocultan, salvo que estén
+  // marcados como "fijado" (el usuario quiere conservarlos siempre visibles).
+  const items = getEventCountdowns().filter(it=>!it.isPast || it.event.fijado);
   if(!items.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   grid.innerHTML = items.map(it=>{
@@ -6030,6 +6006,7 @@ function renderFechasImportantes(){
     return `<div class="fecha-imp-card" onclick="showPage('calendario')">
       <div class="fecha-imp-top">
         <div class="fecha-imp-icon" style="background:${t.color}22">${t.icon}</div>
+        ${it.isPast && it.event.fijado ? '<span title="Fijado" style="font-size:12px;opacity:.7">📌</span>' : ''}
       </div>
       <div>
         <div class="fecha-imp-title">${it.event.titulo}</div>
@@ -6152,6 +6129,7 @@ function openCalEventModal(id, prefillDate){
     document.getElementById('cal-e-fecha').value = ev.fecha;
     document.getElementById('cal-e-tipo').value = ev.tipo;
     document.getElementById('cal-e-recurrente').checked = !!ev.recurrente;
+    document.getElementById('cal-e-fijado').checked = !!ev.fijado;
     document.getElementById('cal-e-notas').value = ev.notas||'';
     delBtn.style.display='inline-flex';
   } else {
@@ -6160,6 +6138,7 @@ function openCalEventModal(id, prefillDate){
     document.getElementById('cal-e-fecha').value = prefillDate || todayISO();
     document.getElementById('cal-e-tipo').value = 'evento';
     document.getElementById('cal-e-recurrente').checked = false;
+    document.getElementById('cal-e-fijado').checked = false;
     document.getElementById('cal-e-notas').value = '';
     delBtn.style.display='none';
   }
@@ -6174,15 +6153,16 @@ function saveCalEvent(){
   const fecha = document.getElementById('cal-e-fecha').value;
   const tipo = document.getElementById('cal-e-tipo').value;
   const recurrente = document.getElementById('cal-e-recurrente').checked;
+  const fijado = document.getElementById('cal-e-fijado').checked;
   const notas = (document.getElementById('cal-e-notas').value||'').trim();
   if(!titulo || !fecha){ alert('Completa el título y la fecha.'); return; }
 
   if(!state.calendarEvents) state.calendarEvents=[];
   if(editingCalEventId){
     const ev = state.calendarEvents.find(e=>e.id===editingCalEventId);
-    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.notas=notas; }
+    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.fijado=fijado; ev.notas=notas; }
   } else {
-    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, notas});
+    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, fijado, notas});
   }
   saveState();
   closeCalEventModal();
@@ -6637,6 +6617,10 @@ if(state.projGoals){
     <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
       <input id="cal-e-recurrente" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
       <label style="margin:0;font-size:12px;font-weight:500;color:var(--text)">Se repite cada mes (mismo día)</label>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
+      <input id="cal-e-fijado" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
+      <label style="margin:0;font-size:12px;font-weight:500;color:var(--text)">📌 Mantener siempre visible en el dashboard (aunque ya haya pasado)</label>
     </div>
     <div class="field"><label>Notas <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
       <input id="cal-e-notas" type="text" placeholder="Detalles adicionales...">
