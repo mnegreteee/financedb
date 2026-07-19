@@ -786,6 +786,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
           </div>
         </div>
 
+        <!-- SECCIÓN: Categorías -->
+        <div class="config-section">
+          <div class="config-section-title">Categorías</div>
+          <div class="config-row">
+            <div class="config-row-label">Gestionar categorías<small>Agrega categorías nuevas para movimientos y presupuesto</small></div>
+            <button class="config-action-btn neutral" onclick="openCategoriasModal();closeConfig()">🏷️ Gestionar</button>
+          </div>
+        </div>
+
         <!-- SECCIÓN: Usuarios -->
         <div class="config-section">
           <div class="config-section-title">Usuarios</div>
@@ -1629,9 +1638,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.7.0';
+const APP_VERSION = 'v1.8.0';
 const APP_VERSION_DATE = '18 jul 2026';
-const APP_VERSION_NOTE = 'Consumos de tarjeta con categoría ahora restan del Presupuesto (usando la fecha real de compra)';
+const APP_VERSION_NOTE = 'Nueva sección "Gestionar Categorías" en Configuraciones — crea categorías personalizadas';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -1650,6 +1659,7 @@ let state={
   budgets:{},
   projGoals:{soles:20000,dolar:3000},
   customCuentas:{},
+  customCategorias:{},   // {nombre: colorHex} — categorías extra creadas por el usuario
   ownerName:'',     // nombre del dueño configurable — vacío = usa currentUser
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
   deudas:[],        // [{id,nombre,monto,currency,fecha,nota,status,fechaPago,cuentaPago}]
@@ -1935,6 +1945,7 @@ function migrateState(){
   ];
   if(!Array.isArray(state.movimientos))    state.movimientos=[];
   if(!state.customCuentas)    state.customCuentas={};
+  if(!state.customCategorias) state.customCategorias={};
   if(!state.servicios)        state.servicios={};
   if(!state.serviciosByMonth) state.serviciosByMonth={};
   if(!state.snapshots)        state.snapshots={};
@@ -2685,6 +2696,7 @@ function openModal(){
   ['f-desc','f-note'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-amount').value='';
   document.getElementById('f-currency').value='PEN';
+  updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('f-cat').value='';
   document.getElementById('f-date').value=new Date().toISOString().slice(0,10);
   updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
@@ -2712,6 +2724,7 @@ function editMovimiento(id){
   document.getElementById('f-account').value=m.account;
   document.getElementById('f-date').value=m.date;
   document.getElementById('f-currency').value=m.currency||'PEN';
+  updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('f-cat').value=m.cat||'';
   document.getElementById('f-note').value=m.note||'';
   setType(m.type);
@@ -2758,6 +2771,7 @@ function saveMovimiento(){
 function openBudgetModal(cat){
   editingBudgetCat=cat||null;
   document.getElementById('budget-modal-title').textContent=cat?'Editar presupuesto':'Nueva Categoría';
+  updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   if(cat){document.getElementById('bm-cat').value=cat;document.getElementById('bm-limit').value=(state.budgets[cat]&&state.budgets[cat].limit)||'';}
   else{document.getElementById('bm-cat').value='🍔 Comida';document.getElementById('bm-limit').value='';}
   document.getElementById('budget-modal-overlay').classList.add('open');
@@ -3792,6 +3806,67 @@ function saveNewCuenta(){
   saveState(); renderCuentasList(); render();
 }
 
+// ── GESTIONAR CATEGORÍAS ──────────────────────────────
+function openCategoriasModal(){
+  renderCategoriasList();
+  document.getElementById('ncat-name').value='';
+  document.getElementById('ncat-color').value='#a78bfa';
+  document.getElementById('categorias-modal-overlay').classList.add('open');
+}
+function closeCategoriasModal(){
+  document.getElementById('categorias-modal-overlay').classList.remove('open');
+}
+
+function renderCategoriasList(){
+  const el=document.getElementById('categorias-list');
+  const custom=state.customCategorias||{};
+  let h='';
+  // Fijas (14) — no se pueden eliminar, solo se muestran de referencia
+  Object.entries(CAT_COLORS).forEach(([name,color])=>{
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0"></span>
+        <span style="font-size:13px;font-weight:500">${name}</span>
+        <span style="font-size:9px;color:var(--text3);background:var(--bg3);padding:1px 6px;border-radius:8px">fija</span>
+      </div>
+    </div>`;
+  });
+  // Personalizadas — sí se pueden eliminar
+  Object.entries(custom).forEach(([name,color])=>{
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0"></span>
+        <span style="font-size:13px;font-weight:500">${name}</span>
+      </div>
+      <button class="config-action-btn danger" onclick="deleteCategoria('${name.replace(/'/g,"\\'")}')" style="font-size:10px;padding:3px 8px">🗑</button>
+    </div>`;
+  });
+  el.innerHTML=h;
+}
+
+function saveNewCategoria(){
+  const name=(document.getElementById('ncat-name').value||'').trim();
+  const color=document.getElementById('ncat-color').value||'#a78bfa';
+  if(!name){alert('Ingresa un nombre (con emoji, ej. 🎮 Videojuegos).');return;}
+  if(getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
+  if(!state.customCategorias) state.customCategorias={};
+  state.customCategorias[name]=color;
+  document.getElementById('ncat-name').value='';
+  document.getElementById('ncat-color').value='#a78bfa';
+  saveState();
+  renderCategoriasList();
+  updateCategorySelects();
+  renderPresupuesto();
+}
+
+function deleteCategoria(name){
+  if(!confirm(`¿Eliminar la categoría "${name}"? Los movimientos que ya la tengan asignada la conservarán en su historial, pero ya no podrás elegirla para nuevos.`)) return;
+  if(state.customCategorias) delete state.customCategorias[name];
+  saveState();
+  renderCategoriasList();
+  updateCategorySelects();
+}
+
 function updateAccountSelects(){
   // Build list from all existing accounts + custom
   const existing=new Set([
@@ -3808,6 +3883,32 @@ function updateAccountSelects(){
     if(keys.includes(cur)) sel.value=cur;
     else if(keys.length) sel.value=keys[0];
   });
+}
+
+// Devuelve TODAS las categorías disponibles: las 14 fijas + las que el
+// usuario haya creado desde "Gestionar Categorías".
+function getAllCategorias(){
+  return {...CAT_COLORS, ...(state.customCategorias||{})};
+}
+
+// Repuebla los 3 desplegables de categoría (movimientos, consumo de tarjeta,
+// presupuesto) cada vez que se abre su modal — así una categoría nueva
+// aparece de inmediato en los tres, sin tener que recargar la página.
+function updateCategorySelects(){
+  const cats = Object.keys(getAllCategorias());
+  // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
+  ['f-cat','tc-m-cat'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel) return;
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    sel.value = cats.includes(cur) ? cur : '';
+  });
+  const bm=document.getElementById('bm-cat');
+  if(bm){
+    const cur=bm.value;
+    bm.innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    bm.value = cats.includes(cur) ? cur : (cats[0]||'');
+  }
 }
 
 
@@ -4142,6 +4243,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-monto').value='';
   document.getElementById('tc-m-pagado').value='no';
   document.getElementById('tc-m-fecha').value=new Date().toISOString().slice(0,10);
+  updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value='';
   document.getElementById('tc-mov-overlay').classList.add('open');
 }
@@ -4155,6 +4257,7 @@ function editTCMov(movId){
   document.getElementById('tc-m-fecha').value=m.fecha;
   document.getElementById('tc-m-monto').value=m.monto;
   document.getElementById('tc-m-pagado').value=m.pagado?'si':'no';
+  updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value=m.cat||'';
   document.getElementById('tc-mov-overlay').classList.add('open');
 }
@@ -6441,6 +6544,29 @@ if(state.projGoals){
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="btn btn-primary" onclick="saveNewCuenta()">+ Agregar cuenta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GESTIONAR CATEGORÍAS -->
+<div class="modal-overlay" id="categorias-modal-overlay" onclick="if(event.target===this)closeCategoriasModal()">
+  <div class="modal" style="width:460px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title"><span>🏷️ Gestionar Categorías</span><button class="modal-close" onclick="closeCategoriasModal()">✕</button></div>
+    <div id="categorias-list" style="margin-bottom:16px"></div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Nueva categoría</div>
+      <div class="field-row">
+        <div class="field"><label>Nombre <span style="font-size:10px;color:var(--text3)">(incluye el emoji)</span></label>
+          <input id="ncat-name" type="text" placeholder="Ej. 🎮 Videojuegos">
+        </div>
+        <div class="field"><label>Color</label>
+          <input id="ncat-color" type="color" value="#a78bfa" style="height:38px;padding:2px;cursor:pointer">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-primary" onclick="saveNewCategoria()">+ Agregar categoría</button>
       </div>
     </div>
   </div>
