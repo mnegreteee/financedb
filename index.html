@@ -1446,15 +1446,17 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
         <table class="tc-mov-table">
           <thead><tr>
             <th style="width:30px"><input type="checkbox" class="tc-check" id="tc-check-all" onchange="toggleAllTCMov(this.checked)"></th>
-            <th>Descripción</th>
-            <th>Fecha</th>
+            <th onclick="setTCSort('desc')" style="cursor:pointer;user-select:none">Descripción <span id="tcsort-desc"></span></th>
+            <th onclick="setTCSort('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="tcsort-fecha"></span></th>
+            <th onclick="setTCSort('cat')" style="cursor:pointer;user-select:none">Categoría <span id="tcsort-cat"></span></th>
             <th style="width:30px">Pagado</th>
-            <th style="text-align:right">Monto</th>
+            <th onclick="setTCSort('monto')" style="text-align:right;cursor:pointer;user-select:none">Monto <span id="tcsort-monto"></span></th>
             <th style="width:40px"></th>
           </tr></thead>
           <tbody id="tc-mov-tbody"></tbody>
         </table>
       </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Toca el encabezado de una columna para ordenar</div>
 
       <!-- Selection total sticky bar -->
       <div class="tc-selection-total" id="tc-sel-total">
@@ -1649,9 +1651,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.9.2';
+const APP_VERSION = 'v1.9.4';
 const APP_VERSION_DATE = '18 jul 2026';
-const APP_VERSION_NOTE = 'Auditoría y optimización: código muerto eliminado + render() ya no recalcula Finanzas si no la estás viendo';
+const APP_VERSION_NOTE = 'Consumos de tarjeta: encabezados clicables para ordenar por descripción, fecha, categoría o monto';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4197,9 +4199,44 @@ function switchTCMonth(key){
   renderTCDetail();
 }
 
+// ── Ordenamiento de la tabla de consumos ──────────────
+let tcSortState={col:null, dir:'asc'};
+function setTCSort(col){
+  if(tcSortState.col===col){
+    tcSortState.dir=tcSortState.dir==='asc'?'desc':'asc';
+  } else {
+    tcSortState.col=col;
+    // Fecha y Monto arrancan descendente (más reciente / mayor primero);
+    // Descripción y Categoría arrancan ascendente (A-Z)
+    tcSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc';
+  }
+  renderTCDetail();
+}
+function sortTCMovs(movs){
+  if(!tcSortState.col) return movs;
+  const {col,dir}=tcSortState;
+  return [...movs].sort((a,b)=>{
+    let av,bv;
+    if(col==='desc'){ av=(a.desc||'').toLowerCase(); bv=(b.desc||'').toLowerCase(); }
+    else if(col==='cat'){ av=(a.cat||'').toLowerCase(); bv=(b.cat||'').toLowerCase(); }
+    else if(col==='fecha'){ av=a.fecha; bv=b.fecha; }
+    else if(col==='monto'){ av=a.monto; bv=b.monto; }
+    if(av<bv) return dir==='asc'?-1:1;
+    if(av>bv) return dir==='asc'?1:-1;
+    return 0;
+  });
+}
+function updateTCSortIndicators(){
+  ['desc','fecha','cat','monto'].forEach(col=>{
+    const el=document.getElementById('tcsort-'+col);
+    if(!el) return;
+    el.textContent=tcSortState.col===col?(tcSortState.dir==='asc'?'▲':'▼'):'';
+  });
+}
+
 function renderTCDetail(){
   if(!currentTCId||!currentTCMonth) return;
-  const movs=getTCMovs(currentTCId,currentTCMonth);
+  const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth));
   const deuda=movs.reduce((s,m)=>s+m.monto,0);
   const pagado=movs.filter(m=>m.pagado).reduce((s,m)=>s+m.monto,0);
   const pendiente=deuda-pagado;
@@ -4219,8 +4256,9 @@ function renderTCDetail(){
   document.getElementById('tc-mov-title').textContent='Consumos — '+tcMesesLong()[parseInt(parts[1])-1]+' '+parts[0];
 
   const tbody=document.getElementById('tc-mov-tbody');
+  updateTCSortIndicators();
   if(!movs.length){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin consumos este mes. Agrega uno con el botón de arriba.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin consumos este mes. Agrega uno con el botón de arriba.</td></tr>';
     updateTCSelectionTotal();
     return;
   }
@@ -4228,6 +4266,7 @@ function renderTCDetail(){
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" onchange="onTCSelChange()"></td>
     <td>${m.desc}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${m.fecha}</td>
+    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
     <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(fmtTCD(Math.abs(m.monto)))}</td>
     <td>
