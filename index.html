@@ -1629,9 +1629,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.6.2';
+const APP_VERSION = 'v1.7.0';
 const APP_VERSION_DATE = '18 jul 2026';
-const APP_VERSION_NOTE = 'Dashboard: eliminado "Próximos Eventos", "Fechas Importantes" movido debajo de Deudas/Préstamos';
+const APP_VERSION_NOTE = 'Consumos de tarjeta con categoría ahora restan del Presupuesto (usando la fecha real de compra)';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2782,9 +2782,29 @@ function renderPresupuesto(){
   if(!cats.length){grid.innerHTML='';empty.style.display='block';return;}
   empty.style.display='none';
   const movs=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense');
+
+  // Consumos de tarjeta con categoría, cuya FECHA DE COMPRA (no el período de
+  // pago/facturación) cae dentro del mes que se está viendo — el presupuesto
+  // refleja cuándo REALMENTE gastaste, sin importar cuándo te lo cobran.
+  // Cuentan tanto los pagados como los pendientes: ya gastaste ese dinero.
+  const tcMovsThisMonth=[];
+  (state.tarjetas||[]).forEach(t=>{
+    Object.values(t.movs||{}).forEach(arr=>{
+      (arr||[]).forEach(m=>{
+        if(!m.cat) return;
+        const d=new Date(m.fecha+'T12:00:00');
+        if(d.getFullYear()===state.currentYear && d.getMonth()===state.currentMonth){
+          tcMovsThisMonth.push({cat:m.cat, monto:m.monto, currency:t.currency||'PEN'});
+        }
+      });
+    });
+  });
+
   grid.innerHTML=cats.map(cat=>{
     const b=state.budgets[cat];
-    const spent=movs.filter(m=>m.cat===cat).reduce((s,m)=>s+(m.currency==='USD'?m.amount*state.tc.venta:m.amount),0);
+    const spentMovs=movs.filter(m=>m.cat===cat).reduce((s,m)=>s+(m.currency==='USD'?m.amount*state.tc.venta:m.amount),0);
+    const spentTC=tcMovsThisMonth.filter(m=>m.cat===cat).reduce((s,m)=>s+(m.currency==='USD'?m.monto*state.tc.venta:m.monto),0);
+    const spent=spentMovs+spentTC;
     const pct=Math.min(100,(spent/b.limit)*100);
     const cls=pct>=100?'over':pct>=80?'warn':'ok';
     const color=cls==='over'?'var(--red)':cls==='warn'?'var(--amber)':'var(--green)';
@@ -2800,7 +2820,7 @@ function renderPresupuesto(){
       </div></div>
       <div class="budget-nums"><span class="spent ${cls}">${M(fmtS(spent))}</span><span>/ ${M(fmtS(b.limit))}</span></div>
       <div class="progress-bar-wrap thick"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${pct.toFixed(0)}% usado · Disponible: ${M(fmtS(Math.max(0,b.limit-spent)))}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">${pct.toFixed(0)}% usado · Disponible: ${M(fmtS(Math.max(0,b.limit-spent)))}${spentTC>0?' · incl. '+M(fmtS(spentTC))+' en tarjeta':''}</div>
     </div>`;
   }).join('');
 }
@@ -4122,6 +4142,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-monto').value='';
   document.getElementById('tc-m-pagado').value='no';
   document.getElementById('tc-m-fecha').value=new Date().toISOString().slice(0,10);
+  document.getElementById('tc-m-cat').value='';
   document.getElementById('tc-mov-overlay').classList.add('open');
 }
 
@@ -4134,6 +4155,7 @@ function editTCMov(movId){
   document.getElementById('tc-m-fecha').value=m.fecha;
   document.getElementById('tc-m-monto').value=m.monto;
   document.getElementById('tc-m-pagado').value=m.pagado?'si':'no';
+  document.getElementById('tc-m-cat').value=m.cat||'';
   document.getElementById('tc-mov-overlay').classList.add('open');
 }
 
@@ -4144,6 +4166,7 @@ function saveTCMov(){
   const fecha=document.getElementById('tc-m-fecha').value;
   const monto=parseFloat(document.getElementById('tc-m-monto').value)||0;
   const pagado=document.getElementById('tc-m-pagado').value==='si';
+  const cat=document.getElementById('tc-m-cat').value||'';
   if(!desc||!fecha||monto===0){alert('Completa todos los campos. El monto puede ser negativo para devoluciones.');return;}
   const t=getTarjeta(currentTCId); if(!t) return;
   if(!t.movs) t.movs={};
@@ -4159,7 +4182,7 @@ function saveTCMov(){
       // Recalculate target month based on new date and tarjeta cycle
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
-      foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado;
+      foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat;
       if(newMk!==foundInMonth){
         // Move to the new billing month
         t.movs[foundInMonth]=t.movs[foundInMonth].filter(x=>x.id!==editingTCMovId);
@@ -4174,7 +4197,7 @@ function saveTCMov(){
     // New mov: calculate billing month from date
     const newMk=getBillingMonthKey(fecha, t);
     if(!t.movs[newMk]) t.movs[newMk]=[];
-    t.movs[newMk].push({id:'tcm'+Date.now(),desc,fecha,monto,pagado});
+    t.movs[newMk].push({id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat});
     // If adding to a different month than currently viewing, switch to it
     if(newMk!==currentTCMonth){
       currentTCMonth=newMk;
@@ -6005,7 +6028,7 @@ function renderFechasImportantes(){
     const countColor = it.isPast ? 'var(--text2)' : (it.diffDays<=7 ? 'var(--red)' : t.color);
     return `<div class="fecha-imp-card" onclick="showPage('calendario')">
       <div class="fecha-imp-top">
-        <div class="fecha-imp-icon" style="background:${t.color}22">${t.icon}</div>
+        <div class="fecha-imp-icon" style="background:${t.color}22">${it.event.icono||t.icon}</div>
         ${it.isPast && it.event.fijado ? '<span title="Fijado" style="font-size:12px;opacity:.7">📌</span>' : ''}
       </div>
       <div>
@@ -6095,7 +6118,7 @@ function renderCalendario(){
     const maxShow = 3;
     const chips = dayEvents.slice(0,maxShow).map(o=>{
       const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
-      return `<div class="cal-event-chip" style="background:${t.color}" onclick="event.stopPropagation();openCalEventModal('${o.event.id}')" title="${o.event.titulo}">${t.icon} ${o.event.titulo}</div>`;
+      return `<div class="cal-event-chip" style="background:${t.color}" onclick="event.stopPropagation();openCalEventModal('${o.event.id}')" title="${o.event.titulo}">${o.event.icono||t.icon} ${o.event.titulo}</div>`;
     }).join('');
     const more = dayEvents.length>maxShow ? `<div class="cal-event-more">+${dayEvents.length-maxShow} más</div>` : '';
     return `<div class="cal-day ${isToday?'cal-today':''}" onclick="openCalEventModal(null,'${dateStr}')">
@@ -6130,6 +6153,7 @@ function openCalEventModal(id, prefillDate){
     document.getElementById('cal-e-tipo').value = ev.tipo;
     document.getElementById('cal-e-recurrente').checked = !!ev.recurrente;
     document.getElementById('cal-e-fijado').checked = !!ev.fijado;
+    document.getElementById('cal-e-icono').value = ev.icono||'';
     document.getElementById('cal-e-notas').value = ev.notas||'';
     delBtn.style.display='inline-flex';
   } else {
@@ -6139,6 +6163,7 @@ function openCalEventModal(id, prefillDate){
     document.getElementById('cal-e-tipo').value = 'evento';
     document.getElementById('cal-e-recurrente').checked = false;
     document.getElementById('cal-e-fijado').checked = false;
+    document.getElementById('cal-e-icono').value = '';
     document.getElementById('cal-e-notas').value = '';
     delBtn.style.display='none';
   }
@@ -6154,15 +6179,16 @@ function saveCalEvent(){
   const tipo = document.getElementById('cal-e-tipo').value;
   const recurrente = document.getElementById('cal-e-recurrente').checked;
   const fijado = document.getElementById('cal-e-fijado').checked;
+  const icono = (document.getElementById('cal-e-icono').value||'').trim();
   const notas = (document.getElementById('cal-e-notas').value||'').trim();
   if(!titulo || !fecha){ alert('Completa el título y la fecha.'); return; }
 
   if(!state.calendarEvents) state.calendarEvents=[];
   if(editingCalEventId){
     const ev = state.calendarEvents.find(e=>e.id===editingCalEventId);
-    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.fijado=fijado; ev.notas=notas; }
+    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.fijado=fijado; ev.icono=icono; ev.notas=notas; }
   } else {
-    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, fijado, notas});
+    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, fijado, icono, notas});
   }
   saveState();
   closeCalEventModal();
@@ -6622,6 +6648,23 @@ if(state.projGoals){
       <input id="cal-e-fijado" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
       <label style="margin:0;font-size:12px;font-weight:500;color:var(--text)">📌 Mantener siempre visible en el dashboard (aunque ya haya pasado)</label>
     </div>
+    <div class="field"><label>Ícono personalizado <span style="font-size:10px;color:var(--text3)">(opcional — si lo dejas vacío usa el del tipo)</span></label>
+      <input id="cal-e-icono" type="text" placeholder="Ej. 🎤" maxlength="4" style="width:70px;text-align:center;font-size:18px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <span onclick="document.getElementById('cal-e-icono').value='🎤'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🎤</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🎬'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🎬</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🎉'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🎉</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🎂'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🎂</span>
+        <span onclick="document.getElementById('cal-e-icono').value='⚽'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">⚽</span>
+        <span onclick="document.getElementById('cal-e-icono').value='✈️'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">✈️</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🏥'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🏥</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🚗'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🚗</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🎓'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🎓</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🐶'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🐶</span>
+        <span onclick="document.getElementById('cal-e-icono').value='💍'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">💍</span>
+        <span onclick="document.getElementById('cal-e-icono').value='🍔'" style="cursor:pointer;font-size:18px;padding:3px 5px;border-radius:6px;background:var(--bg3)">🍔</span>
+      </div>
+    </div>
     <div class="field"><label>Notas <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
       <input id="cal-e-notas" type="text" placeholder="Detalles adicionales...">
     </div>
@@ -6694,6 +6737,25 @@ if(state.projGoals){
     </div>
     <div class="field"><label>Estado</label>
       <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
+    </div>
+    <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
+      <select id="tc-m-cat">
+        <option value="">Sin categoría</option>
+        <option value="🍔 Comida">🍔 Comida</option>
+        <option value="🚗 Transporte">🚗 Transporte</option>
+        <option value="🏠 Vivienda">🏠 Vivienda</option>
+        <option value="💊 Salud">💊 Salud</option>
+        <option value="🎮 Entretenimiento">🎮 Entretenimiento</option>
+        <option value="📱 Servicios">📱 Servicios</option>
+        <option value="👗 Ropa">👗 Ropa</option>
+        <option value="📚 Educación">📚 Educación</option>
+        <option value="💪 Deporte">💪 Deporte</option>
+        <option value="✈️ Viajes">✈️ Viajes</option>
+        <option value="🎁 Regalos">🎁 Regalos</option>
+        <option value="💼 Trabajo">💼 Trabajo</option>
+        <option value="🏦 Finanzas">🏦 Finanzas</option>
+        <option value="📦 Otros">📦 Otros</option>
+      </select>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTCMovModal()">Cancelar</button>
