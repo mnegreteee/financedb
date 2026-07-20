@@ -1651,9 +1651,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.9.4';
+const APP_VERSION = 'v1.10.0';
 const APP_VERSION_DATE = '18 jul 2026';
-const APP_VERSION_NOTE = 'Consumos de tarjeta: encabezados clicables para ordenar por descripción, fecha, categoría o monto';
+const APP_VERSION_NOTE = 'Categorías personalizadas ahora se pueden editar (nombre y color), con actualización en cascada';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3915,10 +3915,11 @@ function saveNewCuenta(){
 }
 
 // ── GESTIONAR CATEGORÍAS ──────────────────────────────
+let editingCategoriaName=null;
+
 function openCategoriasModal(){
+  cancelEditCategoria(); // asegura que el formulario arranque en modo "nueva categoría"
   renderCategoriasList();
-  document.getElementById('ncat-name').value='';
-  document.getElementById('ncat-color').value='#a78bfa';
   document.getElementById('categorias-modal-overlay').classList.add('open');
 }
 function closeCategoriasModal(){
@@ -3929,7 +3930,7 @@ function renderCategoriasList(){
   const el=document.getElementById('categorias-list');
   const custom=state.customCategorias||{};
   let h='';
-  // Fijas (14) — no se pueden eliminar, solo se muestran de referencia
+  // Fijas (14) — no se pueden eliminar ni editar, solo se muestran de referencia
   Object.entries(CAT_COLORS).forEach(([name,color])=>{
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px">
@@ -3939,28 +3940,81 @@ function renderCategoriasList(){
       </div>
     </div>`;
   });
-  // Personalizadas — sí se pueden eliminar
+  // Personalizadas — se pueden editar y eliminar
   Object.entries(custom).forEach(([name,color])=>{
+    const nameEsc=name.replace(/'/g,"\\'");
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0"></span>
         <span style="font-size:13px;font-weight:500">${name}</span>
       </div>
-      <button class="config-action-btn danger" onclick="deleteCategoria('${name.replace(/'/g,"\\'")}')" style="font-size:10px;padding:3px 8px">🗑</button>
+      <div style="display:flex;gap:5px">
+        <button class="config-action-btn neutral" onclick="openEditCategoria('${nameEsc}')" style="font-size:10px;padding:3px 8px">✏️</button>
+        <button class="config-action-btn danger" onclick="deleteCategoria('${nameEsc}')" style="font-size:10px;padding:3px 8px">🗑</button>
+      </div>
     </div>`;
   });
   el.innerHTML=h;
+}
+
+// Abre el formulario en modo "editar" para una categoría personalizada
+function openEditCategoria(name){
+  editingCategoriaName=name;
+  document.getElementById('ncat-name').value=name;
+  document.getElementById('ncat-color').value=(state.customCategorias||{})[name]||'#a78bfa';
+  document.getElementById('ncat-form-title').textContent='✏️ Editando: '+name;
+  document.getElementById('ncat-save-btn').textContent='💾 Guardar cambios';
+  document.getElementById('ncat-cancel-btn').style.display='inline-flex';
+  document.getElementById('ncat-name').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function cancelEditCategoria(){
+  editingCategoriaName=null;
+  document.getElementById('ncat-name').value='';
+  document.getElementById('ncat-color').value='#a78bfa';
+  document.getElementById('ncat-form-title').textContent='Nueva categoría';
+  document.getElementById('ncat-save-btn').textContent='+ Agregar categoría';
+  document.getElementById('ncat-cancel-btn').style.display='none';
+}
+
+// Renombra una categoría en TODOS los lugares donde puede estar referenciada
+// por su nombre exacto — movimientos, consumos de tarjeta y presupuestos —
+// para que el historial no se "desconecte" al corregir un nombre.
+function renameCategoriaEverywhere(oldName, newName){
+  if(oldName===newName) return;
+  (state.movimientos||[]).forEach(mv=>{ if(mv.cat===oldName) mv.cat=newName; });
+  (state.tarjetas||[]).forEach(t=>{
+    Object.values(t.movs||{}).forEach(arr=>{
+      (arr||[]).forEach(mv=>{ if(mv.cat===oldName) mv.cat=newName; });
+    });
+  });
+  if(state.budgets && state.budgets[oldName]){
+    state.budgets[newName]=state.budgets[oldName];
+    delete state.budgets[oldName];
+  }
 }
 
 function saveNewCategoria(){
   const name=(document.getElementById('ncat-name').value||'').trim();
   const color=document.getElementById('ncat-color').value||'#a78bfa';
   if(!name){alert('Ingresa un nombre (con emoji, ej. 🎮 Videojuegos).');return;}
-  if(getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
-  if(!state.customCategorias) state.customCategorias={};
-  state.customCategorias[name]=color;
-  document.getElementById('ncat-name').value='';
-  document.getElementById('ncat-color').value='#a78bfa';
+
+  if(editingCategoriaName){
+    // ── Modo edición ──
+    const oldName=editingCategoriaName;
+    if(name!==oldName && getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
+    if(!state.customCategorias) state.customCategorias={};
+    delete state.customCategorias[oldName];
+    state.customCategorias[name]=color;
+    if(name!==oldName) renameCategoriaEverywhere(oldName,name);
+    cancelEditCategoria();
+  } else {
+    // ── Modo creación ──
+    if(getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
+    if(!state.customCategorias) state.customCategorias={};
+    state.customCategorias[name]=color;
+    document.getElementById('ncat-name').value='';
+    document.getElementById('ncat-color').value='#a78bfa';
+  }
   saveState();
   renderCategoriasList();
   updateCategorySelects();
@@ -6700,7 +6754,7 @@ if(state.projGoals){
     <div id="categorias-list" style="margin-bottom:16px"></div>
 
     <div style="background:var(--bg3);border-radius:10px;padding:14px">
-      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Nueva categoría</div>
+      <div id="ncat-form-title" style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Nueva categoría</div>
       <div class="field-row">
         <div class="field"><label>Nombre <span style="font-size:10px;color:var(--text3)">(incluye el emoji)</span></label>
           <input id="ncat-name" type="text" placeholder="Ej. 🎮 Videojuegos">
@@ -6709,8 +6763,9 @@ if(state.projGoals){
           <input id="ncat-color" type="color" value="#a78bfa" style="height:38px;padding:2px;cursor:pointer">
         </div>
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:8px">
-        <button class="btn btn-primary" onclick="saveNewCategoria()">+ Agregar categoría</button>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+        <button id="ncat-cancel-btn" class="btn" onclick="cancelEditCategoria()" style="display:none">Cancelar</button>
+        <button id="ncat-save-btn" class="btn btn-primary" onclick="saveNewCategoria()">+ Agregar categoría</button>
       </div>
     </div>
   </div>
