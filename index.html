@@ -1673,9 +1673,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.11.0';
+const APP_VERSION = 'v1.11.1';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Buscador y orden en Movimientos, color en Cuentas, orden en Deudas, y sugerencia automática de categoría';
+const APP_VERSION_NOTE = 'Ahora TODAS las cuentas (incl. BCP, BBVA, Efectivo, Ahorros) pueden cambiar de color, no solo las personalizadas';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -1694,6 +1694,7 @@ let state={
   budgets:{},
   projGoals:{soles:20000,dolar:3000},
   customCuentas:{},
+  cuentaColors:{},       // {nombreCuenta: colorHex} — colores de TODAS las cuentas (fijas y personalizadas)
   customCategorias:{},   // {nombre: colorHex} — categorías extra creadas por el usuario
   ownerName:'',     // nombre del dueño configurable — vacío = usa currentUser
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
@@ -1980,6 +1981,7 @@ function migrateState(){
   ];
   if(!Array.isArray(state.movimientos))    state.movimientos=[];
   if(!state.customCuentas)    state.customCuentas={};
+  if(!state.cuentaColors)     state.cuentaColors={};
   if(!state.customCategorias) state.customCategorias={};
   if(!state.servicios)        state.servicios={};
   if(!state.serviciosByMonth) state.serviciosByMonth={};
@@ -2479,8 +2481,9 @@ function renderAccountsTables(){
       // "otras" shown in muted style to signal it doesn't affect calcs
       const muted=r.otras?'opacity:.65;font-style:italic':'';
       const tag=r.otras?`<span style="font-size:9px;background:var(--bg4);color:var(--text3);border-radius:3px;padding:1px 5px;margin-left:5px;vertical-align:middle">no suma</span>`:'';
+      const dot=`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${getCuentaColor(r.k)};margin-right:7px;vertical-align:middle;flex-shrink:0"></span>`;
       return `<tr class="acc-row ${sel}" onclick="selectAccount('${r.k}')" style="${muted}">
-        <td><span class="acc-icon">${r.ic}</span>${r.l}${tag}</td>
+        <td>${dot}${r.l}${tag}</td>
         <td style="text-align:right;font-size:11px;color:var(--text2)">${M(fc(prv))}</td>
         <td style="color:${cur>=0?'var(--text)':'var(--red)'}">${M(fc(cur))}</td>
       </tr>`;
@@ -3855,6 +3858,14 @@ function closeCuentasModal(){
   cancelTransfer();
 }
 
+// Colores por defecto de las 5 cuentas fijas (se usan solo si el usuario no
+// les puso un color propio) — mantienen aproximadamente su identidad visual
+// original (BCP azul, BBVA azul oscuro, Efectivo verde, etc.)
+const DEFAULT_CUENTA_COLORS={BCP:'#3b82f6',BBVA:'#1e3a8a',Efectivo:'#22c55e','Ahorro Soles':'#a78bfa','Ahorro Dólares':'#2dd4bf'};
+function getCuentaColor(key){
+  return (state.cuentaColors||{})[key] || DEFAULT_CUENTA_COLORS[key] || '#5b8def';
+}
+
 function renderCuentasList(){
   const el=document.getElementById('cuentas-list');
   const custom=state.customCuentas||{};
@@ -3863,18 +3874,15 @@ function renderCuentasList(){
   const defaultCurs={BCP:'PEN',BBVA:'PEN',Efectivo:'PEN','Ahorro Soles':'PEN','Ahorro Dólares':'USD'};
   const isDefault=k=>k in defaultTypes;
 
-  function rowHTML(k,t,cur,isCustom,color){
+  function rowHTML(k,t,cur){
     const bal=state.cuentas[k]||0;
     const sym=cur==='USD'?'$':'S/';
     const balStr=(bal>=0?'':'-')+sym+' '+Math.abs(bal).toFixed(2);
     const editBtn=`<button class="config-action-btn neutral" onclick="editCuenta('${k}')" style="font-size:10px;padding:3px 8px">✏ Editar saldo</button>`;
     const delBtn=`<button class="config-action-btn danger" onclick="startDeleteCuenta('${k}')" style="font-size:10px;padding:3px 8px">🗑</button>`;
     const tLabel={'operativa':'operativa · ','ahorro':'ahorro · ','otras':'otras · '};
-    // Solo las cuentas personalizadas tienen color editable (las 5 por defecto
-    // mantienen su ícono de siempre, sin cambios)
-    const dot=isCustom
-      ? `<input type="color" value="${color||'#5b8def'}" onchange="updateCuentaColor('${k}',this.value)" title="Cambiar color" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;flex-shrink:0">`
-      : '';
+    // TODAS las cuentas (fijas y personalizadas) pueden cambiar su color
+    const dot=`<input type="color" value="${getCuentaColor(k)}" onchange="updateCuentaColor('${k}',this.value)" title="Cambiar color" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;flex-shrink:0">`;
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:6px">
         ${dot}
@@ -3891,17 +3899,17 @@ function renderCuentasList(){
   const shownKeys=new Set();
   // First: defaults that exist
   Object.keys(defaultTypes).forEach(k=>{
-    if(state.cuentas[k]!==undefined){h+=rowHTML(k,defaultTypes[k],defaultCurs[k],false);shownKeys.add(k);}
+    if(state.cuentas[k]!==undefined){h+=rowHTML(k,defaultTypes[k],defaultCurs[k]);shownKeys.add(k);}
   });
   // Then: custom
-  Object.entries(custom).forEach(([k,v])=>{if(!shownKeys.has(k))h+=rowHTML(k,v.type,v.currency,true,v.color);});
+  Object.entries(custom).forEach(([k,v])=>{if(!shownKeys.has(k))h+=rowHTML(k,v.type,v.currency);});
   el.innerHTML=h||'<div style="color:var(--text3);font-size:12px;padding:8px 0">No hay cuentas registradas. Carga el histórico Excel.</div>';
   updateAccountSelects();
 }
 
 function updateCuentaColor(key,color){
-  if(!state.customCuentas||!state.customCuentas[key]) return;
-  state.customCuentas[key].color=color;
+  if(!state.cuentaColors) state.cuentaColors={};
+  state.cuentaColors[key]=color;
   saveState();
   render();
 }
@@ -3964,7 +3972,9 @@ function saveNewCuenta(){
   const year=parseInt(document.getElementById('nc-year').value);
   if(!name){alert('Ingresa un nombre.');return;}
   if(!state.customCuentas) state.customCuentas={};
-  state.customCuentas[name]={type,currency,color,startYear:year,startMonth:month};
+  state.customCuentas[name]={type,currency,startYear:year,startMonth:month};
+  if(!state.cuentaColors) state.cuentaColors={};
+  state.cuentaColors[name]=color;
   // Set current balance in state.cuentas
   state.cuentas[name]=balance;
   // Add this account's initial balance ONLY to the snapshot of the selected start month
