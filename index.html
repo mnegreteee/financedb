@@ -1651,9 +1651,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.10.0';
-const APP_VERSION_DATE = '18 jul 2026';
-const APP_VERSION_NOTE = 'Categorías personalizadas ahora se pueden editar (nombre y color), con actualización en cascada';
+const APP_VERSION = 'v1.10.1';
+const APP_VERSION_DATE = '19 jul 2026';
+const APP_VERSION_NOTE = 'Tarjetas: el badge del mes vuelve a reflejar el ciclo propio de cada una; "A pagar" sigue siendo uniforme';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4143,6 +4143,11 @@ function renderTarjetas(){
 }
 
 function buildTCCard(t){
+  // El badge (esquina superior) muestra el período de facturación ACTIVO de
+  // ESTA tarjeta según su propio ciclo (inicio/cierre) — puede diferir entre
+  // tarjetas. "A pagar" en cambio siempre usa el mes calendario SIGUIENTE al
+  // actual, igual para todas, para poder comparar rápido entre tarjetas.
+  const badge = calcTCMes(t);
   const {label, pagoMes, pagoAnio} = getSiguienteMesCalendario();
   const allMovs = getAllTCMovs(t.id);
   const linea   = parseFloat(t.linea) || 0;
@@ -4155,8 +4160,7 @@ function buildTCCard(t){
     .filter(m => !m.pagado)
     .reduce((s, m) => s + m.monto, 0);
 
-  // 2. PENDIENTE = deuda del mes de pago actual (el período que se está facturando ahora)
-  //    = monthKey correspondiente al próximo pago según calcTCMes
+  // 2. PENDIENTE = deuda del mes calendario siguiente (uniforme entre tarjetas)
   const pendienteMk = tcMonthKey(pagoAnio, pagoMes);
   const movsDelPeriodo = (t.movs && t.movs[pendienteMk]) || [];
   const pendiente = movsDelPeriodo
@@ -4174,7 +4178,7 @@ function buildTCCard(t){
         <div class="tc-bank-label">${t.banco||'—'}</div>
         <div class="tc-cat-label">${t.cat||'—'}</div>
       </div>
-      <div class="tc-mes-badge" style="background:${col}">📅 ${label}</div>
+      <div class="tc-mes-badge" style="background:${col}" title="Período de facturación actual de esta tarjeta">📅 ${badge.label}</div>
     </div>
     <div class="tc-info-grid">
       <div class="tc-info-cell"><div class="tc-info-cell-label">Pago</div><div class="tc-info-cell-val">día ${t.pago||'—'}</div></div>
