@@ -1049,6 +1049,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
           <option value="">Todas las categorías</option>
         </select>
       </div>
+      <div style="margin-bottom:10px">
+        <input type="text" id="mov-search" placeholder="🔍 Buscar por descripción..." oninput="render()" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;box-sizing:border-box">
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:10px">
+        <span style="color:var(--text3)">Ordenar:</span>
+        <span onclick="setMovSort('date')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Fecha <span id="movsort-date"></span></span>
+        <span onclick="setMovSort('desc')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Descripción <span id="movsort-desc"></span></span>
+        <span onclick="setMovSort('amount')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Monto <span id="movsort-amount"></span></span>
+        <span onclick="setMovSort('cat')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Categoría <span id="movsort-cat"></span></span>
+      </div>
       <div id="mov-filter-info" style="display:none;margin-bottom:6px"><div class="filter-badge"><span id="mov-filter-text"></span><span style="cursor:pointer;margin-left:4px" onclick="clearAccountFilter()">✕</span></div></div>
       <div class="mov-list" id="mov-list"></div>
     </div>
@@ -1311,10 +1321,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
   </div>
 
   <!-- Filtro -->
-  <div style="display:flex;gap:8px;margin-bottom:16px">
+  <div style="display:flex;gap:8px;margin-bottom:10px">
     <button class="config-action-btn neutral" id="d-filter-all"    onclick="setDeudaFilter('all')"     style="font-size:11px">Todos</button>
     <button class="config-action-btn neutral" id="d-filter-pendiente" onclick="setDeudaFilter('pendiente')" style="font-size:11px">⏳ Pendientes</button>
     <button class="config-action-btn neutral" id="d-filter-pagado"  onclick="setDeudaFilter('pagado')"  style="font-size:11px">✅ Cobrados</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px;font-size:10px">
+    <span style="color:var(--text3)">Ordenar:</span>
+    <span onclick="setDeudaSort('fecha')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Fecha <span id="dsort-fecha"></span></span>
+    <span onclick="setDeudaSort('nombre')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Nombre <span id="dsort-nombre"></span></span>
+    <span onclick="setDeudaSort('monto')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Monto <span id="dsort-monto"></span></span>
   </div>
 
   <div class="deuda-grid" id="deuda-grid">
@@ -1333,6 +1349,12 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 
     <!-- LIST VIEW -->
     <div id="dm-list-view">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:10px">
+        <span style="color:var(--text3)">Ordenar:</span>
+        <span onclick="setDMSort('fecha')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Próximo pago <span id="dmsort-fecha"></span></span>
+        <span onclick="setDMSort('nombre')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Nombre <span id="dmsort-nombre"></span></span>
+        <span onclick="setDMSort('monto')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Saldo pendiente <span id="dmsort-monto"></span></span>
+      </div>
       <div class="dm-grid" id="dm-grid">
         <div class="empty"><div class="empty-icon">🏛️</div>Sin deudas mayores registradas.</div>
       </div>
@@ -1489,7 +1511,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
       </div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Descripción</label><input id="f-desc" type="text" placeholder="Ej. Sueldo, Spotify..."></div>
+      <div class="field"><label>Descripción</label><input id="f-desc" type="text" placeholder="Ej. Sueldo, Spotify..." onblur="suggestCategoriaFor('f-desc','f-cat','f-cat-hint')"></div>
       <div class="field"><label>Monto</label><input id="f-amount" type="number" step="0.01" placeholder="0.00"></div>
     </div>
     <div class="field-row">
@@ -1505,8 +1527,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
       <div class="field"><label>Moneda</label>
         <select id="f-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
-      <div class="field"><label>Categoría</label>
-        <select id="f-cat">
+      <div class="field"><label>Categoría <span id="f-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
+        <select id="f-cat" onchange="document.getElementById('f-cat-hint').textContent=''">
           <option value="">Sin categoría</option>
           <option value="🍔 Comida">🍔 Comida</option>
           <option value="🚗 Transporte">🚗 Transporte</option>
@@ -1651,9 +1673,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.10.1';
+const APP_VERSION = 'v1.11.0';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Tarjetas: el badge del mes vuelve a reflejar el ciclo propio de cada una; "A pagar" sigue siendo uniforme';
+const APP_VERSION_NOTE = 'Buscador y orden en Movimientos, color en Cuentas, orden en Deudas, y sugerencia automática de categoría';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2523,8 +2545,38 @@ function setTab(t){
   ['todos','ingresos','gastos','ahorro'].forEach(id=>document.getElementById('tab-'+id).classList.toggle('active',id===t));
   renderMovimientos();
 }
+// ── Búsqueda y ordenamiento de movimientos ────────────
+let movSortState={col:'date', dir:'desc'}; // por defecto: más reciente primero (igual que antes)
+function setMovSort(col){
+  if(movSortState.col===col){ movSortState.dir=movSortState.dir==='asc'?'desc':'asc'; }
+  else { movSortState.col=col; movSortState.dir=(col==='date'||col==='amount')?'desc':'asc'; }
+  render();
+}
+function sortMovs(movs){
+  const {col,dir}=movSortState;
+  return [...movs].sort((a,b)=>{
+    let av,bv;
+    if(col==='date'){ av=a.date; bv=b.date; }
+    else if(col==='desc'){ av=(a.desc||'').toLowerCase(); bv=(b.desc||'').toLowerCase(); }
+    else if(col==='amount'){ av=a.amount; bv=b.amount; }
+    else if(col==='cat'){ av=(a.cat||'').toLowerCase(); bv=(b.cat||'').toLowerCase(); }
+    if(av<bv) return dir==='asc'?-1:1;
+    if(av>bv) return dir==='asc'?1:-1;
+    return 0;
+  });
+}
+function updateMovSortIndicators(){
+  ['date','desc','amount','cat'].forEach(col=>{
+    const el=document.getElementById('movsort-'+col);
+    if(!el) return;
+    el.textContent=movSortState.col===col?(movSortState.dir==='asc'?'▲':'▼'):'';
+  });
+}
+
 function renderMovimientos(){
   const catF=document.getElementById('cat-filter').value;
+  const searchQ=(document.getElementById('mov-search').value||'').trim().toLowerCase();
+  const allColors=getAllCategorias();
   let movs=getMovs(state.currentYear,state.currentMonth).filter(m=>{
     if(state.currentTab==='ingresos') return m.type==='income';
     if(state.currentTab==='gastos') return m.type==='expense';
@@ -2533,16 +2585,18 @@ function renderMovimientos(){
   });
   if(selectedAccounts.size>0) movs=movs.filter(m=>selectedAccounts.has(m.account));
   if(catF) movs=movs.filter(m=>m.cat===catF);
-  movs=movs.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(searchQ) movs=movs.filter(m=>(m.desc||'').toLowerCase().includes(searchQ));
+  movs=sortMovs(movs);
+  updateMovSortIndicators();
   const el=document.getElementById('mov-list');
-  if(!movs.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos este mes.</div>`;return;}
+  if(!movs.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos${searchQ?' que coincidan con la búsqueda':' este mes'}.</div>`;return;}
   el.innerHTML=movs.map(m=>{
     const ic=m.type==='income'?'⬆':m.type==='expense'?'⬇':'🏦';
     const cls=m.type==='income'?'income':m.type==='expense'?'expense':'ahorro';
     const sign=m.type==='expense'?'-':'+';
     const amtStr=sign+(m.currency==='USD'?fmtD(m.amount):fmtS(m.amount));
     const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'});
-    const catHtml=m.cat?`<span class="cat-pill" style="background:${CAT_COLORS[m.cat]||'#666'}22;color:${CAT_COLORS[m.cat]||'#999'}">${m.cat}</span>`:'';
+    const catHtml=m.cat?`<span class="cat-pill" style="background:${allColors[m.cat]||'#666'}22;color:${allColors[m.cat]||'#999'}">${m.cat}</span>`:'';
     const noteHtml=m.note?`<div class="mov-note">📝 ${m.note}</div>`:'';
     return `<div class="mov-item ${cls}" onclick="editMovimiento('${m.id}')">
       <div class="mov-left"><div class="mov-dot ${cls}">${ic}</div>
@@ -3809,15 +3863,23 @@ function renderCuentasList(){
   const defaultCurs={BCP:'PEN',BBVA:'PEN',Efectivo:'PEN','Ahorro Soles':'PEN','Ahorro Dólares':'USD'};
   const isDefault=k=>k in defaultTypes;
 
-  function rowHTML(k,t,cur,isCustom){
+  function rowHTML(k,t,cur,isCustom,color){
     const bal=state.cuentas[k]||0;
     const sym=cur==='USD'?'$':'S/';
     const balStr=(bal>=0?'':'-')+sym+' '+Math.abs(bal).toFixed(2);
     const editBtn=`<button class="config-action-btn neutral" onclick="editCuenta('${k}')" style="font-size:10px;padding:3px 8px">✏ Editar saldo</button>`;
     const delBtn=`<button class="config-action-btn danger" onclick="startDeleteCuenta('${k}')" style="font-size:10px;padding:3px 8px">🗑</button>`;
     const tLabel={'operativa':'operativa · ','ahorro':'ahorro · ','otras':'otras · '};
+    // Solo las cuentas personalizadas tienen color editable (las 5 por defecto
+    // mantienen su ícono de siempre, sin cambios)
+    const dot=isCustom
+      ? `<input type="color" value="${color||'#5b8def'}" onchange="updateCuentaColor('${k}',this.value)" title="Cambiar color" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;flex-shrink:0">`
+      : '';
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div><span style="font-size:13px;font-weight:500">${k}</span><span style="font-size:10px;color:var(--text3);margin-left:6px">${tLabel[t]||''}${cur}</span></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${dot}
+        <span style="font-size:13px;font-weight:500">${k}</span><span style="font-size:10px;color:var(--text3)">${tLabel[t]||''}${cur}</span>
+      </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-family:var(--mono);font-size:12px;color:${bal>=0?'var(--text2)':'var(--red)'}">${balStr}</span>
         ${editBtn}${delBtn}
@@ -3832,9 +3894,16 @@ function renderCuentasList(){
     if(state.cuentas[k]!==undefined){h+=rowHTML(k,defaultTypes[k],defaultCurs[k],false);shownKeys.add(k);}
   });
   // Then: custom
-  Object.entries(custom).forEach(([k,v])=>{if(!shownKeys.has(k))h+=rowHTML(k,v.type,v.currency,true);});
+  Object.entries(custom).forEach(([k,v])=>{if(!shownKeys.has(k))h+=rowHTML(k,v.type,v.currency,true,v.color);});
   el.innerHTML=h||'<div style="color:var(--text3);font-size:12px;padding:8px 0">No hay cuentas registradas. Carga el histórico Excel.</div>';
   updateAccountSelects();
+}
+
+function updateCuentaColor(key,color){
+  if(!state.customCuentas||!state.customCuentas[key]) return;
+  state.customCuentas[key].color=color;
+  saveState();
+  render();
 }
 
 function editCuenta(key){
@@ -3890,11 +3959,12 @@ function saveNewCuenta(){
   const type=document.getElementById('nc-type').value;
   const currency=document.getElementById('nc-currency').value;
   const balance=parseFloat(document.getElementById('nc-balance').value)||0;
+  const color=document.getElementById('nc-color').value||'#5b8def';
   const month=parseInt(document.getElementById('nc-month').value);
   const year=parseInt(document.getElementById('nc-year').value);
   if(!name){alert('Ingresa un nombre.');return;}
   if(!state.customCuentas) state.customCuentas={};
-  state.customCuentas[name]={type,currency,startYear:year,startMonth:month};
+  state.customCuentas[name]={type,currency,color,startYear:year,startMonth:month};
   // Set current balance in state.cuentas
   state.cuentas[name]=balance;
   // Add this account's initial balance ONLY to the snapshot of the selected start month
@@ -3911,6 +3981,7 @@ function saveNewCuenta(){
   }
   document.getElementById('nc-name').value='';
   document.getElementById('nc-balance').value='';
+  document.getElementById('nc-color').value='#5b8def';
   saveState(); renderCuentasList(); render();
 }
 
@@ -4073,6 +4144,53 @@ function updateCategorySelects(){
   }
 }
 
+// Busca, en TODO el historial (movimientos + consumos de tarjeta), qué
+// categoría se usó más veces para una descripción igual o parecida — para
+// poder sugerirla automáticamente sin que el usuario tenga que elegirla
+// cada vez que compra en el mismo lugar.
+function suggestCategoriaForDesc(desc){
+  const q=(desc||'').trim().toLowerCase();
+  if(q.length<2) return null;
+
+  const sources=[];
+  (state.movimientos||[]).forEach(m=>{ if(m.desc&&m.cat) sources.push({desc:m.desc,cat:m.cat}); });
+  (state.tarjetas||[]).forEach(t=>{
+    Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>{ if(m.desc&&m.cat) sources.push({desc:m.desc,cat:m.cat}); }));
+  });
+  if(!sources.length) return null;
+
+  // 1. Coincidencia exacta (sin importar mayúsculas)
+  const exact={};
+  sources.forEach(s=>{ if(s.desc.trim().toLowerCase()===q) exact[s.cat]=(exact[s.cat]||0)+1; });
+  if(Object.keys(exact).length) return Object.entries(exact).sort((a,b)=>b[1]-a[1])[0][0];
+
+  // 2. Coincidencia parcial: una contiene a la otra (ej. "Uber" ↔ "Uber Eats")
+  const partial={};
+  sources.forEach(s=>{
+    const sd=s.desc.trim().toLowerCase();
+    if(sd.length>=2&&(sd.includes(q)||q.includes(sd))) partial[s.cat]=(partial[s.cat]||0)+1;
+  });
+  if(Object.keys(partial).length) return Object.entries(partial).sort((a,b)=>b[1]-a[1])[0][0];
+
+  return null;
+}
+
+// Se dispara al salir del campo de descripción — si encuentra una sugerencia
+// Y el campo de categoría todavía está vacío (no pisa una elección manual),
+// la completa sola y muestra un pequeño aviso "🧠 Sugerido".
+function suggestCategoriaFor(descId, catId, hintId){
+  const descEl=document.getElementById(descId);
+  const catEl=document.getElementById(catId);
+  const hintEl=document.getElementById(hintId);
+  if(!descEl||!catEl) return;
+  if(catEl.value) return; // ya hay una categoría elegida, no la pisamos
+  const suggested=suggestCategoriaForDesc(descEl.value);
+  if(suggested && getAllCategorias()[suggested]){
+    catEl.value=suggested;
+    if(hintEl) hintEl.textContent='🧠 Sugerido';
+  }
+}
+
 
 // ══════════════════════════════════════════════════════
 //  MÓDULO TARJETAS DE CRÉDITO
@@ -4081,7 +4199,6 @@ function updateCategorySelects(){
 let currentTCId=null;       // ID of card being viewed
 let currentTCMonth=null;    // "YYYY-MM" string for detail view
 let editingTCMovId=null;    // ID of mov being edited
-let selectedTCColor='#5b8def';
 let pendingPayMovIds=[];    // mov IDs pending payment
 
 // ── HELPERS ──────────────────────────────────────────
@@ -4533,28 +4650,25 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-cierre').value=t.cierre||'';
     document.getElementById('tc-f-linea').value=t.linea||'';
     document.getElementById('tc-f-currency').value=t.currency||'PEN';
-    selectedTCColor=t.color||'#5b8def';
-    document.getElementById('tc-f-color').value=selectedTCColor;
+    document.getElementById('tc-f-color').value=t.color||'#5b8def';
     document.getElementById('tc-delete-btn').style.display='inline-flex';
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
     ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
-    selectedTCColor='#5b8def';
+    document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-delete-btn').style.display='none';
   }
-  // Highlight selected color
-  document.querySelectorAll('.tc-color-opt').forEach(o=>{
-    o.classList.toggle('selected',o.style.background===selectedTCColor||o.style.backgroundColor===selectedTCColor);
-  });
   document.getElementById('tc-config-overlay').classList.add('open');
 }
 
 function closeTCConfigModal(){ document.getElementById('tc-config-overlay').classList.remove('open'); }
 
+// Los círculos de color son solo atajos rápidos — completan el mismo campo
+// de color libre, que también se puede editar directamente eligiendo
+// cualquier color o pegando un código hexadecimal.
 function selectTCColor(col){
-  selectedTCColor=col;
   document.getElementById('tc-f-color').value=col;
   document.querySelectorAll('.tc-color-opt').forEach(o=>{
     o.classList.toggle('selected',o.style.background===col);
@@ -5253,6 +5367,21 @@ let editingDeudaId = null;
 let payingDeudaId  = null;
 
 // ── RENDER ────────────────────────────────────────────
+// ── Ordenamiento de Préstamos por Cobrar ──────────────
+let deudaSortState={col:null, dir:'asc'};
+function setDeudaSort(col){
+  if(deudaSortState.col===col){ deudaSortState.dir=deudaSortState.dir==='asc'?'desc':'asc'; }
+  else { deudaSortState.col=col; deudaSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc'; }
+  renderDeudas();
+}
+function updateDeudaSortIndicators(){
+  ['fecha','nombre','monto'].forEach(col=>{
+    const el=document.getElementById('dsort-'+col);
+    if(!el) return;
+    el.textContent=deudaSortState.col===col?(deudaSortState.dir==='asc'?'▲':'▼'):'';
+  });
+}
+
 function renderDeudas(){
   const deudas = state.deudas || [];
   const rate   = state.tc?.venta || 3.45;
@@ -5291,11 +5420,27 @@ function renderDeudas(){
     return;
   }
 
-  // Sort: pendientes first, then by date desc
-  const sorted = [...filtered].sort((a,b)=>{
-    if(a.status!==b.status) return a.status==='pendiente'?-1:1;
-    return new Date(b.fecha)-new Date(a.fecha);
-  });
+  // Sort: si el usuario eligió una columna, se usa esa; si no, comportamiento
+  // por defecto (pendientes primero, luego por fecha descendente)
+  updateDeudaSortIndicators();
+  let sorted;
+  if(deudaSortState.col){
+    const {col,dir}=deudaSortState;
+    sorted=[...filtered].sort((a,b)=>{
+      let av,bv;
+      if(col==='fecha'){ av=a.fecha; bv=b.fecha; }
+      else if(col==='nombre'){ av=(a.nombre||'').toLowerCase(); bv=(b.nombre||'').toLowerCase(); }
+      else if(col==='monto'){ av=a.monto; bv=b.monto; }
+      if(av<bv) return dir==='asc'?-1:1;
+      if(av>bv) return dir==='asc'?1:-1;
+      return 0;
+    });
+  } else {
+    sorted=[...filtered].sort((a,b)=>{
+      if(a.status!==b.status) return a.status==='pendiente'?-1:1;
+      return new Date(b.fecha)-new Date(a.fecha);
+    });
+  }
 
   grid.innerHTML = sorted.map(d=>{
     const isPaid = d.status==='pagado';
@@ -6131,14 +6276,42 @@ function getDMResumen(d){
   return { total, pagadas, restantes, saldoPendiente, proximaFecha: proxima?proxima.fecha:null };
 }
 
+// ── Ordenamiento de Deudas Mayores ────────────────────
+let dmSortState={col:null, dir:'asc'};
+function setDMSort(col){
+  if(dmSortState.col===col){ dmSortState.dir=dmSortState.dir==='asc'?'desc':'asc'; }
+  else { dmSortState.col=col; dmSortState.dir=col==='nombre'?'asc':(col==='fecha'?'asc':'desc'); }
+  renderDeudasMayores();
+}
+function updateDMSortIndicators(){
+  ['fecha','nombre','monto'].forEach(col=>{
+    const el=document.getElementById('dmsort-'+col);
+    if(!el) return;
+    el.textContent=dmSortState.col===col?(dmSortState.dir==='asc'?'▲':'▼'):'';
+  });
+}
+
 // ── RENDER: GRID DE TARJETAS ───────────────────────────
 function renderDeudasMayores(){
   const grid = document.getElementById('dm-grid');
   if(!grid) return;
-  const deudas = state.deudasMayores || [];
+  let deudas = state.deudasMayores || [];
   if(!deudas.length){
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🏛️</div>Sin deudas mayores registradas.</div>';
     return;
+  }
+  updateDMSortIndicators();
+  if(dmSortState.col){
+    const {col,dir}=dmSortState;
+    deudas=[...deudas].sort((a,b)=>{
+      let av,bv;
+      if(col==='fecha'){ const ra=getDMResumen(a),rb=getDMResumen(b); av=ra.proximaFecha||'9999'; bv=rb.proximaFecha||'9999'; }
+      else if(col==='nombre'){ av=(a.nombre||'').toLowerCase(); bv=(b.nombre||'').toLowerCase(); }
+      else if(col==='monto'){ av=getDMResumen(a).saldoPendiente; bv=getDMResumen(b).saldoPendiente; }
+      if(av<bv) return dir==='asc'?-1:1;
+      if(av>bv) return dir==='asc'?1:-1;
+      return 0;
+    });
   }
   grid.innerHTML = deudas.map(d=>{
     const r = getDMResumen(d);
@@ -6732,6 +6905,11 @@ if(state.projGoals){
         <div class="field"><label>Saldo inicial</label><input id="nc-balance" type="number" step="0.01" placeholder="0.00"></div>
       </div>
       <div class="field-row">
+        <div class="field"><label>Color</label>
+          <input id="nc-color" type="color" value="#5b8def" style="width:70px;height:38px;padding:2px;cursor:pointer">
+        </div>
+      </div>
+      <div class="field-row">
         <div class="field"><label>Mes de inicio</label>
           <select id="nc-month">
             <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
@@ -7047,7 +7225,8 @@ if(state.projGoals){
       </div>
     </div>
     <div class="field"><label>Color</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="tc-color-picker">
+      <input id="tc-f-color" type="color" value="#5b8def" style="width:70px;height:38px;padding:2px;cursor:pointer">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" id="tc-color-picker">
         <div class="tc-color-opt" style="background:#5b8def" onclick="selectTCColor('#5b8def')"></div>
         <div class="tc-color-opt" style="background:#3ec96e" onclick="selectTCColor('#3ec96e')"></div>
         <div class="tc-color-opt" style="background:#f05c5c" onclick="selectTCColor('#f05c5c')"></div>
@@ -7056,7 +7235,6 @@ if(state.projGoals){
         <div class="tc-color-opt" style="background:#2dd4bf" onclick="selectTCColor('#2dd4bf')"></div>
       </div>
     </div>
-    <input type="hidden" id="tc-f-color" value="#5b8def">
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
       <button class="config-action-btn danger" id="tc-delete-btn" style="display:none" onclick="deleteTCCard()">🗑 Eliminar tarjeta</button>
       <div style="display:flex;gap:8px;margin-left:auto">
@@ -7071,7 +7249,7 @@ if(state.projGoals){
 <div class="modal-overlay" id="tc-mov-overlay" onclick="if(event.target===this)closeTCMovModal()">
   <div class="modal modal-sm" style="width:380px">
     <div class="modal-title"><span id="tc-mov-modal-title">Agregar consumo</span><button class="modal-close" onclick="closeTCMovModal()">✕</button></div>
-    <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..."></div>
+    <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..." onblur="suggestCategoriaFor('tc-m-desc','tc-m-cat','tc-m-cat-hint')"></div>
     <div class="field-row">
       <div class="field"><label>Fecha</label><input id="tc-m-fecha" type="date"></div>
       <div class="field"><label>Monto (S/) <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
@@ -7079,8 +7257,8 @@ if(state.projGoals){
     <div class="field"><label>Estado</label>
       <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
     </div>
-    <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
-      <select id="tc-m-cat">
+    <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span> <span id="tc-m-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
+      <select id="tc-m-cat" onchange="document.getElementById('tc-m-cat-hint').textContent=''">
         <option value="">Sin categoría</option>
         <option value="🍔 Comida">🍔 Comida</option>
         <option value="🚗 Transporte">🚗 Transporte</option>
