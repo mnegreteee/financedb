@@ -1673,9 +1673,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.11.1';
+const APP_VERSION = 'v1.12.0';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Ahora TODAS las cuentas (incl. BCP, BBVA, Efectivo, Ahorros) pueden cambiar de color, no solo las personalizadas';
+const APP_VERSION_NOTE = 'Tarjetas de crédito: consumos ahora pueden ser en soles o dólares (mezclados), reflejado en toda la app';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2872,7 +2872,7 @@ function getCategorizedTCMovsForMonth(y,m){
         const d=new Date(mv.fecha+'T12:00:00');
         if(d.getFullYear()===y && d.getMonth()===m){
           out.push({
-            cat:mv.cat, monto:mv.monto, currency:t.currency||'PEN',
+            cat:mv.cat, monto:mv.monto, currency:mv.currency||t.currency||'PEN',
             id:mv.id, desc:mv.desc, fecha:mv.fecha, pagado:!!mv.pagado,
             tarjetaId:t.id, tarjetaBanco:t.banco, tarjetaCat:t.cat||''
           });
@@ -4269,6 +4269,27 @@ function renderTarjetas(){
   renderTCGlobal();
 }
 
+// Suma un arreglo de consumos separando soles y dólares — cada consumo puede
+// tener su propia moneda (mv.currency); si no la tiene (datos antiguos), se
+// asume la moneda de la tarjeta.
+function sumTCByCurrency(movs, tarjetaCurrency){
+  let pen=0, usd=0;
+  movs.forEach(m=>{
+    const cur=m.currency||tarjetaCurrency||'PEN';
+    if(cur==='USD') usd+=m.monto; else pen+=m.monto;
+  });
+  return {pen,usd};
+}
+// Formatea un total mixto: siempre muestra soles, y agrega "+ $ X.XX" si
+// también hay dólares (o solo dólares, si no hay nada en soles).
+function fmtTCMixed(pen,usd){
+  const fmtN=v=>Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  const parts=[];
+  if(Math.abs(pen)>0.004||Math.abs(usd)<=0.004) parts.push((pen<0?'-':'')+'S/ '+fmtN(pen));
+  if(Math.abs(usd)>0.004) parts.push((usd<0?'-':'')+'$ '+fmtN(usd));
+  return parts.join(' + ');
+}
+
 function buildTCCard(t){
   // El badge (esquina superior) muestra el período de facturación ACTIVO de
   // ESTA tarjeta según su propio ciclo (inicio/cierre) — puede diferir entre
@@ -4279,24 +4300,25 @@ function buildTCCard(t){
   const allMovs = getAllTCMovs(t.id);
   const linea   = parseFloat(t.linea) || 0;
   const col     = t.color || '#5b8def';
-  const sym     = t.currency === 'USD' ? '$' : 'S/';
-  const fmtTC   = v => sym + ' ' + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const rate    = state.tc?.venta || 3.45;
 
-  // 1. DEUDA TOTAL = suma de todos los montos NO pagados de todos los meses
-  const deudaTotal = allMovs
-    .filter(m => !m.pagado)
-    .reduce((s, m) => s + m.monto, 0);
+  // 1. DEUDA TOTAL = suma de todos los montos NO pagados de todos los meses,
+  //    separando soles y dólares (un consumo puede estar en cualquiera)
+  const deudaTotalByCur = sumTCByCurrency(allMovs.filter(m=>!m.pagado), t.currency);
 
   // 2. PENDIENTE = deuda del mes calendario siguiente (uniforme entre tarjetas)
   const pendienteMk = tcMonthKey(pagoAnio, pagoMes);
   const movsDelPeriodo = (t.movs && t.movs[pendienteMk]) || [];
-  const pendiente = movsDelPeriodo
-    .filter(m => !m.pagado)
-    .reduce((s, m) => s + m.monto, 0);
+  const pendienteByCur = sumTCByCurrency(movsDelPeriodo.filter(m=>!m.pagado), t.currency);
 
-  // 3. % de uso = deuda total / línea de crédito
-  const usadoPct = linea > 0 ? Math.min(100, (deudaTotal / linea) * 100) : 0;
+  // 3. % de uso = deuda total (convertida a la moneda de la línea) / línea de crédito
+  const deudaEnMonedaTarjeta = t.currency==='USD'
+    ? deudaTotalByCur.usd + (deudaTotalByCur.pen/rate)
+    : deudaTotalByCur.pen + (deudaTotalByCur.usd*rate);
+  const usadoPct = linea > 0 ? Math.min(100, (deudaEnMonedaTarjeta / linea) * 100) : 0;
   const barColor = usadoPct >= 90 ? 'var(--red)' : usadoPct >= 70 ? 'var(--amber)' : col;
+  const lineaSym = t.currency==='USD' ? '$' : 'S/';
+  const lineaStr = lineaSym+' '+linea.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 
   return `<div class="tc-card-item" id="tc-card-${t.id}" onclick="openTCDetail('${t.id}')" style="--tc-color:${col}">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col};border-radius:var(--radius) var(--radius) 0 0"></div>
@@ -4312,12 +4334,12 @@ function buildTCCard(t){
       <div class="tc-info-cell"><div class="tc-info-cell-label">Inicio</div><div class="tc-info-cell-val">día ${t.inicio||'—'}</div></div>
       <div class="tc-info-cell"><div class="tc-info-cell-label">Cierre</div><div class="tc-info-cell-val">día ${t.cierre||'—'}</div></div>
     </div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:10px;margin-bottom:4px">
-      <span style="color:var(--text2)">Deuda total: <strong style="color:var(--red)">${M(fmtTC(deudaTotal))}</strong></span>
-      <span style="color:var(--text2)">A pagar ${label}: <strong style="color:var(--amber)">${M(fmtTC(pendiente))}</strong></span>
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:10px;margin-bottom:4px;flex-wrap:wrap;gap:4px">
+      <span style="color:var(--text2)">Deuda total: <strong style="color:var(--red)">${M(fmtTCMixed(deudaTotalByCur.pen,deudaTotalByCur.usd))}</strong></span>
+      <span style="color:var(--text2)">A pagar ${label}: <strong style="color:var(--amber)">${M(fmtTCMixed(pendienteByCur.pen,pendienteByCur.usd))}</strong></span>
     </div>
     <div class="tc-line-bar"><div class="tc-line-bar-fill" style="width:${usadoPct}%;background:${barColor}"></div></div>
-    <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea: ${M(fmtTC(linea))} — ${usadoPct.toFixed(0)}% usado</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea: ${M(lineaStr)} — ${usadoPct.toFixed(0)}% usado</div>
   </div>`;
 }
 
@@ -4422,19 +4444,21 @@ function updateTCSortIndicators(){
 function renderTCDetail(){
   if(!currentTCId||!currentTCMonth) return;
   const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth));
-  const deuda=movs.reduce((s,m)=>s+m.monto,0);
-  const pagado=movs.filter(m=>m.pagado).reduce((s,m)=>s+m.monto,0);
-  const pendiente=deuda-pagado;
   const t=getTarjeta(currentTCId);
-  const linea=parseFloat(t&&t.linea)||0;
-  const usadoPct=linea>0?Math.min(100,(deuda/linea)*100):0;
+  const cardCur=(t&&t.currency)||'PEN';
 
-  const tCard=getTarjeta(currentTCId);
-  const tcSym=tCard&&tCard.currency==='USD'?'$':'S/';
-  const fmtTCD=v=>tcSym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-  document.getElementById('tc-sum-deuda').textContent=M(fmtTCD(deuda));
-  document.getElementById('tc-sum-pagado').textContent=M(fmtTCD(pagado));
-  document.getElementById('tc-sum-pendiente').textContent=M(fmtTCD(pendiente));
+  const deudaByCur=sumTCByCurrency(movs,cardCur);
+  const pagadoByCur=sumTCByCurrency(movs.filter(m=>m.pagado),cardCur);
+  const pendienteByCur={pen:deudaByCur.pen-pagadoByCur.pen, usd:deudaByCur.usd-pagadoByCur.usd};
+
+  const linea=parseFloat(t&&t.linea)||0;
+  const rate=state.tc?.venta||3.45;
+  const deudaEnMonedaTarjeta=cardCur==='USD'?deudaByCur.usd+(deudaByCur.pen/rate):deudaByCur.pen+(deudaByCur.usd*rate);
+  const usadoPct=linea>0?Math.min(100,(deudaEnMonedaTarjeta/linea)*100):0;
+
+  document.getElementById('tc-sum-deuda').textContent=M(fmtTCMixed(deudaByCur.pen,deudaByCur.usd));
+  document.getElementById('tc-sum-pagado').textContent=M(fmtTCMixed(pagadoByCur.pen,pagadoByCur.usd));
+  document.getElementById('tc-sum-pendiente').textContent=M(fmtTCMixed(pendienteByCur.pen,pendienteByCur.usd));
   document.getElementById('tc-sum-linea').textContent=usadoPct.toFixed(1)+'%';
 
   const parts=currentTCMonth.split('-');
@@ -4447,18 +4471,23 @@ function renderTCDetail(){
     updateTCSelectionTotal();
     return;
   }
-  tbody.innerHTML=movs.map(m=>`<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
-    <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" onchange="onTCSelChange()"></td>
+  tbody.innerHTML=movs.map(m=>{
+    const mCur=m.currency||cardCur;
+    const mSym=mCur==='USD'?'$':'S/';
+    const mFmt=mSym+' '+Math.abs(m.monto).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+    return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
+    <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
     <td>${m.desc}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${m.fecha}</td>
     <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
-    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(fmtTCD(Math.abs(m.monto)))}</td>
+    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
       <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   document.getElementById('tc-check-all').checked=false;
   updateTCSelectionTotal();
 }
@@ -4479,12 +4508,14 @@ function selectAllTCMov(){ toggleAllTCMov(true); }
 
 function updateTCSelectionTotal(){
   const cbs=[...document.querySelectorAll('.tc-sel-cb:checked')];
-  const total=cbs.reduce((s,c)=>s+parseFloat(c.dataset.monto||0),0);
+  let pen=0, usd=0;
+  cbs.forEach(c=>{
+    const v=parseFloat(c.dataset.monto||0);
+    if(c.dataset.currency==='USD') usd+=v; else pen+=v;
+  });
   const bar=document.getElementById('tc-sel-total');
   bar.style.display=cbs.length?'flex':'none';
-  const tCardSel=getTarjeta(currentTCId);
-  const fmtSel=v=>(tCardSel&&tCardSel.currency==='USD'?'$ ':'S/ ')+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-  document.getElementById('tc-sel-amount').textContent=M(fmtSel(total));
+  document.getElementById('tc-sel-amount').textContent=M(fmtTCMixed(pen,usd));
   document.getElementById('tc-sel-count').textContent=cbs.length+' consumo'+(cbs.length===1?'':'s');
   pendingPayMovIds=cbs.map(c=>c.dataset.id);
 }
@@ -4567,10 +4598,12 @@ function confirmarPago(){
 // ── CRUD MOVIMIENTOS ──────────────────────────────────
 function openAddMovTC(){
   editingTCMovId=null;
+  const t=getTarjeta(currentTCId);
   document.getElementById('tc-mov-modal-title').textContent='Agregar consumo';
   document.getElementById('tc-m-desc').value='';
   document.getElementById('tc-m-monto').value='';
   document.getElementById('tc-m-pagado').value='no';
+  document.getElementById('tc-m-currency').value=(t&&t.currency)||'PEN';
   document.getElementById('tc-m-fecha').value=new Date().toISOString().slice(0,10);
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value='';
@@ -4580,12 +4613,14 @@ function openAddMovTC(){
 function editTCMov(movId){
   const movs=getTCMovs(currentTCId,currentTCMonth);
   const m=movs.find(x=>x.id===movId); if(!m) return;
+  const t=getTarjeta(currentTCId);
   editingTCMovId=movId;
   document.getElementById('tc-mov-modal-title').textContent='Editar consumo';
   document.getElementById('tc-m-desc').value=m.desc;
   document.getElementById('tc-m-fecha').value=m.fecha;
   document.getElementById('tc-m-monto').value=m.monto;
   document.getElementById('tc-m-pagado').value=m.pagado?'si':'no';
+  document.getElementById('tc-m-currency').value=m.currency||(t&&t.currency)||'PEN';
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value=m.cat||'';
   document.getElementById('tc-mov-overlay').classList.add('open');
@@ -4598,6 +4633,7 @@ function saveTCMov(){
   const fecha=document.getElementById('tc-m-fecha').value;
   const monto=parseFloat(document.getElementById('tc-m-monto').value)||0;
   const pagado=document.getElementById('tc-m-pagado').value==='si';
+  const currency=document.getElementById('tc-m-currency').value||'PEN';
   const cat=document.getElementById('tc-m-cat').value||'';
   if(!desc||!fecha||monto===0){alert('Completa todos los campos. El monto puede ser negativo para devoluciones.');return;}
   const t=getTarjeta(currentTCId); if(!t) return;
@@ -4614,7 +4650,7 @@ function saveTCMov(){
       // Recalculate target month based on new date and tarjeta cycle
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
-      foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat;
+      foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat; foundMov.currency=currency;
       if(newMk!==foundInMonth){
         // Move to the new billing month
         t.movs[foundInMonth]=t.movs[foundInMonth].filter(x=>x.id!==editingTCMovId);
@@ -4629,7 +4665,7 @@ function saveTCMov(){
     // New mov: calculate billing month from date
     const newMk=getBillingMonthKey(fecha, t);
     if(!t.movs[newMk]) t.movs[newMk]=[];
-    t.movs[newMk].push({id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat});
+    t.movs[newMk].push({id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat,currency});
     // If adding to a different month than currently viewing, switch to it
     if(newMk!==currentTCMonth){
       currentTCMonth=newMk;
@@ -4754,9 +4790,9 @@ function renderTCGlobal(){
     tarjetas.forEach(t=>{
       const movs=(t.movs&&t.movs[mk])||[];
       const rate=(state.tc&&state.tc.venta)||3.45;
-      const toSoles=v=>t.currency==='USD'?v*rate:v;
-      const d=movs.reduce((s,m)=>s+toSoles(m.monto),0);
-      const p=movs.filter(m=>m.pagado).reduce((s,m)=>s+toSoles(m.monto),0);
+      const toSoles=m=>(m.currency||t.currency)==='USD'?m.monto*rate:m.monto;
+      const d=movs.reduce((s,m)=>s+toSoles(m),0);
+      const p=movs.filter(m=>m.pagado).reduce((s,m)=>s+toSoles(m),0);
       totalDeuda+=d; totalPagado+=p;
       pcts.push({banco:t.banco,deuda:d,color:t.color||'#5b8def'});
       porTarjeta[t.id]=d;
@@ -5163,12 +5199,12 @@ function renderDashboard(){
   const siguienteMes = getSiguienteMesCalendario();
   tarjetas.forEach(t => {
     const allMovs   = getAllTCMovs(t.id);
-    const toS = v => t.currency==='USD' ? v*rate : v;
+    const toS = m => (m.currency||t.currency)==='USD' ? m.monto*rate : m.monto;
     // Deuda total: todos los no pagados
-    deudaTCTotal += allMovs.filter(m=>!m.pagado).reduce((s,m)=>s+toS(m.monto),0);
+    deudaTCTotal += allMovs.filter(m=>!m.pagado).reduce((s,m)=>s+toS(m),0);
     // A pagar próximo mes: consumos del período (mes calendario siguiente) no pagados
     const mk = tcMonthKey(siguienteMes.pagoAnio, siguienteMes.pagoMes);
-    ((t.movs&&t.movs[mk])||[]).filter(m=>!m.pagado).forEach(m=>pagarEsteMes+=toS(m.monto));
+    ((t.movs&&t.movs[mk])||[]).filter(m=>!m.pagado).forEach(m=>pagarEsteMes+=toS(m));
   });
 
   // ── Patrimonio neto ───────────────────────────────
@@ -5256,8 +5292,8 @@ function renderDashboard(){
       tcList.innerHTML='<div class="dash-empty">Sin tarjetas registradas.</div>';
     } else {
       tcList.innerHTML=tarjetas.map(t=>{
-        const toS2=v=>t.currency==='USD'?v*rate:v;
-        const unpaid=getAllTCMovs(t.id).filter(m=>!m.pagado).reduce((s,m)=>s+toS2(m.monto),0);
+        const toS2=m=>(m.currency||t.currency)==='USD'?m.monto*rate:m.monto;
+        const unpaid=getAllTCMovs(t.id).filter(m=>!m.pagado).reduce((s,m)=>s+toS2(m),0);
         const linea=parseFloat(t.linea)||0;
         const pct=linea>0?Math.min(100,(unpaid/linea)*100):0;
         const barCol=pct>=90?'var(--red)':pct>=70?'var(--amber)':t.color||'var(--accent)';
@@ -7262,10 +7298,15 @@ if(state.projGoals){
     <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..." onblur="suggestCategoriaFor('tc-m-desc','tc-m-cat','tc-m-cat-hint')"></div>
     <div class="field-row">
       <div class="field"><label>Fecha</label><input id="tc-m-fecha" type="date"></div>
-      <div class="field"><label>Monto (S/) <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
+      <div class="field"><label>Monto <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
     </div>
-    <div class="field"><label>Estado</label>
-      <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
+    <div class="field-row">
+      <div class="field"><label>Moneda</label>
+        <select id="tc-m-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+      </div>
+      <div class="field"><label>Estado</label>
+        <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
+      </div>
     </div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span> <span id="tc-m-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
       <select id="tc-m-cat" onchange="document.getElementById('tc-m-cat-hint').textContent=''">
