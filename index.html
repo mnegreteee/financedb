@@ -1673,9 +1673,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.12.0';
+const APP_VERSION = 'v1.12.2';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Tarjetas de crédito: consumos ahora pueden ser en soles o dólares (mezclados), reflejado en toda la app';
+const APP_VERSION_NOTE = 'Dashboard: "Deuda de tarjetas" y "A pagar próximo mes" ahora muestran soles y dólares por separado';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4784,31 +4784,34 @@ function renderTCGlobal(){
   tbody.innerHTML=sortedMonths.map(mk=>{
     const[y,mo]=mk.split('-');
     const mesLabel=tcMesesLong()[parseInt(mo)-1]+' '+y;
-    let totalDeuda=0,totalPagado=0;
+    let deudaPen=0,deudaUsd=0,pagadoPen=0,pagadoUsd=0;
     const pcts=[];
     const porTarjeta={};
+    const rate=(state.tc&&state.tc.venta)||3.45;
     tarjetas.forEach(t=>{
       const movs=(t.movs&&t.movs[mk])||[];
-      const rate=(state.tc&&state.tc.venta)||3.45;
-      const toSoles=m=>(m.currency||t.currency)==='USD'?m.monto*rate:m.monto;
-      const d=movs.reduce((s,m)=>s+toSoles(m),0);
-      const p=movs.filter(m=>m.pagado).reduce((s,m)=>s+toSoles(m),0);
-      totalDeuda+=d; totalPagado+=p;
-      pcts.push({banco:t.banco,deuda:d,color:t.color||'#5b8def'});
-      porTarjeta[t.id]=d;
+      let dCard=0; // deuda de ESTA tarjeta convertida a soles, solo para el % de la barra
+      movs.forEach(m=>{
+        const cur=m.currency||t.currency||'PEN';
+        if(cur==='USD'){ deudaUsd+=m.monto; if(m.pagado) pagadoUsd+=m.monto; dCard+=m.monto*rate; }
+        else{ deudaPen+=m.monto; if(m.pagado) pagadoPen+=m.monto; dCard+=m.monto; }
+      });
+      pcts.push({banco:t.banco,deuda:dCard,color:t.color||'#5b8def'});
+      porTarjeta[t.id]=dCard;
     });
-    const pendiente=totalDeuda-totalPagado;
+    const totalDeudaEnSoles=deudaPen+(deudaUsd*rate); // solo para las barras de %, no se muestra directo
+    const pendientePen=deudaPen-pagadoPen, pendienteUsd=deudaUsd-pagadoUsd;
     const pctBars=pcts.filter(p=>p.deuda>0).map(p=>{
-      const pct=totalDeuda>0?((p.deuda/totalDeuda)*100).toFixed(0):0;
+      const pct=totalDeudaEnSoles>0?((p.deuda/totalDeudaEnSoles)*100).toFixed(0):0;
       return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px;font-size:10px">
         <span style="width:8px;height:8px;border-radius:2px;background:${p.color};display:inline-block"></span>${p.banco} ${pct}%</span>`;
     }).join('');
-    chartData.push({mk,mesLabel,porTarjeta,total:totalDeuda});
+    chartData.push({mk,mesLabel,porTarjeta,total:totalDeudaEnSoles});
     return `<tr>
       <td>${mesLabel}</td>
-      <td style="color:var(--red)">${M(tcFmtS(totalDeuda))}</td>
-      <td style="color:var(--green)">${M(tcFmtS(totalPagado))}</td>
-      <td style="color:${pendiente>0?'var(--amber)':'var(--text3)'}">${M(tcFmtS(pendiente))}</td>
+      <td style="color:var(--red)">${M(fmtTCMixed(deudaPen,deudaUsd))}</td>
+      <td style="color:var(--green)">${M(fmtTCMixed(pagadoPen,pagadoUsd))}</td>
+      <td style="color:${(pendientePen>0||pendienteUsd>0)?'var(--amber)':'var(--text3)'}">${M(fmtTCMixed(pendientePen,pendienteUsd))}</td>
       <td>${pctBars||'—'}</td>
     </tr>`;
   }).join('');
@@ -5196,15 +5199,22 @@ function renderDashboard(){
   const tarjetas = state.tarjetas || [];
   const rate = state.tc?.venta || 3.45;
   let deudaTCTotal = 0, pagarEsteMes = 0;
+  let deudaTCPen = 0, deudaTCUsd = 0, pagarPen = 0, pagarUsd = 0;
   const siguienteMes = getSiguienteMesCalendario();
   tarjetas.forEach(t => {
     const allMovs   = getAllTCMovs(t.id);
     const toS = m => (m.currency||t.currency)==='USD' ? m.monto*rate : m.monto;
     // Deuda total: todos los no pagados
-    deudaTCTotal += allMovs.filter(m=>!m.pagado).reduce((s,m)=>s+toS(m),0);
+    allMovs.filter(m=>!m.pagado).forEach(m=>{
+      deudaTCTotal += toS(m);
+      if((m.currency||t.currency)==='USD') deudaTCUsd += m.monto; else deudaTCPen += m.monto;
+    });
     // A pagar próximo mes: consumos del período (mes calendario siguiente) no pagados
     const mk = tcMonthKey(siguienteMes.pagoAnio, siguienteMes.pagoMes);
-    ((t.movs&&t.movs[mk])||[]).filter(m=>!m.pagado).forEach(m=>pagarEsteMes+=toS(m));
+    ((t.movs&&t.movs[mk])||[]).filter(m=>!m.pagado).forEach(m=>{
+      pagarEsteMes += toS(m);
+      if((m.currency||t.currency)==='USD') pagarUsd += m.monto; else pagarPen += m.monto;
+    });
   });
 
   // ── Patrimonio neto ───────────────────────────────
@@ -5252,8 +5262,8 @@ function renderDashboard(){
   setKpi('kpi-disponible', fmtS(dispCur), 'operativas · ' + MONTHS[curM], dispCur>=0?'var(--accent)':'var(--red)');
   const ahorroSubtxt = aD>0 ? fmtS(aS)+' + '+fmtD(aD) : fmtS(aS);
   setKpi('kpi-ahorro', fmtS(ahorroTotalCur), ahorroSubtxt, 'var(--purple)');
-  setKpi('kpi-deuda-tc', deudaTCTotal>0?fmtS(deudaTCTotal):'S/ 0.00', deudaTCTotal>0?tarjetas.length+' tarjeta(s)':'sin deuda pendiente', deudaTCTotal>0?'var(--red)':'var(--green)');
-  setKpi('kpi-pagar-mes', pagarEsteMes>0?fmtS(pagarEsteMes):'S/ 0.00', pagarEsteMes>0?siguienteMes.label:'al día 🎉', pagarEsteMes>0?'var(--amber)':'var(--green)');
+  setKpi('kpi-deuda-tc', deudaTCTotal>0?fmtTCMixed(deudaTCPen,deudaTCUsd):'S/ 0.00', deudaTCTotal>0?tarjetas.length+' tarjeta(s)':'sin deuda pendiente', deudaTCTotal>0?'var(--red)':'var(--green)');
+  setKpi('kpi-pagar-mes', pagarEsteMes>0?fmtTCMixed(pagarPen,pagarUsd):'S/ 0.00', pagarEsteMes>0?siguienteMes.label:'al día 🎉', pagarEsteMes>0?'var(--amber)':'var(--green)');
 
   // ── Últimos movimientos ────────────────────────────
   const movsList = document.getElementById('dash-movs-list');
