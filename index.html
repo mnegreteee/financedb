@@ -714,7 +714,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
     <div class="last-updated" id="last-updated-wrap">
       <div class="last-updated-label">Última actualización</div>
       <div class="last-updated-val" id="last-updated-val">—</div>
-      <div class="sync-status"><span class="sync-dot sync-ok" id="sync-dot"></span><span id="sync-label">sincronizado</span></div>
+      <div class="sync-status"><span class="sync-dot sync-ok" id="sync-dot"></span><span id="sync-label">sincronizado</span><span id="sync-retry-btn" onclick="retrySync()" style="display:none;cursor:pointer;margin-left:5px;text-decoration:underline;color:var(--accent)">Reintentar</span></div>
     </div>
     <div class="config-wrap" id="config-wrap">
       <button class="config-btn" onclick="toggleConfig(event)">⚙ Config <span id="config-arrow">▾</span></button>
@@ -1193,7 +1193,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
     <h1 id="cal-month-title">Julio 2026</h1>
     <button class="month-btn" onclick="changeCalMonth(1)">›</button>
     <button class="btn" style="font-size:11px;margin-left:12px" onclick="goToCalToday()">Hoy</button>
-    <button class="btn btn-primary" style="font-size:11px;margin-left:auto" onclick="openCalEventModal(null, todayISO())">+ Nuevo evento</button>
+    <button class="btn" style="font-size:11px;margin-left:auto" onclick="agregarFeriadosPeru()">🇵🇪 Agregar feriados de Perú</button>
+    <button class="btn btn-primary" style="font-size:11px" onclick="openCalEventModal(null, todayISO())">+ Nuevo evento</button>
   </div>
 
   <div class="cal-legend" id="cal-legend"></div>
@@ -1673,9 +1674,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.13.1';
+const APP_VERSION = 'v1.15.2';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Pago de tarjeta: la descripción del movimiento ahora incluye el nombre de la tarjeta y la fecha del pago';
+const APP_VERSION_NOTE = 'Corregido: un movimiento con error de guardado ya no se pierde al recargar la página + botón Reintentar';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -1732,12 +1733,22 @@ function setSyncStatus(status){
   // status: 'saving' | 'ok' | 'error' | 'loading'
   const dot=document.getElementById('sync-dot');
   const lbl=document.getElementById('sync-label');
+  const retryBtn=document.getElementById('sync-retry-btn');
   if(!dot||!lbl)return;
   dot.className='sync-dot';
   if(status==='saving'){dot.classList.add('sync-saving');lbl.textContent='guardando...';}
   else if(status==='ok'){dot.classList.add('sync-ok');lbl.textContent='sincronizado';}
   else if(status==='error'){dot.classList.add('sync-err');lbl.textContent='error de red';}
   else if(status==='loading'){dot.classList.add('sync-saving');lbl.textContent='cargando...';}
+  if(retryBtn) retryBtn.style.display=(status==='error')?'inline':'none';
+}
+
+// Reintenta manualmente guardar en la nube tras un "error de red" — útil
+// para no perder un movimiento reciente si la sincronización automática
+// falló (ej. por un corte de internet momentáneo).
+function retrySync(){
+  setSyncStatus('saving');
+  _doFirestoreWrite();
 }
 
 let saveTimer=null;
@@ -2046,9 +2057,23 @@ function loadState(){
             // meta — así que depender solo de esa comparación podía dejar movimientos nuevos
             // sin mostrarse aunque remoteTs sí fuera más reciente. Leer la subcolección es
             // barato (un solo query) y siempre seguro de adoptar.
-            state.movimientos = subMovs;
+            //
+            // EXCEPCIÓN — rescatar movimientos locales aún no sincronizados: si el estado
+            // local es más reciente que el servidor (shouldMerge=false), puede ser porque
+            // un guardado anterior falló (ej. "error de red") y ese movimiento nunca llegó
+            // a Firestore. Si lo reemplazáramos ciegamente por subMovs, ese movimiento se
+            // perdería para siempre. Se detecta por ID (está en local pero no en el servidor)
+            // y se vuelve a agregar, reintentando guardarlo de inmediato.
+            const remoteIds = new Set(subMovs.map(m=>m.id));
+            let finalMovs = subMovs;
+            let rescatados = [];
+            if(!shouldMerge){
+              rescatados = (state.movimientos||[]).filter(mv=>mv.id && !remoteIds.has(mv.id));
+              if(rescatados.length>0) finalMovs = [...subMovs, ...rescatados];
+            }
+            state.movimientos = finalMovs;
             if(shouldMerge){
-              state={...state,...meta,movimientos:subMovs};
+              state={...state,...meta,movimientos:finalMovs};
               // meta.lastUpdated puede venir desactualizado si quien escribió por última vez
               // fue un proceso externo que no lo actualiza (el bot solo toca meta.cuentas).
               // remoteTs (el savedAt real del documento) es la fuente de verdad correcta aquí.
@@ -2063,6 +2088,10 @@ function loadState(){
             const snap={};
             subMovs.forEach(mv=>{ if(mv.id) snap[mv.id]=JSON.stringify(mv); });
             _lastSyncedMovs = snap;
+            if(rescatados.length>0){
+              console.warn(rescatados.length+' movimiento(s) local(es) sin sincronizar recuperado(s); reintentando guardar...');
+              setTimeout(()=>saveState(true), 1500);
+            }
           } else {
             // Subcolección vacía: cuenta nueva, o falta migrar desde el formato antiguo.
             if(shouldMerge){
@@ -6548,7 +6577,14 @@ function getEventCountdowns(){
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   return events.map(ev=>{
     let targetDate, isPast=false, elapsed=null;
-    if(ev.recurrente){
+    if(ev.recurrenteAnual){
+      // Buscar la próxima ocurrencia del mismo mes/día — este año si todavía
+      // no pasó, o el próximo año si ya pasó (ej. feriados, cumpleaños)
+      const origDate = new Date(ev.fecha+'T12:00:00');
+      let candidate = new Date(hoy.getFullYear(), origDate.getMonth(), origDate.getDate());
+      if(candidate<hoy) candidate = new Date(hoy.getFullYear()+1, origDate.getMonth(), origDate.getDate());
+      targetDate = candidate;
+    } else if(ev.recurrente){
       // Buscar la próxima ocurrencia (mes actual o futuro) — nunca queda "vencido"
       const origDate = new Date(ev.fecha+'T12:00:00');
       let y=hoy.getFullYear(), m=hoy.getMonth();
@@ -6612,7 +6648,13 @@ function getEventOccurrencesForMonth(year, month){
   const occurrences = [];
   events.forEach(ev=>{
     const evDate = new Date(ev.fecha+'T12:00:00');
-    if(ev.recurrente){
+    if(ev.recurrenteAnual){
+      // Se repite cada año en el mismo mes y día (ej. feriados, cumpleaños)
+      if(evDate.getMonth()===month){
+        const dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(evDate.getDate()).padStart(2,'0');
+        occurrences.push({event:ev, fecha:dateStr});
+      }
+    } else if(ev.recurrente){
       const day = Math.min(evDate.getDate(), daysInMonth(year,month));
       const dateStr = year+'-'+String(month+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
       occurrences.push({event:ev, fecha:dateStr});
@@ -6626,6 +6668,7 @@ function getEventOccurrencesForMonth(year, month){
 }
 
 // ── RENDER CALENDARIO ──────────────────────────────────
+
 function renderCalendario(){
   const titleEl = document.getElementById('cal-month-title');
   if(titleEl) titleEl.textContent = MONTHS[calViewMonth]+' '+calViewYear;
@@ -6705,6 +6748,71 @@ function goToCalToday(){
   renderCalendario();
 }
 
+// Calcula la fecha del Domingo de Pascua para un año dado (algoritmo de Gauss/
+// anónimo gregoriano) — necesario porque Jueves Santo y Viernes Santo (feriados
+// oficiales en Perú) cambian de fecha cada año, a diferencia del resto.
+function calcularPascua(year){
+  const a=year%19, b=Math.floor(year/100), c=year%100;
+  const d=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3);
+  const h=(19*a+b-d-g+15)%30, i=Math.floor(c/4), k=c%4;
+  const l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451);
+  const mes=Math.floor((h+l-7*m+114)/31), dia=((h+l-7*m+114)%31)+1;
+  return new Date(year, mes-1, dia);
+}
+
+// Agrega los feriados nacionales del Perú al calendario. Los de fecha fija
+// (11) se agregan como recurrentes ANUALES (funcionan para siempre, sin
+// volver a ejecutarse). Los de fecha móvil — Jueves y Viernes Santo, que
+// dependen de la Pascua — se calculan y agregan individualmente para los
+// próximos 5 años; después de eso basta con volver a tocar el botón.
+function agregarFeriadosPeru(){
+  if(!state.calendarEvents) state.calendarEvents=[];
+  const existingIds=new Set(state.calendarEvents.map(e=>e.id));
+  const yearActual=new Date().getFullYear();
+  let agregados=0;
+
+  const fijos=[
+    {mes:1, dia:1,  titulo:'Año Nuevo',              icono:'🎉'},
+    {mes:5, dia:1,  titulo:'Día del Trabajo',         icono:'👷'},
+    {mes:6, dia:29, titulo:'San Pedro y San Pablo',   icono:'⛪'},
+    {mes:7, dia:28, titulo:'Fiestas Patrias',         icono:'🇵🇪'},
+    {mes:7, dia:29, titulo:'Fiestas Patrias',         icono:'🇵🇪'},
+    {mes:8, dia:30, titulo:'Santa Rosa de Lima',      icono:'🌹'},
+    {mes:10,dia:8,  titulo:'Combate de Angamos',      icono:'⚓'},
+    {mes:11,dia:1,  titulo:'Todos los Santos',        icono:'🕯️'},
+    {mes:12,dia:8,  titulo:'Inmaculada Concepción',   icono:'🙏'},
+    {mes:12,dia:9,  titulo:'Batalla de Ayacucho',     icono:'🎖️'},
+    {mes:12,dia:25, titulo:'Navidad',                 icono:'🎄'},
+  ];
+  fijos.forEach(f=>{
+    const id='feriado-'+f.mes+'-'+f.dia;
+    if(existingIds.has(id)) return;
+    const fecha=yearActual+'-'+String(f.mes).padStart(2,'0')+'-'+String(f.dia).padStart(2,'0');
+    state.calendarEvents.push({id, titulo:f.titulo, fecha, tipo:'otro', recurrente:false, recurrenteAnual:true, fijado:false, icono:f.icono, notas:'Feriado nacional', esFeriadoPeru:true});
+    agregados++;
+  });
+
+  for(let y=yearActual; y<yearActual+5; y++){
+    const pascua=calcularPascua(y);
+    const jueves=new Date(pascua); jueves.setDate(pascua.getDate()-3);
+    const viernes=new Date(pascua); viernes.setDate(pascua.getDate()-2);
+    [{d:jueves,titulo:'Jueves Santo'},{d:viernes,titulo:'Viernes Santo'}].forEach(mv=>{
+      const id='feriado-'+mv.titulo.replace(/\s/g,'').toLowerCase()+'-'+y;
+      if(existingIds.has(id)) return;
+      const fecha=mv.d.getFullYear()+'-'+String(mv.d.getMonth()+1).padStart(2,'0')+'-'+String(mv.d.getDate()).padStart(2,'0');
+      state.calendarEvents.push({id, titulo:mv.titulo, fecha, tipo:'otro', recurrente:false, recurrenteAnual:false, fijado:false, icono:'✝️', notas:'Feriado nacional (fecha móvil, calculada según la Pascua)', esFeriadoPeru:true});
+      agregados++;
+    });
+  }
+
+  saveState();
+  renderCalendario();
+  renderFechasImportantes();
+  alert(agregados>0
+    ? `✅ Se agregaron ${agregados} feriados. Los de fecha fija se repetirán solos cada año; los de Semana Santa ya están calculados hasta ${yearActual+4}.`
+    : 'Ya tenías todos los feriados de Perú agregados.');
+}
+
 // ── CRUD EVENTOS ────────────────────────────────────────
 function openCalEventModal(id, prefillDate){
   editingCalEventId = id || null;
@@ -6717,6 +6825,7 @@ function openCalEventModal(id, prefillDate){
     document.getElementById('cal-e-fecha').value = ev.fecha;
     document.getElementById('cal-e-tipo').value = ev.tipo;
     document.getElementById('cal-e-recurrente').checked = !!ev.recurrente;
+    document.getElementById('cal-e-recurrente-anual').checked = !!ev.recurrenteAnual;
     document.getElementById('cal-e-fijado').checked = !!ev.fijado;
     document.getElementById('cal-e-icono').value = ev.icono||'';
     document.getElementById('cal-e-notas').value = ev.notas||'';
@@ -6727,6 +6836,7 @@ function openCalEventModal(id, prefillDate){
     document.getElementById('cal-e-fecha').value = prefillDate || todayISO();
     document.getElementById('cal-e-tipo').value = 'evento';
     document.getElementById('cal-e-recurrente').checked = false;
+    document.getElementById('cal-e-recurrente-anual').checked = false;
     document.getElementById('cal-e-fijado').checked = false;
     document.getElementById('cal-e-icono').value = '';
     document.getElementById('cal-e-notas').value = '';
@@ -6743,6 +6853,7 @@ function saveCalEvent(){
   const fecha = document.getElementById('cal-e-fecha').value;
   const tipo = document.getElementById('cal-e-tipo').value;
   const recurrente = document.getElementById('cal-e-recurrente').checked;
+  const recurrenteAnual = document.getElementById('cal-e-recurrente-anual').checked;
   const fijado = document.getElementById('cal-e-fijado').checked;
   const icono = (document.getElementById('cal-e-icono').value||'').trim();
   const notas = (document.getElementById('cal-e-notas').value||'').trim();
@@ -6751,9 +6862,9 @@ function saveCalEvent(){
   if(!state.calendarEvents) state.calendarEvents=[];
   if(editingCalEventId){
     const ev = state.calendarEvents.find(e=>e.id===editingCalEventId);
-    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.fijado=fijado; ev.icono=icono; ev.notas=notas; }
+    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.recurrenteAnual=recurrenteAnual; ev.fijado=fijado; ev.icono=icono; ev.notas=notas; }
   } else {
-    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, fijado, icono, notas});
+    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, recurrenteAnual, fijado, icono, notas});
   }
   saveState();
   closeCalEventModal();
@@ -7247,8 +7358,12 @@ if(state.projGoals){
       </div>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
-      <input id="cal-e-recurrente" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
+      <input id="cal-e-recurrente" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)" onchange="if(this.checked)document.getElementById('cal-e-recurrente-anual').checked=false">
       <label style="margin:0;font-size:12px;font-weight:500;color:var(--text)">Se repite cada mes (mismo día)</label>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
+      <input id="cal-e-recurrente-anual" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)" onchange="if(this.checked)document.getElementById('cal-e-recurrente').checked=false">
+      <label style="margin:0;font-size:12px;font-weight:500;color:var(--text)">🎉 Se repite cada año (mismo día y mes — feriados, cumpleaños)</label>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
       <input id="cal-e-fijado" type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)">
