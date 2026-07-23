@@ -1673,9 +1673,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.12.2';
+const APP_VERSION = 'v1.12.3';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Dashboard: "Deuda de tarjetas" y "A pagar próximo mes" ahora muestran soles y dólares por separado';
+const APP_VERSION_NOTE = 'Dashboard: "Estado tarjetas de crédito" también muestra soles y dólares por separado';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5303,7 +5303,10 @@ function renderDashboard(){
     } else {
       tcList.innerHTML=tarjetas.map(t=>{
         const toS2=m=>(m.currency||t.currency)==='USD'?m.monto*rate:m.monto;
-        const unpaid=getAllTCMovs(t.id).filter(m=>!m.pagado).reduce((s,m)=>s+toS2(m),0);
+        const movsUnpaid=getAllTCMovs(t.id).filter(m=>!m.pagado);
+        const unpaid=movsUnpaid.reduce((s,m)=>s+toS2(m),0);
+        let unpaidPen=0, unpaidUsd=0;
+        movsUnpaid.forEach(m=>{ if((m.currency||t.currency)==='USD') unpaidUsd+=m.monto; else unpaidPen+=m.monto; });
         const linea=parseFloat(t.linea)||0;
         const pct=linea>0?Math.min(100,(unpaid/linea)*100):0;
         const barCol=pct>=90?'var(--red)':pct>=70?'var(--amber)':t.color||'var(--accent)';
@@ -5312,7 +5315,7 @@ function renderDashboard(){
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;justify-content:space-between">
               <div style="font-size:13px;font-weight:600">${t.banco} <span style="font-size:10px;color:var(--text3);font-weight:400">${t.cat||''}</span></div>
-              <div style="font-family:var(--mono);font-size:12px;color:${unpaid>0?'var(--red)':'var(--green)'};flex-shrink:0;margin-left:8px">${M(fmtS(unpaid))}</div>
+              <div style="font-family:var(--mono);font-size:12px;color:${unpaid>0?'var(--red)':'var(--green)'};flex-shrink:0;margin-left:8px">${M(unpaid>0?fmtTCMixed(unpaidPen,unpaidUsd):fmtS(0))}</div>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px">
               <div style="font-size:10px;color:var(--text3)">Pago: ${label} · ${pct.toFixed(0)}% de línea</div>
