@@ -1674,9 +1674,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.15.2';
+const APP_VERSION = 'v1.15.3';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Corregido: un movimiento con error de guardado ya no se pierde al recargar la página + botón Reintentar';
+const APP_VERSION_NOTE = 'Corregido bug real: guardar un movimiento SIN categoría o SIN nota causaba "error de red" (Firestore rechazaba el campo undefined)';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2852,7 +2852,12 @@ function saveMovimiento(){
   const note=document.getElementById('f-note').value.trim();
   if(!desc||isNaN(amount)||amount<=0||!date){alert('Completa todos los campos.');return;}
   if(state.editId){const old=state.movimientos.find(x=>x.id===state.editId);if(old)revertAccount(old);state.movimientos=state.movimientos.filter(x=>x.id!==state.editId);}
-  const mov={id:state.editId||Date.now().toString(),type:currentType,desc,amount,account,date,currency,cat:cat||undefined,note:note||undefined};
+  const mov={id:state.editId||Date.now().toString(),type:currentType,desc,amount,account,date,currency};
+  // Firestore rechaza campos con valor "undefined" — si no hay categoría o
+  // nota, simplemente se omite el campo por completo (nunca se le asigna
+  // undefined), para no romper el guardado en la nube.
+  if(cat) mov.cat=cat;
+  if(note) mov.note=note;
   if(currency==='PEN'){
     if(currentType==='income')state.cuentas[account]=(state.cuentas[account]||0)+amount;
     else if(currentType==='expense')state.cuentas[account]=(state.cuentas[account]||0)-amount;
