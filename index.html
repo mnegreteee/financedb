@@ -1673,9 +1673,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(2,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.12.3';
+const APP_VERSION = 'v1.13.1';
 const APP_VERSION_DATE = '19 jul 2026';
-const APP_VERSION_NOTE = 'Dashboard: "Estado tarjetas de crédito" también muestra soles y dólares por separado';
+const APP_VERSION_NOTE = 'Pago de tarjeta: la descripción del movimiento ahora incluye el nombre de la tarjeta y la fecha del pago';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3950,10 +3950,21 @@ function confirmDeleteWithTransfer(){
   if(!pendingDeleteKey) return;
   const to=document.getElementById('transfer-to').value;
   const amount=parseFloat(document.getElementById('transfer-amount').value)||0;
-  const fromBal=state.cuentas[pendingDeleteKey]||0;
-  // Move balance
-  state.cuentas[to]=(state.cuentas[to]||0)+fromBal;
-  doDeleteCuenta(pendingDeleteKey,null);
+  const fromKey=pendingDeleteKey;
+  // Registrar el traspaso como un movimiento real de ingreso en la cuenta
+  // destino — igual que con el pago de tarjetas, mutar state.cuentas directo
+  // no bastaba: Disponible Actual y el historial se reconstruyen siempre
+  // desde los movimientos, no desde ese caché.
+  if(amount>0.004){
+    const toCurrency=(state.customCuentas||{})[to]?.currency || (to==='Ahorro Dólares'?'USD':'PEN');
+    if(!state.movimientos) state.movimientos=[];
+    state.movimientos.push({
+      id:'transfer-'+Date.now(), type:'income',
+      desc:'Traspaso de saldo desde "'+fromKey+'" (cuenta eliminada)',
+      amount, account:to, date:todayISO(), currency:toCurrency
+    });
+  }
+  doDeleteCuenta(fromKey,null);
   cancelTransfer();
 }
 function doDeleteCuenta(key){
@@ -4535,13 +4546,11 @@ function markSelectedPaid(){
 // ── PAGO ──────────────────────────────────────────────
 function pagarSeleccionados(){
   if(!pendingPayMovIds.length){ alert('Selecciona al menos un consumo.'); return; }
+  const t=getTarjeta(currentTCId);
   const movs=getTCMovs(currentTCId,currentTCMonth);
-  const total=pendingPayMovIds.reduce((s,id)=>{
-    const m=movs.find(x=>x.id===id); return s+(m?m.monto:0);
-  },0);
-  const tCardPago=getTarjeta(currentTCId);
-  const fmtPago=v=>(tCardPago&&tCardPago.currency==='USD'?'$ ':'S/ ')+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-  document.getElementById('tc-pago-monto').textContent=M(fmtPago(total));
+  const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(Boolean);
+  const {pen,usd}=sumTCByCurrency(selMovs, t&&t.currency);
+  document.getElementById('tc-pago-monto').textContent=M(fmtTCMixed(pen,usd));
   document.getElementById('tc-pago-tipo').value='total';
   document.getElementById('tc-pago-parcial-field').style.display='none';
   const cw=document.getElementById('tc-pago-cuenta-wrap');if(cw)cw.style.display='block';
@@ -4566,6 +4575,7 @@ function closePagoModal(){ document.getElementById('tc-pago-overlay').classList.
 function confirmarPago(){
   const tipo=document.getElementById('tc-pago-tipo').value;
   const movs=getTCMovs(currentTCId,currentTCMonth);
+  const t=getTarjeta(currentTCId);
 
   if(tipo==='puntos'){
     // Puntos: mark as paid but DO NOT deduct from any account
@@ -4577,22 +4587,40 @@ function confirmarPago(){
     return;
   }
 
-  let montoAPagar;
-  if(tipo==='total'){
-    montoAPagar=pendingPayMovIds.reduce((s,id)=>{const m=movs.find(x=>x.id===id);return s+(m?m.monto:0);},0);
-  } else {
-    montoAPagar=parseFloat(document.getElementById('tc-pago-parcial-val').value)||0;
-    if(montoAPagar<=0){alert('Ingresa un monto válido.');return;}
-  }
-  // Descontar de la cuenta seleccionada
   const cuenta=document.getElementById('tc-pago-cuenta').value;
-  state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-montoAPagar;
+  const hoy=todayISO();
+  const fechaLabel=new Date(hoy+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  if(!state.movimientos) state.movimientos=[];
+
+  if(tipo==='total'){
+    // El pago puede incluir consumos en soles Y dólares a la vez — se crea
+    // UN movimiento real por cada moneda involucrada, para que el descuento
+    // sí se refleje en Disponible Actual, la tabla de Cuentas y el historial
+    // (mutar state.cuentas directamente, como se hacía antes, no bastaba:
+    // esos valores se recalculan siempre desde los movimientos).
+    const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(Boolean);
+    const {pen,usd}=sumTCByCurrency(selMovs, t&&t.currency);
+    const desc='Pago de tarjeta '+(t?t.banco+(t.cat?' '+t.cat:''):'')+' - '+fechaLabel;
+    if(pen>0.004){
+      state.movimientos.push({id:'pagoTC'+Date.now()+'p',type:'expense',desc,amount:pen,account:cuenta,date:hoy,currency:'PEN'});
+    }
+    if(usd>0.004){
+      state.movimientos.push({id:'pagoTC'+Date.now()+'u',type:'expense',desc,amount:usd,account:cuenta,date:hoy,currency:'USD'});
+    }
+  } else {
+    // Parcial: un solo monto en soles (según indica el campo del formulario)
+    const montoAPagar=parseFloat(document.getElementById('tc-pago-parcial-val').value)||0;
+    if(montoAPagar<=0){alert('Ingresa un monto válido.');return;}
+    const desc='Pago de tarjeta '+(t?t.banco+(t.cat?' '+t.cat:''):'')+' - '+fechaLabel+' (parcial)';
+    state.movimientos.push({id:'pagoTC'+Date.now(),type:'expense',desc,amount:montoAPagar,account:cuenta,date:hoy,currency:'PEN'});
+  }
+
   // Marcar movimientos como pagados
   pendingPayMovIds.forEach(id=>{
     const m=movs.find(x=>x.id===id);
     if(m){ m.pagado=true; m.metodoPago='dinero'; }
   });
-  saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas();
+  saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas(); render();
 }
 
 // ── CRUD MOVIMIENTOS ──────────────────────────────────
