@@ -1668,6 +1668,32 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <h1>⛽ Control de Combustible</h1>
   </div>
 
+  <!-- MANTENIMIENTO DEL AUTO — proyección basada en el kilometraje registrado -->
+  <div class="card" id="mant-card" style="padding:18px;margin-bottom:20px">
+    <div class="section-header">
+      <div class="section-title">🔧 Mantenimiento del Auto</div>
+      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirConfigMantenimiento()">⚙️ Configurar</button>
+    </div>
+    <div id="mant-sin-config" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:12px">
+      Configura tu último mantenimiento para empezar a proyectar cuándo te toca el próximo.
+      <div style="margin-top:10px"><button class="btn btn-primary" style="font-size:11px" onclick="abrirConfigMantenimiento()">⚙️ Configurar ahora</button></div>
+    </div>
+    <div id="mant-contenido" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-bottom:14px">
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div><div id="mant-km-actual" style="font-size:16px;font-weight:700;font-family:var(--mono)">—</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Próximo a los</div><div id="mant-km-proximo" style="font-size:16px;font-weight:700;font-family:var(--mono)">—</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Te faltan</div><div id="mant-km-faltan" style="font-size:16px;font-weight:700;font-family:var(--mono);color:var(--accent)">—</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Fecha estimada</div><div id="mant-fecha-est" style="font-size:16px;font-weight:700">—</div></div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;height:10px;overflow:hidden;margin-bottom:6px">
+        <div id="mant-barra" style="height:100%;background:var(--accent);width:0%;transition:width .3s"></div>
+      </div>
+      <div id="mant-nota" style="font-size:10px;color:var(--text3);margin-bottom:12px"></div>
+      <button class="btn" style="font-size:11px" onclick="abrirRegistrarMantenimiento()">✅ Ya lo hice — registrar mantenimiento</button>
+      <div id="mant-historial" style="margin-top:14px"></div>
+    </div>
+  </div>
+
   <!-- Tabs GLP / Gasolina -->
   <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border)">
     <button class="fuel-type-tab active" id="ftab-glp" onclick="switchFuelType('glp')"
@@ -2116,6 +2142,40 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 
 <!-- MODAL: Completar/editar la VENTA de una operación existente -->
+<!-- MODAL: CONFIGURAR MANTENIMIENTO -->
+<div class="modal-overlay" id="mant-config-overlay" onclick="if(event.target===this)cerrarConfigMantenimiento()">
+  <div class="modal" style="width:400px">
+    <div class="modal-title"><span>⚙️ Configurar Mantenimiento</span><button class="modal-close" onclick="cerrarConfigMantenimiento()">✕</button></div>
+    <div class="field">
+      <label>Cada cuántos km toca mantenimiento</label>
+      <input id="mant-intervalo" type="number" min="500" step="500" placeholder="Ej. 10000">
+    </div>
+    <div class="field">
+      <label>Km del último mantenimiento realizado <span style="font-size:10px;color:var(--text3)">(0 si nunca le has hecho ninguno)</span></label>
+      <input id="mant-km-base" type="number" min="0" step="1" placeholder="Ej. 45000">
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">El próximo mantenimiento se calcula como: km del último + el intervalo. Después de cada uno, el contador se reinicia solo.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="cerrarConfigMantenimiento()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarConfigMantenimiento()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: REGISTRAR MANTENIMIENTO HECHO -->
+<div class="modal-overlay" id="mant-registrar-overlay" onclick="if(event.target===this)cerrarRegistrarMantenimiento()">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span>✅ Registrar Mantenimiento</span><button class="modal-close" onclick="cerrarRegistrarMantenimiento()">✕</button></div>
+    <div class="field"><label>Kilometraje al momento del mantenimiento</label><input id="mant-reg-km" type="number" min="0" step="1"></div>
+    <div class="field"><label>Fecha</label><input id="mant-reg-fecha" type="date"></div>
+    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="mant-reg-nota" type="text" placeholder="Ej. Cambio de aceite y filtros"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="cerrarRegistrarMantenimiento()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarRegistrarMantenimiento()">Registrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: REGISTRAR GASTO DE RECARGA DE COMBUSTIBLE -->
 <div class="modal-overlay" id="fuel-gasto-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeFuelGastoModal')">
   <div class="modal" style="width:430px">
@@ -2295,9 +2355,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.49.1';
-const APP_VERSION_DATE = '08/08/26 - 07:50'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Auditoría completa de todo lo agregado esta semana. Se encontraron y corrigieron 3 últimos rastros del bug de "dólares forzados a Ahorro Dólares": (1) importar Excel ignoraba la cuenta de ahorro en dólares indicada y la forzaba a la fija; (2) "Borrar meses" reconstruía saldos con el mismo problema, pudiendo corromper cuentas de ahorro USD personalizadas; (3) el reporte PDF mostraba el símbolo de moneda incorrecto (S/ en vez de $) para cuentas de ahorro en dólares personalizadas. Bot: 0 problemas reales (3 alertas de "función no definida" resultaron ser funciones locales válidas). Verificado con pruebas automatizadas: 5/5 casos correctos en el símbolo de moneda.';
+const APP_VERSION = 'v1.50.1';
+const APP_VERSION_DATE = '08/08/26 - 08:13'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mantenimiento del Auto: corregido el cálculo del promedio de km/día — antes sumaba los km de GLP y Gasolina por separado, arriesgando contar el mismo recorrido físico dos veces si ambos períodos se traslapan en el tiempo (lo normal, ya que ambos combustibles miden el mismo odómetro). Ahora junta todas las lecturas de ambos en una sola línea de tiempo y compara solo la primera contra la última. Corregido en web y bot por igual. Verificado con un escenario de GLP (recarga frecuente) y Gasolina (recarga poco frecuente) traslapados: el km actual usa la lectura de fecha más reciente entre ambos, y el promedio dio exacto (250 km / 8 días = 31.25 km/día).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2984,6 +3044,8 @@ function migrateState(){
   if(!Array.isArray(state.tcOperaciones)) state.tcOperaciones=[]; // historial real de compra/venta de USD (genera movimientos)
   if(!Array.isArray(state.ordenCuentas)) state.ordenCuentas=[]; // orden manual de cuentas/ahorros (arrastrar o ▲▼) — claves no listadas van al final en su orden natural
   if(!Array.isArray(state.actividadLog)) state.actividadLog=[]; // registro de las últimas acciones — ver Config → Actividad Reciente
+  if(!state.mantenimiento) state.mantenimiento={intervaloKm:10000, kmUltimoMantenimiento:null, historial:[]};
+  if(!Array.isArray(state.mantenimiento.historial)) state.mantenimiento.historial=[];
   if(!Array.isArray(state.inversiones.compras))        state.inversiones.compras=[];
   if(!Array.isArray(state.inversiones.ventas))          state.inversiones.ventas=[];
   if(!Array.isArray(state.inversiones.valorizaciones))  state.inversiones.valorizaciones=[];
@@ -3481,6 +3543,17 @@ function checkBrowserNotifications(forzar){
       else mensajes.push(`📅 ${p.nombre} vence en ${diffDias} días (${fechaLabel})`);
     }
   });
+
+  // 6. Mantenimiento del auto próximo (a 1000 km o 15 días, lo que llegue primero)
+  const proyMant=getProyeccionMantenimiento();
+  if(proyMant){
+    const cercaPorKm = proyMant.kmFaltan<=1000;
+    const cercaPorDias = proyMant.diasFaltan!==null && proyMant.diasFaltan<=15;
+    if(cercaPorKm || cercaPorDias){
+      const fechaTxt=proyMant.fechaEstimada?(' — estimado '+proyMant.fechaEstimada.getDate()+'/'+(proyMant.fechaEstimada.getMonth()+1)):'';
+      mensajes.push(`🔧 Mantenimiento en ~${Math.round(proyMant.kmFaltan)} km${fechaTxt}`);
+    }
+  }
 
   if(mensajes.length){
     new Notification('🔔 Recordatorios de hoy', {
@@ -10501,6 +10574,140 @@ function saveFuelGasto(){
 }
 
 // ── COMPUTE ROW FIELDS ────────────────────────────────
+// ══════════════════════════════════════════════════════
+//  MANTENIMIENTO DEL AUTO — proyecta cuándo tocará el próximo mantenimiento
+//  en base al kilometraje que ya registras al cargar combustible (GLP y
+//  Gasolina juntos), sin pedir ningún dato nuevo aparte de la config inicial.
+// ══════════════════════════════════════════════════════
+// Km actual = el kmFinal más reciente entre TODAS las recargas (GLP+Gas)
+function getKmActualVehiculo(){
+  let mejor=null;
+  ['combustibleGlp','combustibleGas'].forEach(key=>{
+    (state[key]||[]).forEach(row=>{
+      const km=parseFloat(row.kmFinal);
+      const fecha=row.fFinal;
+      if(isNaN(km)||!fecha) return;
+      if(!mejor || fecha>mejor.fecha) mejor={km, fecha};
+    });
+  });
+  return mejor; // null si todavía no hay ninguna recarga con km registrado
+}
+// Promedio de km recorridos por día — ponderado (suma de km ÷ suma de días
+// de TODAS las recargas completas), más preciso que promediar cada tasa
+// individual, porque no le da el mismo peso a un tramo de 2 días que a uno de 20.
+function getKmPromedioDiario(){
+  // GLP y Gasolina miden el MISMO odómetro del auto. Sumar los km de cada
+  // combustible por separado (como se hacía antes) corre el riesgo de contar
+  // el mismo recorrido físico dos veces si sus períodos se traslapan en el
+  // tiempo — que es lo normal, porque manejas todos los días sin importar
+  // qué combustible cargues. La forma correcta: juntar TODAS las lecturas de
+  // ambos en una sola línea de tiempo, y comparar solo la primera contra la
+  // última — así cada kilómetro real se cuenta una sola vez.
+  const lecturas=[];
+  ['combustibleGlp','combustibleGas'].forEach(key=>{
+    (state[key]||[]).forEach(row=>{
+      const km=parseFloat(row.kmFinal);
+      if(!isNaN(km) && row.fFinal) lecturas.push({fecha:row.fFinal, km});
+    });
+  });
+  if(lecturas.length<2) return null;
+  lecturas.sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
+  const primera=lecturas[0], ultima=lecturas[lecturas.length-1];
+  const dias=fuelDaysBetween(primera.fecha, ultima.fecha);
+  const km=ultima.km-primera.km;
+  return (dias>0 && km>0) ? km/dias : null;
+}
+function getProyeccionMantenimiento(){
+  const cfg=state.mantenimiento||{};
+  if(cfg.kmUltimoMantenimiento===null || cfg.kmUltimoMantenimiento===undefined) return null;
+  const actual=getKmActualVehiculo();
+  const kmActual=actual ? actual.km : cfg.kmUltimoMantenimiento;
+  const intervalo=cfg.intervaloKm||10000;
+  const kmProximo=cfg.kmUltimoMantenimiento+intervalo;
+  const kmFaltan=Math.max(0,kmProximo-kmActual);
+  const promDiario=getKmPromedioDiario();
+  let fechaEstimada=null, diasFaltan=null;
+  if(promDiario && promDiario>0){
+    diasFaltan=Math.ceil(kmFaltan/promDiario);
+    fechaEstimada=new Date(); fechaEstimada.setHours(0,0,0,0); fechaEstimada.setDate(fechaEstimada.getDate()+diasFaltan);
+  }
+  const avance=intervalo>0 ? Math.min(100,Math.max(0,((kmActual-cfg.kmUltimoMantenimiento)/intervalo)*100)) : 0;
+  return {kmActual, kmProximo, kmFaltan, promDiario, diasFaltan, fechaEstimada, avance, sinDatosKm:!actual};
+}
+function renderMantenimiento(){
+  const sinConfigEl=document.getElementById('mant-sin-config');
+  const contEl=document.getElementById('mant-contenido');
+  if(!sinConfigEl||!contEl) return;
+  const proy=getProyeccionMantenimiento();
+  if(!proy){
+    sinConfigEl.style.display='block';
+    contEl.style.display='none';
+    return;
+  }
+  sinConfigEl.style.display='none';
+  contEl.style.display='block';
+  document.getElementById('mant-km-actual').textContent=Math.round(proy.kmActual).toLocaleString('es-PE')+' km';
+  document.getElementById('mant-km-proximo').textContent=Math.round(proy.kmProximo).toLocaleString('es-PE')+' km';
+  const colorUrgencia = proy.kmFaltan<=500 ? 'var(--red)' : proy.kmFaltan<=1500 ? 'var(--amber)' : 'var(--accent)';
+  const faltEl=document.getElementById('mant-km-faltan');
+  faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
+  faltEl.style.color=colorUrgencia;
+  document.getElementById('mant-fecha-est').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+  const barra=document.getElementById('mant-barra');
+  barra.style.width=proy.avance.toFixed(0)+'%';
+  barra.style.background=colorUrgencia;
+  let nota='';
+  if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga con kilometraje registrado — agrega el km al registrar tus recargas de GLP/Gasolina para que esto se actualice solo.';
+  else if(!proy.promDiario) nota='Registra al menos 2 recargas seguidas (con fecha y km) para que se pueda calcular una fecha estimada.';
+  document.getElementById('mant-nota').textContent=nota;
+
+  const hist=(state.mantenimiento.historial||[]).slice().reverse();
+  const histEl=document.getElementById('mant-historial');
+  histEl.innerHTML = hist.length ? ('<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Historial</div>'+
+    hist.map(h=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-top:1px solid var(--border)">
+      <span>${escapeHtml(h.nota||'Mantenimiento')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
+      <span style="color:var(--text3)">${h.fecha}</span>
+    </div>`).join('')) : '';
+}
+function abrirConfigMantenimiento(){
+  document.getElementById('mant-intervalo').value=state.mantenimiento.intervaloKm||10000;
+  document.getElementById('mant-km-base').value=state.mantenimiento.kmUltimoMantenimiento ?? '';
+  document.getElementById('mant-config-overlay').classList.add('open');
+}
+function cerrarConfigMantenimiento(){ document.getElementById('mant-config-overlay').classList.remove('open'); }
+function guardarConfigMantenimiento(){
+  const intervalo=parseFloat(document.getElementById('mant-intervalo').value);
+  const kmBase=parseFloat(document.getElementById('mant-km-base').value);
+  if(isNaN(intervalo)||intervalo<=0){alert('Ingresa un intervalo de km válido (mayor a 0).');return;}
+  if(isNaN(kmBase)||kmBase<0){alert('Ingresa el kilometraje del último mantenimiento (usa 0 si nunca le has hecho ninguno).');return;}
+  state.mantenimiento.intervaloKm=intervalo;
+  state.mantenimiento.kmUltimoMantenimiento=kmBase;
+  saveState();
+  cerrarConfigMantenimiento();
+  renderMantenimiento();
+  toast('Configuración de mantenimiento guardada');
+}
+function abrirRegistrarMantenimiento(){
+  const proy=getProyeccionMantenimiento();
+  document.getElementById('mant-reg-km').value = proy ? Math.round(proy.kmActual) : '';
+  document.getElementById('mant-reg-fecha').value = todayLocalISO();
+  document.getElementById('mant-reg-nota').value='';
+  document.getElementById('mant-registrar-overlay').classList.add('open');
+}
+function cerrarRegistrarMantenimiento(){ document.getElementById('mant-registrar-overlay').classList.remove('open'); }
+function guardarRegistrarMantenimiento(){
+  const km=parseFloat(document.getElementById('mant-reg-km').value);
+  const fecha=document.getElementById('mant-reg-fecha').value;
+  const nota=(document.getElementById('mant-reg-nota').value||'').trim();
+  if(isNaN(km)||km<0||!fecha){alert('Completa el kilometraje y la fecha.');return;}
+  if(!state.mantenimiento.historial) state.mantenimiento.historial=[];
+  state.mantenimiento.historial.push({id:'mant-'+Date.now(), km, fecha, nota});
+  state.mantenimiento.kmUltimoMantenimiento=km; // reinicia el contador desde este punto — el próximo será a los +intervaloKm
+  saveState();
+  cerrarRegistrarMantenimiento();
+  renderMantenimiento();
+  toast('Mantenimiento registrado — el contador se reinició');
+}
 function computeFuelRows(rows){
   return rows.map((row,i)=>{
     const r={...row};
@@ -10533,6 +10740,7 @@ function computeFuelRows(rows){
 function renderCombustible(){
   renderFuelSection('glp');
   renderFuelSection('gas');
+  renderMantenimiento();
 }
 
 function renderFuelSection(type){
@@ -10572,6 +10780,7 @@ function renderFuelSection(type){
   }
   renderFuelSummary(type, rows);
   renderFuelChart(type, rows);
+  if(document.getElementById('mant-card')) renderMantenimiento();
 }
 
 // ── SUMMARY ───────────────────────────────────────────
