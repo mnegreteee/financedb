@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shhhhhhh🤫</title>
+<title>No hay nada que ver aquí</title>
 <!-- PWA: instalable en la pantalla de inicio. Ícono y nombre deliberadamente
      neutros/genéricos, igual que el título de la pestaña, para no delatar
      de qué app se trata a simple vista. -->
@@ -57,7 +57,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .nav-tab.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
 .nav-dropdown{position:relative;}
 .nav-dropdown-trigger.group-active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
-.nav-dropdown-menu{display:none;flex-direction:column;gap:1px;position:absolute;top:calc(100% + 6px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:4px;min-width:170px;z-index:210;box-shadow:0 10px 28px rgba(0,0,0,.4);}
+.nav-dropdown-menu{display:none;flex-direction:column;gap:1px;position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:4px;min-width:170px;z-index:210;box-shadow:0 10px 28px rgba(0,0,0,.4);}
 .nav-dropdown-menu.open{display:flex;}
 .nav-dropdown-item{padding:7px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text2);border:none;background:none;font-family:var(--font);text-align:left;white-space:nowrap;}
 .nav-dropdown-item:hover{background:var(--bg3);color:var(--text);}
@@ -2399,8 +2399,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 13:13'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva opción "📅 Último día de cada mes" en Pagos/Ingresos Frecuentes (checkbox junto al campo "Día límite de pago") — se ajusta solo entre 28, 29, 30 o 31 según el mes real, sin tener que adivinar ni escribir 31 a mano. Se guarda como pf.diaPago="ultimo" (antes solo aceptaba 1-31) y se propagó a los 3 lugares que calculan/muestran ese día: recordatorios del dashboard, la tarjeta de cada pago frecuente, y el bot de Telegram (recordatorios diarios). Corregido también un detalle menor: antes, si configurabas el día 31 en un mes de 30 días, el aviso decía "vence el día 31" aunque en realidad usaba el día 30 — ahora con "último día del mes" el mensaje es explícito y correcto en cualquier mes. Se mantiene todo lo demás: km actual manual en Mantenimiento, valorización por unidad/total en Inversiones.';
+const APP_VERSION_DATE = '08/08/26 - 13:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregido: en móvil, los desplegables de "Análisis", "Créditos", "Patrimonio" y "Otros" no se veían al tocarlos. Causa: .nav-center tiene overflow-x:auto para poder hacer scroll horizontal entre pestañas en pantallas chicas, y eso recortaba el menú (estaba con position:absolute dentro de ese mismo contenedor). Solución: el menú ahora usa position:fixed con la posición calculada por JS (debajo del botón tocado, ajustada si se saldría del borde derecho de la pantalla), así ya no lo afecta el overflow de ningún contenedor. También se cierra solo si haces scroll horizontal de las pestañas mientras está abierto. Se mantiene todo lo demás: último día del mes en Pagos Frecuentes, km actual manual en Mantenimiento, valorización por unidad/total en Inversiones.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3325,9 +3325,34 @@ function toggleNavDropdown(name, ev){
   const menu=document.getElementById('navmenu-'+name);
   const wasOpen=menu.classList.contains('open');
   closeAllNavDropdowns();
-  if(!wasOpen) menu.classList.add('open');
+  if(!wasOpen){
+    menu.classList.add('open');
+    // El menú usa position:fixed con coordenadas calculadas a mano (en vez del
+    // position:absolute que tenía antes) porque en móvil .nav-center tiene
+    // overflow-x:auto para poder hacer scroll horizontal entre pestañas — y
+    // eso recorta cualquier hijo con position:absolute que sobresalga de su
+    // alto, que es justo lo que le pasaba a este desplegable (por eso no se
+    // veía en el celular). position:fixed no se ve afectado por el overflow
+    // de ningún contenedor ancestro, así que siempre queda visible encima.
+    const trigger=ev?ev.currentTarget:document.querySelector('#navdrop-'+name+' .nav-dropdown-trigger');
+    if(trigger){
+      const rect=trigger.getBoundingClientRect();
+      const menuWidth=menu.offsetWidth||170;
+      let left=rect.left;
+      if(left+menuWidth>window.innerWidth-8) left=Math.max(8,window.innerWidth-menuWidth-8);
+      menu.style.top=(rect.bottom+6)+'px';
+      menu.style.left=left+'px';
+    }
+  }
 }
 document.addEventListener('click', closeAllNavDropdowns);
+// Si el usuario hace scroll horizontal de las pestañas (móvil) mientras un
+// desplegable está abierto, se cierra — como ahora el menú es position:fixed,
+// ya no "sigue" al botón si este se mueve por el scroll del contenedor.
+document.addEventListener('DOMContentLoaded', function(){
+  const navCenter=document.querySelector('.nav-center');
+  if(navCenter) navCenter.addEventListener('scroll', closeAllNavDropdowns);
+});
 
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
