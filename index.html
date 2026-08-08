@@ -2399,8 +2399,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 18:18'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Traídos desde la copia de Nathy (adaptados para no romper tus cuentas reales): (1) deduplicación de saldos — Disponible, Ahorro, Patrimonio Neto, tabla anual y gráficos de 12 meses ya no suman una cuenta dos veces si alguna vez creas una personalizada con el mismo nombre que BCP/BBVA/Efectivo/Ahorro Soles/Ahorro Dólares (a diferencia de Nathy, TUS 5 cuentas por defecto se siguen contando y mostrando normalmente, porque las usas de verdad); (2) tieneDatosHasta() — un mes sin actividad propia ahora muestra el saldo arrastrado en vez de "—"; (3) "Disponible Actual" ya no muestra el saldo de HOY al navegar a un mes pasado sin datos, solo cuando el mes que ves es de verdad el actual; (4) validación anti-duplicados al crear una cuenta nueva. Se mantiene todo lo anterior: Km actual manual en Mantenimiento, "Último día del mes" en Pagos Frecuentes, menú móvil corregido, valorización por unidad/total en Inversiones, Mantenimiento del Auto con varios tipos.';
+const APP_VERSION_DATE = '08/08/26 - 18:37'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregido bug de seguridad importante: como tu app y la de Nathy viven bajo el mismo dominio de GitHub Pages (mnegreteee.github.io), compartían el localStorage del navegador — si alguien abría ambas apps en el mismo navegador, tu data podía aparecer, y en el peor caso GUARDARSE, dentro del Firestore real de Nathy (o viceversa). Se le puso un prefijo único ("miguel_") a TODAS las claves de localStorage que usa tu app, así ya es técnicamente imposible que se mezclen entre las dos sin importar el navegador. Nota: tu caché local anterior queda huérfana bajo la clave vieja (sin prefijo) — la próxima vez que abras tu app, cargará de cero desde Firestore (tus datos reales, sin pérdida) en vez de usar el caché instantáneo, solo una vez. Se mantiene todo lo demás: deduplicación de saldos, meses arrastrados, Km actual manual, último día del mes.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2907,7 +2907,7 @@ function saveState(immediate){
   state.lastUpdated=new Date().toISOString();
   clearSaldoCache(); // invalidate saldo cache on any state change
   // Save to localStorage immediately as backup
-  localStorage.setItem('mf_v5',JSON.stringify(state));
+  localStorage.setItem('miguel_mf_v5',JSON.stringify(state));
   updateLastUpdated();
   setSyncStatus('saving');
   clearTimeout(saveTimer);
@@ -3118,9 +3118,9 @@ function migrateState(){
 let _remoteDocExisted = null; // null=desconocido/offline, true=había doc, false=no había doc (cuenta nueva)
 
 function loadState(){
-  ['mf_state_v2','mf_state_v3','mf_state_v4'].forEach(k=>localStorage.removeItem(k));
+  ['miguel_mf_state_v2','miguel_mf_state_v3','miguel_mf_state_v4'].forEach(k=>localStorage.removeItem(k));
   // Load from localStorage first for instant render
-  const s=localStorage.getItem('mf_v5');
+  const s=localStorage.getItem('miguel_mf_v5');
   if(s){try{const p=JSON.parse(s);state={...state,...p};}catch(e){}}
   migrateState();
   clearSaldoCache();
@@ -3130,7 +3130,7 @@ function loadState(){
 
   // If the user just cleared all data, skip fetching from Firestore entirely
   // (even if the delete hasn't fully propagated yet, we want a blank slate).
-  if(localStorage.getItem('mf_cleared')==='1'){
+  if(localStorage.getItem('miguel_mf_cleared')==='1'){
     setSyncStatus('ok');
     // Push the fresh blank state to Firestore to guarantee it's clean there too
     if(DOC_REF){
@@ -3194,7 +3194,7 @@ function loadState(){
               state.currentYear=now.getFullYear();
               state.currentMonth=now.getMonth();
             }
-            localStorage.setItem('mf_v5',JSON.stringify(state));
+            localStorage.setItem('miguel_mf_v5',JSON.stringify(state));
             const snap={};
             subMovs.forEach(mv=>{ if(mv.id) snap[mv.id]=JSON.stringify(mv); });
             _lastSyncedMovs = snap;
@@ -3212,7 +3212,7 @@ function loadState(){
               const now=new Date();
               state.currentYear=now.getFullYear();
               state.currentMonth=now.getMonth();
-              localStorage.setItem('mf_v5',JSON.stringify(state));
+              localStorage.setItem('miguel_mf_v5',JSON.stringify(state));
             }
             // Forzar que la próxima sincronización suba TODOS los movimientos actuales
             // como documentos individuales (migración transparente, no destructiva).
@@ -3239,12 +3239,12 @@ function toggleTheme(){
   const cur=document.documentElement.getAttribute('data-theme');
   const next=cur==='dark'?'light':'dark';
   document.documentElement.setAttribute('data-theme',next);
-  localStorage.setItem('mf_theme',next);
+  localStorage.setItem('miguel_mf_theme',next);
   if(mainChart)renderChart();
   if(projChart)renderProyeccion();
 }
 function loadTheme(){
-  const t=localStorage.getItem('mf_theme')||'dark';
+  const t=localStorage.getItem('miguel_mf_theme')||'dark';
   document.documentElement.setAttribute('data-theme',t);
 }
 
@@ -3553,11 +3553,11 @@ function setTCAuto(){
 //  navegador esté cerrado — esa sigue siendo la opción para eso).
 // ══════════════════════════════════════════════════════
 function browserNotifsEnabled(){
-  return localStorage.getItem('mf_browser_notifs')==='1';
+  return localStorage.getItem('miguel_mf_browser_notifs')==='1';
 }
 async function toggleBrowserNotifs(){
   if(browserNotifsEnabled()){
-    localStorage.removeItem('mf_browser_notifs');
+    localStorage.removeItem('miguel_mf_browser_notifs');
     updateBrowserNotifsBtn();
     return;
   }
@@ -3567,7 +3567,7 @@ async function toggleBrowserNotifs(){
   }
   const perm=await Notification.requestPermission();
   if(perm==='granted'){
-    localStorage.setItem('mf_browser_notifs','1');
+    localStorage.setItem('miguel_mf_browser_notifs','1');
     updateBrowserNotifsBtn();
     new Notification('Notificaciones activadas', {body:'Te avisaremos aquí mientras tengas esta pestaña abierta.'});
     checkBrowserNotifications(true);
@@ -3591,7 +3591,7 @@ function checkBrowserNotifications(forzar){
   if(!('Notification' in window) || Notification.permission!=='granted') return;
   if(demoMode) return; // nunca notificar con datos falsos del Modo Demo
   const hoyISO=todayISO();
-  if(!forzar && localStorage.getItem('mf_last_notif_date')===hoyISO) return;
+  if(!forzar && localStorage.getItem('miguel_mf_last_notif_date')===hoyISO) return;
 
   const mensajes=[];
   const hoy=new Date(); hoy.setHours(0,0,0,0);
@@ -3670,7 +3670,7 @@ function checkBrowserNotifications(forzar){
     new Notification('🔔 Recordatorios de hoy', {
       body: mensajes.slice(0,5).join('\n')+(mensajes.length>5?`\n...y ${mensajes.length-5} más`:''),
     });
-    localStorage.setItem('mf_last_notif_date', hoyISO);
+    localStorage.setItem('miguel_mf_last_notif_date', hoyISO);
   }
 }
 
@@ -7168,9 +7168,9 @@ async function deleteAllData(){
   if(!confirm('⚠️ ¿Estás seguro? Se eliminarán TODOS los movimientos, snapshots, servicios y presupuestos. Esta acción no se puede deshacer.')) return;
   // Set the cleared flag FIRST so loadState() skips any Firestore fetch on reload,
   // regardless of whether the delete below has fully propagated yet.
-  localStorage.setItem('mf_cleared','1');
+  localStorage.setItem('miguel_mf_cleared','1');
   // Clear localStorage completely (all versions)
-  ['mf_v5','mf_state_v2','mf_state_v3','mf_state_v4','mf_theme','mf_inactivity'].forEach(k=>localStorage.removeItem(k));
+  ['miguel_mf_v5','miguel_mf_state_v2','miguel_mf_state_v3','miguel_mf_state_v4','miguel_mf_theme','miguel_mf_inactivity'].forEach(k=>localStorage.removeItem(k));
   // AWAIT Firestore deletion before reloading — prevents the old race condition
   // where reload happened before the delete finished, pulling old data back.
   if(DOC_REF){
@@ -7382,7 +7382,7 @@ function executeDeleteMonths(){
 // exigen request.auth != null, así que sin sesión iniciada no se puede leer
 // ni escribir nada (ver README de reglas).
 let currentUser = null;
-let inactivityMinutes = parseInt(localStorage.getItem('mf_inactivity')||'5');
+let inactivityMinutes = parseInt(localStorage.getItem('miguel_mf_inactivity')||'5');
 let inactivityTimer = null;
 
 async function doLogin(){
@@ -7432,7 +7432,7 @@ function lockApp(){
   // Se borra también el caché local — si no, los datos financieros completos
   // quedarían legibles en localStorage (DevTools → Application) para
   // cualquiera con acceso físico al dispositivo, incluso ya sin sesión activa.
-  ['mf_v5','mf_state_v2','mf_state_v3','mf_state_v4'].forEach(k=>localStorage.removeItem(k));
+  ['miguel_mf_v5','miguel_mf_state_v2','miguel_mf_state_v3','miguel_mf_state_v4'].forEach(k=>localStorage.removeItem(k));
   document.getElementById('login-email').value='';
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').style.display='none';
@@ -7458,7 +7458,7 @@ function openInactivityModal(){
 function closeInactivityModal(){ document.getElementById('inactivity-modal-overlay').classList.remove('open'); }
 function saveInactivity(){
   inactivityMinutes=parseInt(document.getElementById('inactivity-select').value);
-  localStorage.setItem('mf_inactivity',String(inactivityMinutes));
+  localStorage.setItem('miguel_mf_inactivity',String(inactivityMinutes));
   const lbl = inactivityMinutes===0?'Nunca':inactivityMinutes+' minutos';
   document.getElementById('cfg-inactivity-label').textContent=lbl;
   closeInactivityModal();
@@ -9583,10 +9583,10 @@ function toggleCompact(){
   const isCompact = document.body.classList.toggle('compact-mode');
   document.getElementById('compact-btn').textContent = isCompact ? '🖥️' : '📱';
   document.getElementById('compact-btn').title = isCompact ? 'Volver a vista normal' : 'Adaptar vista al dispositivo';
-  localStorage.setItem('mf_compact', isCompact?'1':'0');
+  localStorage.setItem('miguel_mf_compact', isCompact?'1':'0');
 }
 function loadCompact(){
-  if(localStorage.getItem('mf_compact')==='1'){
+  if(localStorage.getItem('miguel_mf_compact')==='1'){
     document.body.classList.add('compact-mode');
     document.getElementById('compact-btn').textContent='🖥️';
   }
@@ -12382,8 +12382,8 @@ function getUpcomingCalEventsThisMonth(){
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
   // Don't seed if user explicitly cleared all data
-  if(localStorage.getItem('mf_cleared')==='1'){
-    localStorage.removeItem('mf_cleared');
+  if(localStorage.getItem('miguel_mf_cleared')==='1'){
+    localStorage.removeItem('miguel_mf_cleared');
     return;
   }
   if(state.movimientos.length>0)return;
@@ -12432,7 +12432,7 @@ function seedDemo(){
 // Show login branding instantly from localStorage cache (before Firebase loads)
 (function(){
   try{
-    const cached = localStorage.getItem('mf_v5');
+    const cached = localStorage.getItem('miguel_mf_v5');
     if(cached){
       const parsed = JSON.parse(cached);
       const name = (parsed.ownerName||'').trim();
