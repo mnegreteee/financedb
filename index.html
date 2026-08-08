@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>No hay nada que ver aquí</title>
+<title>🤫No hay nada que ver aquí🤫</title>
 <!-- PWA: instalable en la pantalla de inicio. Ícono y nombre deliberadamente
      neutros/genéricos, igual que el título de la pestaña, para no delatar
      de qué app se trata a simple vista. -->
@@ -500,12 +500,8 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 /* ══ RESPONSIVE — MÓVIL (≤600px) ══ */
 @media(max-width:600px){
-  nav{padding:6px 10px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px;row-gap:6px;}
-  /* Nav en 2 filas: arriba los íconos/Config/+Agregar, abajo las pestañas
-     con todo el ancho disponible — antes ambas filas competían por el mismo
-     espacio y las pestañas quedaban aplastadas a un par de letras. */
-  .nav-right{order:1;width:100%;justify-content:space-between;}
-  .nav-center{order:2;width:100%;gap:2px;padding:2px;overflow-x:auto;scrollbar-width:none;}
+  nav{padding:0 10px;height:52px;}
+  .nav-center{gap:2px;padding:2px;overflow-x:auto;scrollbar-width:none;}
   .nav-center::-webkit-scrollbar{display:none;}
   .nav-tab{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0;}
   .container{padding:12px;}
@@ -533,11 +529,8 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   /* Modales */
   .modal,.modal-lg{width:95vw!important;max-height:92vh;}
   .field-row{flex-direction:column;gap:0;}
-  /* Config dropdown en móvil: anclado a la PANTALLA (position:fixed), no al
-     botón — así nunca se abre fuera de la vista sin importar dónde esté el
-     botón "Config" dentro de la nav. El "top" exacto lo calcula toggleConfig()
-     en JS, según la altura real de la nav en ese momento. */
-  .config-dropdown{position:fixed!important;left:8px!important;right:8px!important;width:auto!important;max-width:none!important;max-height:calc(100vh - 80px)!important;}
+  /* Config dropdown en móvil: casi pantalla completa */
+  .config-dropdown{width:92vw!important;max-width:340px;max-height:calc(100vh - 64px)!important;right:-8px!important;}
   /* TC */
   .tc-grid{grid-template-columns:1fr;}
   .tc-info-grid{grid-template-columns:repeat(3,1fr);}
@@ -962,15 +955,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           </div>
         </div>
 
-        <!-- SECCIÓN: Actividad Reciente -->
-        <div class="config-section">
-          <div class="config-section-title">Actividad Reciente</div>
-          <div class="config-row">
-            <div class="config-row-label">Ver y deshacer últimas acciones<small>Movimientos, consumos, transferencias, deudas...</small></div>
-            <button class="config-action-btn neutral" onclick="abrirActividadReciente();closeConfig()">🕓 Ver actividad</button>
-          </div>
-        </div>
-
         <!-- SECCIÓN: Data — Borrar -->
         <div class="config-section">
           <div class="config-section-title">Data — Eliminar</div>
@@ -993,31 +977,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div id="demo-banner" style="display:none;position:sticky;top:0;z-index:150;background:linear-gradient(90deg,#7c3aed,#a78bfa);color:#fff;padding:8px 20px;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3)">
   <span>🎭 MODO DEMO — estás viendo números aleatorios, no tus datos reales. Nada de lo que hagas aquí se guarda.</span>
   <button onclick="toggleDemoMode()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Salir</button>
-</div>
-
-<div id="datos-danados-banner" style="display:none;position:sticky;top:0;z-index:149;background:linear-gradient(90deg,#dc2626,#f0a53c);color:#fff;padding:8px 20px;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3)">
-  <span>⚠️ Se encontraron <span id="datos-danados-count">0</span> consumo(s) con fecha dañada en tus tarjetas</span>
-  <button onclick="abrirReparacionDatos()" style="background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Reparar ahora</button>
-</div>
-
-<!-- MODAL: REPARAR CONSUMOS CON FECHA DAÑADA -->
-<!-- MODAL: ACTIVIDAD RECIENTE -->
-<div class="modal-overlay" id="actividad-overlay" onclick="if(event.target===this)cerrarActividadReciente()">
-  <div class="modal" style="width:460px;max-height:80vh;overflow-y:auto">
-    <div class="modal-title"><span>🕓 Actividad Reciente</span><button class="modal-close" onclick="cerrarActividadReciente()">✕</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Las últimas acciones registradas (movimientos, consumos, transferencias, deudas, etc.). "Eliminar" también deshace el efecto que tuvo (saldo, consumo...).</div>
-    <div id="actividad-lista"></div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="reparar-datos-overlay" onclick="if(event.target===this)cerrarReparacionDatos()">
-  <div class="modal" style="width:480px;max-height:80vh;overflow-y:auto">
-    <div class="modal-title"><span>🔧 Reparar consumos dañados</span><button class="modal-close" onclick="cerrarReparacionDatos()">✕</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.5">
-      Estos consumos se guardaron con una fecha inválida (por un bug ya corregido). No se perdió ningún dato — solo hay que confirmar la fecha real de cada uno para que vuelvan a aparecer correctamente en su tarjeta.
-    </div>
-    <div id="reparar-datos-lista"></div>
-  </div>
 </div>
 
 <!-- ══ PAGE: DASHBOARD ══ -->
@@ -1675,43 +1634,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <h1>⛽ Control de Combustible</h1>
   </div>
 
-  <!-- MANTENIMIENTO DEL AUTO — proyección basada en el kilometraje registrado -->
-  <div class="card" id="mant-card" style="padding:18px;margin-bottom:20px">
-    <div class="section-header">
-      <div class="section-title">🔧 Mantenimiento del Auto <span style="font-size:10px;color:var(--text3);font-weight:400">(cada tipo lleva su propio conteo)</span></div>
-      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirNuevoTipoMantenimiento()">+ Agregar tipo</button>
-    </div>
-    <div id="mant-sin-config" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:12px">
-      Aún no tienes ningún tipo de mantenimiento configurado — ej. cambio de aceite, bujías, filtros, o el mantenimiento general del concesionario.
-      <div style="margin-top:10px"><button class="btn btn-primary" style="font-size:11px" onclick="abrirNuevoTipoMantenimiento()">+ Agregar el primero</button></div>
-    </div>
-    <div id="mant-lista" style="display:flex;flex-direction:column;gap:12px"></div>
-  </div>
-
-  <!-- Plantilla de una tarjeta de tipo de mantenimiento (se clona por JS) -->
-  <template id="mant-item-template">
-    <div class="mant-item-card" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600" data-role="nombre"></div>
-        <div style="display:flex;gap:6px">
-          <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" data-role="btn-editar">⚙️</button>
-          <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" data-role="btn-hecho">✅ Hecho</button>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:10px">
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div><div data-role="km-actual" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Próximo a los</div><div data-role="km-proximo" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div><div data-role="km-proximo-tag" style="font-size:9px;color:var(--text3)"></div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Te faltan</div><div data-role="km-faltan" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Fecha estimada</div><div data-role="fecha-est" style="font-size:13px;font-weight:600">—</div></div>
-      </div>
-      <div style="background:var(--bg2);border-radius:8px;height:8px;overflow:hidden;margin-bottom:5px">
-        <div data-role="barra" style="height:100%;background:var(--accent);width:0%;transition:width .3s"></div>
-      </div>
-      <div data-role="nota" style="font-size:10px;color:var(--text3)"></div>
-      <div data-role="historial" style="margin-top:8px"></div>
-    </div>
-  </template>
-
   <!-- Tabs GLP / Gasolina -->
   <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border)">
     <button class="fuel-type-tab active" id="ftab-glp" onclick="switchFuelType('glp')"
@@ -2160,55 +2082,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 
 <!-- MODAL: Completar/editar la VENTA de una operación existente -->
-<!-- MODAL: CONFIGURAR MANTENIMIENTO -->
-<div class="modal-overlay" id="mant-config-overlay" onclick="if(event.target===this)cerrarConfigMantenimiento()">
-  <div class="modal" style="width:420px">
-    <div class="modal-title"><span id="mant-config-title">⚙️ Tipo de Mantenimiento</span><button class="modal-close" onclick="cerrarConfigMantenimiento()">✕</button></div>
-    <div class="field-row">
-      <div class="field" style="flex:0 0 60px"><label>Ícono</label><input id="mant-icono" type="text" maxlength="4" placeholder="🔧" style="text-align:center"></div>
-      <div class="field" style="flex:1"><label>Nombre</label><input id="mant-nombre" type="text" placeholder="Ej. Cambio de aceite"></div>
-    </div>
-    <div class="field">
-      <label>Km del último cambio realizado <span style="font-size:10px;color:var(--text3)">(0 si nunca lo has hecho)</span></label>
-      <input id="mant-km-base" type="number" min="0" step="1" placeholder="Ej. 1000">
-    </div>
-    <div class="field">
-      <label>Próximos ya planificados <span style="font-size:10px;color:var(--text3)">(opcional — ej. auto nuevo: primero a los 10,000, después ya entra al patrón normal)</span></label>
-      <div id="mant-planificados-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
-      <div style="display:flex;gap:6px">
-        <input id="mant-nuevo-planificado" type="number" min="0" step="1" placeholder="Ej. 10000" style="flex:1">
-        <button class="btn" style="font-size:11px;white-space:nowrap" onclick="agregarKmPlanificado()">+ Agregar</button>
-      </div>
-    </div>
-    <div class="field">
-      <label>Cada cuántos km, una vez agotados los planificados de arriba</label>
-      <input id="mant-intervalo" type="number" min="100" step="100" placeholder="Ej. 5000">
-    </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Si hay algún planificado pendiente (mayor al km del último), se usa ese como próximo objetivo. Si no queda ninguno, se usa km del último + el intervalo.</div>
-    <div style="display:flex;gap:8px;justify-content:space-between">
-      <button class="config-action-btn danger" id="mant-delete-btn" style="display:none;font-size:11px" onclick="eliminarTipoMantenimiento()">🗑 Eliminar</button>
-      <div style="display:flex;gap:8px;margin-left:auto">
-        <button class="btn" onclick="cerrarConfigMantenimiento()">Cancelar</button>
-        <button class="btn btn-primary" onclick="guardarConfigMantenimiento()">Guardar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL: REGISTRAR MANTENIMIENTO HECHO -->
-<div class="modal-overlay" id="mant-registrar-overlay" onclick="if(event.target===this)cerrarRegistrarMantenimiento()">
-  <div class="modal" style="width:380px">
-    <div class="modal-title"><span id="mant-reg-title">✅ Registrar Mantenimiento</span><button class="modal-close" onclick="cerrarRegistrarMantenimiento()">✕</button></div>
-    <div class="field"><label>Kilometraje al momento del mantenimiento</label><input id="mant-reg-km" type="number" min="0" step="1"></div>
-    <div class="field"><label>Fecha</label><input id="mant-reg-fecha" type="date"></div>
-    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="mant-reg-nota" type="text" placeholder="Ej. Se usó aceite 5W-30"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn" onclick="cerrarRegistrarMantenimiento()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarRegistrarMantenimiento()">Registrar</button>
-    </div>
-  </div>
-</div>
-
 <!-- MODAL: REGISTRAR GASTO DE RECARGA DE COMBUSTIBLE -->
 <div class="modal-overlay" id="fuel-gasto-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeFuelGastoModal')">
   <div class="modal" style="width:430px">
@@ -2388,9 +2261,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 08:51'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mantenimiento del Auto rediseñado para soportar VARIOS tipos independientes (ej. aceite cada 5,000 km, bujías cada 4,000, filtros cada 2,000) — antes solo permitía uno. Cada tipo tiene su propio nombre, ícono, intervalo, hitos planificados, historial y botón de registrar, todos compartiendo el mismo kilometraje del vehículo (calculado igual que antes, de las recargas de GLP/Gasolina) pero calculando su próximo objetivo de forma 100% independiente. Migración automática: si ya tenías el mantenimiento único configurado, se convierte en el primer ítem de la lista sin perder nada. Corregido en web y bot por igual (incluye /mantenimiento y los recordatorios diarios). Verificado en navegador real con tus 3 tipos: los 3 calcularon exacto e independiente, y registrar uno (bujías) no tocó los otros dos.';
+const APP_VERSION = 'v1.47.0';
+const APP_VERSION_DATE = '08/08/26 - 12:05'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Modal de "Nueva Valorización" en Inversiones ahora soporta 2 formas de ingresar el precio por símbolo, con toggle "Por unidad" / "Por total": (1) precio unitario -> muestra el total calculado como referencia para comparar contra el broker; (2) valor total de la posición -> calcula automáticamente el precio unitario (total / cantidad). Se guarda internamente como precio unitario en ambos casos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2588,137 +2461,6 @@ function animarNumero(el, desde, hasta, formatear, ms){
 }
 // Muestra esqueletos grises mientras cargan los datos, para que la pantalla
 // no se vea vacía o a medio armar durante la carga inicial.
-// ══════════════════════════════════════════════════════
-//  ACTIVIDAD RECIENTE — registro de las últimas acciones (Config), con
-//  opción de deshacer cualquiera desde ahí. Pensado para el caso real que lo
-//  motivó: un dato raro se coló por el bot y no había forma fácil de
-//  encontrarlo y borrarlo sin ir a revisar tarjeta por tarjeta.
-// ══════════════════════════════════════════════════════
-const ACTIVIDAD_MAX=80; // se recorta lo más viejo para no crecer sin límite
-function logActividad(tipo, resumen, ref){
-  if(!Array.isArray(state.actividadLog)) state.actividadLog=[];
-  state.actividadLog.push({id:'act-'+Date.now()+Math.random().toString(36).slice(2,6), ts:Date.now(), tipo, resumen, ref});
-  if(state.actividadLog.length>ACTIVIDAD_MAX) state.actividadLog=state.actividadLog.slice(-ACTIVIDAD_MAX);
-}
-function tiempoRelativo(ts){
-  const seg=Math.floor((Date.now()-ts)/1000);
-  if(seg<60) return 'hace un momento';
-  const min=Math.floor(seg/60);
-  if(min<60) return 'hace '+min+' min';
-  const hrs=Math.floor(min/60);
-  if(hrs<24) return 'hace '+hrs+' h';
-  const dias=Math.floor(hrs/24);
-  if(dias<7) return 'hace '+dias+' día'+(dias===1?'':'s');
-  const d=new Date(ts);
-  return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
-}
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽'};
-function abrirActividadReciente(){
-  renderActividadReciente();
-  document.getElementById('actividad-overlay').classList.add('open');
-}
-function cerrarActividadReciente(){
-  const el=document.getElementById('actividad-overlay');
-  if(el) el.classList.remove('open');
-}
-function renderActividadReciente(){
-  const cont=document.getElementById('actividad-lista');
-  if(!cont) return;
-  const log=(state.actividadLog||[]).slice().reverse(); // más reciente primero
-  if(!log.length){
-    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Aún no hay actividad registrada.</div>';
-    return;
-  }
-  cont.innerHTML=log.map(entry=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-      <div style="font-size:16px;flex-shrink:0">${ACTIVIDAD_ICONOS[entry.tipo]||'📌'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(entry.resumen)}</div>
-        <div style="font-size:10px;color:var(--text3)">${tiempoRelativo(entry.ts)}</div>
-      </div>
-      <button onclick="eliminarActividad('${entry.id}')" style="font-size:10px;padding:5px 10px;background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;cursor:pointer;flex-shrink:0">Eliminar</button>
-    </div>`).join('');
-}
-// Revierte un movimiento de cuenta O un consumo de tarjeta, según qué datos
-// traiga el ref — reutilizado por varios tipos de actividad (pago frecuente
-// y gasto de combustible pueden haber ido a cualquiera de los dos).
-function _revertirMovOConsumo(ref){
-  if(ref.movId){
-    const m=state.movimientos.find(x=>x.id===ref.movId);
-    if(m){ revertAccount(m); state.movimientos=state.movimientos.filter(x=>x.id!==ref.movId); }
-  }
-  if(ref.tarjetaId && ref.monthKey && ref.consumoId){
-    const t=getTarjeta(ref.tarjetaId);
-    if(t && t.movs && t.movs[ref.monthKey]){
-      t.movs[ref.monthKey]=t.movs[ref.monthKey].filter(c=>c.id!==ref.consumoId);
-      if(t.movs[ref.monthKey].length===0) delete t.movs[ref.monthKey];
-    }
-  }
-}
-function eliminarActividad(logId){
-  const entry=(state.actividadLog||[]).find(e=>e.id===logId);
-  if(!entry) return;
-  if(!confirm('¿Eliminar esto y deshacer lo que haya generado (saldo, consumo, etc.)?\n\n"'+entry.resumen+'"')) return;
-  const ref=entry.ref||{};
-  try{
-    if(entry.tipo==='movimiento'){
-      _revertirMovOConsumo(ref);
-    } else if(entry.tipo==='tc_consumo'){
-      _revertirMovOConsumo(ref);
-    } else if(entry.tipo==='transferencia'){
-      if(ref.movIdA) _revertirMovOConsumo({movId:ref.movIdA});
-      if(ref.movIdB) _revertirMovOConsumo({movId:ref.movIdB});
-    } else if(entry.tipo==='deuda'){
-      state.deudas=(state.deudas||[]).filter(d=>d.id!==ref.deudaId);
-    } else if(entry.tipo==='deuda_item'){
-      const d=(state.deudas||[]).find(x=>x.id===ref.deudaId);
-      if(d && Array.isArray(d.items)){
-        d.items=d.items.filter(it=>it.id!==ref.itemId);
-        d.monto=d.items.reduce((s,it)=>s+it.monto,0);
-      }
-    } else if(entry.tipo==='tc_operacion'){
-      const op=(state.tcOperaciones||[]).find(x=>x.id===ref.opId);
-      if(op){
-        if(ref.accion==='venta'){
-          // Deshacer SOLO la venta — la compra original se queda intacta.
-          [op.movVentaUsdId, op.movVentaSolId].forEach(mid=>{
-            if(!mid) return;
-            const m=state.movimientos.find(x=>x.id===mid);
-            if(m){ revertAccount(m); state.movimientos=state.movimientos.filter(x=>x.id!==mid); }
-          });
-          op.fechaVenta=null; op.cuentaVenta=null; op.montoDolaresVenta=null; op.tcVenta=null; op.montoSolesVenta=null;
-          op.movVentaUsdId=null; op.movVentaSolId=null;
-        } else {
-          // Deshacer la compra — revierte compra Y venta (si la hubiera) y
-          // elimina la operación completa, ya que sin la compra no tiene sentido.
-          [op.movCompraSolId, op.movCompraUsdId, op.movVentaUsdId, op.movVentaSolId].forEach(mid=>{
-            if(!mid) return;
-            const m=state.movimientos.find(x=>x.id===mid);
-            if(m){ revertAccount(m); state.movimientos=state.movimientos.filter(x=>x.id!==mid); }
-          });
-          state.tcOperaciones=(state.tcOperaciones||[]).filter(x=>x.id!==ref.opId);
-        }
-      }
-    } else if(entry.tipo==='pago_frecuente'){
-      _revertirMovOConsumo(ref);
-      const pf=(state.pagosFrecuentes||[]).find(p=>p.id===ref.pfId);
-      if(pf && pf.pagosRegistrados) delete pf.pagosRegistrados[ref.periodoKey];
-    } else if(entry.tipo==='combustible_gasto'){
-      _revertirMovOConsumo(ref);
-      const arr=state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']||[];
-      const fila=arr.find(f=>f.id===ref.fuelRowId);
-      if(fila) delete fila.gastoRegistrado;
-    }
-  }catch(err){
-    console.error('Error revirtiendo actividad:', err);
-    alert('Hubo un problema deshaciendo esta acción. Revisa manualmente en la sección correspondiente.');
-  }
-  state.actividadLog=(state.actividadLog||[]).filter(e=>e.id!==logId);
-  saveState();
-  toast('Eliminado y revertido','info');
-  renderActividadReciente();
-  render();
-}
 function mostrarSkeletons(){
   const objetivos=[
     ['accounts-tbody', 4], ['savings-tbody', 3], ['mov-list', 5],
@@ -2745,20 +2487,6 @@ function horaLimaActual(){
 // Escapa HTML antes de mostrar texto que el usuario escribió (descripciones,
 // notas, nombres) — sin esto, alguien podría escribir algo como
 // <img src=x onerror=...> en una descripción y que se ejecute al mostrarse.
-// Valida que un string 'YYYY-MM-DD' sea un día calendario REAL (no solo el
-// formato correcto) — ej. '2026-02-30' tiene formato válido pero no existe.
-// También rechaza cualquier NaN/undefined colado desde un cálculo previo.
-// Mismo validador que usa el bot de Telegram, para que ambos se comporten igual.
-function esFechaValida(fechaStr){
-  if(!fechaStr || typeof fechaStr!=='string') return false;
-  const m=fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if(!m) return false;
-  const anio=parseInt(m[1],10), mes=parseInt(m[2],10), dia=parseInt(m[3],10);
-  if(!Number.isFinite(anio)||!Number.isFinite(mes)||!Number.isFinite(dia)) return false;
-  if(mes<1||mes>12||dia<1||dia>31) return false;
-  const fecha=new Date(anio,mes-1,dia);
-  return fecha.getFullYear()===anio && fecha.getMonth()===mes-1 && fecha.getDate()===dia;
-}
 function escapeHtml(str){
   if(str===null||str===undefined) return '';
   return String(str)
@@ -2879,13 +2607,10 @@ function saveTransfer(){
   const idBase='transfer'+Date.now();
   pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, currency, linkId:idBase});
   pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, currency, linkId:idBase});
-  // Se respetan las cuentas elegidas tal cual — antes esto forzaba cualquier
-  // transferencia en dólares a la cuenta fija 'Ahorro Dólares', sin importar
-  // cuál hubieras elegido (mismo bug ya corregido en movimientos normales).
-  state.cuentas[origen]=(state.cuentas[origen]||0)-monto;
-  state.cuentas[destino]=(state.cuentas[destino]||0)+monto;
-  const symTr=currency==='USD'?'$':'S/';
-  logActividad('transferencia', `${origen} → ${destino} — ${symTr} ${monto.toFixed(2)}`, {movIdA:idBase+'a', movIdB:idBase+'b'});
+  const cuentaOrigenReal = currency==='USD' ? 'Ahorro Dólares' : origen;
+  const cuentaDestinoReal = currency==='USD' ? 'Ahorro Dólares' : destino;
+  state.cuentas[cuentaOrigenReal]=(state.cuentas[cuentaOrigenReal]||0)-monto;
+  state.cuentas[cuentaDestinoReal]=(state.cuentas[cuentaDestinoReal]||0)+monto;
   saveState(); closeTransferModal(); render(); toast('Transferencia registrada');
 }
 function saveState(immediate){
@@ -3076,24 +2801,6 @@ function migrateState(){
   if(!state.inversiones)      state.inversiones={compras:[],ventas:[],valorizaciones:[]};
   if(!Array.isArray(state.tcOperaciones)) state.tcOperaciones=[]; // historial real de compra/venta de USD (genera movimientos)
   if(!Array.isArray(state.ordenCuentas)) state.ordenCuentas=[]; // orden manual de cuentas/ahorros (arrastrar o ▲▼) — claves no listadas van al final en su orden natural
-  if(!Array.isArray(state.actividadLog)) state.actividadLog=[]; // registro de las últimas acciones — ver Config → Actividad Reciente
-  // Migración: antes había UN solo "mantenimiento" (state.mantenimiento).
-  // Ahora se soportan varios tipos independientes (aceite, bujías, filtros,
-  // el general del concesionario, etc.) en state.mantenimientos (array). Si
-  // existía el formato viejo y ya estaba configurado, se convierte en el
-  // primer ítem de la lista nueva, para no perder lo que ya tenías puesto.
-  if(!Array.isArray(state.mantenimientos)){
-    state.mantenimientos=[];
-    const viejo=state.mantenimiento;
-    if(viejo && viejo.kmUltimoMantenimiento!==null && viejo.kmUltimoMantenimiento!==undefined){
-      state.mantenimientos.push({
-        id:'mant-migrado-'+Date.now(), nombre:'Mantenimiento General', icono:'🔧',
-        intervaloKm:viejo.intervaloKm||10000, kmUltimo:viejo.kmUltimoMantenimiento,
-        proximosPlanificados:viejo.proximosPlanificados||[], historial:viejo.historial||[],
-      });
-    }
-  }
-  delete state.mantenimiento; // ya no se usa — todo vive en state.mantenimientos
   if(!Array.isArray(state.inversiones.compras))        state.inversiones.compras=[];
   if(!Array.isArray(state.inversiones.ventas))          state.inversiones.ventas=[];
   if(!Array.isArray(state.inversiones.valorizaciones))  state.inversiones.valorizaciones=[];
@@ -3565,19 +3272,6 @@ function checkBrowserNotifications(forzar){
     if(pend.length) mensajes.push(`💡 Pagos frecuentes sin registrar: ${pend.map(p=>p.nombre).join(', ')}`);
   }
 
-  // 4b. Día límite de pago próximo (opcional, no-anual) — independiente del
-  // aviso genérico de arriba, para que el usuario sepa CUÁNDO exactamente
-  // debe pagar, no solo que "está pendiente". Se avisa desde 3 días antes.
-  const mkDp=mesActualKey();
-  (state.pagosFrecuentes||[]).filter(p=>p.diaPago && p.frecuencia!=='anual' && !(p.pagosRegistrados&&p.pagosRegistrados[mkDp])).forEach(p=>{
-    const diasEnMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
-    const diaLimite=Math.min(p.diaPago,diasEnMes);
-    const diffDp=diaLimite-diaHoy;
-    if(diffDp<0) mensajes.push(`🔴 ${p.nombre} venció el día ${p.diaPago} y no lo has registrado`);
-    else if(diffDp===0) mensajes.push(`🟡 ${p.nombre} vence HOY (día ${p.diaPago})`);
-    else if(diffDp<=3) mensajes.push(`📅 ${p.nombre} vence en ${diffDp} día${diffDp===1?'':'s'} (día ${p.diaPago})`);
-  });
-
   // 5. Pagos Frecuentes ANUALES próximos a vencer (dentro de 15 días) o ya vencidos
   (state.pagosFrecuentes||[]).filter(p=>p.frecuencia==='anual').forEach(p=>{
     const proximaFecha=getPFProximaFechaAnual(p);
@@ -3592,19 +3286,6 @@ function checkBrowserNotifications(forzar){
     }
   });
 
-  // 6. Mantenimiento del auto próximo — se revisa CADA tipo por separado
-  // (a 1000 km o 15 días, lo que llegue primero para ese tipo específico)
-  (state.mantenimientos||[]).forEach(item=>{
-    const proyMant=getProyeccionMantenimientoItem(item);
-    if(!proyMant) return;
-    const cercaPorKm = proyMant.kmFaltan<=1000;
-    const cercaPorDias = proyMant.diasFaltan!==null && proyMant.diasFaltan<=15;
-    if(cercaPorKm || cercaPorDias){
-      const fechaTxt=proyMant.fechaEstimada?(' — estimado '+proyMant.fechaEstimada.getDate()+'/'+(proyMant.fechaEstimada.getMonth()+1)):'';
-      mensajes.push(`🔧 ${item.nombre} en ~${Math.round(proyMant.kmFaltan)} km${fechaTxt}`);
-    }
-  });
-
   if(mensajes.length){
     new Notification('🔔 Recordatorios de hoy', {
       body: mensajes.slice(0,5).join('\n')+(mensajes.length>5?`\n...y ${mensajes.length-5} más`:''),
@@ -3613,121 +3294,6 @@ function checkBrowserNotifications(forzar){
   }
 }
 
-// ══════════════════════════════════════════════════════
-//  REPARAR CONSUMOS CON FECHA DAÑADA
-//  Detecta consumos de tarjeta guardados con una fecha inválida (ej. por el
-//  bug de "NaN-NaN-NaN" del bot a medianoche, ya corregido) y deja al usuario
-//  confirmar la fecha real de cada uno — nunca se borra nada sin que el
-//  usuario lo decida explícitamente.
-// ══════════════════════════════════════════════════════
-function detectarConsumosCorruptos(){
-  const encontrados=[];
-  (state.tarjetas||[]).forEach(t=>{
-    Object.entries(t.movs||{}).forEach(([monthKey, arr])=>{
-      const claveValida=/^\d{4}-\d{2}$/.test(monthKey);
-      (arr||[]).forEach(c=>{
-        if(!claveValida || !esFechaValida(c.fecha)){
-          encontrados.push({tarjetaId:t.id, tarjetaLabel:t.banco+(t.cat?' '+t.cat:''), monthKeyViejo:monthKey, consumo:c});
-        }
-      });
-    });
-  });
-  return encontrados;
-}
-function actualizarBannerDatosDanados(){
-  const banner=document.getElementById('datos-danados-banner');
-  if(!banner) return;
-  const encontrados=detectarConsumosCorruptos();
-  if(encontrados.length>0){
-    banner.style.display='flex';
-    document.getElementById('datos-danados-count').textContent=encontrados.length;
-  } else {
-    banner.style.display='none';
-    cerrarReparacionDatos();
-  }
-}
-function abrirReparacionDatos(){
-  renderListaReparacion();
-  document.getElementById('reparar-datos-overlay').classList.add('open');
-}
-function cerrarReparacionDatos(){
-  const el=document.getElementById('reparar-datos-overlay');
-  if(el) el.classList.remove('open');
-}
-function renderListaReparacion(){
-  const encontrados=detectarConsumosCorruptos();
-  const cont=document.getElementById('reparar-datos-lista');
-  if(!cont) return;
-  if(!encontrados.length){
-    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">✅ Ya no hay consumos dañados.</div>';
-    return;
-  }
-  cont.innerHTML=encontrados.map((item,idx)=>{
-    const c=item.consumo;
-    const sym=c.currency==='USD'?'$':'S/';
-    const inputId='reparar-fecha-'+idx;
-    return `<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:2px">${escapeHtml(c.desc||'Sin descripción')}</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${escapeHtml(item.tarjetaLabel)} · ${sym} ${(c.monto||0).toFixed(2)}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input id="${inputId}" type="date" style="flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12px">
-        <button class="btn btn-primary" style="font-size:11px;padding:6px 10px" onclick="guardarFechaReparada('${item.tarjetaId}','${item.monthKeyViejo}','${c.id}','${inputId}')">Guardar fecha</button>
-        <button style="font-size:11px;padding:6px 10px;background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;cursor:pointer" onclick="eliminarConsumoDanado('${item.tarjetaId}','${item.monthKeyViejo}','${c.id}')">Eliminar</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-function _sacarConsumoDeMonthKeyViejo(tarjetaId, monthKeyViejo, consumoId){
-  const t=(state.tarjetas||[]).find(x=>x.id===tarjetaId);
-  if(!t||!t.movs||!t.movs[monthKeyViejo]) return null;
-  const idx=t.movs[monthKeyViejo].findIndex(c=>c.id===consumoId);
-  if(idx===-1) return null;
-  const [consumo]=t.movs[monthKeyViejo].splice(idx,1);
-  if(t.movs[monthKeyViejo].length===0) delete t.movs[monthKeyViejo]; // limpia la clave corrupta si quedó vacía
-  return {t, consumo};
-}
-function guardarFechaReparada(tarjetaId, monthKeyViejo, consumoId, inputId){
-  const nuevaFecha=document.getElementById(inputId).value;
-  if(!esFechaValida(nuevaFecha)){ alert('Elige una fecha válida.'); return; }
-  const t=(state.tarjetas||[]).find(x=>x.id===tarjetaId);
-  if(!t||!t.movs||!t.movs[monthKeyViejo]){ toast('No se encontró ese consumo (¿ya se reparó?)','info'); renderListaReparacion(); return; }
-  const idx=t.movs[monthKeyViejo].findIndex(c=>c.id===consumoId);
-  if(idx===-1){ toast('No se encontró ese consumo (¿ya se reparó?)','info'); renderListaReparacion(); return; }
-  // Se calcula la clave nueva ANTES de tocar nada — si esto fallara por
-  // cualquier razón, el consumo se queda intacto donde estaba, en vez de
-  // quedar "en el aire" a mitad de una operación (perdido de memoria sin
-  // haberse guardado en ningún lado).
-  let nuevoMonthKey;
-  try{
-    nuevoMonthKey=getBillingMonthKey(nuevaFecha, t);
-  }catch(err){
-    console.error('Error calculando el período de facturación:', err);
-    alert('No se pudo calcular el período de pago para esa fecha. Intenta de nuevo.');
-    return;
-  }
-  // Recién acá, con la clave nueva ya calculada y segura, se mueve el consumo.
-  const [consumo]=t.movs[monthKeyViejo].splice(idx,1);
-  if(t.movs[monthKeyViejo].length===0) delete t.movs[monthKeyViejo]; // limpia la clave corrupta si quedó vacía
-  consumo.fecha=nuevaFecha;
-  if(!t.movs[nuevoMonthKey]) t.movs[nuevoMonthKey]=[];
-  t.movs[nuevoMonthKey].push(consumo);
-  saveState();
-  toast('Fecha corregida — el consumo ya aparece en su período correcto');
-  renderListaReparacion();
-  actualizarBannerDatosDanados();
-  renderTarjetas();
-}
-function eliminarConsumoDanado(tarjetaId, monthKeyViejo, consumoId){
-  if(!confirm('¿Eliminar este consumo dañado? No se puede deshacer.')) return;
-  const res=_sacarConsumoDeMonthKeyViejo(tarjetaId, monthKeyViejo, consumoId);
-  if(res){
-    saveState();
-    toast('Consumo eliminado','info');
-  }
-  renderListaReparacion();
-  actualizarBannerDatosDanados();
-  renderTarjetas();
-}
 function checkNotifications(){
   const banner=document.getElementById('notify-banner');
   if(!banner) return;
@@ -5661,25 +5227,79 @@ function renderInvValorModalFields(preciosExistentes){
     cont.innerHTML='<div style="color:var(--text3);font-size:12px">No tienes posiciones abiertas para valorizar. Registra primero una compra.</div>';
     return;
   }
+  // Por cada símbolo se puede llenar de 2 formas: (1) precio unitario -> se calcula
+  // el total como referencia para comparar contra lo que muestra el broker, o
+  // (2) valor total de la posición -> se calcula el precio unitario dividiendo
+  // entre la cantidad. El modo elegido se guarda en data-mode del propio input.
   cont.innerHTML=posiciones.map(p=>{
     const val=(preciosExistentes&&preciosExistentes[p.simbolo]!==undefined)?preciosExistentes[p.simbolo]:'';
     const monedaLabel=p.moneda==='PEN'?'S/':'US$';
-    return `<div class="field" style="margin-bottom:0">
-      <label>${escapeHtml(p.simbolo)} <span style="font-size:10px;color:var(--text3)">(${p.cantidad} unid. · ${monedaLabel})</span></label>
-      <input type="number" step="0.01" class="ival-precio-input" data-simbolo="${escapeHtml(p.simbolo)}" placeholder="Precio actual (${monedaLabel})" value="${val}">
+    const sid=escapeHtml(p.simbolo).replace(/[^a-zA-Z0-9]/g,'_');
+    return `<div class="field" style="margin-bottom:0" data-ival-row="${escapeHtml(p.simbolo)}">
+      <label style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;justify-content:space-between">
+        <span>${escapeHtml(p.simbolo)} <span style="font-size:10px;color:var(--text3)">(${p.cantidad} unid. · ${monedaLabel})</span></span>
+        <span class="chart-tabs" style="margin:0">
+          <span class="chart-tab ival-mode-btn active" style="padding:3px 9px;font-size:10px" data-simbolo="${escapeHtml(p.simbolo)}" data-mode="unitario" onclick="setIvalMode(this)">Por unidad</span>
+          <span class="chart-tab ival-mode-btn" style="padding:3px 9px;font-size:10px" data-simbolo="${escapeHtml(p.simbolo)}" data-mode="total" onclick="setIvalMode(this)">Por total</span>
+        </span>
+      </label>
+      <input type="number" step="0.01" id="ival-unit-${sid}" class="ival-precio-input" data-simbolo="${escapeHtml(p.simbolo)}" data-cantidad="${p.cantidad}" data-moneda="${monedaLabel}" data-mode="unitario" placeholder="Precio unitario (${monedaLabel})" value="${val}" oninput="updateIvalCalc('${escapeHtml(p.simbolo)}')">
+      <input type="number" step="0.01" id="ival-total-${sid}" class="ival-total-input" data-simbolo="${escapeHtml(p.simbolo)}" data-cantidad="${p.cantidad}" data-moneda="${monedaLabel}" placeholder="Valorización total (${monedaLabel})" value="" style="display:none;margin-top:6px" oninput="updateIvalCalc('${escapeHtml(p.simbolo)}')">
+      <div class="ival-calc-hint" id="ival-hint-${sid}" style="font-size:10px;color:var(--text3);margin-top:4px"></div>
     </div>`;
   }).join('');
+  posiciones.forEach(p=>updateIvalCalc(p.simbolo));
+}
+// Formato de moneda genérico (independiente de S//US$) para el hint de cálculo cruzado.
+function ivalFmt(n,monedaLabel){ return monedaLabel+' '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+// Cambia entre modo "Por unidad" y "Por total" para un símbolo específico.
+function setIvalMode(el){
+  const simbolo=el.dataset.simbolo, modo=el.dataset.mode;
+  const sid=simbolo.replace(/[^a-zA-Z0-9]/g,'_');
+  document.querySelectorAll(`.ival-mode-btn[data-simbolo="${CSS.escape(simbolo)}"]`).forEach(b=>b.classList.toggle('active',b.dataset.mode===modo));
+  document.getElementById('ival-unit-'+sid).style.display=(modo==='unitario')?'block':'none';
+  document.getElementById('ival-total-'+sid).style.display=(modo==='total')?'block':'none';
+  updateIvalCalc(simbolo);
+}
+// Recalcula y muestra el valor "espejo" (total<->unitario) para que Miguel pueda
+// verificar contra lo que le muestra el broker, sin importar cuál campo llenó.
+function updateIvalCalc(simbolo){
+  const sid=simbolo.replace(/[^a-zA-Z0-9]/g,'_');
+  const modoBtn=document.querySelector(`.ival-mode-btn[data-simbolo="${CSS.escape(simbolo)}"].active`);
+  const modo=modoBtn?modoBtn.dataset.mode:'unitario';
+  const unitInp=document.getElementById('ival-unit-'+sid);
+  const totalInp=document.getElementById('ival-total-'+sid);
+  const hint=document.getElementById('ival-hint-'+sid);
+  if(!unitInp||!totalInp||!hint) return;
+  const cantidad=parseFloat(unitInp.dataset.cantidad)||0;
+  const monedaLabel=unitInp.dataset.moneda||'';
+  if(modo==='unitario'){
+    const precio=parseFloat(unitInp.value);
+    hint.textContent=(!isNaN(precio)&&cantidad>0)?`= Valorización total: ${ivalFmt(precio*cantidad,monedaLabel)}`:'';
+  } else {
+    const total=parseFloat(totalInp.value);
+    hint.textContent=(!isNaN(total)&&cantidad>0)?`= Precio unitario: ${ivalFmt(total/cantidad,monedaLabel)}`:'';
+  }
 }
 function closeInvValorModal(){ document.getElementById('inv-valor-modal-overlay').classList.remove('open'); }
 function saveInvValor(){
   const fecha=document.getElementById('ival-fecha').value;
   if(!fecha){alert('Selecciona una fecha.');return;}
   const precios={};
-  document.querySelectorAll('.ival-precio-input').forEach(inp=>{
-    const v=parseFloat(inp.value);
-    if(!isNaN(v)&&v>0) precios[inp.dataset.simbolo]=v;
+  document.querySelectorAll('.ival-mode-btn.active').forEach(btn=>{
+    const simbolo=btn.dataset.simbolo, modo=btn.dataset.mode;
+    const sid=simbolo.replace(/[^a-zA-Z0-9]/g,'_');
+    const cantidad=parseFloat(document.getElementById('ival-unit-'+sid).dataset.cantidad)||0;
+    let precioUnit=NaN;
+    if(modo==='unitario'){
+      precioUnit=parseFloat(document.getElementById('ival-unit-'+sid).value);
+    } else {
+      const total=parseFloat(document.getElementById('ival-total-'+sid).value);
+      if(!isNaN(total)&&cantidad>0) precioUnit=total/cantidad;
+    }
+    if(!isNaN(precioUnit)&&precioUnit>0) precios[simbolo]=precioUnit;
   });
-  if(!Object.keys(precios).length){alert('Ingresa al menos un precio.');return;}
+  if(!Object.keys(precios).length){alert('Ingresa al menos un precio (unitario o total).');return;}
   if(!state.inversiones.valorizaciones) state.inversiones.valorizaciones=[];
   if(editingInvValorId){
     const val=state.inversiones.valorizaciones.find(x=>x.id===editingInvValorId);
@@ -5850,13 +5470,7 @@ function saveMovimiento(){
     else if(currentType==='expense')state.cuentas[account]=(state.cuentas[account]||0)-amount;
     else if(currentType==='ahorro')state.cuentas[account]=(state.cuentas[account]||0)+amount;
   }
-  const esNuevoMov=!state.editId;
-  pushMovimiento(mov);
-  if(esNuevoMov){
-    const sym=currency==='USD'?'$':'S/';
-    logActividad('movimiento', `${desc} — ${sym} ${amount.toFixed(2)} (${account})`, {movId:mov.id});
-  }
-  saveState();closeModal();render();toast(esNuevoMov?'Movimiento guardado':'Movimiento actualizado');
+  pushMovimiento(mov);saveState();closeModal();render();toast(state.editId?'Movimiento actualizado':'Movimiento guardado');
 }
 
 // ── PRESUPUESTO ───────────────────────────────────────
@@ -6492,11 +6106,7 @@ function generarReporteMensualPDF(y,m){
   const s=reconstructSaldoAt(y,m);
   sectionTitle('Saldos al cierre del mes');
   Object.entries(s).forEach(([cuenta,saldo])=>{
-    // Antes esto solo reconocía 'Ahorro Dólares' exacto — cualquier cuenta de
-    // ahorro personalizada en dólares (ej. "Pichincha $") aparecía con el
-    // símbolo de soles por error. getAccountCurrency() ya sabe reconocer
-    // las cuentas personalizadas correctamente.
-    const sym=getAccountCurrency(cuenta)==='USD'?'$':'S/';
+    const sym=cuenta==='Ahorro Dólares'?'$':'S/';
     row(cuenta, sym+' '+(saldo||0).toFixed(2));
   });
   yy+=4;
@@ -6827,12 +6437,8 @@ function parseExcelToHistorico(wb){
     else if(type==='ahorro'){
       // Preservar signo original: depósito=positivo, retiro=negativo
       const delta=monto; // monto original con signo
-      // Se respeta la cuenta indicada en el Excel — antes esto forzaba
-      // cualquier ahorro en dólares a la cuenta fija 'Ahorro Dólares', aunque
-      // arriba mismo esta función ya sabe reconocer cuentas personalizadas
-      // en dólares (discoveredAccounts). Mismo bug ya corregido en otros
-      // lugares (movimientos, transferencias, reconstrucción de saldos).
-      cuentasSaldo[account]=(cuentasSaldo[account]||0)+delta;
+      if(currency==='PEN') cuentasSaldo[account]=(cuentasSaldo[account]||0)+delta;
+      else cuentasSaldo['Ahorro Dólares']=(cuentasSaldo['Ahorro Dólares']||0)+delta;
     }
   });
   return{movimientos,snapshots,cuentas:cuentasSaldo,discoveredAccounts};
@@ -7030,17 +6636,6 @@ function toggleConfig(e){
   const isOpen = dd.classList.contains('open');
   dd.classList.toggle('open', !isOpen);
   document.getElementById('config-arrow').textContent = !isOpen ? '▴' : '▾';
-  // En móvil, el panel se ancla a la PANTALLA (no al botón "Config") — antes
-  // usaba position:absolute con right:0 relativo al botón, y como el botón
-  // no siempre está pegado al borde derecho real de la pantalla (ej. cuando
-  // "+ Agregar" queda a su derecha), el panel terminaba abriéndose fuera de
-  // la vista por la izquierda, con el texto cortado a la mitad.
-  if(!isOpen && window.innerWidth<=600){
-    const navRect=document.querySelector('nav').getBoundingClientRect();
-    dd.style.top=(navRect.bottom+6)+'px';
-  } else {
-    dd.style.top='';
-  }
   // Actualizar TC en el panel
   document.getElementById('cfg-tc-compra').textContent = 'S/ ' + state.tc.compra.toFixed(4);
   document.getElementById('cfg-tc-venta').textContent  = 'S/ ' + state.tc.venta.toFixed(4);
@@ -7246,13 +6841,8 @@ function executeDeleteMonths(){
         if(mv.type==='expense') cuentasBase[mv.account]=(cuentasBase[mv.account]||0)-mv.amount;
         if(mv.type==='ahorro')  cuentasBase[mv.account]=(cuentasBase[mv.account]||0)+mv.amount;
       } else {
-        // Se respeta la cuenta real del movimiento — antes esto forzaba
-        // cualquier movimiento USD a la cuenta fija 'Ahorro Dólares' al
-        // reconstruir saldos tras "Borrar meses", ignorando en qué cuenta
-        // de ahorro en dólares realmente estaba (mismo bug ya corregido
-        // en otros lugares de la app).
-        if(mv.type==='income'||mv.type==='ahorro') cuentasBase[mv.account]=(cuentasBase[mv.account]||0)+mv.amount;
-        if(mv.type==='expense') cuentasBase[mv.account]=(cuentasBase[mv.account]||0)-mv.amount;
+        if(mv.type==='income'||mv.type==='ahorro') cuentasBase['Ahorro Dólares']=(cuentasBase['Ahorro Dólares']||0)+mv.amount;
+        if(mv.type==='expense') cuentasBase['Ahorro Dólares']=(cuentasBase['Ahorro Dólares']||0)-mv.amount;
       }
     });
     state.cuentas = cuentasBase;
@@ -8400,8 +7990,6 @@ function saveTCMov(){
     const nuevoMov={id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat,currency};
     if(hora) nuevoMov.hora=hora;
     t.movs[newMk].push(nuevoMov);
-    const symTC=currency==='USD'?'$':'S/';
-    logActividad('tc_consumo', `${desc} — ${symTC} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:newMk, consumoId:nuevoMov.id});
     // If adding to a different month than currently viewing, switch to it
     // (solo aplica si estamos viendo el detalle de esta misma tarjeta)
     if(tarjetaId===currentTCId && newMk!==currentTCMonth){
@@ -8412,7 +8000,6 @@ function saveTCMov(){
   saveState(); closeTCMovModal();
   renderTarjetas();
   if(tarjetaId===currentTCId && document.getElementById('tc-detail-view').style.display!=='none') renderTCDetail();
-  toast(editingTCMovId?'Consumo actualizado':'Consumo guardado');
 }
 
 function deleteTCMov(movId){
@@ -8961,14 +8548,6 @@ function getBillingMonthKey(fechaStr, tarjeta){
   // Example BBVA: inicio=26, cierre=25
   //   Purchase 10-jun → falls in cycle 26-may to 25-jun → closes jun → pago = jul → monthKey "2026-07"
   //   Purchase 01-jul → falls in cycle 26-jun to 25-jul → closes jul → pago = aug → monthKey "2026-08"
-
-  // Barrera defensiva: si la fecha no es un día calendario real (ej. llegó
-  // corrupta como 'NaN-NaN-NaN' desde algún flujo con un bug), NO se sigue —
-  // esto es justo lo que antes creaba un "mes" tipo "undefined-NaN" que
-  // contaminaba el Resumen Global y rompía la navegación de esa tarjeta.
-  if(!esFechaValida(fechaStr)){
-    throw new Error(`Fecha inválida para calcular el período de facturación: "${fechaStr}"`);
-  }
 
   const d      = new Date(fechaStr + 'T12:00:00');
   const dia    = d.getDate();
@@ -9558,7 +9137,6 @@ function openPagoFrecuenteModal(id){
     if(pf.metodoPago==='cuenta') document.getElementById('pf-cuenta').value=pf.destino;
     else document.getElementById('pf-tarjeta').value=pf.destino;
     document.getElementById('pf-cat').value=pf.categoria||'';
-    document.getElementById('pf-dia-pago').value=pf.diaPago||'';
     delBtn.style.display='inline-flex';
     delBtn.dataset.id=id;
   } else {
@@ -9575,7 +9153,6 @@ function openPagoFrecuenteModal(id){
     document.getElementById('pf-currency').value='PEN';
     document.getElementById('pf-metodo').value='cuenta';
     document.getElementById('pf-cat').value='';
-    document.getElementById('pf-dia-pago').value='';
     delBtn.style.display='none';
   }
   onPFTipoChange();
@@ -9646,8 +9223,6 @@ function savePagoFrecuente(){
   const metodoPago=tipo==='ingreso'?'cuenta':document.getElementById('pf-metodo').value;
   const destino=metodoPago==='cuenta'?document.getElementById('pf-cuenta').value:document.getElementById('pf-tarjeta').value;
   const categoria=tipo==='ingreso'?'':(document.getElementById('pf-cat').value||'');
-  const diaPagoRaw=document.getElementById('pf-dia-pago').value;
-  const diaPago=diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null;
   if(!nombre){alert('Ingresa un nombre.');return;}
   if(frecuencia==='anual' && !fechaAnual){alert('Ingresa la fecha exacta de vencimiento.');return;}
   if((tipoMonto==='fijo'||tipoMonto==='base_descuentos') && montoFijo<=0){alert('Ingresa el monto '+(tipoMonto==='base_descuentos'?'base':'fijo')+'.');return;}
@@ -9656,14 +9231,13 @@ function savePagoFrecuente(){
   if(!state.pagosFrecuentes) state.pagosFrecuentes=[];
   if(editingPFId){
     const pf=state.pagosFrecuentes.find(p=>p.id===editingPFId);
-    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,fechaAnual,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago}); }
+    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,fechaAnual,tipoMonto,montoFijo,currency,metodoPago,destino,categoria}); }
   } else {
-    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, fechaAnual, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]});
+    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, fechaAnual, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, pagosRegistrados:{}, descuentosPendientes:[]});
   }
   saveState();
   closePagoFrecuenteModal();
   renderPagosFrecuentes();
-  toast(editingPFId?'Pago frecuente actualizado':'Pago frecuente guardado');
 }
 
 function deletePagoFrecuente(){
@@ -9733,21 +9307,6 @@ function renderPagosFrecuentes(){
     } else if(pf.mesInicio){
       const [iy,im]=pf.mesInicio.split('-').map(Number);
       inicioLabel=' · desde '+MONTHS[im-1]+' '+iy;
-    }
-    // Día límite de pago (opcional, no-anual) — mismo criterio de colores que
-    // la fecha anual: rojo si venció sin pagar, ámbar si es hoy, gris si falta.
-    if(!esAnual && pf.diaPago && !yaPagado){
-      const hoyDp=new Date(); hoyDp.setHours(0,0,0,0);
-      const diasEnMes=new Date(hoyDp.getFullYear(),hoyDp.getMonth()+1,0).getDate();
-      const diaLimite=Math.min(pf.diaPago,diasEnMes);
-      const fechaLimite=new Date(hoyDp.getFullYear(),hoyDp.getMonth(),diaLimite);
-      const diffDp=Math.round((fechaLimite-hoyDp)/(1000*60*60*24));
-      if(diffDp<0) inicioLabel+=' · 🔴 Venció el día '+pf.diaPago;
-      else if(diffDp===0) inicioLabel+=' · 🟡 Vence hoy (día '+pf.diaPago+')';
-      else if(diffDp<=3) inicioLabel+=' · 🟠 Vence en '+diffDp+' día'+(diffDp===1?'':'s')+' (día '+pf.diaPago+')';
-      else inicioLabel+=' · Antes del día '+pf.diaPago;
-    } else if(!esAnual && pf.diaPago && yaPagado){
-      inicioLabel+=' · Vence el día '+pf.diaPago;
     }
     // A qué mes se le va a aplicar la próxima vez que se registre el pago —
     // los descuentos pendientes NO tienen un mes propio asignado, se suman
@@ -9997,14 +9556,12 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
     ? String(targetY!==undefined?targetY:new Date().getFullYear())
     : (targetY!==undefined ? (targetY+'-'+String(targetM+1).padStart(2,'0')) : mesActualKey());
   const esIngreso=pf.tipo==='ingreso';
-  let refActividad=null;
   if(monto>0.004){
     if(esIngreso || pf.metodoPago==='cuenta'){
       if(!state.movimientos) state.movimientos=[];
       const mov={id:'pf-mov-'+Date.now(), type:esIngreso?'income':'expense', desc:pf.nombre, amount:monto, account:pf.destino, date:hoy, currency:pf.currency};
       if(!esIngreso && pf.categoria) mov.cat=pf.categoria;
       pushMovimiento(mov);
-      refActividad={movId:mov.id};
     } else {
       const t=getTarjeta(pf.destino);
       if(!t){ alert('La tarjeta configurada ya no existe. Edita este pago frecuente para elegir otra.'); return; }
@@ -10014,11 +9571,6 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
       const consumo={id:'pf-tcm-'+Date.now(), desc:pf.nombre, fecha:hoy, monto, pagado:false, currency:pf.currency, hora:horaLimaActual()};
       if(pf.categoria) consumo.cat=pf.categoria;
       t.movs[newMk].push(consumo);
-      refActividad={tarjetaId:t.id, monthKey:newMk, consumoId:consumo.id};
-    }
-    if(refActividad){
-      const symPf=pf.currency==='USD'?'$':'S/';
-      logActividad('pago_frecuente', `${pf.nombre} — ${symPf} ${monto.toFixed(2)}`, {...refActividad, pfId:pf.id, periodoKey:mk});
     }
   }
   if(!pf.pagosRegistrados) pf.pagosRegistrados={};
@@ -10029,7 +9581,6 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
   saveState();
   renderPagosFrecuentes();
   render();
-  toast(pf.nombre+' registrado');
 }
 
 
@@ -10322,23 +9873,18 @@ function saveDeuda(){
       }
     }
   } else {
-    const symD=currency==='USD'?'$':'S/';
     if(tipo==='acumulativa'){
-      const nuevaDeuda={
+      state.deudas.push({
         id:'deu'+Date.now(), nombre, monto:0, currency, fecha, nota,
         status:'pendiente', fechaPago:null, cuentaPago:null, items:[],
-      };
-      state.deudas.push(nuevaDeuda);
-      logActividad('deuda', `Préstamo (acumulativa): ${nombre}`, {deudaId:nuevaDeuda.id});
+      });
     } else {
       const monto=parseFloat(document.getElementById('d-monto').value)||0;
       if(monto<=0){alert('Completa el monto.');return;}
-      const nuevaDeuda={
+      state.deudas.push({
         id:'deu'+Date.now(), nombre, monto, currency, fecha, nota,
         status:'pendiente', fechaPago:null, cuentaPago:null,
-      };
-      state.deudas.push(nuevaDeuda);
-      logActividad('deuda', `Préstamo: ${nombre} — ${symD} ${monto.toFixed(2)}`, {deudaId:nuevaDeuda.id});
+      });
     }
   }
   saveState(); closeDeudaModal(); renderDeudas(); toast('Préstamo guardado');
@@ -10370,11 +9916,8 @@ function saveDeudaItem(){
   const fecha=document.getElementById('di-fecha').value;
   if(!desc||monto<=0||!fecha){alert('Completa descripción, monto y fecha.');return;}
   if(!Array.isArray(d.items)) d.items=[];
-  const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
-  d.items.push(nuevoItem);
+  d.items.push({id:'di'+Date.now(), desc, monto, fecha});
   recalcDeudaMonto(d);
-  const symDi=d.currency==='USD'?'$':'S/';
-  logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
   saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
 }
 function deleteDeudaItem(deudaId, itemId){
@@ -10607,7 +10150,6 @@ function saveFuelGasto(){
   const fila=arr.find(x=>x.id===rowId);
   if(!fila) return;
 
-  const symFuel='S/';
   if(medio==='tarjeta'){
     const tarjetaId=document.getElementById('fuel-gasto-tarjeta').value;
     const t=getTarjeta(tarjetaId);
@@ -10618,261 +10160,20 @@ function saveFuelGasto(){
     const consumoId='tcm-fuel-'+Date.now();
     t.movs[mk].push({id:consumoId, desc, fecha, monto, pagado:false, cat, currency:'PEN', hora:horaLimaActual()});
     fila.gastoRegistrado={tipo:'tarjeta', id:consumoId, tarjetaId};
-    logActividad('combustible_gasto', `${desc} — ${symFuel} ${monto.toFixed(2)}`, {tarjetaId, monthKey:mk, consumoId, fuelTipo:type, fuelRowId:rowId});
   } else {
     const cuenta=document.getElementById('fuel-gasto-cuenta').value;
     const movId='mov-fuel-'+Date.now();
     pushMovimiento({id:movId, type:'expense', desc, amount:monto, account:cuenta, date:fecha, currency:'PEN', cat});
     state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-monto;
     fila.gastoRegistrado={tipo:'cuenta', id:movId, cuenta};
-    logActividad('combustible_gasto', `${desc} — ${symFuel} ${monto.toFixed(2)}`, {movId, fuelTipo:type, fuelRowId:rowId});
   }
   saveState();
   closeFuelGastoModal();
   renderFuelSection(type);
   render();
-  toast('Gasto de combustible registrado');
 }
 
 // ── COMPUTE ROW FIELDS ────────────────────────────────
-// ══════════════════════════════════════════════════════
-//  MANTENIMIENTO DEL AUTO — proyecta cuándo tocará el próximo mantenimiento
-//  en base al kilometraje que ya registras al cargar combustible (GLP y
-//  Gasolina juntos), sin pedir ningún dato nuevo aparte de la config inicial.
-// ══════════════════════════════════════════════════════
-// Km actual = el kmFinal más reciente entre TODAS las recargas (GLP+Gas)
-function getKmActualVehiculo(){
-  let mejor=null;
-  ['combustibleGlp','combustibleGas'].forEach(key=>{
-    (state[key]||[]).forEach(row=>{
-      const km=parseFloat(row.kmFinal);
-      const fecha=row.fFinal;
-      if(isNaN(km)||!fecha) return;
-      if(!mejor || fecha>mejor.fecha) mejor={km, fecha};
-    });
-  });
-  return mejor; // null si todavía no hay ninguna recarga con km registrado
-}
-// Promedio de km recorridos por día — ponderado (suma de km ÷ suma de días
-// de TODAS las recargas completas), más preciso que promediar cada tasa
-// individual, porque no le da el mismo peso a un tramo de 2 días que a uno de 20.
-function getKmPromedioDiario(){
-  // GLP y Gasolina miden el MISMO odómetro del auto. Sumar los km de cada
-  // combustible por separado (como se hacía antes) corre el riesgo de contar
-  // el mismo recorrido físico dos veces si sus períodos se traslapan en el
-  // tiempo — que es lo normal, porque manejas todos los días sin importar
-  // qué combustible cargues. La forma correcta: juntar TODAS las lecturas de
-  // ambos en una sola línea de tiempo, y comparar solo la primera contra la
-  // última — así cada kilómetro real se cuenta una sola vez.
-  const lecturas=[];
-  ['combustibleGlp','combustibleGas'].forEach(key=>{
-    (state[key]||[]).forEach(row=>{
-      const km=parseFloat(row.kmFinal);
-      if(!isNaN(km) && row.fFinal) lecturas.push({fecha:row.fFinal, km});
-    });
-  });
-  if(lecturas.length<2) return null;
-  lecturas.sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
-  const primera=lecturas[0], ultima=lecturas[lecturas.length-1];
-  const dias=fuelDaysBetween(primera.fecha, ultima.fecha);
-  const km=ultima.km-primera.km;
-  return (dias>0 && km>0) ? km/dias : null;
-}
-// Decide cuál es el próximo objetivo de km: si hay algún hito planificado
-// (ej. "10,000" porque así lo dijo el concesionario para un auto nuevo) que
-// todavía no se haya pasado, se usa ESE. Si ya no queda ninguno pendiente,
-// se cae al patrón recurrente habitual (km del último + intervaloKm).
-function getProximoKmObjetivo(item, kmReferencia){
-  const pendientes=(item.proximosPlanificados||[]).filter(k=>k>kmReferencia).sort((a,b)=>a-b);
-  if(pendientes.length) return {km:pendientes[0], esPlanificado:true};
-  return {km:kmReferencia+(item.intervaloKm||5000), esPlanificado:false};
-}
-function getProyeccionMantenimientoItem(item){
-  if(item.kmUltimo===null || item.kmUltimo===undefined) return null;
-  const actual=getKmActualVehiculo();
-  const kmActual=actual ? actual.km : item.kmUltimo;
-  const objetivo=getProximoKmObjetivo(item, item.kmUltimo);
-  const kmProximo=objetivo.km;
-  const kmFaltan=Math.max(0,kmProximo-kmActual);
-  const promDiario=getKmPromedioDiario();
-  let fechaEstimada=null, diasFaltan=null;
-  if(promDiario && promDiario>0){
-    diasFaltan=Math.ceil(kmFaltan/promDiario);
-    fechaEstimada=new Date(); fechaEstimada.setHours(0,0,0,0); fechaEstimada.setDate(fechaEstimada.getDate()+diasFaltan);
-  }
-  const tramoTotal=Math.max(1,kmProximo-item.kmUltimo);
-  const avance=Math.min(100,Math.max(0,((kmActual-item.kmUltimo)/tramoTotal)*100));
-  return {kmActual, kmProximo, kmFaltan, promDiario, diasFaltan, fechaEstimada, avance, sinDatosKm:!actual, esPlanificado:objetivo.esPlanificado};
-}
-function renderMantenimiento(){
-  const sinConfigEl=document.getElementById('mant-sin-config');
-  const listaEl=document.getElementById('mant-lista');
-  const tpl=document.getElementById('mant-item-template');
-  if(!sinConfigEl||!listaEl||!tpl) return;
-  const items=state.mantenimientos||[];
-  if(!items.length){
-    sinConfigEl.style.display='block';
-    listaEl.innerHTML='';
-    return;
-  }
-  sinConfigEl.style.display='none';
-  listaEl.innerHTML='';
-  items.forEach(item=>{
-    const node=tpl.content.cloneNode(true);
-    const root=node.querySelector('.mant-item-card');
-    root.dataset.id=item.id;
-    node.querySelector('[data-role="nombre"]').textContent=(item.icono||'🔧')+' '+item.nombre;
-    node.querySelector('[data-role="btn-editar"]').onclick=()=>abrirEditarTipoMantenimiento(item.id);
-    node.querySelector('[data-role="btn-hecho"]').onclick=()=>abrirRegistrarMantenimiento(item.id);
-    const proy=getProyeccionMantenimientoItem(item);
-    if(!proy){
-      node.querySelector('[data-role="km-actual"]').textContent='—';
-      node.querySelector('[data-role="km-proximo"]').textContent='Sin configurar';
-      node.querySelector('[data-role="nota"]').textContent='Toca ⚙️ para poner el km del último cambio.';
-    } else {
-      node.querySelector('[data-role="km-actual"]').textContent=Math.round(proy.kmActual).toLocaleString('es-PE')+' km';
-      node.querySelector('[data-role="km-proximo"]').textContent=Math.round(proy.kmProximo).toLocaleString('es-PE')+' km';
-      node.querySelector('[data-role="km-proximo-tag"]').textContent=proy.esPlanificado?'📌 hito planificado':'patrón habitual';
-      const colorUrgencia = proy.kmFaltan<=200 ? 'var(--red)' : proy.kmFaltan<=500 ? 'var(--amber)' : 'var(--accent)';
-      const faltEl=node.querySelector('[data-role="km-faltan"]');
-      faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
-      faltEl.style.color=colorUrgencia;
-      node.querySelector('[data-role="fecha-est"]').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
-      const barra=node.querySelector('[data-role="barra"]');
-      barra.style.width=proy.avance.toFixed(0)+'%';
-      barra.style.background=colorUrgencia;
-      let nota='';
-      if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga con kilometraje registrado.';
-      else if(!proy.promDiario) nota='Registra 2+ recargas con km para estimar la fecha.';
-      node.querySelector('[data-role="nota"]').textContent=nota;
-    }
-    const hist=(item.historial||[]).slice().reverse().slice(0,5);
-    const histEl=node.querySelector('[data-role="historial"]');
-    histEl.innerHTML = hist.length ? ('<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Historial</div>'+
-      hist.map(h=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-top:1px solid var(--border)">
-        <span>${escapeHtml(h.nota||'Realizado')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
-        <span style="color:var(--text3)">${h.fecha}</span>
-      </div>`).join('')) : '';
-    listaEl.appendChild(node);
-  });
-}
-let mantPlanificadosTemp=[]; // copia editable mientras el modal está abierto
-let editingMantId=null; // id del tipo que se está editando, null = creando uno nuevo
-function abrirNuevoTipoMantenimiento(){
-  editingMantId=null;
-  document.getElementById('mant-config-title').textContent='+ Nuevo Tipo de Mantenimiento';
-  document.getElementById('mant-icono').value='🔧';
-  document.getElementById('mant-nombre').value='';
-  document.getElementById('mant-intervalo').value='';
-  document.getElementById('mant-km-base').value='';
-  mantPlanificadosTemp=[];
-  renderPlanificadosLista();
-  document.getElementById('mant-delete-btn').style.display='none';
-  document.getElementById('mant-config-overlay').classList.add('open');
-}
-function abrirEditarTipoMantenimiento(id){
-  const item=(state.mantenimientos||[]).find(x=>x.id===id);
-  if(!item) return;
-  editingMantId=id;
-  document.getElementById('mant-config-title').textContent='⚙️ '+item.nombre;
-  document.getElementById('mant-icono').value=item.icono||'🔧';
-  document.getElementById('mant-nombre').value=item.nombre;
-  document.getElementById('mant-intervalo').value=item.intervaloKm||'';
-  document.getElementById('mant-km-base').value=item.kmUltimo ?? '';
-  mantPlanificadosTemp=[...(item.proximosPlanificados||[])].sort((a,b)=>a-b);
-  renderPlanificadosLista();
-  document.getElementById('mant-delete-btn').style.display='inline-flex';
-  document.getElementById('mant-config-overlay').classList.add('open');
-}
-function renderPlanificadosLista(){
-  const cont=document.getElementById('mant-planificados-lista');
-  if(!cont) return;
-  if(!mantPlanificadosTemp.length){
-    cont.innerHTML='<div style="font-size:10px;color:var(--text3)">Ninguno agregado — se usará directo el intervalo de abajo.</div>';
-    return;
-  }
-  cont.innerHTML=mantPlanificadosTemp.map((km,i)=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:6px;padding:6px 10px;font-size:12px">
-      <span>📌 ${km.toLocaleString('es-PE')} km</span>
-      <span onclick="eliminarKmPlanificado(${i})" style="cursor:pointer;color:var(--red)" title="Quitar">✕</span>
-    </div>`).join('');
-}
-function agregarKmPlanificado(){
-  const input=document.getElementById('mant-nuevo-planificado');
-  const km=parseFloat(input.value);
-  if(isNaN(km)||km<=0){alert('Ingresa un kilometraje válido.');return;}
-  if(mantPlanificadosTemp.includes(km)){alert('Ese kilometraje ya está en la lista.');return;}
-  mantPlanificadosTemp.push(km);
-  mantPlanificadosTemp.sort((a,b)=>a-b);
-  input.value='';
-  renderPlanificadosLista();
-}
-function eliminarKmPlanificado(idx){
-  mantPlanificadosTemp.splice(idx,1);
-  renderPlanificadosLista();
-}
-function cerrarConfigMantenimiento(){ document.getElementById('mant-config-overlay').classList.remove('open'); }
-function guardarConfigMantenimiento(){
-  const nombre=(document.getElementById('mant-nombre').value||'').trim();
-  const icono=(document.getElementById('mant-icono').value||'🔧').trim()||'🔧';
-  const intervalo=parseFloat(document.getElementById('mant-intervalo').value);
-  const kmBase=parseFloat(document.getElementById('mant-km-base').value);
-  if(!nombre){alert('Ponle un nombre a este tipo de mantenimiento (ej. "Cambio de aceite").');return;}
-  if(isNaN(intervalo)||intervalo<=0){alert('Ingresa cada cuántos km toca (mayor a 0).');return;}
-  if(isNaN(kmBase)||kmBase<0){alert('Ingresa el km del último cambio (usa 0 si nunca lo has hecho).');return;}
-  if(!state.mantenimientos) state.mantenimientos=[];
-  if(editingMantId){
-    const item=state.mantenimientos.find(x=>x.id===editingMantId);
-    if(item) Object.assign(item,{nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp]});
-  } else {
-    state.mantenimientos.push({id:'mant-'+Date.now(), nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp], historial:[]});
-  }
-  saveState();
-  cerrarConfigMantenimiento();
-  renderMantenimiento();
-  toast(editingMantId?'Tipo de mantenimiento actualizado':'Tipo de mantenimiento agregado');
-}
-function eliminarTipoMantenimiento(){
-  if(!editingMantId || !confirm('¿Eliminar este tipo de mantenimiento? También se pierde su historial.')) return;
-  state.mantenimientos=(state.mantenimientos||[]).filter(x=>x.id!==editingMantId);
-  saveState();
-  cerrarConfigMantenimiento();
-  renderMantenimiento();
-  toast('Tipo de mantenimiento eliminado','info');
-}
-let registrandoMantId=null;
-function abrirRegistrarMantenimiento(id){
-  const item=(state.mantenimientos||[]).find(x=>x.id===id);
-  if(!item) return;
-  registrandoMantId=id;
-  document.getElementById('mant-reg-title').textContent='✅ '+item.nombre;
-  const proy=getProyeccionMantenimientoItem(item);
-  document.getElementById('mant-reg-km').value = proy ? Math.round(proy.kmActual) : '';
-  document.getElementById('mant-reg-fecha').value = todayLocalISO();
-  document.getElementById('mant-reg-nota').value='';
-  document.getElementById('mant-registrar-overlay').classList.add('open');
-}
-function cerrarRegistrarMantenimiento(){ document.getElementById('mant-registrar-overlay').classList.remove('open'); registrandoMantId=null; }
-function guardarRegistrarMantenimiento(){
-  const item=(state.mantenimientos||[]).find(x=>x.id===registrandoMantId);
-  if(!item) return;
-  const km=parseFloat(document.getElementById('mant-reg-km').value);
-  const fecha=document.getElementById('mant-reg-fecha').value;
-  const nota=(document.getElementById('mant-reg-nota').value||'').trim();
-  if(isNaN(km)||km<0||!fecha){alert('Completa el kilometraje y la fecha.');return;}
-  if(!item.historial) item.historial=[];
-  item.historial.push({id:'mreg-'+Date.now(), km, fecha, nota});
-  item.kmUltimo=km; // reinicia el contador de ESTE tipo desde este punto
-  // Cualquier hito planificado de ESTE tipo que ya se haya alcanzado o
-  // pasado se retira — los demás tipos no se ven afectados en absoluto.
-  if(Array.isArray(item.proximosPlanificados)){
-    item.proximosPlanificados=item.proximosPlanificados.filter(k=>k>km);
-  }
-  saveState();
-  cerrarRegistrarMantenimiento();
-  renderMantenimiento();
-  toast(item.nombre+' registrado — el contador se reinició');
-}
 function computeFuelRows(rows){
   return rows.map((row,i)=>{
     const r={...row};
@@ -10905,7 +10206,6 @@ function computeFuelRows(rows){
 function renderCombustible(){
   renderFuelSection('glp');
   renderFuelSection('gas');
-  renderMantenimiento();
 }
 
 function renderFuelSection(type){
@@ -10945,7 +10245,6 @@ function renderFuelSection(type){
   }
   renderFuelSummary(type, rows);
   renderFuelChart(type, rows);
-  if(document.getElementById('mant-card')) renderMantenimiento();
 }
 
 // ── SUMMARY ───────────────────────────────────────────
@@ -11223,8 +10522,6 @@ function saveTcOpCompra(){
     fechaVenta:null, cuentaVenta:null, montoDolaresVenta:null, tcVenta:null, montoSolesVenta:null,
     movVentaUsdId:null, movVentaSolId:null,
   });
-  const opIdCompra=state.tcOperaciones[state.tcOperaciones.length-1].id;
-  logActividad('tc_operacion', `Compra USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:opIdCompra, accion:'compra'});
   saveState(); closeTcOpCompraModal(); render(); toast('Compra de dólares registrada');
 }
 
@@ -11287,7 +10584,6 @@ function saveTcOpVenta(){
 
   op.fechaVenta=fecha; op.cuentaVenta=cuenta; op.montoDolaresVenta=dolares; op.tcVenta=tcEfectivo; op.montoSolesVenta=soles;
   op.movVentaUsdId=usdId; op.movVentaSolId=solId;
-  logActividad('tc_operacion', `Venta USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:op.id, accion:'venta'});
   saveState(); closeTcOpVentaModal(); render(); toast('Venta de dólares registrada');
 }
 function deleteTcOpVenta(){
@@ -12324,7 +11620,6 @@ function initFirebase(){
         updateLoginBranding();
         render();
         updateLastUpdated();
-        actualizarBannerDatosDanados(); // detecta consumos con fecha dañada (ver bug de bot corregido)
         // Si la cuenta nunca se sincronizó antes (no había documento en Firestore),
         // subimos el estado resultante (local + demo si se sembró) una sola vez.
         if(DOC_REF && _remoteDocExisted===false){
@@ -12859,10 +12154,6 @@ if(state.projGoals){
     <div class="field" id="pf-tarjeta-wrap" style="display:none">
       <label>Tarjeta</label>
       <select id="pf-tarjeta"></select>
-    </div>
-    <div class="field">
-      <label>Día límite de pago <span style="font-size:10px;color:var(--text3)">(opcional — para que te avise antes)</span></label>
-      <input id="pf-dia-pago" type="number" min="1" max="31" placeholder="Ej. 10 (deja vacío si no tiene fecha fija)">
     </div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
       <select id="pf-cat"></select>
