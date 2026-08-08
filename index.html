@@ -1678,28 +1678,39 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <!-- MANTENIMIENTO DEL AUTO — proyección basada en el kilometraje registrado -->
   <div class="card" id="mant-card" style="padding:18px;margin-bottom:20px">
     <div class="section-header">
-      <div class="section-title">🔧 Mantenimiento del Auto</div>
-      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirConfigMantenimiento()">⚙️ Configurar</button>
+      <div class="section-title">🔧 Mantenimiento del Auto <span style="font-size:10px;color:var(--text3);font-weight:400">(cada tipo lleva su propio conteo)</span></div>
+      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirNuevoTipoMantenimiento()">+ Agregar tipo</button>
     </div>
     <div id="mant-sin-config" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:12px">
-      Configura tu último mantenimiento para empezar a proyectar cuándo te toca el próximo.
-      <div style="margin-top:10px"><button class="btn btn-primary" style="font-size:11px" onclick="abrirConfigMantenimiento()">⚙️ Configurar ahora</button></div>
+      Aún no tienes ningún tipo de mantenimiento configurado — ej. cambio de aceite, bujías, filtros, o el mantenimiento general del concesionario.
+      <div style="margin-top:10px"><button class="btn btn-primary" style="font-size:11px" onclick="abrirNuevoTipoMantenimiento()">+ Agregar el primero</button></div>
     </div>
-    <div id="mant-contenido" style="display:none">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-bottom:14px">
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div><div id="mant-km-actual" style="font-size:16px;font-weight:700;font-family:var(--mono)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Próximo a los</div><div id="mant-km-proximo" style="font-size:16px;font-weight:700;font-family:var(--mono)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Te faltan</div><div id="mant-km-faltan" style="font-size:16px;font-weight:700;font-family:var(--mono);color:var(--accent)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Fecha estimada</div><div id="mant-fecha-est" style="font-size:16px;font-weight:700">—</div></div>
-      </div>
-      <div style="background:var(--bg3);border-radius:8px;height:10px;overflow:hidden;margin-bottom:6px">
-        <div id="mant-barra" style="height:100%;background:var(--accent);width:0%;transition:width .3s"></div>
-      </div>
-      <div id="mant-nota" style="font-size:10px;color:var(--text3);margin-bottom:12px"></div>
-      <button class="btn" style="font-size:11px" onclick="abrirRegistrarMantenimiento()">✅ Ya lo hice — registrar mantenimiento</button>
-      <div id="mant-historial" style="margin-top:14px"></div>
-    </div>
+    <div id="mant-lista" style="display:flex;flex-direction:column;gap:12px"></div>
   </div>
+
+  <!-- Plantilla de una tarjeta de tipo de mantenimiento (se clona por JS) -->
+  <template id="mant-item-template">
+    <div class="mant-item-card" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600" data-role="nombre"></div>
+        <div style="display:flex;gap:6px">
+          <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" data-role="btn-editar">⚙️</button>
+          <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" data-role="btn-hecho">✅ Hecho</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:10px">
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div><div data-role="km-actual" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Próximo a los</div><div data-role="km-proximo" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div><div data-role="km-proximo-tag" style="font-size:9px;color:var(--text3)"></div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Te faltan</div><div data-role="km-faltan" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
+        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Fecha estimada</div><div data-role="fecha-est" style="font-size:13px;font-weight:600">—</div></div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;height:8px;overflow:hidden;margin-bottom:5px">
+        <div data-role="barra" style="height:100%;background:var(--accent);width:0%;transition:width .3s"></div>
+      </div>
+      <div data-role="nota" style="font-size:10px;color:var(--text3)"></div>
+      <div data-role="historial" style="margin-top:8px"></div>
+    </div>
+  </template>
 
   <!-- Tabs GLP / Gasolina -->
   <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border)">
@@ -2151,20 +2162,35 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <!-- MODAL: Completar/editar la VENTA de una operación existente -->
 <!-- MODAL: CONFIGURAR MANTENIMIENTO -->
 <div class="modal-overlay" id="mant-config-overlay" onclick="if(event.target===this)cerrarConfigMantenimiento()">
-  <div class="modal" style="width:400px">
-    <div class="modal-title"><span>⚙️ Configurar Mantenimiento</span><button class="modal-close" onclick="cerrarConfigMantenimiento()">✕</button></div>
-    <div class="field">
-      <label>Cada cuántos km toca mantenimiento</label>
-      <input id="mant-intervalo" type="number" min="500" step="500" placeholder="Ej. 10000">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><span id="mant-config-title">⚙️ Tipo de Mantenimiento</span><button class="modal-close" onclick="cerrarConfigMantenimiento()">✕</button></div>
+    <div class="field-row">
+      <div class="field" style="flex:0 0 60px"><label>Ícono</label><input id="mant-icono" type="text" maxlength="4" placeholder="🔧" style="text-align:center"></div>
+      <div class="field" style="flex:1"><label>Nombre</label><input id="mant-nombre" type="text" placeholder="Ej. Cambio de aceite"></div>
     </div>
     <div class="field">
-      <label>Km del último mantenimiento realizado <span style="font-size:10px;color:var(--text3)">(0 si nunca le has hecho ninguno)</span></label>
-      <input id="mant-km-base" type="number" min="0" step="1" placeholder="Ej. 45000">
+      <label>Km del último cambio realizado <span style="font-size:10px;color:var(--text3)">(0 si nunca lo has hecho)</span></label>
+      <input id="mant-km-base" type="number" min="0" step="1" placeholder="Ej. 1000">
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">El próximo mantenimiento se calcula como: km del último + el intervalo. Después de cada uno, el contador se reinicia solo.</div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn" onclick="cerrarConfigMantenimiento()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarConfigMantenimiento()">Guardar</button>
+    <div class="field">
+      <label>Próximos ya planificados <span style="font-size:10px;color:var(--text3)">(opcional — ej. auto nuevo: primero a los 10,000, después ya entra al patrón normal)</span></label>
+      <div id="mant-planificados-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+      <div style="display:flex;gap:6px">
+        <input id="mant-nuevo-planificado" type="number" min="0" step="1" placeholder="Ej. 10000" style="flex:1">
+        <button class="btn" style="font-size:11px;white-space:nowrap" onclick="agregarKmPlanificado()">+ Agregar</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Cada cuántos km, una vez agotados los planificados de arriba</label>
+      <input id="mant-intervalo" type="number" min="100" step="100" placeholder="Ej. 5000">
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Si hay algún planificado pendiente (mayor al km del último), se usa ese como próximo objetivo. Si no queda ninguno, se usa km del último + el intervalo.</div>
+    <div style="display:flex;gap:8px;justify-content:space-between">
+      <button class="config-action-btn danger" id="mant-delete-btn" style="display:none;font-size:11px" onclick="eliminarTipoMantenimiento()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarConfigMantenimiento()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarConfigMantenimiento()">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2172,10 +2198,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <!-- MODAL: REGISTRAR MANTENIMIENTO HECHO -->
 <div class="modal-overlay" id="mant-registrar-overlay" onclick="if(event.target===this)cerrarRegistrarMantenimiento()">
   <div class="modal" style="width:380px">
-    <div class="modal-title"><span>✅ Registrar Mantenimiento</span><button class="modal-close" onclick="cerrarRegistrarMantenimiento()">✕</button></div>
+    <div class="modal-title"><span id="mant-reg-title">✅ Registrar Mantenimiento</span><button class="modal-close" onclick="cerrarRegistrarMantenimiento()">✕</button></div>
     <div class="field"><label>Kilometraje al momento del mantenimiento</label><input id="mant-reg-km" type="number" min="0" step="1"></div>
     <div class="field"><label>Fecha</label><input id="mant-reg-fecha" type="date"></div>
-    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="mant-reg-nota" type="text" placeholder="Ej. Cambio de aceite y filtros"></div>
+    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="mant-reg-nota" type="text" placeholder="Ej. Se usó aceite 5W-30"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="cerrarRegistrarMantenimiento()">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarRegistrarMantenimiento()">Registrar</button>
@@ -2362,9 +2388,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.50.2';
-const APP_VERSION_DATE = '08/08/26 - 08:31'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corregidos 2 problemas reales de vista móvil (confirmados en navegador a 390px de ancho): (1) las pestañas de navegación quedaban aplastadas a solo "Res" porque los íconos/Config/+Agregar nunca se encogían — ahora en móvil la nav se reparte en 2 filas (íconos arriba, pestañas abajo con todo el ancho); (2) el panel de Config se abría 38px fuera de la pantalla por la izquierda (texto cortado a la mitad) porque se posicionaba relativo al botón, no a la pantalla — ahora usa position:fixed anclado a los bordes de la pantalla, con la posición vertical calculada en JS según la altura real de la nav. Verificado: desktop y tablet quedaron sin cambios, solo afecta ≤600px.';
+const APP_VERSION = 'v1.52.0';
+const APP_VERSION_DATE = '08/08/26 - 08:51'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mantenimiento del Auto rediseñado para soportar VARIOS tipos independientes (ej. aceite cada 5,000 km, bujías cada 4,000, filtros cada 2,000) — antes solo permitía uno. Cada tipo tiene su propio nombre, ícono, intervalo, hitos planificados, historial y botón de registrar, todos compartiendo el mismo kilometraje del vehículo (calculado igual que antes, de las recargas de GLP/Gasolina) pero calculando su próximo objetivo de forma 100% independiente. Migración automática: si ya tenías el mantenimiento único configurado, se convierte en el primer ítem de la lista sin perder nada. Corregido en web y bot por igual (incluye /mantenimiento y los recordatorios diarios). Verificado en navegador real con tus 3 tipos: los 3 calcularon exacto e independiente, y registrar uno (bujías) no tocó los otros dos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3051,8 +3077,23 @@ function migrateState(){
   if(!Array.isArray(state.tcOperaciones)) state.tcOperaciones=[]; // historial real de compra/venta de USD (genera movimientos)
   if(!Array.isArray(state.ordenCuentas)) state.ordenCuentas=[]; // orden manual de cuentas/ahorros (arrastrar o ▲▼) — claves no listadas van al final en su orden natural
   if(!Array.isArray(state.actividadLog)) state.actividadLog=[]; // registro de las últimas acciones — ver Config → Actividad Reciente
-  if(!state.mantenimiento) state.mantenimiento={intervaloKm:10000, kmUltimoMantenimiento:null, historial:[]};
-  if(!Array.isArray(state.mantenimiento.historial)) state.mantenimiento.historial=[];
+  // Migración: antes había UN solo "mantenimiento" (state.mantenimiento).
+  // Ahora se soportan varios tipos independientes (aceite, bujías, filtros,
+  // el general del concesionario, etc.) en state.mantenimientos (array). Si
+  // existía el formato viejo y ya estaba configurado, se convierte en el
+  // primer ítem de la lista nueva, para no perder lo que ya tenías puesto.
+  if(!Array.isArray(state.mantenimientos)){
+    state.mantenimientos=[];
+    const viejo=state.mantenimiento;
+    if(viejo && viejo.kmUltimoMantenimiento!==null && viejo.kmUltimoMantenimiento!==undefined){
+      state.mantenimientos.push({
+        id:'mant-migrado-'+Date.now(), nombre:'Mantenimiento General', icono:'🔧',
+        intervaloKm:viejo.intervaloKm||10000, kmUltimo:viejo.kmUltimoMantenimiento,
+        proximosPlanificados:viejo.proximosPlanificados||[], historial:viejo.historial||[],
+      });
+    }
+  }
+  delete state.mantenimiento; // ya no se usa — todo vive en state.mantenimientos
   if(!Array.isArray(state.inversiones.compras))        state.inversiones.compras=[];
   if(!Array.isArray(state.inversiones.ventas))          state.inversiones.ventas=[];
   if(!Array.isArray(state.inversiones.valorizaciones))  state.inversiones.valorizaciones=[];
@@ -3551,16 +3592,18 @@ function checkBrowserNotifications(forzar){
     }
   });
 
-  // 6. Mantenimiento del auto próximo (a 1000 km o 15 días, lo que llegue primero)
-  const proyMant=getProyeccionMantenimiento();
-  if(proyMant){
+  // 6. Mantenimiento del auto próximo — se revisa CADA tipo por separado
+  // (a 1000 km o 15 días, lo que llegue primero para ese tipo específico)
+  (state.mantenimientos||[]).forEach(item=>{
+    const proyMant=getProyeccionMantenimientoItem(item);
+    if(!proyMant) return;
     const cercaPorKm = proyMant.kmFaltan<=1000;
     const cercaPorDias = proyMant.diasFaltan!==null && proyMant.diasFaltan<=15;
     if(cercaPorKm || cercaPorDias){
       const fechaTxt=proyMant.fechaEstimada?(' — estimado '+proyMant.fechaEstimada.getDate()+'/'+(proyMant.fechaEstimada.getMonth()+1)):'';
-      mensajes.push(`🔧 Mantenimiento en ~${Math.round(proyMant.kmFaltan)} km${fechaTxt}`);
+      mensajes.push(`🔧 ${item.nombre} en ~${Math.round(proyMant.kmFaltan)} km${fechaTxt}`);
     }
-  }
+  });
 
   if(mensajes.length){
     new Notification('🔔 Recordatorios de hoy', {
@@ -10635,13 +10678,21 @@ function getKmPromedioDiario(){
   const km=ultima.km-primera.km;
   return (dias>0 && km>0) ? km/dias : null;
 }
-function getProyeccionMantenimiento(){
-  const cfg=state.mantenimiento||{};
-  if(cfg.kmUltimoMantenimiento===null || cfg.kmUltimoMantenimiento===undefined) return null;
+// Decide cuál es el próximo objetivo de km: si hay algún hito planificado
+// (ej. "10,000" porque así lo dijo el concesionario para un auto nuevo) que
+// todavía no se haya pasado, se usa ESE. Si ya no queda ninguno pendiente,
+// se cae al patrón recurrente habitual (km del último + intervaloKm).
+function getProximoKmObjetivo(item, kmReferencia){
+  const pendientes=(item.proximosPlanificados||[]).filter(k=>k>kmReferencia).sort((a,b)=>a-b);
+  if(pendientes.length) return {km:pendientes[0], esPlanificado:true};
+  return {km:kmReferencia+(item.intervaloKm||5000), esPlanificado:false};
+}
+function getProyeccionMantenimientoItem(item){
+  if(item.kmUltimo===null || item.kmUltimo===undefined) return null;
   const actual=getKmActualVehiculo();
-  const kmActual=actual ? actual.km : cfg.kmUltimoMantenimiento;
-  const intervalo=cfg.intervaloKm||10000;
-  const kmProximo=cfg.kmUltimoMantenimiento+intervalo;
+  const kmActual=actual ? actual.km : item.kmUltimo;
+  const objetivo=getProximoKmObjetivo(item, item.kmUltimo);
+  const kmProximo=objetivo.km;
   const kmFaltan=Math.max(0,kmProximo-kmActual);
   const promDiario=getKmPromedioDiario();
   let fechaEstimada=null, diasFaltan=null;
@@ -10649,82 +10700,178 @@ function getProyeccionMantenimiento(){
     diasFaltan=Math.ceil(kmFaltan/promDiario);
     fechaEstimada=new Date(); fechaEstimada.setHours(0,0,0,0); fechaEstimada.setDate(fechaEstimada.getDate()+diasFaltan);
   }
-  const avance=intervalo>0 ? Math.min(100,Math.max(0,((kmActual-cfg.kmUltimoMantenimiento)/intervalo)*100)) : 0;
-  return {kmActual, kmProximo, kmFaltan, promDiario, diasFaltan, fechaEstimada, avance, sinDatosKm:!actual};
+  const tramoTotal=Math.max(1,kmProximo-item.kmUltimo);
+  const avance=Math.min(100,Math.max(0,((kmActual-item.kmUltimo)/tramoTotal)*100));
+  return {kmActual, kmProximo, kmFaltan, promDiario, diasFaltan, fechaEstimada, avance, sinDatosKm:!actual, esPlanificado:objetivo.esPlanificado};
 }
 function renderMantenimiento(){
   const sinConfigEl=document.getElementById('mant-sin-config');
-  const contEl=document.getElementById('mant-contenido');
-  if(!sinConfigEl||!contEl) return;
-  const proy=getProyeccionMantenimiento();
-  if(!proy){
+  const listaEl=document.getElementById('mant-lista');
+  const tpl=document.getElementById('mant-item-template');
+  if(!sinConfigEl||!listaEl||!tpl) return;
+  const items=state.mantenimientos||[];
+  if(!items.length){
     sinConfigEl.style.display='block';
-    contEl.style.display='none';
+    listaEl.innerHTML='';
     return;
   }
   sinConfigEl.style.display='none';
-  contEl.style.display='block';
-  document.getElementById('mant-km-actual').textContent=Math.round(proy.kmActual).toLocaleString('es-PE')+' km';
-  document.getElementById('mant-km-proximo').textContent=Math.round(proy.kmProximo).toLocaleString('es-PE')+' km';
-  const colorUrgencia = proy.kmFaltan<=500 ? 'var(--red)' : proy.kmFaltan<=1500 ? 'var(--amber)' : 'var(--accent)';
-  const faltEl=document.getElementById('mant-km-faltan');
-  faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
-  faltEl.style.color=colorUrgencia;
-  document.getElementById('mant-fecha-est').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
-  const barra=document.getElementById('mant-barra');
-  barra.style.width=proy.avance.toFixed(0)+'%';
-  barra.style.background=colorUrgencia;
-  let nota='';
-  if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga con kilometraje registrado — agrega el km al registrar tus recargas de GLP/Gasolina para que esto se actualice solo.';
-  else if(!proy.promDiario) nota='Registra al menos 2 recargas seguidas (con fecha y km) para que se pueda calcular una fecha estimada.';
-  document.getElementById('mant-nota').textContent=nota;
-
-  const hist=(state.mantenimiento.historial||[]).slice().reverse();
-  const histEl=document.getElementById('mant-historial');
-  histEl.innerHTML = hist.length ? ('<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Historial</div>'+
-    hist.map(h=>`<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-top:1px solid var(--border)">
-      <span>${escapeHtml(h.nota||'Mantenimiento')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
-      <span style="color:var(--text3)">${h.fecha}</span>
-    </div>`).join('')) : '';
+  listaEl.innerHTML='';
+  items.forEach(item=>{
+    const node=tpl.content.cloneNode(true);
+    const root=node.querySelector('.mant-item-card');
+    root.dataset.id=item.id;
+    node.querySelector('[data-role="nombre"]').textContent=(item.icono||'🔧')+' '+item.nombre;
+    node.querySelector('[data-role="btn-editar"]').onclick=()=>abrirEditarTipoMantenimiento(item.id);
+    node.querySelector('[data-role="btn-hecho"]').onclick=()=>abrirRegistrarMantenimiento(item.id);
+    const proy=getProyeccionMantenimientoItem(item);
+    if(!proy){
+      node.querySelector('[data-role="km-actual"]').textContent='—';
+      node.querySelector('[data-role="km-proximo"]').textContent='Sin configurar';
+      node.querySelector('[data-role="nota"]').textContent='Toca ⚙️ para poner el km del último cambio.';
+    } else {
+      node.querySelector('[data-role="km-actual"]').textContent=Math.round(proy.kmActual).toLocaleString('es-PE')+' km';
+      node.querySelector('[data-role="km-proximo"]').textContent=Math.round(proy.kmProximo).toLocaleString('es-PE')+' km';
+      node.querySelector('[data-role="km-proximo-tag"]').textContent=proy.esPlanificado?'📌 hito planificado':'patrón habitual';
+      const colorUrgencia = proy.kmFaltan<=200 ? 'var(--red)' : proy.kmFaltan<=500 ? 'var(--amber)' : 'var(--accent)';
+      const faltEl=node.querySelector('[data-role="km-faltan"]');
+      faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
+      faltEl.style.color=colorUrgencia;
+      node.querySelector('[data-role="fecha-est"]').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+      const barra=node.querySelector('[data-role="barra"]');
+      barra.style.width=proy.avance.toFixed(0)+'%';
+      barra.style.background=colorUrgencia;
+      let nota='';
+      if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga con kilometraje registrado.';
+      else if(!proy.promDiario) nota='Registra 2+ recargas con km para estimar la fecha.';
+      node.querySelector('[data-role="nota"]').textContent=nota;
+    }
+    const hist=(item.historial||[]).slice().reverse().slice(0,5);
+    const histEl=node.querySelector('[data-role="historial"]');
+    histEl.innerHTML = hist.length ? ('<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Historial</div>'+
+      hist.map(h=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-top:1px solid var(--border)">
+        <span>${escapeHtml(h.nota||'Realizado')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
+        <span style="color:var(--text3)">${h.fecha}</span>
+      </div>`).join('')) : '';
+    listaEl.appendChild(node);
+  });
 }
-function abrirConfigMantenimiento(){
-  document.getElementById('mant-intervalo').value=state.mantenimiento.intervaloKm||10000;
-  document.getElementById('mant-km-base').value=state.mantenimiento.kmUltimoMantenimiento ?? '';
+let mantPlanificadosTemp=[]; // copia editable mientras el modal está abierto
+let editingMantId=null; // id del tipo que se está editando, null = creando uno nuevo
+function abrirNuevoTipoMantenimiento(){
+  editingMantId=null;
+  document.getElementById('mant-config-title').textContent='+ Nuevo Tipo de Mantenimiento';
+  document.getElementById('mant-icono').value='🔧';
+  document.getElementById('mant-nombre').value='';
+  document.getElementById('mant-intervalo').value='';
+  document.getElementById('mant-km-base').value='';
+  mantPlanificadosTemp=[];
+  renderPlanificadosLista();
+  document.getElementById('mant-delete-btn').style.display='none';
   document.getElementById('mant-config-overlay').classList.add('open');
+}
+function abrirEditarTipoMantenimiento(id){
+  const item=(state.mantenimientos||[]).find(x=>x.id===id);
+  if(!item) return;
+  editingMantId=id;
+  document.getElementById('mant-config-title').textContent='⚙️ '+item.nombre;
+  document.getElementById('mant-icono').value=item.icono||'🔧';
+  document.getElementById('mant-nombre').value=item.nombre;
+  document.getElementById('mant-intervalo').value=item.intervaloKm||'';
+  document.getElementById('mant-km-base').value=item.kmUltimo ?? '';
+  mantPlanificadosTemp=[...(item.proximosPlanificados||[])].sort((a,b)=>a-b);
+  renderPlanificadosLista();
+  document.getElementById('mant-delete-btn').style.display='inline-flex';
+  document.getElementById('mant-config-overlay').classList.add('open');
+}
+function renderPlanificadosLista(){
+  const cont=document.getElementById('mant-planificados-lista');
+  if(!cont) return;
+  if(!mantPlanificadosTemp.length){
+    cont.innerHTML='<div style="font-size:10px;color:var(--text3)">Ninguno agregado — se usará directo el intervalo de abajo.</div>';
+    return;
+  }
+  cont.innerHTML=mantPlanificadosTemp.map((km,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:6px;padding:6px 10px;font-size:12px">
+      <span>📌 ${km.toLocaleString('es-PE')} km</span>
+      <span onclick="eliminarKmPlanificado(${i})" style="cursor:pointer;color:var(--red)" title="Quitar">✕</span>
+    </div>`).join('');
+}
+function agregarKmPlanificado(){
+  const input=document.getElementById('mant-nuevo-planificado');
+  const km=parseFloat(input.value);
+  if(isNaN(km)||km<=0){alert('Ingresa un kilometraje válido.');return;}
+  if(mantPlanificadosTemp.includes(km)){alert('Ese kilometraje ya está en la lista.');return;}
+  mantPlanificadosTemp.push(km);
+  mantPlanificadosTemp.sort((a,b)=>a-b);
+  input.value='';
+  renderPlanificadosLista();
+}
+function eliminarKmPlanificado(idx){
+  mantPlanificadosTemp.splice(idx,1);
+  renderPlanificadosLista();
 }
 function cerrarConfigMantenimiento(){ document.getElementById('mant-config-overlay').classList.remove('open'); }
 function guardarConfigMantenimiento(){
+  const nombre=(document.getElementById('mant-nombre').value||'').trim();
+  const icono=(document.getElementById('mant-icono').value||'🔧').trim()||'🔧';
   const intervalo=parseFloat(document.getElementById('mant-intervalo').value);
   const kmBase=parseFloat(document.getElementById('mant-km-base').value);
-  if(isNaN(intervalo)||intervalo<=0){alert('Ingresa un intervalo de km válido (mayor a 0).');return;}
-  if(isNaN(kmBase)||kmBase<0){alert('Ingresa el kilometraje del último mantenimiento (usa 0 si nunca le has hecho ninguno).');return;}
-  state.mantenimiento.intervaloKm=intervalo;
-  state.mantenimiento.kmUltimoMantenimiento=kmBase;
+  if(!nombre){alert('Ponle un nombre a este tipo de mantenimiento (ej. "Cambio de aceite").');return;}
+  if(isNaN(intervalo)||intervalo<=0){alert('Ingresa cada cuántos km toca (mayor a 0).');return;}
+  if(isNaN(kmBase)||kmBase<0){alert('Ingresa el km del último cambio (usa 0 si nunca lo has hecho).');return;}
+  if(!state.mantenimientos) state.mantenimientos=[];
+  if(editingMantId){
+    const item=state.mantenimientos.find(x=>x.id===editingMantId);
+    if(item) Object.assign(item,{nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp]});
+  } else {
+    state.mantenimientos.push({id:'mant-'+Date.now(), nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp], historial:[]});
+  }
   saveState();
   cerrarConfigMantenimiento();
   renderMantenimiento();
-  toast('Configuración de mantenimiento guardada');
+  toast(editingMantId?'Tipo de mantenimiento actualizado':'Tipo de mantenimiento agregado');
 }
-function abrirRegistrarMantenimiento(){
-  const proy=getProyeccionMantenimiento();
+function eliminarTipoMantenimiento(){
+  if(!editingMantId || !confirm('¿Eliminar este tipo de mantenimiento? También se pierde su historial.')) return;
+  state.mantenimientos=(state.mantenimientos||[]).filter(x=>x.id!==editingMantId);
+  saveState();
+  cerrarConfigMantenimiento();
+  renderMantenimiento();
+  toast('Tipo de mantenimiento eliminado','info');
+}
+let registrandoMantId=null;
+function abrirRegistrarMantenimiento(id){
+  const item=(state.mantenimientos||[]).find(x=>x.id===id);
+  if(!item) return;
+  registrandoMantId=id;
+  document.getElementById('mant-reg-title').textContent='✅ '+item.nombre;
+  const proy=getProyeccionMantenimientoItem(item);
   document.getElementById('mant-reg-km').value = proy ? Math.round(proy.kmActual) : '';
   document.getElementById('mant-reg-fecha').value = todayLocalISO();
   document.getElementById('mant-reg-nota').value='';
   document.getElementById('mant-registrar-overlay').classList.add('open');
 }
-function cerrarRegistrarMantenimiento(){ document.getElementById('mant-registrar-overlay').classList.remove('open'); }
+function cerrarRegistrarMantenimiento(){ document.getElementById('mant-registrar-overlay').classList.remove('open'); registrandoMantId=null; }
 function guardarRegistrarMantenimiento(){
+  const item=(state.mantenimientos||[]).find(x=>x.id===registrandoMantId);
+  if(!item) return;
   const km=parseFloat(document.getElementById('mant-reg-km').value);
   const fecha=document.getElementById('mant-reg-fecha').value;
   const nota=(document.getElementById('mant-reg-nota').value||'').trim();
   if(isNaN(km)||km<0||!fecha){alert('Completa el kilometraje y la fecha.');return;}
-  if(!state.mantenimiento.historial) state.mantenimiento.historial=[];
-  state.mantenimiento.historial.push({id:'mant-'+Date.now(), km, fecha, nota});
-  state.mantenimiento.kmUltimoMantenimiento=km; // reinicia el contador desde este punto — el próximo será a los +intervaloKm
+  if(!item.historial) item.historial=[];
+  item.historial.push({id:'mreg-'+Date.now(), km, fecha, nota});
+  item.kmUltimo=km; // reinicia el contador de ESTE tipo desde este punto
+  // Cualquier hito planificado de ESTE tipo que ya se haya alcanzado o
+  // pasado se retira — los demás tipos no se ven afectados en absoluto.
+  if(Array.isArray(item.proximosPlanificados)){
+    item.proximosPlanificados=item.proximosPlanificados.filter(k=>k>km);
+  }
   saveState();
   cerrarRegistrarMantenimiento();
   renderMantenimiento();
-  toast('Mantenimiento registrado — el contador se reinició');
+  toast(item.nombre+' registrado — el contador se reinició');
 }
 function computeFuelRows(rows){
   return rows.map((row,i)=>{
