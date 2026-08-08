@@ -955,6 +955,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           </div>
         </div>
 
+        <!-- SECCIÓN: Actividad Reciente -->
+        <div class="config-section">
+          <div class="config-section-title">Actividad Reciente</div>
+          <div class="config-row">
+            <div class="config-row-label">Ver y deshacer últimas acciones<small>Movimientos, consumos, transferencias, deudas...</small></div>
+            <button class="config-action-btn neutral" onclick="abrirActividadReciente();closeConfig()">🕓 Ver actividad</button>
+          </div>
+        </div>
+
         <!-- SECCIÓN: Data — Borrar -->
         <div class="config-section">
           <div class="config-section-title">Data — Eliminar</div>
@@ -985,6 +994,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 
 <!-- MODAL: REPARAR CONSUMOS CON FECHA DAÑADA -->
+<!-- MODAL: ACTIVIDAD RECIENTE -->
+<div class="modal-overlay" id="actividad-overlay" onclick="if(event.target===this)cerrarActividadReciente()">
+  <div class="modal" style="width:460px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title"><span>🕓 Actividad Reciente</span><button class="modal-close" onclick="cerrarActividadReciente()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Las últimas acciones registradas (movimientos, consumos, transferencias, deudas, etc.). "Eliminar" también deshace el efecto que tuvo (saldo, consumo...).</div>
+    <div id="actividad-lista"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="reparar-datos-overlay" onclick="if(event.target===this)cerrarReparacionDatos()">
   <div class="modal" style="width:480px;max-height:80vh;overflow-y:auto">
     <div class="modal-title"><span>🔧 Reparar consumos dañados</span><button class="modal-close" onclick="cerrarReparacionDatos()">✕</button></div>
@@ -2277,9 +2295,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.48.0';
-const APP_VERSION_DATE = '08/08/26 - 07:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Bug crítico corregido: cerca de medianoche, un bug conocido de Node/ICU en Intl.DateTimeFormat (hour12:false devolvía "24" en vez de "00") producía fechas inválidas al registrar consumos por el bot, guardando "NaN-NaN-NaN" y corrompiendo el período de facturación de la tarjeta ("undefined-NaN" en Resumen Global). Corregido en 4 capas: todayISO() reescrita sin depender de la hora, nowLima() blindada, validador esFechaValida() nuevo (web y bot) y barreras antes de escribir en Firestore. Agregada herramienta de reparación (banner + modal) que detecta consumos con fecha dañada y deja confirmar la fecha real sin perder el dato. Probado en navegador real: reubicación correcta al mismo período que un consumo válido existente, y eliminación cuando corresponde.';
+const APP_VERSION = 'v1.49.0';
+const APP_VERSION_DATE = '08/08/26 - 07:33'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Dos funcionalidades nuevas: (1) "Día límite de pago" opcional en Pagos/Ingresos Frecuentes, con recordatorios desde 3 días antes (web y bot), independiente de la regla genérica del día 5 para los que no tienen fecha exacta; (2) "Actividad Reciente" en Config — registro de las últimas 80 acciones (movimientos, consumos, transferencias, deudas, operaciones de TC, pagos frecuentes, combustible) con botón para eliminar y deshacer el efecto de cualquiera. De paso se corrigió otro caso del bug de dólares forzados a "Ahorro Dólares" (esta vez en Transferencias). Probado en navegador real: revertir un movimiento normal, un consumo de tarjeta y un gasto de deuda acumulativa, los 3 con resultado correcto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2477,6 +2495,137 @@ function animarNumero(el, desde, hasta, formatear, ms){
 }
 // Muestra esqueletos grises mientras cargan los datos, para que la pantalla
 // no se vea vacía o a medio armar durante la carga inicial.
+// ══════════════════════════════════════════════════════
+//  ACTIVIDAD RECIENTE — registro de las últimas acciones (Config), con
+//  opción de deshacer cualquiera desde ahí. Pensado para el caso real que lo
+//  motivó: un dato raro se coló por el bot y no había forma fácil de
+//  encontrarlo y borrarlo sin ir a revisar tarjeta por tarjeta.
+// ══════════════════════════════════════════════════════
+const ACTIVIDAD_MAX=80; // se recorta lo más viejo para no crecer sin límite
+function logActividad(tipo, resumen, ref){
+  if(!Array.isArray(state.actividadLog)) state.actividadLog=[];
+  state.actividadLog.push({id:'act-'+Date.now()+Math.random().toString(36).slice(2,6), ts:Date.now(), tipo, resumen, ref});
+  if(state.actividadLog.length>ACTIVIDAD_MAX) state.actividadLog=state.actividadLog.slice(-ACTIVIDAD_MAX);
+}
+function tiempoRelativo(ts){
+  const seg=Math.floor((Date.now()-ts)/1000);
+  if(seg<60) return 'hace un momento';
+  const min=Math.floor(seg/60);
+  if(min<60) return 'hace '+min+' min';
+  const hrs=Math.floor(min/60);
+  if(hrs<24) return 'hace '+hrs+' h';
+  const dias=Math.floor(hrs/24);
+  if(dias<7) return 'hace '+dias+' día'+(dias===1?'':'s');
+  const d=new Date(ts);
+  return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽'};
+function abrirActividadReciente(){
+  renderActividadReciente();
+  document.getElementById('actividad-overlay').classList.add('open');
+}
+function cerrarActividadReciente(){
+  const el=document.getElementById('actividad-overlay');
+  if(el) el.classList.remove('open');
+}
+function renderActividadReciente(){
+  const cont=document.getElementById('actividad-lista');
+  if(!cont) return;
+  const log=(state.actividadLog||[]).slice().reverse(); // más reciente primero
+  if(!log.length){
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Aún no hay actividad registrada.</div>';
+    return;
+  }
+  cont.innerHTML=log.map(entry=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:16px;flex-shrink:0">${ACTIVIDAD_ICONOS[entry.tipo]||'📌'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(entry.resumen)}</div>
+        <div style="font-size:10px;color:var(--text3)">${tiempoRelativo(entry.ts)}</div>
+      </div>
+      <button onclick="eliminarActividad('${entry.id}')" style="font-size:10px;padding:5px 10px;background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;cursor:pointer;flex-shrink:0">Eliminar</button>
+    </div>`).join('');
+}
+// Revierte un movimiento de cuenta O un consumo de tarjeta, según qué datos
+// traiga el ref — reutilizado por varios tipos de actividad (pago frecuente
+// y gasto de combustible pueden haber ido a cualquiera de los dos).
+function _revertirMovOConsumo(ref){
+  if(ref.movId){
+    const m=state.movimientos.find(x=>x.id===ref.movId);
+    if(m){ revertAccount(m); state.movimientos=state.movimientos.filter(x=>x.id!==ref.movId); }
+  }
+  if(ref.tarjetaId && ref.monthKey && ref.consumoId){
+    const t=getTarjeta(ref.tarjetaId);
+    if(t && t.movs && t.movs[ref.monthKey]){
+      t.movs[ref.monthKey]=t.movs[ref.monthKey].filter(c=>c.id!==ref.consumoId);
+      if(t.movs[ref.monthKey].length===0) delete t.movs[ref.monthKey];
+    }
+  }
+}
+function eliminarActividad(logId){
+  const entry=(state.actividadLog||[]).find(e=>e.id===logId);
+  if(!entry) return;
+  if(!confirm('¿Eliminar esto y deshacer lo que haya generado (saldo, consumo, etc.)?\n\n"'+entry.resumen+'"')) return;
+  const ref=entry.ref||{};
+  try{
+    if(entry.tipo==='movimiento'){
+      _revertirMovOConsumo(ref);
+    } else if(entry.tipo==='tc_consumo'){
+      _revertirMovOConsumo(ref);
+    } else if(entry.tipo==='transferencia'){
+      if(ref.movIdA) _revertirMovOConsumo({movId:ref.movIdA});
+      if(ref.movIdB) _revertirMovOConsumo({movId:ref.movIdB});
+    } else if(entry.tipo==='deuda'){
+      state.deudas=(state.deudas||[]).filter(d=>d.id!==ref.deudaId);
+    } else if(entry.tipo==='deuda_item'){
+      const d=(state.deudas||[]).find(x=>x.id===ref.deudaId);
+      if(d && Array.isArray(d.items)){
+        d.items=d.items.filter(it=>it.id!==ref.itemId);
+        d.monto=d.items.reduce((s,it)=>s+it.monto,0);
+      }
+    } else if(entry.tipo==='tc_operacion'){
+      const op=(state.tcOperaciones||[]).find(x=>x.id===ref.opId);
+      if(op){
+        if(ref.accion==='venta'){
+          // Deshacer SOLO la venta — la compra original se queda intacta.
+          [op.movVentaUsdId, op.movVentaSolId].forEach(mid=>{
+            if(!mid) return;
+            const m=state.movimientos.find(x=>x.id===mid);
+            if(m){ revertAccount(m); state.movimientos=state.movimientos.filter(x=>x.id!==mid); }
+          });
+          op.fechaVenta=null; op.cuentaVenta=null; op.montoDolaresVenta=null; op.tcVenta=null; op.montoSolesVenta=null;
+          op.movVentaUsdId=null; op.movVentaSolId=null;
+        } else {
+          // Deshacer la compra — revierte compra Y venta (si la hubiera) y
+          // elimina la operación completa, ya que sin la compra no tiene sentido.
+          [op.movCompraSolId, op.movCompraUsdId, op.movVentaUsdId, op.movVentaSolId].forEach(mid=>{
+            if(!mid) return;
+            const m=state.movimientos.find(x=>x.id===mid);
+            if(m){ revertAccount(m); state.movimientos=state.movimientos.filter(x=>x.id!==mid); }
+          });
+          state.tcOperaciones=(state.tcOperaciones||[]).filter(x=>x.id!==ref.opId);
+        }
+      }
+    } else if(entry.tipo==='pago_frecuente'){
+      _revertirMovOConsumo(ref);
+      const pf=(state.pagosFrecuentes||[]).find(p=>p.id===ref.pfId);
+      if(pf && pf.pagosRegistrados) delete pf.pagosRegistrados[ref.periodoKey];
+    } else if(entry.tipo==='combustible_gasto'){
+      _revertirMovOConsumo(ref);
+      const arr=state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']||[];
+      const fila=arr.find(f=>f.id===ref.fuelRowId);
+      if(fila) delete fila.gastoRegistrado;
+    }
+  }catch(err){
+    console.error('Error revirtiendo actividad:', err);
+    alert('Hubo un problema deshaciendo esta acción. Revisa manualmente en la sección correspondiente.');
+  }
+  state.actividadLog=(state.actividadLog||[]).filter(e=>e.id!==logId);
+  saveState();
+  toast('Eliminado y revertido','info');
+  renderActividadReciente();
+  render();
+}
 function mostrarSkeletons(){
   const objetivos=[
     ['accounts-tbody', 4], ['savings-tbody', 3], ['mov-list', 5],
@@ -2637,10 +2786,13 @@ function saveTransfer(){
   const idBase='transfer'+Date.now();
   pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, currency, linkId:idBase});
   pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, currency, linkId:idBase});
-  const cuentaOrigenReal = currency==='USD' ? 'Ahorro Dólares' : origen;
-  const cuentaDestinoReal = currency==='USD' ? 'Ahorro Dólares' : destino;
-  state.cuentas[cuentaOrigenReal]=(state.cuentas[cuentaOrigenReal]||0)-monto;
-  state.cuentas[cuentaDestinoReal]=(state.cuentas[cuentaDestinoReal]||0)+monto;
+  // Se respetan las cuentas elegidas tal cual — antes esto forzaba cualquier
+  // transferencia en dólares a la cuenta fija 'Ahorro Dólares', sin importar
+  // cuál hubieras elegido (mismo bug ya corregido en movimientos normales).
+  state.cuentas[origen]=(state.cuentas[origen]||0)-monto;
+  state.cuentas[destino]=(state.cuentas[destino]||0)+monto;
+  const symTr=currency==='USD'?'$':'S/';
+  logActividad('transferencia', `${origen} → ${destino} — ${symTr} ${monto.toFixed(2)}`, {movIdA:idBase+'a', movIdB:idBase+'b'});
   saveState(); closeTransferModal(); render(); toast('Transferencia registrada');
 }
 function saveState(immediate){
@@ -2831,6 +2983,7 @@ function migrateState(){
   if(!state.inversiones)      state.inversiones={compras:[],ventas:[],valorizaciones:[]};
   if(!Array.isArray(state.tcOperaciones)) state.tcOperaciones=[]; // historial real de compra/venta de USD (genera movimientos)
   if(!Array.isArray(state.ordenCuentas)) state.ordenCuentas=[]; // orden manual de cuentas/ahorros (arrastrar o ▲▼) — claves no listadas van al final en su orden natural
+  if(!Array.isArray(state.actividadLog)) state.actividadLog=[]; // registro de las últimas acciones — ver Config → Actividad Reciente
   if(!Array.isArray(state.inversiones.compras))        state.inversiones.compras=[];
   if(!Array.isArray(state.inversiones.ventas))          state.inversiones.ventas=[];
   if(!Array.isArray(state.inversiones.valorizaciones))  state.inversiones.valorizaciones=[];
@@ -3301,6 +3454,19 @@ function checkBrowserNotifications(forzar){
     const pend=(state.pagosFrecuentes||[]).filter(p=>(p.frecuencia||'mensual')==='mensual' && !(p.pagosRegistrados&&p.pagosRegistrados[mk]));
     if(pend.length) mensajes.push(`💡 Pagos frecuentes sin registrar: ${pend.map(p=>p.nombre).join(', ')}`);
   }
+
+  // 4b. Día límite de pago próximo (opcional, no-anual) — independiente del
+  // aviso genérico de arriba, para que el usuario sepa CUÁNDO exactamente
+  // debe pagar, no solo que "está pendiente". Se avisa desde 3 días antes.
+  const mkDp=mesActualKey();
+  (state.pagosFrecuentes||[]).filter(p=>p.diaPago && p.frecuencia!=='anual' && !(p.pagosRegistrados&&p.pagosRegistrados[mkDp])).forEach(p=>{
+    const diasEnMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
+    const diaLimite=Math.min(p.diaPago,diasEnMes);
+    const diffDp=diaLimite-diaHoy;
+    if(diffDp<0) mensajes.push(`🔴 ${p.nombre} venció el día ${p.diaPago} y no lo has registrado`);
+    else if(diffDp===0) mensajes.push(`🟡 ${p.nombre} vence HOY (día ${p.diaPago})`);
+    else if(diffDp<=3) mensajes.push(`📅 ${p.nombre} vence en ${diffDp} día${diffDp===1?'':'s'} (día ${p.diaPago})`);
+  });
 
   // 5. Pagos Frecuentes ANUALES próximos a vencer (dentro de 15 días) o ya vencidos
   (state.pagosFrecuentes||[]).filter(p=>p.frecuencia==='anual').forEach(p=>{
@@ -5561,7 +5727,13 @@ function saveMovimiento(){
     else if(currentType==='expense')state.cuentas[account]=(state.cuentas[account]||0)-amount;
     else if(currentType==='ahorro')state.cuentas[account]=(state.cuentas[account]||0)+amount;
   }
-  pushMovimiento(mov);saveState();closeModal();render();toast(state.editId?'Movimiento actualizado':'Movimiento guardado');
+  const esNuevoMov=!state.editId;
+  pushMovimiento(mov);
+  if(esNuevoMov){
+    const sym=currency==='USD'?'$':'S/';
+    logActividad('movimiento', `${desc} — ${sym} ${amount.toFixed(2)} (${account})`, {movId:mov.id});
+  }
+  saveState();closeModal();render();toast(esNuevoMov?'Movimiento guardado':'Movimiento actualizado');
 }
 
 // ── PRESUPUESTO ───────────────────────────────────────
@@ -8081,6 +8253,8 @@ function saveTCMov(){
     const nuevoMov={id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat,currency};
     if(hora) nuevoMov.hora=hora;
     t.movs[newMk].push(nuevoMov);
+    const symTC=currency==='USD'?'$':'S/';
+    logActividad('tc_consumo', `${desc} — ${symTC} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:newMk, consumoId:nuevoMov.id});
     // If adding to a different month than currently viewing, switch to it
     // (solo aplica si estamos viendo el detalle de esta misma tarjeta)
     if(tarjetaId===currentTCId && newMk!==currentTCMonth){
@@ -8091,6 +8265,7 @@ function saveTCMov(){
   saveState(); closeTCMovModal();
   renderTarjetas();
   if(tarjetaId===currentTCId && document.getElementById('tc-detail-view').style.display!=='none') renderTCDetail();
+  toast(editingTCMovId?'Consumo actualizado':'Consumo guardado');
 }
 
 function deleteTCMov(movId){
@@ -9236,6 +9411,7 @@ function openPagoFrecuenteModal(id){
     if(pf.metodoPago==='cuenta') document.getElementById('pf-cuenta').value=pf.destino;
     else document.getElementById('pf-tarjeta').value=pf.destino;
     document.getElementById('pf-cat').value=pf.categoria||'';
+    document.getElementById('pf-dia-pago').value=pf.diaPago||'';
     delBtn.style.display='inline-flex';
     delBtn.dataset.id=id;
   } else {
@@ -9252,6 +9428,7 @@ function openPagoFrecuenteModal(id){
     document.getElementById('pf-currency').value='PEN';
     document.getElementById('pf-metodo').value='cuenta';
     document.getElementById('pf-cat').value='';
+    document.getElementById('pf-dia-pago').value='';
     delBtn.style.display='none';
   }
   onPFTipoChange();
@@ -9322,6 +9499,8 @@ function savePagoFrecuente(){
   const metodoPago=tipo==='ingreso'?'cuenta':document.getElementById('pf-metodo').value;
   const destino=metodoPago==='cuenta'?document.getElementById('pf-cuenta').value:document.getElementById('pf-tarjeta').value;
   const categoria=tipo==='ingreso'?'':(document.getElementById('pf-cat').value||'');
+  const diaPagoRaw=document.getElementById('pf-dia-pago').value;
+  const diaPago=diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null;
   if(!nombre){alert('Ingresa un nombre.');return;}
   if(frecuencia==='anual' && !fechaAnual){alert('Ingresa la fecha exacta de vencimiento.');return;}
   if((tipoMonto==='fijo'||tipoMonto==='base_descuentos') && montoFijo<=0){alert('Ingresa el monto '+(tipoMonto==='base_descuentos'?'base':'fijo')+'.');return;}
@@ -9330,13 +9509,14 @@ function savePagoFrecuente(){
   if(!state.pagosFrecuentes) state.pagosFrecuentes=[];
   if(editingPFId){
     const pf=state.pagosFrecuentes.find(p=>p.id===editingPFId);
-    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,fechaAnual,tipoMonto,montoFijo,currency,metodoPago,destino,categoria}); }
+    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,fechaAnual,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago}); }
   } else {
-    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, fechaAnual, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, pagosRegistrados:{}, descuentosPendientes:[]});
+    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, fechaAnual, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]});
   }
   saveState();
   closePagoFrecuenteModal();
   renderPagosFrecuentes();
+  toast(editingPFId?'Pago frecuente actualizado':'Pago frecuente guardado');
 }
 
 function deletePagoFrecuente(){
@@ -9406,6 +9586,21 @@ function renderPagosFrecuentes(){
     } else if(pf.mesInicio){
       const [iy,im]=pf.mesInicio.split('-').map(Number);
       inicioLabel=' · desde '+MONTHS[im-1]+' '+iy;
+    }
+    // Día límite de pago (opcional, no-anual) — mismo criterio de colores que
+    // la fecha anual: rojo si venció sin pagar, ámbar si es hoy, gris si falta.
+    if(!esAnual && pf.diaPago && !yaPagado){
+      const hoyDp=new Date(); hoyDp.setHours(0,0,0,0);
+      const diasEnMes=new Date(hoyDp.getFullYear(),hoyDp.getMonth()+1,0).getDate();
+      const diaLimite=Math.min(pf.diaPago,diasEnMes);
+      const fechaLimite=new Date(hoyDp.getFullYear(),hoyDp.getMonth(),diaLimite);
+      const diffDp=Math.round((fechaLimite-hoyDp)/(1000*60*60*24));
+      if(diffDp<0) inicioLabel+=' · 🔴 Venció el día '+pf.diaPago;
+      else if(diffDp===0) inicioLabel+=' · 🟡 Vence hoy (día '+pf.diaPago+')';
+      else if(diffDp<=3) inicioLabel+=' · 🟠 Vence en '+diffDp+' día'+(diffDp===1?'':'s')+' (día '+pf.diaPago+')';
+      else inicioLabel+=' · Antes del día '+pf.diaPago;
+    } else if(!esAnual && pf.diaPago && yaPagado){
+      inicioLabel+=' · Vence el día '+pf.diaPago;
     }
     // A qué mes se le va a aplicar la próxima vez que se registre el pago —
     // los descuentos pendientes NO tienen un mes propio asignado, se suman
@@ -9655,12 +9850,14 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
     ? String(targetY!==undefined?targetY:new Date().getFullYear())
     : (targetY!==undefined ? (targetY+'-'+String(targetM+1).padStart(2,'0')) : mesActualKey());
   const esIngreso=pf.tipo==='ingreso';
+  let refActividad=null;
   if(monto>0.004){
     if(esIngreso || pf.metodoPago==='cuenta'){
       if(!state.movimientos) state.movimientos=[];
       const mov={id:'pf-mov-'+Date.now(), type:esIngreso?'income':'expense', desc:pf.nombre, amount:monto, account:pf.destino, date:hoy, currency:pf.currency};
       if(!esIngreso && pf.categoria) mov.cat=pf.categoria;
       pushMovimiento(mov);
+      refActividad={movId:mov.id};
     } else {
       const t=getTarjeta(pf.destino);
       if(!t){ alert('La tarjeta configurada ya no existe. Edita este pago frecuente para elegir otra.'); return; }
@@ -9670,6 +9867,11 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
       const consumo={id:'pf-tcm-'+Date.now(), desc:pf.nombre, fecha:hoy, monto, pagado:false, currency:pf.currency, hora:horaLimaActual()};
       if(pf.categoria) consumo.cat=pf.categoria;
       t.movs[newMk].push(consumo);
+      refActividad={tarjetaId:t.id, monthKey:newMk, consumoId:consumo.id};
+    }
+    if(refActividad){
+      const symPf=pf.currency==='USD'?'$':'S/';
+      logActividad('pago_frecuente', `${pf.nombre} — ${symPf} ${monto.toFixed(2)}`, {...refActividad, pfId:pf.id, periodoKey:mk});
     }
   }
   if(!pf.pagosRegistrados) pf.pagosRegistrados={};
@@ -9680,6 +9882,7 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
   saveState();
   renderPagosFrecuentes();
   render();
+  toast(pf.nombre+' registrado');
 }
 
 
@@ -9972,18 +10175,23 @@ function saveDeuda(){
       }
     }
   } else {
+    const symD=currency==='USD'?'$':'S/';
     if(tipo==='acumulativa'){
-      state.deudas.push({
+      const nuevaDeuda={
         id:'deu'+Date.now(), nombre, monto:0, currency, fecha, nota,
         status:'pendiente', fechaPago:null, cuentaPago:null, items:[],
-      });
+      };
+      state.deudas.push(nuevaDeuda);
+      logActividad('deuda', `Préstamo (acumulativa): ${nombre}`, {deudaId:nuevaDeuda.id});
     } else {
       const monto=parseFloat(document.getElementById('d-monto').value)||0;
       if(monto<=0){alert('Completa el monto.');return;}
-      state.deudas.push({
+      const nuevaDeuda={
         id:'deu'+Date.now(), nombre, monto, currency, fecha, nota,
         status:'pendiente', fechaPago:null, cuentaPago:null,
-      });
+      };
+      state.deudas.push(nuevaDeuda);
+      logActividad('deuda', `Préstamo: ${nombre} — ${symD} ${monto.toFixed(2)}`, {deudaId:nuevaDeuda.id});
     }
   }
   saveState(); closeDeudaModal(); renderDeudas(); toast('Préstamo guardado');
@@ -10015,8 +10223,11 @@ function saveDeudaItem(){
   const fecha=document.getElementById('di-fecha').value;
   if(!desc||monto<=0||!fecha){alert('Completa descripción, monto y fecha.');return;}
   if(!Array.isArray(d.items)) d.items=[];
-  d.items.push({id:'di'+Date.now(), desc, monto, fecha});
+  const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
+  d.items.push(nuevoItem);
   recalcDeudaMonto(d);
+  const symDi=d.currency==='USD'?'$':'S/';
+  logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
   saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
 }
 function deleteDeudaItem(deudaId, itemId){
@@ -10249,6 +10460,7 @@ function saveFuelGasto(){
   const fila=arr.find(x=>x.id===rowId);
   if(!fila) return;
 
+  const symFuel='S/';
   if(medio==='tarjeta'){
     const tarjetaId=document.getElementById('fuel-gasto-tarjeta').value;
     const t=getTarjeta(tarjetaId);
@@ -10259,17 +10471,20 @@ function saveFuelGasto(){
     const consumoId='tcm-fuel-'+Date.now();
     t.movs[mk].push({id:consumoId, desc, fecha, monto, pagado:false, cat, currency:'PEN', hora:horaLimaActual()});
     fila.gastoRegistrado={tipo:'tarjeta', id:consumoId, tarjetaId};
+    logActividad('combustible_gasto', `${desc} — ${symFuel} ${monto.toFixed(2)}`, {tarjetaId, monthKey:mk, consumoId, fuelTipo:type, fuelRowId:rowId});
   } else {
     const cuenta=document.getElementById('fuel-gasto-cuenta').value;
     const movId='mov-fuel-'+Date.now();
     pushMovimiento({id:movId, type:'expense', desc, amount:monto, account:cuenta, date:fecha, currency:'PEN', cat});
     state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-monto;
     fila.gastoRegistrado={tipo:'cuenta', id:movId, cuenta};
+    logActividad('combustible_gasto', `${desc} — ${symFuel} ${monto.toFixed(2)}`, {movId, fuelTipo:type, fuelRowId:rowId});
   }
   saveState();
   closeFuelGastoModal();
   renderFuelSection(type);
   render();
+  toast('Gasto de combustible registrado');
 }
 
 // ── COMPUTE ROW FIELDS ────────────────────────────────
@@ -10621,6 +10836,8 @@ function saveTcOpCompra(){
     fechaVenta:null, cuentaVenta:null, montoDolaresVenta:null, tcVenta:null, montoSolesVenta:null,
     movVentaUsdId:null, movVentaSolId:null,
   });
+  const opIdCompra=state.tcOperaciones[state.tcOperaciones.length-1].id;
+  logActividad('tc_operacion', `Compra USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:opIdCompra, accion:'compra'});
   saveState(); closeTcOpCompraModal(); render(); toast('Compra de dólares registrada');
 }
 
@@ -10683,6 +10900,7 @@ function saveTcOpVenta(){
 
   op.fechaVenta=fecha; op.cuentaVenta=cuenta; op.montoDolaresVenta=dolares; op.tcVenta=tcEfectivo; op.montoSolesVenta=soles;
   op.movVentaUsdId=usdId; op.movVentaSolId=solId;
+  logActividad('tc_operacion', `Venta USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:op.id, accion:'venta'});
   saveState(); closeTcOpVentaModal(); render(); toast('Venta de dólares registrada');
 }
 function deleteTcOpVenta(){
@@ -12254,6 +12472,10 @@ if(state.projGoals){
     <div class="field" id="pf-tarjeta-wrap" style="display:none">
       <label>Tarjeta</label>
       <select id="pf-tarjeta"></select>
+    </div>
+    <div class="field">
+      <label>Día límite de pago <span style="font-size:10px;color:var(--text3)">(opcional — para que te avise antes)</span></label>
+      <input id="pf-dia-pago" type="number" min="1" max="31" placeholder="Ej. 10 (deja vacío si no tiene fecha fija)">
     </div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
       <select id="pf-cat"></select>
