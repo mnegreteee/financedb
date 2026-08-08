@@ -500,8 +500,12 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 /* ══ RESPONSIVE — MÓVIL (≤600px) ══ */
 @media(max-width:600px){
-  nav{padding:0 10px;height:52px;}
-  .nav-center{gap:2px;padding:2px;overflow-x:auto;scrollbar-width:none;}
+  nav{padding:6px 10px;height:auto;min-height:52px;flex-wrap:wrap;gap:6px;row-gap:6px;}
+  /* Nav en 2 filas: arriba los íconos/Config/+Agregar, abajo las pestañas
+     con todo el ancho disponible — antes ambas filas competían por el mismo
+     espacio y las pestañas quedaban aplastadas a un par de letras. */
+  .nav-right{order:1;width:100%;justify-content:space-between;}
+  .nav-center{order:2;width:100%;gap:2px;padding:2px;overflow-x:auto;scrollbar-width:none;}
   .nav-center::-webkit-scrollbar{display:none;}
   .nav-tab{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0;}
   .container{padding:12px;}
@@ -529,8 +533,11 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   /* Modales */
   .modal,.modal-lg{width:95vw!important;max-height:92vh;}
   .field-row{flex-direction:column;gap:0;}
-  /* Config dropdown en móvil: casi pantalla completa */
-  .config-dropdown{width:92vw!important;max-width:340px;max-height:calc(100vh - 64px)!important;right:-8px!important;}
+  /* Config dropdown en móvil: anclado a la PANTALLA (position:fixed), no al
+     botón — así nunca se abre fuera de la vista sin importar dónde esté el
+     botón "Config" dentro de la nav. El "top" exacto lo calcula toggleConfig()
+     en JS, según la altura real de la nav en ese momento. */
+  .config-dropdown{position:fixed!important;left:8px!important;right:8px!important;width:auto!important;max-width:none!important;max-height:calc(100vh - 80px)!important;}
   /* TC */
   .tc-grid{grid-template-columns:1fr;}
   .tc-info-grid{grid-template-columns:repeat(3,1fr);}
@@ -2355,9 +2362,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.50.1';
-const APP_VERSION_DATE = '08/08/26 - 08:13'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mantenimiento del Auto: corregido el cálculo del promedio de km/día — antes sumaba los km de GLP y Gasolina por separado, arriesgando contar el mismo recorrido físico dos veces si ambos períodos se traslapan en el tiempo (lo normal, ya que ambos combustibles miden el mismo odómetro). Ahora junta todas las lecturas de ambos en una sola línea de tiempo y compara solo la primera contra la última. Corregido en web y bot por igual. Verificado con un escenario de GLP (recarga frecuente) y Gasolina (recarga poco frecuente) traslapados: el km actual usa la lectura de fecha más reciente entre ambos, y el promedio dio exacto (250 km / 8 días = 31.25 km/día).';
+const APP_VERSION = 'v1.50.2';
+const APP_VERSION_DATE = '08/08/26 - 08:31'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregidos 2 problemas reales de vista móvil (confirmados en navegador a 390px de ancho): (1) las pestañas de navegación quedaban aplastadas a solo "Res" porque los íconos/Config/+Agregar nunca se encogían — ahora en móvil la nav se reparte en 2 filas (íconos arriba, pestañas abajo con todo el ancho); (2) el panel de Config se abría 38px fuera de la pantalla por la izquierda (texto cortado a la mitad) porque se posicionaba relativo al botón, no a la pantalla — ahora usa position:fixed anclado a los bordes de la pantalla, con la posición vertical calculada en JS según la altura real de la nav. Verificado: desktop y tablet quedaron sin cambios, solo afecta ≤600px.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6980,6 +6987,17 @@ function toggleConfig(e){
   const isOpen = dd.classList.contains('open');
   dd.classList.toggle('open', !isOpen);
   document.getElementById('config-arrow').textContent = !isOpen ? '▴' : '▾';
+  // En móvil, el panel se ancla a la PANTALLA (no al botón "Config") — antes
+  // usaba position:absolute con right:0 relativo al botón, y como el botón
+  // no siempre está pegado al borde derecho real de la pantalla (ej. cuando
+  // "+ Agregar" queda a su derecha), el panel terminaba abriéndose fuera de
+  // la vista por la izquierda, con el texto cortado a la mitad.
+  if(!isOpen && window.innerWidth<=600){
+    const navRect=document.querySelector('nav').getBoundingClientRect();
+    dd.style.top=(navRect.bottom+6)+'px';
+  } else {
+    dd.style.top='';
+  }
   // Actualizar TC en el panel
   document.getElementById('cfg-tc-compra').textContent = 'S/ ' + state.tc.compra.toFixed(4);
   document.getElementById('cfg-tc-venta').textContent  = 'S/ ' + state.tc.venta.toFixed(4);
