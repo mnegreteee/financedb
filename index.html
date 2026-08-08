@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🤫No hay nada que ver aquí🤫</title>
+<title>No hay nada que ver aquí</title>
 <!-- PWA: instalable en la pantalla de inicio. Ícono y nombre deliberadamente
      neutros/genéricos, igual que el título de la pestaña, para no delatar
      de qué app se trata a simple vista. -->
@@ -977,6 +977,22 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div id="demo-banner" style="display:none;position:sticky;top:0;z-index:150;background:linear-gradient(90deg,#7c3aed,#a78bfa);color:#fff;padding:8px 20px;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3)">
   <span>🎭 MODO DEMO — estás viendo números aleatorios, no tus datos reales. Nada de lo que hagas aquí se guarda.</span>
   <button onclick="toggleDemoMode()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Salir</button>
+</div>
+
+<div id="datos-danados-banner" style="display:none;position:sticky;top:0;z-index:149;background:linear-gradient(90deg,#dc2626,#f0a53c);color:#fff;padding:8px 20px;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3)">
+  <span>⚠️ Se encontraron <span id="datos-danados-count">0</span> consumo(s) con fecha dañada en tus tarjetas</span>
+  <button onclick="abrirReparacionDatos()" style="background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Reparar ahora</button>
+</div>
+
+<!-- MODAL: REPARAR CONSUMOS CON FECHA DAÑADA -->
+<div class="modal-overlay" id="reparar-datos-overlay" onclick="if(event.target===this)cerrarReparacionDatos()">
+  <div class="modal" style="width:480px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title"><span>🔧 Reparar consumos dañados</span><button class="modal-close" onclick="cerrarReparacionDatos()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+      Estos consumos se guardaron con una fecha inválida (por un bug ya corregido). No se perdió ningún dato — solo hay que confirmar la fecha real de cada uno para que vuelvan a aparecer correctamente en su tarjeta.
+    </div>
+    <div id="reparar-datos-lista"></div>
+  </div>
 </div>
 
 <!-- ══ PAGE: DASHBOARD ══ -->
@@ -2261,9 +2277,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.47.0';
-const APP_VERSION_DATE = '06/08/26 - 08:14'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tanda de mejoras visuales: (1) toasts de confirmación al guardar movimientos, transferencias, deudas y operaciones de TC; (2) skeleton loaders grises mientras cargan los datos; (3) el indicador de sincronización ahora detecta "sin conexión" (navigator.onLine); (4) helper animarNumero() con easing y respeto a prefers-reduced-motion; (5) modo compacto reforzado en móvil (padding y tipografías más densas); (6) transición fade al cambiar de página; (9) hover unificado en todas las tablas; (10) tooltips "?" en XIRR, Spread, Crecimiento, Utilidad realizada y Ganancia no realizada. Verificado en navegador real.';
+const APP_VERSION = 'v1.48.0';
+const APP_VERSION_DATE = '08/08/26 - 07:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Bug crítico corregido: cerca de medianoche, un bug conocido de Node/ICU en Intl.DateTimeFormat (hour12:false devolvía "24" en vez de "00") producía fechas inválidas al registrar consumos por el bot, guardando "NaN-NaN-NaN" y corrompiendo el período de facturación de la tarjeta ("undefined-NaN" en Resumen Global). Corregido en 4 capas: todayISO() reescrita sin depender de la hora, nowLima() blindada, validador esFechaValida() nuevo (web y bot) y barreras antes de escribir en Firestore. Agregada herramienta de reparación (banner + modal) que detecta consumos con fecha dañada y deja confirmar la fecha real sin perder el dato. Probado en navegador real: reubicación correcta al mismo período que un consumo válido existente, y eliminación cuando corresponde.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2487,6 +2503,20 @@ function horaLimaActual(){
 // Escapa HTML antes de mostrar texto que el usuario escribió (descripciones,
 // notas, nombres) — sin esto, alguien podría escribir algo como
 // <img src=x onerror=...> en una descripción y que se ejecute al mostrarse.
+// Valida que un string 'YYYY-MM-DD' sea un día calendario REAL (no solo el
+// formato correcto) — ej. '2026-02-30' tiene formato válido pero no existe.
+// También rechaza cualquier NaN/undefined colado desde un cálculo previo.
+// Mismo validador que usa el bot de Telegram, para que ambos se comporten igual.
+function esFechaValida(fechaStr){
+  if(!fechaStr || typeof fechaStr!=='string') return false;
+  const m=fechaStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return false;
+  const anio=parseInt(m[1],10), mes=parseInt(m[2],10), dia=parseInt(m[3],10);
+  if(!Number.isFinite(anio)||!Number.isFinite(mes)||!Number.isFinite(dia)) return false;
+  if(mes<1||mes>12||dia<1||dia>31) return false;
+  const fecha=new Date(anio,mes-1,dia);
+  return fecha.getFullYear()===anio && fecha.getMonth()===mes-1 && fecha.getDate()===dia;
+}
 function escapeHtml(str){
   if(str===null||str===undefined) return '';
   return String(str)
@@ -3294,6 +3324,121 @@ function checkBrowserNotifications(forzar){
   }
 }
 
+// ══════════════════════════════════════════════════════
+//  REPARAR CONSUMOS CON FECHA DAÑADA
+//  Detecta consumos de tarjeta guardados con una fecha inválida (ej. por el
+//  bug de "NaN-NaN-NaN" del bot a medianoche, ya corregido) y deja al usuario
+//  confirmar la fecha real de cada uno — nunca se borra nada sin que el
+//  usuario lo decida explícitamente.
+// ══════════════════════════════════════════════════════
+function detectarConsumosCorruptos(){
+  const encontrados=[];
+  (state.tarjetas||[]).forEach(t=>{
+    Object.entries(t.movs||{}).forEach(([monthKey, arr])=>{
+      const claveValida=/^\d{4}-\d{2}$/.test(monthKey);
+      (arr||[]).forEach(c=>{
+        if(!claveValida || !esFechaValida(c.fecha)){
+          encontrados.push({tarjetaId:t.id, tarjetaLabel:t.banco+(t.cat?' '+t.cat:''), monthKeyViejo:monthKey, consumo:c});
+        }
+      });
+    });
+  });
+  return encontrados;
+}
+function actualizarBannerDatosDanados(){
+  const banner=document.getElementById('datos-danados-banner');
+  if(!banner) return;
+  const encontrados=detectarConsumosCorruptos();
+  if(encontrados.length>0){
+    banner.style.display='flex';
+    document.getElementById('datos-danados-count').textContent=encontrados.length;
+  } else {
+    banner.style.display='none';
+    cerrarReparacionDatos();
+  }
+}
+function abrirReparacionDatos(){
+  renderListaReparacion();
+  document.getElementById('reparar-datos-overlay').classList.add('open');
+}
+function cerrarReparacionDatos(){
+  const el=document.getElementById('reparar-datos-overlay');
+  if(el) el.classList.remove('open');
+}
+function renderListaReparacion(){
+  const encontrados=detectarConsumosCorruptos();
+  const cont=document.getElementById('reparar-datos-lista');
+  if(!cont) return;
+  if(!encontrados.length){
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">✅ Ya no hay consumos dañados.</div>';
+    return;
+  }
+  cont.innerHTML=encontrados.map((item,idx)=>{
+    const c=item.consumo;
+    const sym=c.currency==='USD'?'$':'S/';
+    const inputId='reparar-fecha-'+idx;
+    return `<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:2px">${escapeHtml(c.desc||'Sin descripción')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${escapeHtml(item.tarjetaLabel)} · ${sym} ${(c.monto||0).toFixed(2)}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="${inputId}" type="date" style="flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12px">
+        <button class="btn btn-primary" style="font-size:11px;padding:6px 10px" onclick="guardarFechaReparada('${item.tarjetaId}','${item.monthKeyViejo}','${c.id}','${inputId}')">Guardar fecha</button>
+        <button style="font-size:11px;padding:6px 10px;background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;cursor:pointer" onclick="eliminarConsumoDanado('${item.tarjetaId}','${item.monthKeyViejo}','${c.id}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function _sacarConsumoDeMonthKeyViejo(tarjetaId, monthKeyViejo, consumoId){
+  const t=(state.tarjetas||[]).find(x=>x.id===tarjetaId);
+  if(!t||!t.movs||!t.movs[monthKeyViejo]) return null;
+  const idx=t.movs[monthKeyViejo].findIndex(c=>c.id===consumoId);
+  if(idx===-1) return null;
+  const [consumo]=t.movs[monthKeyViejo].splice(idx,1);
+  if(t.movs[monthKeyViejo].length===0) delete t.movs[monthKeyViejo]; // limpia la clave corrupta si quedó vacía
+  return {t, consumo};
+}
+function guardarFechaReparada(tarjetaId, monthKeyViejo, consumoId, inputId){
+  const nuevaFecha=document.getElementById(inputId).value;
+  if(!esFechaValida(nuevaFecha)){ alert('Elige una fecha válida.'); return; }
+  const t=(state.tarjetas||[]).find(x=>x.id===tarjetaId);
+  if(!t||!t.movs||!t.movs[monthKeyViejo]){ toast('No se encontró ese consumo (¿ya se reparó?)','info'); renderListaReparacion(); return; }
+  const idx=t.movs[monthKeyViejo].findIndex(c=>c.id===consumoId);
+  if(idx===-1){ toast('No se encontró ese consumo (¿ya se reparó?)','info'); renderListaReparacion(); return; }
+  // Se calcula la clave nueva ANTES de tocar nada — si esto fallara por
+  // cualquier razón, el consumo se queda intacto donde estaba, en vez de
+  // quedar "en el aire" a mitad de una operación (perdido de memoria sin
+  // haberse guardado en ningún lado).
+  let nuevoMonthKey;
+  try{
+    nuevoMonthKey=getBillingMonthKey(nuevaFecha, t);
+  }catch(err){
+    console.error('Error calculando el período de facturación:', err);
+    alert('No se pudo calcular el período de pago para esa fecha. Intenta de nuevo.');
+    return;
+  }
+  // Recién acá, con la clave nueva ya calculada y segura, se mueve el consumo.
+  const [consumo]=t.movs[monthKeyViejo].splice(idx,1);
+  if(t.movs[monthKeyViejo].length===0) delete t.movs[monthKeyViejo]; // limpia la clave corrupta si quedó vacía
+  consumo.fecha=nuevaFecha;
+  if(!t.movs[nuevoMonthKey]) t.movs[nuevoMonthKey]=[];
+  t.movs[nuevoMonthKey].push(consumo);
+  saveState();
+  toast('Fecha corregida — el consumo ya aparece en su período correcto');
+  renderListaReparacion();
+  actualizarBannerDatosDanados();
+  renderTarjetas();
+}
+function eliminarConsumoDanado(tarjetaId, monthKeyViejo, consumoId){
+  if(!confirm('¿Eliminar este consumo dañado? No se puede deshacer.')) return;
+  const res=_sacarConsumoDeMonthKeyViejo(tarjetaId, monthKeyViejo, consumoId);
+  if(res){
+    saveState();
+    toast('Consumo eliminado','info');
+  }
+  renderListaReparacion();
+  actualizarBannerDatosDanados();
+  renderTarjetas();
+}
 function checkNotifications(){
   const banner=document.getElementById('notify-banner');
   if(!banner) return;
@@ -8495,6 +8640,14 @@ function getBillingMonthKey(fechaStr, tarjeta){
   //   Purchase 10-jun → falls in cycle 26-may to 25-jun → closes jun → pago = jul → monthKey "2026-07"
   //   Purchase 01-jul → falls in cycle 26-jun to 25-jul → closes jul → pago = aug → monthKey "2026-08"
 
+  // Barrera defensiva: si la fecha no es un día calendario real (ej. llegó
+  // corrupta como 'NaN-NaN-NaN' desde algún flujo con un bug), NO se sigue —
+  // esto es justo lo que antes creaba un "mes" tipo "undefined-NaN" que
+  // contaminaba el Resumen Global y rompía la navegación de esa tarjeta.
+  if(!esFechaValida(fechaStr)){
+    throw new Error(`Fecha inválida para calcular el período de facturación: "${fechaStr}"`);
+  }
+
   const d      = new Date(fechaStr + 'T12:00:00');
   const dia    = d.getDate();
   const mes    = d.getMonth();   // 0-indexed
@@ -11566,6 +11719,7 @@ function initFirebase(){
         updateLoginBranding();
         render();
         updateLastUpdated();
+        actualizarBannerDatosDanados(); // detecta consumos con fecha dañada (ver bug de bot corregido)
         // Si la cuenta nunca se sincronizó antes (no había documento en Firestore),
         // subimos el estado resultante (local + demo si se sembró) una sola vez.
         if(DOC_REF && _remoteDocExisted===false){
