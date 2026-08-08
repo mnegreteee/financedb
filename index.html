@@ -1681,6 +1681,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="section-title">🔧 Mantenimiento del Auto <span style="font-size:10px;color:var(--text3);font-weight:400">(cada tipo lleva su propio conteo)</span></div>
       <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirNuevoTipoMantenimiento()">+ Agregar tipo</button>
     </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--text3);flex:1;min-width:200px">
+        📍 <b>Km actual manual</b> — solo se usa para calcular estos mantenimientos (no afecta combustible ni nada más). Actualízalo cuando te acuerdes de revisar el odómetro.
+        <div id="mant-km-manual-ultimo" style="margin-top:3px;color:var(--text2)"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="mant-km-manual-input" type="number" min="0" step="1" placeholder="Km actual" style="width:110px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text1);font-size:12px;font-family:var(--mono)">
+        <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="guardarKmManual()">Guardar</button>
+      </div>
+    </div>
     <div id="mant-sin-config" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:12px">
       Aún no tienes ningún tipo de mantenimiento configurado — ej. cambio de aceite, bujías, filtros, o el mantenimiento general del concesionario.
       <div style="margin-top:10px"><button class="btn btn-primary" style="font-size:11px" onclick="abrirNuevoTipoMantenimiento()">+ Agregar el primero</button></div>
@@ -2389,8 +2399,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 12:44'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Modal de "Nueva Valorización" en Inversiones ahora soporta 2 formas de ingresar el precio por símbolo, con toggle "Por unidad" / "Por total": (1) precio unitario -> muestra el total calculado como referencia para comparar contra el broker; (2) valor total de la posición -> calcula automáticamente el precio unitario (total / cantidad). Se guarda internamente como precio unitario en ambos casos. Se mantiene todo lo anterior: Mantenimiento del Auto con VARIOS tipos independientes (aceite, bujías, filtros, etc.), cada uno con su propio intervalo, hitos planificados e historial, corregido en web y bot por igual.';
+const APP_VERSION_DATE = '08/08/26 - 12:59'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo campo de "Km actual manual" dentro de Mantenimiento del Auto (sección Combustible) — se ingresa a mano cuando te acuerdes de revisar el odómetro, queda guardado con fecha Y HORA exacta (state.kmManual), y se usa SOLO para calcular los mantenimientos (no afecta combustible, gráficos ni tablas). getKmActualVehiculo() y getKmPromedioDiario() ahora comparan la lectura manual más reciente contra las recargas de combustible y usan la que tenga la fecha/hora más nueva. Mismo cambio aplicado al bot de Telegram (comando /kmactual). Se mantiene todo lo demás: los 2 modos de valorización (por unidad/por total) en Inversiones, y Mantenimiento del Auto con varios tipos independientes.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2420,6 +2430,7 @@ let state={
   deudas:[],        // [{id,nombre,monto,currency,fecha,nota,status,fechaPago,cuentaPago}]
   combustibleGlp:[],      // recargas GLP
   combustibleGas:[],      // recargas gasolina
+  kmManual:[],            // [{id,km,fechaHora}] lecturas manuales del odómetro — SOLO se usan para Mantenimiento del Auto, no afectan nada de combustible
   tcEmpresas:[             // casas de cambio configurables
     {id:'kambista',   nombre:'Kambista',   color:'#2f6fd1'},
     {id:'rextie',     nombre:'Rextie',     color:'#f0a53c'},
@@ -3047,6 +3058,7 @@ function migrateState(){
   // Garantizar que todos los campos existan (data guardada antes de cada módulo)
   if(!Array.isArray(state.combustibleGlp)) state.combustibleGlp=[];
   if(!Array.isArray(state.combustibleGas)) state.combustibleGas=[];
+  if(!Array.isArray(state.kmManual)) state.kmManual=[];
   if(!Array.isArray(state.tarjetas))       state.tarjetas=[];
   if(!Array.isArray(state.deudas))         state.deudas=[];
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
@@ -10694,7 +10706,42 @@ function saveFuelGasto(){
 //  en base al kilometraje que ya registras al cargar combustible (GLP y
 //  Gasolina juntos), sin pedir ningún dato nuevo aparte de la config inicial.
 // ══════════════════════════════════════════════════════
-// Km actual = el kmFinal más reciente entre TODAS las recargas (GLP+Gas)
+// ══════════════════════════════════════════════════════
+//  KM MANUAL — lectura del odómetro que Miguel ingresa a mano cuando se
+//  acuerda (no siempre coincide con una recarga de combustible). Se guarda
+//  con fecha Y HORA exacta de registro, para poder compararla correctamente
+//  contra las recargas de combustible y quedarse siempre con la lectura más
+//  reciente. SOLO se usa para Mantenimiento del Auto — no toca combustible.
+// ══════════════════════════════════════════════════════
+function guardarKmManual(){
+  const inp=document.getElementById('mant-km-manual-input');
+  const km=parseFloat(inp.value);
+  if(isNaN(km)||km<0){ alert('Ingresa un kilometraje válido.'); return; }
+  if(!Array.isArray(state.kmManual)) state.kmManual=[];
+  const ahora=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const fechaHora=`${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
+  state.kmManual.push({id:'kmm-'+Date.now(), km, fechaHora});
+  saveState();
+  inp.value='';
+  renderMantenimiento();
+  toast('Kilometraje actual actualizado');
+}
+function renderKmManualUltimo(){
+  const el=document.getElementById('mant-km-manual-ultimo');
+  if(!el) return;
+  const arr=(state.kmManual||[]).slice().sort((a,b)=>a.fechaHora<b.fechaHora?1:a.fechaHora>b.fechaHora?-1:0);
+  if(!arr.length){ el.textContent='Aún no has registrado ninguna lectura manual.'; return; }
+  const ult=arr[0];
+  const d=new Date(ult.fechaHora);
+  const fechaTxt=d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+  el.textContent=`Última lectura manual: ${Math.round(ult.km).toLocaleString('es-PE')} km — registrada el ${fechaTxt}`;
+}
+// Km actual = la lectura más reciente entre TODAS las recargas (GLP+Gas) Y las
+// lecturas manuales del odómetro (state.kmManual) — la que tenga la fecha/hora
+// más reciente gana, sin importar de qué fuente venga. Las recargas solo tienen
+// fecha (sin hora), así que se comparan al mediodía de ese día (mismo criterio
+// que el resto de la app); las lecturas manuales sí llevan hora exacta.
 function getKmActualVehiculo(){
   let mejor=null;
   ['combustibleGlp','combustibleGas'].forEach(key=>{
@@ -10702,31 +10749,43 @@ function getKmActualVehiculo(){
       const km=parseFloat(row.kmFinal);
       const fecha=row.fFinal;
       if(isNaN(km)||!fecha) return;
-      if(!mejor || fecha>mejor.fecha) mejor={km, fecha};
+      const ts=fecha+'T12:00:00';
+      if(!mejor || ts>mejor.ts) mejor={km, ts};
     });
   });
-  return mejor; // null si todavía no hay ninguna recarga con km registrado
+  (state.kmManual||[]).forEach(row=>{
+    const km=parseFloat(row.km);
+    if(isNaN(km)||!row.fechaHora) return;
+    if(!mejor || row.fechaHora>mejor.ts) mejor={km, ts:row.fechaHora};
+  });
+  if(!mejor) return null;
+  return {km:mejor.km, fecha:mejor.ts.slice(0,10)};
 }
 // Promedio de km recorridos por día — ponderado (suma de km ÷ suma de días
 // de TODAS las recargas completas), más preciso que promediar cada tasa
 // individual, porque no le da el mismo peso a un tramo de 2 días que a uno de 20.
 function getKmPromedioDiario(){
-  // GLP y Gasolina miden el MISMO odómetro del auto. Sumar los km de cada
-  // combustible por separado (como se hacía antes) corre el riesgo de contar
-  // el mismo recorrido físico dos veces si sus períodos se traslapan en el
-  // tiempo — que es lo normal, porque manejas todos los días sin importar
-  // qué combustible cargues. La forma correcta: juntar TODAS las lecturas de
-  // ambos en una sola línea de tiempo, y comparar solo la primera contra la
-  // última — así cada kilómetro real se cuenta una sola vez.
+  // GLP, Gasolina y las lecturas manuales miden el MISMO odómetro del auto.
+  // Sumar los km de cada fuente por separado corre el riesgo de contar el
+  // mismo recorrido físico dos veces si sus períodos se traslapan en el
+  // tiempo — que es lo normal, porque el auto se mueve todos los días sin
+  // importar qué combustible cargues o cuándo actualizas el km a mano. La
+  // forma correcta: juntar TODAS las lecturas en una sola línea de tiempo, y
+  // comparar solo la primera contra la última — así cada km real se cuenta
+  // una sola vez, sin importar de qué fuente vino cada lectura.
   const lecturas=[];
   ['combustibleGlp','combustibleGas'].forEach(key=>{
     (state[key]||[]).forEach(row=>{
       const km=parseFloat(row.kmFinal);
-      if(!isNaN(km) && row.fFinal) lecturas.push({fecha:row.fFinal, km});
+      if(!isNaN(km) && row.fFinal) lecturas.push({fecha:row.fFinal, ts:row.fFinal+'T12:00:00', km});
     });
   });
+  (state.kmManual||[]).forEach(row=>{
+    const km=parseFloat(row.km);
+    if(!isNaN(km) && row.fechaHora) lecturas.push({fecha:row.fechaHora.slice(0,10), ts:row.fechaHora, km});
+  });
   if(lecturas.length<2) return null;
-  lecturas.sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
+  lecturas.sort((a,b)=>a.ts<b.ts?-1:a.ts>b.ts?1:0);
   const primera=lecturas[0], ultima=lecturas[lecturas.length-1];
   const dias=fuelDaysBetween(primera.fecha, ultima.fecha);
   const km=ultima.km-primera.km;
@@ -10759,6 +10818,7 @@ function getProyeccionMantenimientoItem(item){
   return {kmActual, kmProximo, kmFaltan, promDiario, diasFaltan, fechaEstimada, avance, sinDatosKm:!actual, esPlanificado:objetivo.esPlanificado};
 }
 function renderMantenimiento(){
+  renderKmManualUltimo();
   const sinConfigEl=document.getElementById('mant-sin-config');
   const listaEl=document.getElementById('mant-lista');
   const tpl=document.getElementById('mant-item-template');
@@ -10796,8 +10856,8 @@ function renderMantenimiento(){
       barra.style.width=proy.avance.toFixed(0)+'%';
       barra.style.background=colorUrgencia;
       let nota='';
-      if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga con kilometraje registrado.';
-      else if(!proy.promDiario) nota='Registra 2+ recargas con km para estimar la fecha.';
+      if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga ni lectura manual con kilometraje registrado.';
+      else if(!proy.promDiario) nota='Registra 2+ lecturas de km (recarga o manual) para estimar la fecha.';
       node.querySelector('[data-role="nota"]').textContent=nota;
     }
     const hist=(item.historial||[]).slice().reverse().slice(0,5);
