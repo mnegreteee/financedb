@@ -2295,9 +2295,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.49.0';
-const APP_VERSION_DATE = '08/08/26 - 07:33'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Dos funcionalidades nuevas: (1) "Día límite de pago" opcional en Pagos/Ingresos Frecuentes, con recordatorios desde 3 días antes (web y bot), independiente de la regla genérica del día 5 para los que no tienen fecha exacta; (2) "Actividad Reciente" en Config — registro de las últimas 80 acciones (movimientos, consumos, transferencias, deudas, operaciones de TC, pagos frecuentes, combustible) con botón para eliminar y deshacer el efecto de cualquiera. De paso se corrigió otro caso del bug de dólares forzados a "Ahorro Dólares" (esta vez en Transferencias). Probado en navegador real: revertir un movimiento normal, un consumo de tarjeta y un gasto de deuda acumulativa, los 3 con resultado correcto.';
+const APP_VERSION = 'v1.49.1';
+const APP_VERSION_DATE = '08/08/26 - 07:50'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Auditoría completa de todo lo agregado esta semana. Se encontraron y corrigieron 3 últimos rastros del bug de "dólares forzados a Ahorro Dólares": (1) importar Excel ignoraba la cuenta de ahorro en dólares indicada y la forzaba a la fija; (2) "Borrar meses" reconstruía saldos con el mismo problema, pudiendo corromper cuentas de ahorro USD personalizadas; (3) el reporte PDF mostraba el símbolo de moneda incorrecto (S/ en vez de $) para cuentas de ahorro en dólares personalizadas. Bot: 0 problemas reales (3 alertas de "función no definida" resultaron ser funciones locales válidas). Verificado con pruebas automatizadas: 5/5 casos correctos en el símbolo de moneda.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6369,7 +6369,11 @@ function generarReporteMensualPDF(y,m){
   const s=reconstructSaldoAt(y,m);
   sectionTitle('Saldos al cierre del mes');
   Object.entries(s).forEach(([cuenta,saldo])=>{
-    const sym=cuenta==='Ahorro Dólares'?'$':'S/';
+    // Antes esto solo reconocía 'Ahorro Dólares' exacto — cualquier cuenta de
+    // ahorro personalizada en dólares (ej. "Pichincha $") aparecía con el
+    // símbolo de soles por error. getAccountCurrency() ya sabe reconocer
+    // las cuentas personalizadas correctamente.
+    const sym=getAccountCurrency(cuenta)==='USD'?'$':'S/';
     row(cuenta, sym+' '+(saldo||0).toFixed(2));
   });
   yy+=4;
@@ -6700,8 +6704,12 @@ function parseExcelToHistorico(wb){
     else if(type==='ahorro'){
       // Preservar signo original: depósito=positivo, retiro=negativo
       const delta=monto; // monto original con signo
-      if(currency==='PEN') cuentasSaldo[account]=(cuentasSaldo[account]||0)+delta;
-      else cuentasSaldo['Ahorro Dólares']=(cuentasSaldo['Ahorro Dólares']||0)+delta;
+      // Se respeta la cuenta indicada en el Excel — antes esto forzaba
+      // cualquier ahorro en dólares a la cuenta fija 'Ahorro Dólares', aunque
+      // arriba mismo esta función ya sabe reconocer cuentas personalizadas
+      // en dólares (discoveredAccounts). Mismo bug ya corregido en otros
+      // lugares (movimientos, transferencias, reconstrucción de saldos).
+      cuentasSaldo[account]=(cuentasSaldo[account]||0)+delta;
     }
   });
   return{movimientos,snapshots,cuentas:cuentasSaldo,discoveredAccounts};
@@ -7104,8 +7112,13 @@ function executeDeleteMonths(){
         if(mv.type==='expense') cuentasBase[mv.account]=(cuentasBase[mv.account]||0)-mv.amount;
         if(mv.type==='ahorro')  cuentasBase[mv.account]=(cuentasBase[mv.account]||0)+mv.amount;
       } else {
-        if(mv.type==='income'||mv.type==='ahorro') cuentasBase['Ahorro Dólares']=(cuentasBase['Ahorro Dólares']||0)+mv.amount;
-        if(mv.type==='expense') cuentasBase['Ahorro Dólares']=(cuentasBase['Ahorro Dólares']||0)-mv.amount;
+        // Se respeta la cuenta real del movimiento — antes esto forzaba
+        // cualquier movimiento USD a la cuenta fija 'Ahorro Dólares' al
+        // reconstruir saldos tras "Borrar meses", ignorando en qué cuenta
+        // de ahorro en dólares realmente estaba (mismo bug ya corregido
+        // en otros lugares de la app).
+        if(mv.type==='income'||mv.type==='ahorro') cuentasBase[mv.account]=(cuentasBase[mv.account]||0)+mv.amount;
+        if(mv.type==='expense') cuentasBase[mv.account]=(cuentasBase[mv.account]||0)-mv.amount;
       }
     });
     state.cuentas = cuentasBase;
