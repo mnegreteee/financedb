@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shhhhhhh🤫</title>
+<title>No hay nada que ver aquí</title>
 <!-- PWA: instalable en la pantalla de inicio. Ícono y nombre deliberadamente
      neutros/genéricos, igual que el título de la pestaña, para no delatar
      de qué app se trata a simple vista. -->
@@ -57,7 +57,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .nav-tab.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
 .nav-dropdown{position:relative;}
 .nav-dropdown-trigger.group-active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
-.nav-dropdown-menu{display:none;flex-direction:column;gap:1px;position:absolute;top:calc(100% + 6px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:4px;min-width:170px;z-index:210;box-shadow:0 10px 28px rgba(0,0,0,.4);}
+.nav-dropdown-menu{display:none;flex-direction:column;gap:1px;position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:4px;min-width:170px;z-index:210;box-shadow:0 10px 28px rgba(0,0,0,.4);}
 .nav-dropdown-menu.open{display:flex;}
 .nav-dropdown-item{padding:7px 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text2);border:none;background:none;font-family:var(--font);text-align:left;white-space:nowrap;}
 .nav-dropdown-item:hover{background:var(--bg3);color:var(--text);}
@@ -2399,8 +2399,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 13:13'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva opción "📅 Último día de cada mes" en Pagos/Ingresos Frecuentes (checkbox junto al campo "Día límite de pago") — se ajusta solo entre 28, 29, 30 o 31 según el mes real, sin tener que adivinar ni escribir 31 a mano. Se guarda como pf.diaPago="ultimo" (antes solo aceptaba 1-31) y se propagó a los 3 lugares que calculan/muestran ese día: recordatorios del dashboard, la tarjeta de cada pago frecuente, y el bot de Telegram (recordatorios diarios). Corregido también un detalle menor: antes, si configurabas el día 31 en un mes de 30 días, el aviso decía "vence el día 31" aunque en realidad usaba el día 30 — ahora con "último día del mes" el mensaje es explícito y correcto en cualquier mes. Se mantiene todo lo demás: km actual manual en Mantenimiento, valorización por unidad/total en Inversiones.';
+const APP_VERSION_DATE = '08/08/26 - 18:18'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Traídos desde la copia de Nathy (adaptados para no romper tus cuentas reales): (1) deduplicación de saldos — Disponible, Ahorro, Patrimonio Neto, tabla anual y gráficos de 12 meses ya no suman una cuenta dos veces si alguna vez creas una personalizada con el mismo nombre que BCP/BBVA/Efectivo/Ahorro Soles/Ahorro Dólares (a diferencia de Nathy, TUS 5 cuentas por defecto se siguen contando y mostrando normalmente, porque las usas de verdad); (2) tieneDatosHasta() — un mes sin actividad propia ahora muestra el saldo arrastrado en vez de "—"; (3) "Disponible Actual" ya no muestra el saldo de HOY al navegar a un mes pasado sin datos, solo cuando el mes que ves es de verdad el actual; (4) validación anti-duplicados al crear una cuenta nueva. Se mantiene todo lo anterior: Km actual manual en Mantenimiento, "Último día del mes" en Pagos Frecuentes, menú móvil corregido, valorización por unidad/total en Inversiones, Mantenimiento del Auto con varios tipos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3325,9 +3325,34 @@ function toggleNavDropdown(name, ev){
   const menu=document.getElementById('navmenu-'+name);
   const wasOpen=menu.classList.contains('open');
   closeAllNavDropdowns();
-  if(!wasOpen) menu.classList.add('open');
+  if(!wasOpen){
+    menu.classList.add('open');
+    // El menú usa position:fixed con coordenadas calculadas a mano (en vez del
+    // position:absolute que tenía antes) porque en móvil .nav-center tiene
+    // overflow-x:auto para poder hacer scroll horizontal entre pestañas — y
+    // eso recorta cualquier hijo con position:absolute que sobresalga de su
+    // alto, que es justo lo que le pasaba a este desplegable (por eso no se
+    // veía en el celular). position:fixed no se ve afectado por el overflow
+    // de ningún contenedor ancestro, así que siempre queda visible encima.
+    const trigger=ev?ev.currentTarget:document.querySelector('#navdrop-'+name+' .nav-dropdown-trigger');
+    if(trigger){
+      const rect=trigger.getBoundingClientRect();
+      const menuWidth=menu.offsetWidth||170;
+      let left=rect.left;
+      if(left+menuWidth>window.innerWidth-8) left=Math.max(8,window.innerWidth-menuWidth-8);
+      menu.style.top=(rect.bottom+6)+'px';
+      menu.style.left=left+'px';
+    }
+  }
 }
 document.addEventListener('click', closeAllNavDropdowns);
+// Si el usuario hace scroll horizontal de las pestañas (móvil) mientras un
+// desplegable está abierto, se cierra — como ahora el menú es position:fixed,
+// ya no "sigue" al botón si este se mueve por el scroll del contenedor.
+document.addEventListener('DOMContentLoaded', function(){
+  const navCenter=document.querySelector('.nav-center');
+  if(navCenter) navCenter.addEventListener('scroll', closeAllNavDropdowns);
+});
 
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -3380,24 +3405,47 @@ function calcMonth(y,m){
   });
   return{ingresos:ing,gastos:gas,resultado:ing-gas};
 }
-function getDisponible(y,m){
-  const hasMov=state.movimientos.some(mv=>{const d=new Date(mv.date+'T12:00:00');return d.getFullYear()===y&&d.getMonth()===m;});
-  const hasSnap=!!(state.snapshots||{})[snapKey(y,m)];
-  if(!hasMov&&!hasSnap) return null;
-  const s=reconstructSaldoAt(y,m);
-  // Only sum OPERATIVA accounts (type=operativa or default op accounts)
-  // Explicitly exclude: ahorro, otras, Ahorro Soles, Ahorro Dólares
+// Devuelve la lista de cuentas OPERATIVAS a sumar, sin duplicados: si una
+// cuenta personalizada usa el mismo nombre que BCP/BBVA/Efectivo, la
+// personalizada manda y el default con ese nombre no se cuenta aparte —
+// evita sumar el mismo saldo dos veces.
+function getCuentasOperativasUnicas(){
   const defaultOp=['BCP','BBVA','Efectivo'];
-  const ahDefaults=['Ahorro Soles','Ahorro Dólares'];
-  let total=0;
-  // Default operativa accounts
-  defaultOp.forEach(k=>{ if(s[k]!==undefined) total+=s[k]; });
-  // Custom accounts: only operativa type
-  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-    if(v.type==='operativa') total+=(s[k]||0);
-    // 'otras' and 'ahorro' are explicitly excluded
+  const customKeys=Object.entries(state.customCuentas||{}).filter(([,v])=>v.type==='operativa').map(([k])=>k);
+  const customSet=new Set(customKeys);
+  return [...defaultOp.filter(k=>!customSet.has(k)), ...customKeys];
+}
+function sumaDisponibleDe(saldos){
+  return getCuentasOperativasUnicas().reduce((sum,k)=>sum+((saldos||{})[k]||0),0);
+}
+// Mismo cuidado pero para cuentas de AHORRO. moneda: 'PEN' o 'USD'.
+function sumaAhorroDe(saldos, moneda){
+  const claveDefault = moneda==='USD' ? 'Ahorro Dólares' : 'Ahorro Soles';
+  const customAhorro = Object.entries(state.customCuentas||{}).filter(([,v])=>v.type==='ahorro');
+  const customSet = new Set(customAhorro.map(([k])=>k));
+  let tot = customSet.has(claveDefault) ? 0 : ((saldos||{})[claveDefault]||0);
+  customAhorro.forEach(([k,v])=>{
+    const esUSD = v.currency==='USD';
+    if((moneda==='USD')===esUSD) tot += ((saldos||{})[k]||0);
   });
-  return total;
+  return tot;
+}
+// ¿Hay algún dato (movimiento o snapshot) EN o ANTES del mes (y,m)? — así un
+// mes sin actividad propia sigue mostrando el saldo real arrastrado del mes
+// anterior, en vez de "—" (reconstructSaldoAt ya sabe calcularlo bien).
+function tieneDatosHasta(y,m){
+  const cutoff=new Date(y,m+1,0,23,59,59);
+  const hasMov=state.movimientos.some(mv=>new Date(mv.date+'T12:00:00')<=cutoff);
+  if(hasMov) return true;
+  return Object.keys(state.snapshots||{}).some(key=>{
+    const [yy,mm]=key.split('-').map(Number);
+    return yy<y || (yy===y && (mm-1)<=m);
+  });
+}
+function getDisponible(y,m){
+  if(!tieneDatosHasta(y,m)) return null;
+  const s=reconstructSaldoAt(y,m);
+  return sumaDisponibleDe(s);
 }
 
 // ── RENDER MAIN ───────────────────────────────────────
@@ -3556,7 +3604,7 @@ function checkBrowserNotifications(forzar){
 
   // 2. Saldo bajo en cuentas operativas (umbral fijo de S/50, igual que el bot por defecto)
   const threshold=50;
-  const cuentasOperativas=['BCP','BBVA','Efectivo',...Object.entries(state.customCuentas||{}).filter(([,v])=>v.type==='operativa').map(([k])=>k)];
+  const cuentasOperativas=getCuentasOperativasUnicas();
   cuentasOperativas.forEach(k=>{
     const saldo=(state.cuentas||{})[k];
     if(saldo!==undefined && saldo<threshold) mensajes.push(`⚠️ Saldo bajo en ${k}: S/ ${saldo.toFixed(2)}`);
@@ -3784,9 +3832,14 @@ function renderSummaryCards(){
   else{pe.textContent='—';pe.style.color='var(--text3)';}
   document.getElementById('sub-disp-prev').textContent=MONTHS[prev.month]+' '+prev.year;
 
-  // Disponible actual = mes SELECCIONADO reconstruido desde movimientos
+  // Disponible actual = mes SELECCIONADO reconstruido desde movimientos. El
+  // atajo de usar el saldo EN VIVO (state.cuentas) solo aplica si el mes que
+  // se ve es de verdad el mes actual real — si no, un mes pasado sin datos
+  // mostraba el saldo de HOY en vez de lo que correspondía a ese mes.
   const dcRaw=getDisponible(state.currentYear,state.currentMonth);
-  const dc = dcRaw !== null ? dcRaw : (state.cuentas.BCP||0)+(state.cuentas.BBVA||0)+(state.cuentas.Efectivo||0);
+  const hoyReal=new Date();
+  const esMesActualReal = state.currentYear===hoyReal.getFullYear() && state.currentMonth===hoyReal.getMonth();
+  const dc = dcRaw !== null ? dcRaw : (esMesActualReal ? sumaDisponibleDe(state.cuentas) : 0);
   document.getElementById('sum-disp-cur').textContent=M(fmtS(dc));
   document.getElementById('sum-disp-cur').style.color=dc>=0?'var(--accent)':'var(--red)';
   if(dp!==null){
@@ -3796,15 +3849,10 @@ function renderSummaryCards(){
 
   // Reconstruir saldos del mes seleccionado para los cards
   const curSaldoCards=reconstructSaldoAt(state.currentYear,state.currentMonth);
-  // Sum ALL ahorro-type accounts for display
-  let aS=curSaldoCards['Ahorro Soles']||0;
-  let aD=curSaldoCards['Ahorro Dólares']||0;
-  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-    if(v.type==='ahorro'){
-      if(v.currency==='USD') aD+=(curSaldoCards[k]||0);
-      else aS+=(curSaldoCards[k]||0);
-    }
-  });
+  // Sum ALL ahorro-type accounts for display — sin contar dos veces si una
+  // personalizada repite el nombre de "Ahorro Soles"/"Ahorro Dólares".
+  const aS=sumaAhorroDe(curSaldoCards,'PEN');
+  const aD=sumaAhorroDe(curSaldoCards,'USD');
   document.getElementById('sum-ahorro-soles').textContent=M(fmtS(aS));
   const intS=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='ahorro'&&(
     m.account==='Ahorro Soles'||
@@ -3874,22 +3922,14 @@ function clearSaldoCache(){ _saldoCache = {}; }
 function getTotalAhorroSoles(){
   const now = new Date();
   const saldo = reconstructSaldoAt(now.getFullYear(), now.getMonth());
-  let aS = saldo['Ahorro Soles'] || 0;
-  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-    if(v.type==='ahorro' && v.currency!=='USD') aS += (saldo[k]||0);
-  });
-  return aS;
+  return sumaAhorroDe(saldo,'PEN');
 }
 
 // Devuelve el saldo actual TOTAL de Ahorro en Dólares (cuenta default + custom tipo ahorro en USD)
 function getTotalAhorroDolares(){
   const now = new Date();
   const saldo = reconstructSaldoAt(now.getFullYear(), now.getMonth());
-  let aD = saldo['Ahorro Dólares'] || 0;
-  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-    if(v.type==='ahorro' && v.currency==='USD') aD += (saldo[k]||0);
-  });
-  return aD;
+  return sumaAhorroDe(saldo,'USD');
 }
 
 function reconstructSaldoAt(y,m){
@@ -4073,14 +4113,29 @@ function renderAccountsTables(){
       ahRows.push({k,l:k,ic:'🏦',s:v.currency==='USD'?'$':'S/',otras:false});
   });
 
-  document.getElementById('accounts-tbody').innerHTML=allOpRows.length?makeRows(ordenarPorPreferencia(allOpRows),'op'):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</td></tr>';
+  // Si una cuenta personalizada se crea con el MISMO nombre que una de las 5
+  // cuentas por defecto, quedaría dos veces en la tabla — se deduplica por
+  // nombre, quedándose con la versión personalizada (tiene más info propia).
+  function dedupePorNombre(rows){
+    const vistos=new Set(); const out=[];
+    for(let i=rows.length-1;i>=0;i--){
+      if(vistos.has(rows[i].k)) continue;
+      vistos.add(rows[i].k);
+      out.unshift(rows[i]);
+    }
+    return out;
+  }
+  const allOpRowsDeduped=dedupePorNombre(allOpRows);
+  const ahRowsDeduped=dedupePorNombre(ahRows);
+
+  document.getElementById('accounts-tbody').innerHTML=allOpRowsDeduped.length?makeRows(ordenarPorPreferencia(allOpRowsDeduped),'op'):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</td></tr>';
 
   // Filas de TOTAL por moneda — coinciden con lo que muestran las tarjetas
   // "Ahorro Soles" y "Ahorro Dólares" de arriba (mismo criterio de suma).
   let totalFilas='';
-  if(ahRows.length){
+  if(ahRowsDeduped.length){
     let totS=0, totD=0, prevS=0, prevD=0, hayS=false, hayD=false;
-    ahRows.forEach(r=>{
+    ahRowsDeduped.forEach(r=>{
       const cur=curSaldo[r.k]||0, prv=prevSaldo[r.k]||0;
       if(r.s==='$'){ totD+=cur; prevD+=prv; hayD=true; }
       else { totS+=cur; prevS+=prv; hayS=true; }
@@ -4093,7 +4148,7 @@ function renderAccountsTables(){
     if(hayS) totalFilas+=filaTotal('Total Soles', totS, prevS, fmtS);
     if(hayD) totalFilas+=filaTotal('Total Dólares', totD, prevD, fmtD);
   }
-  document.getElementById('savings-tbody').innerHTML=ahRows.length?(makeRows(ordenarPorPreferencia(ahRows),'ahorro')+totalFilas):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">—</td></tr>';
+  document.getElementById('savings-tbody').innerHTML=ahRowsDeduped.length?(makeRows(ordenarPorPreferencia(ahRowsDeduped),'ahorro')+totalFilas):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">—</td></tr>';
 }
 // ── Reordenar Cuentas/Ahorros a mano — flechas ▲▼ (cualquier dispositivo) o
 // arrastrando con el mouse (PC). Ambos caminos guardan en state.ordenCuentas.
@@ -4526,18 +4581,11 @@ function renderAnualTable(){
   const rows=[];
   for(let i=0;i<12;i++){
     const disp=getDisponible(state.currentYear,i);
-    const hasMov=state.movimientos.some(mv=>{const d=new Date(mv.date+'T12:00:00');return d.getFullYear()===state.currentYear&&d.getMonth()===i;});
-    const hasSnap=!!(state.snapshots||{})[snapKey(state.currentYear,i)];
     let aS=null,aD=null;
-    if(hasMov||hasSnap){
+    if(tieneDatosHasta(state.currentYear,i)){
       const s=reconstructSaldoAt(state.currentYear,i);
-      aS=s['Ahorro Soles']||0;
-      aD=s['Ahorro Dólares']||0;
-      // Suma también las cuentas de ahorro personalizadas de cada moneda
-      Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-        if(v.type!=='ahorro') return;
-        if(v.currency==='USD') aD+=(s[k]||0); else aS+=(s[k]||0);
-      });
+      aS=sumaAhorroDe(s,'PEN');
+      aD=sumaAhorroDe(s,'USD');
     }
     rows.push({disp,aS,aD});
   }
@@ -4703,29 +4751,14 @@ function renderChart(){
   } else if(currentChartTab===1||currentChartTab===2||currentChartTab===3||currentChartTab===4){
     const isS=currentChartTab===1,isD=currentChartTab===2,isT=currentChartTab===4;
     const col=isS?'#a78bfa':isD?'#f0a53c':isT?'#5b8def':'#2dd4bf';
-    // Suma TODAS las cuentas de ahorro de la moneda indicada (la cuenta por
-    // defecto + las personalizadas tipo "ahorro"), no solo la cuenta fija —
-    // así el gráfico refleja el mismo total que la tarjeta de arriba.
-    const sumAhorro=(s, moneda)=>{
-      let tot = s[moneda==='USD'?'Ahorro Dólares':'Ahorro Soles']||0;
-      Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-        if(v.type!=='ahorro') return;
-        const esUSD = v.currency==='USD';
-        if((moneda==='USD')===esUSD) tot += (s[k]||0);
-      });
-      return tot;
-    };
     const data=[];
     for(let i=0;i<12;i++){
-      // Verificar si hay movimientos o snapshot en ese mes
-      const hasMov=state.movimientos.some(mv=>{const d=new Date(mv.date+'T12:00:00');return d.getFullYear()===state.currentYear&&d.getMonth()===i;});
-      const hasSnap=!!(state.snapshots||{})[snapKey(state.currentYear,i)];
-      if(hasMov||hasSnap){
+      if(tieneDatosHasta(state.currentYear,i)){
         const s=reconstructSaldoAt(state.currentYear,i);
-        if(isS) data.push(+sumAhorro(s,'PEN').toFixed(2));
-        else if(isD) data.push(+sumAhorro(s,'USD').toFixed(2));
-        else if(isT) data.push(+((s.BCP||0)+(s.BBVA||0)+(s.Efectivo||0)+sumAhorro(s,'PEN')).toFixed(2));
-        else data.push(+((s.BCP||0)+(s.BBVA||0)+(s.Efectivo||0)).toFixed(2));
+        if(isS) data.push(+sumaAhorroDe(s,'PEN').toFixed(2));
+        else if(isD) data.push(+sumaAhorroDe(s,'USD').toFixed(2));
+        else if(isT) data.push(+(sumaDisponibleDe(s)+sumaAhorroDe(s,'PEN')).toFixed(2));
+        else data.push(+sumaDisponibleDe(s).toFixed(2));
       } else data.push(null);
     }
     const lbl=isS?'Ahorro S/':isD?'Ahorro $':isT?'Total Soles':'Saldo disp.';
@@ -4822,19 +4855,13 @@ function renderChart(){
       meses.push({y,m});
     }
     const data=meses.map(({y,m})=>{
-      const hasMov=state.movimientos.some(mv=>{const d=new Date(mv.date+'T12:00:00');return d.getFullYear()===y&&d.getMonth()===m;});
-      const hasSnap=!!(state.snapshots||{})[snapKey(y,m)];
-      if(!hasMov&&!hasSnap) return null;
+      if(!tieneDatosHasta(y,m)) return null;
       const s=reconstructSaldoAt(y,m);
-      const disponible=(s.BCP||0)+(s.BBVA||0)+(s.Efectivo||0);
-      // Suma TODAS las cuentas de ahorro (default + personalizadas), no solo
-      // las dos por defecto — si no, el patrimonio ignoraría los ahorros que
-      // el usuario tenga repartidos en otros bancos.
-      let ahorroPEN=s['Ahorro Soles']||0, ahorroUSD=s['Ahorro Dólares']||0;
-      Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-        if(v.type!=='ahorro') return;
-        if(v.currency==='USD') ahorroUSD+=(s[k]||0); else ahorroPEN+=(s[k]||0);
-      });
+      const disponible=sumaDisponibleDe(s);
+      // Suma TODAS las cuentas de ahorro (default + personalizadas), sin
+      // contar dos veces si alguna personalizada repite el nombre de una
+      // cuenta de ahorro por defecto.
+      const ahorroPEN=sumaAhorroDe(s,'PEN'), ahorroUSD=sumaAhorroDe(s,'USD');
       const ahorro=ahorroPEN+(ahorroUSD*rate);
       return +(disponible+ahorro+invValorAhora-deudaTCTotalAhora).toFixed(2);
     });
@@ -6379,7 +6406,7 @@ function renderComparativo(){
     {label:'Ingresos',a:cA.ingresos,b:cB.ingresos,fmt:fmtS,color:'var(--green)'},
     {label:'Gastos',a:cA.gastos,b:cB.gastos,fmt:fmtS,color:'var(--red)'},
     {label:'Resultado',a:cA.resultado,b:cB.resultado,fmt:fmtS,color:'var(--accent)'},
-    {label:'Ahorro Soles',a:(()=>{const s=(state.snapshots||{})[snapKey(yA,mA)];return s?s['Ahorro Soles']||0:0;})(),b:(()=>{const s=(state.snapshots||{})[snapKey(yB,mB)];return s?s['Ahorro Soles']||0:getTotalAhorroSoles();})(),fmt:fmtS,color:'var(--purple)'},
+    {label:'Ahorro Soles',a:sumaAhorroDe(reconstructSaldoAt(yA,mA),'PEN'),b:sumaAhorroDe(reconstructSaldoAt(yB,mB),'PEN'),fmt:fmtS,color:'var(--purple)'},
     {label:'Disponible',a:getDisponible(yA,mA)||0,b:getDisponible(yB,mB)||0,fmt:fmtS,color:'var(--teal)'},
   ];
   const maxVal=Math.max(...rows.map(r=>Math.max(r.a,r.b)))||1;
@@ -6423,6 +6450,7 @@ function exportXLSX(){
   const saldos=[['Cuenta','Tipo','Moneda','Saldo']];
   ['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares'].forEach(k=>{
     if(state.cuentas[k]===undefined) return;
+    if((state.customCuentas||{})[k]) return; // evita fila duplicada si una cuenta personalizada repite este nombre
     const esAhorro=k.startsWith('Ahorro');
     saldos.push([k, esAhorro?'ahorro':'operativa', k==='Ahorro Dólares'?'USD':'PEN', state.cuentas[k]||0]);
   });
@@ -7678,6 +7706,14 @@ function saveNewCuenta(){
   const month=parseInt(document.getElementById('nc-month').value);
   const year=parseInt(document.getElementById('nc-year').value);
   if(!name){alert('Ingresa un nombre.');return;}
+  // Evita el choque de nombres que causaba cuentas "duplicadas" en la tabla
+  // (una fila por ser cuenta por defecto, otra por ser personalizada, ambas
+  // con el mismo nombre y leyendo el mismo saldo).
+  const nombresEnUso=new Set([...Object.keys(state.customCuentas||{}), ...Object.keys(state.cuentas||{})]);
+  if(nombresEnUso.has(name)){
+    alert('Ya existe una cuenta llamada "'+name+'". Usa otro nombre, o edítala desde la lista de abajo.');
+    return;
+  }
   if(!state.customCuentas) state.customCuentas={};
   state.customCuentas[name]={type,currency,startYear:year,startMonth:month};
   if(!state.cuentaColors) state.cuentaColors={};
@@ -9289,16 +9325,10 @@ function renderDashboard(){
   const dispPrev = getDisponible(prev.year, prev.month) || 0;
 
   // ── Ahorros ───────────────────────────────────────
-  let aS = saldoCur['Ahorro Soles']  || 0;
-  let aD = saldoCur['Ahorro Dólares']|| 0;
-  let aSp= saldoPrev['Ahorro Soles'] || 0;
-  let aDp= saldoPrev['Ahorro Dólares']||0;
-  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-    if(v.type==='ahorro'){
-      if(v.currency==='USD'){ aD+=(saldoCur[k]||0); aDp+=(saldoPrev[k]||0); }
-      else { aS+=(saldoCur[k]||0); aSp+=(saldoPrev[k]||0); }
-    }
-  });
+  const aS = sumaAhorroDe(saldoCur,'PEN');
+  const aD = sumaAhorroDe(saldoCur,'USD');
+  const aSp= sumaAhorroDe(saldoPrev,'PEN');
+  const aDp= sumaAhorroDe(saldoPrev,'USD');
   const ahorroTotalCur  = aS + (aD * (state.tc?.compra||3.45));
   const ahorroTotalPrev = aSp + (aDp* (state.tc?.compra||3.45));
 
