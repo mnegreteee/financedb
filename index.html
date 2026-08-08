@@ -2399,8 +2399,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 12:59'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo campo de "Km actual manual" dentro de Mantenimiento del Auto (sección Combustible) — se ingresa a mano cuando te acuerdes de revisar el odómetro, queda guardado con fecha Y HORA exacta (state.kmManual), y se usa SOLO para calcular los mantenimientos (no afecta combustible, gráficos ni tablas). getKmActualVehiculo() y getKmPromedioDiario() ahora comparan la lectura manual más reciente contra las recargas de combustible y usan la que tenga la fecha/hora más nueva. Mismo cambio aplicado al bot de Telegram (comando /kmactual). Se mantiene todo lo demás: los 2 modos de valorización (por unidad/por total) en Inversiones, y Mantenimiento del Auto con varios tipos independientes.';
+const APP_VERSION_DATE = '08/08/26 - 13:13'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva opción "📅 Último día de cada mes" en Pagos/Ingresos Frecuentes (checkbox junto al campo "Día límite de pago") — se ajusta solo entre 28, 29, 30 o 31 según el mes real, sin tener que adivinar ni escribir 31 a mano. Se guarda como pf.diaPago="ultimo" (antes solo aceptaba 1-31) y se propagó a los 3 lugares que calculan/muestran ese día: recordatorios del dashboard, la tarjeta de cada pago frecuente, y el bot de Telegram (recordatorios diarios). Corregido también un detalle menor: antes, si configurabas el día 31 en un mes de 30 días, el aviso decía "vence el día 31" aunque en realidad usaba el día 30 — ahora con "último día del mes" el mensaje es explícito y correcto en cualquier mes. Se mantiene todo lo demás: km actual manual en Mantenimiento, valorización por unidad/total en Inversiones.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3583,11 +3583,12 @@ function checkBrowserNotifications(forzar){
   const mkDp=mesActualKey();
   (state.pagosFrecuentes||[]).filter(p=>p.diaPago && p.frecuencia!=='anual' && !(p.pagosRegistrados&&p.pagosRegistrados[mkDp])).forEach(p=>{
     const diasEnMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
-    const diaLimite=Math.min(p.diaPago,diasEnMes);
+    const diaLimite=pfDiaLimite(p.diaPago,diasEnMes);
     const diffDp=diaLimite-diaHoy;
-    if(diffDp<0) mensajes.push(`🔴 ${p.nombre} venció el día ${p.diaPago} y no lo has registrado`);
-    else if(diffDp===0) mensajes.push(`🟡 ${p.nombre} vence HOY (día ${p.diaPago})`);
-    else if(diffDp<=3) mensajes.push(`📅 ${p.nombre} vence en ${diffDp} día${diffDp===1?'':'s'} (día ${p.diaPago})`);
+    const label=pfDiaLabel(p.diaPago,diasEnMes);
+    if(diffDp<0) mensajes.push(`🔴 ${p.nombre} venció ${label} y no lo has registrado`);
+    else if(diffDp===0) mensajes.push(`🟡 ${p.nombre} vence HOY (${label})`);
+    else if(diffDp<=3) mensajes.push(`📅 ${p.nombre} vence en ${diffDp} día${diffDp===1?'':'s'} (${label})`);
   });
 
   // 5. Pagos Frecuentes ANUALES próximos a vencer (dentro de 15 días) o ya vencidos
@@ -9624,7 +9625,9 @@ function openPagoFrecuenteModal(id){
     if(pf.metodoPago==='cuenta') document.getElementById('pf-cuenta').value=pf.destino;
     else document.getElementById('pf-tarjeta').value=pf.destino;
     document.getElementById('pf-cat').value=pf.categoria||'';
-    document.getElementById('pf-dia-pago').value=pf.diaPago||'';
+    document.getElementById('pf-dia-pago').value=(pf.diaPago&&pf.diaPago!=='ultimo')?pf.diaPago:'';
+    document.getElementById('pf-dia-pago-ultimo').checked=(pf.diaPago==='ultimo');
+    togglePfDiaPagoUltimo();
     delBtn.style.display='inline-flex';
     delBtn.dataset.id=id;
   } else {
@@ -9642,6 +9645,8 @@ function openPagoFrecuenteModal(id){
     document.getElementById('pf-metodo').value='cuenta';
     document.getElementById('pf-cat').value='';
     document.getElementById('pf-dia-pago').value='';
+    document.getElementById('pf-dia-pago-ultimo').checked=false;
+    togglePfDiaPagoUltimo();
     delBtn.style.display='none';
   }
   onPFTipoChange();
@@ -9649,6 +9654,17 @@ function openPagoFrecuenteModal(id){
   onPFTipoMontoChange();
   onPFMetodoChange();
   document.getElementById('pago-frecuente-modal-overlay').classList.add('open');
+}
+// Cuando se marca "Último día de cada mes", el input numérico de día se
+// deshabilita y se vacía visualmente (el valor real que se guarda es el
+// string 'ultimo', ver guardarPagoFrecuente) — así no hay ambigüedad entre
+// "el usuario quiso decir 31" y "quiso decir el último día real del mes".
+function togglePfDiaPagoUltimo(){
+  const chk=document.getElementById('pf-dia-pago-ultimo').checked;
+  const inp=document.getElementById('pf-dia-pago');
+  inp.disabled=chk;
+  inp.style.opacity=chk?'0.4':'1';
+  if(chk) inp.value='';
 }
 function closePagoFrecuenteModal(){
   document.getElementById('pago-frecuente-modal-overlay').classList.remove('open');
@@ -9713,7 +9729,7 @@ function savePagoFrecuente(){
   const destino=metodoPago==='cuenta'?document.getElementById('pf-cuenta').value:document.getElementById('pf-tarjeta').value;
   const categoria=tipo==='ingreso'?'':(document.getElementById('pf-cat').value||'');
   const diaPagoRaw=document.getElementById('pf-dia-pago').value;
-  const diaPago=diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null;
+  const diaPago=document.getElementById('pf-dia-pago-ultimo').checked ? 'ultimo' : (diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null);
   if(!nombre){alert('Ingresa un nombre.');return;}
   if(frecuencia==='anual' && !fechaAnual){alert('Ingresa la fecha exacta de vencimiento.');return;}
   if((tipoMonto==='fijo'||tipoMonto==='base_descuentos') && montoFijo<=0){alert('Ingresa el monto '+(tipoMonto==='base_descuentos'?'base':'fijo')+'.');return;}
@@ -9747,6 +9763,15 @@ function deletePagoFrecuente(){
 function mesActualKey(){
   const h=new Date();
   return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0');
+}
+// pf.diaPago puede ser un número (1-31) o el string 'ultimo' (= último día
+// real del mes, se ajusta solo entre 28/29/30/31). Estos 2 helpers evitan
+// repetir esa lógica en cada lugar que muestra o calcula el día límite.
+function pfDiaLimite(diaPago, diasEnMes){
+  return diaPago==='ultimo' ? diasEnMes : Math.min(diaPago, diasEnMes);
+}
+function pfDiaLabel(diaPago, diasEnMes){
+  return diaPago==='ultimo' ? `el último día del mes (${diasEnMes})` : `el día ${diaPago}`;
 }
 
 function renderPagosFrecuentes(){
@@ -9805,15 +9830,18 @@ function renderPagosFrecuentes(){
     if(!esAnual && pf.diaPago && !yaPagado){
       const hoyDp=new Date(); hoyDp.setHours(0,0,0,0);
       const diasEnMes=new Date(hoyDp.getFullYear(),hoyDp.getMonth()+1,0).getDate();
-      const diaLimite=Math.min(pf.diaPago,diasEnMes);
+      const diaLimite=pfDiaLimite(pf.diaPago,diasEnMes);
       const fechaLimite=new Date(hoyDp.getFullYear(),hoyDp.getMonth(),diaLimite);
       const diffDp=Math.round((fechaLimite-hoyDp)/(1000*60*60*24));
-      if(diffDp<0) inicioLabel+=' · 🔴 Venció el día '+pf.diaPago;
-      else if(diffDp===0) inicioLabel+=' · 🟡 Vence hoy (día '+pf.diaPago+')';
-      else if(diffDp<=3) inicioLabel+=' · 🟠 Vence en '+diffDp+' día'+(diffDp===1?'':'s')+' (día '+pf.diaPago+')';
-      else inicioLabel+=' · Antes del día '+pf.diaPago;
+      const label=pfDiaLabel(pf.diaPago,diasEnMes);
+      if(diffDp<0) inicioLabel+=' · 🔴 Venció '+label;
+      else if(diffDp===0) inicioLabel+=' · 🟡 Vence hoy ('+label+')';
+      else if(diffDp<=3) inicioLabel+=' · 🟠 Vence en '+diffDp+' día'+(diffDp===1?'':'s')+' ('+label+')';
+      else inicioLabel+=' · Antes de '+label;
     } else if(!esAnual && pf.diaPago && yaPagado){
-      inicioLabel+=' · Vence el día '+pf.diaPago;
+      const hoyYp=new Date();
+      const diasEnMesYp=new Date(hoyYp.getFullYear(),hoyYp.getMonth()+1,0).getDate();
+      inicioLabel+=' · Vence '+pfDiaLabel(pf.diaPago,diasEnMesYp);
     }
     // A qué mes se le va a aplicar la próxima vez que se registre el pago —
     // los descuentos pendientes NO tienen un mes propio asignado, se suman
@@ -12977,6 +13005,10 @@ if(state.projGoals){
     <div class="field">
       <label>Día límite de pago <span style="font-size:10px;color:var(--text3)">(opcional — para que te avise antes)</span></label>
       <input id="pf-dia-pago" type="number" min="1" max="31" placeholder="Ej. 10 (deja vacío si no tiene fecha fija)">
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer">
+        <input id="pf-dia-pago-ultimo" type="checkbox" style="width:auto;margin:0" onchange="togglePfDiaPagoUltimo()">
+        📅 Último día de cada mes (se ajusta solo: 28, 29, 30 o 31 según corresponda)
+      </label>
     </div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
       <select id="pf-cat"></select>
