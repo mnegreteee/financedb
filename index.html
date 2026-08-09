@@ -838,6 +838,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="nav-dropdown-menu" id="navmenu-otros">
         <button class="nav-dropdown-item" id="nav-combustible" onclick="showPage('combustible')">⛽ Combustible</button>
         <button class="nav-dropdown-item" id="nav-calendario" onclick="showPage('calendario')">📅 Calendario</button>
+        <button class="nav-dropdown-item" id="nav-sueldos" onclick="showPage('sueldos')">💼 Análisis de Sueldos</button>
       </div>
     </div>
   </div>
@@ -1690,6 +1691,187 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 </div>
 
+<!-- ══ PAGE: ANÁLISIS DE SUELDOS ══ -->
+<div class="page" id="page-sueldos">
+<div class="container">
+
+  <div class="section-header" style="margin-bottom:16px">
+    <div class="section-title">💼 Análisis de Sueldos</div>
+    <div style="display:flex;gap:8px">
+      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirSimuladorNeto()">🧮 Simular sueldo neto</button>
+      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirConfigSueldo()">⚙ Configurar</button>
+    </div>
+  </div>
+
+  <div id="sueldo-sin-config" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;margin-bottom:16px">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Antes de calcular tus descuentos, necesito unos datos tuyos (sistema de pensión, tipo de sueldo, fecha de inicio en tu trabajo actual).</div>
+    <button class="btn btn-primary" onclick="abrirConfigSueldo()">⚙ Configurar ahora</button>
+  </div>
+
+  <div id="sueldo-contenido" style="display:none">
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div class="section-header" style="margin-bottom:10px">
+        <div class="section-title" style="font-size:13px">Parámetros vigentes <span id="sueldo-anio-parametros"></span> <small style="font-weight:400;color:var(--text3)">— revisar cada enero</small></div>
+        <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirParametrosSueldo()">✏ Editar</button>
+      </div>
+      <div id="sueldo-parametros-resumen" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;font-size:12px"></div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div class="section-title" style="font-size:13px;margin-bottom:10px">Registrar boleta del mes</div>
+      <div class="field-row">
+        <div class="field"><label>Mes</label>
+          <select id="sb-mes">
+            <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+            <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+            <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+            <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+          </select>
+        </div>
+        <div class="field"><label>Año</label><input id="sb-anio" type="number" style="width:100%"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Remuneración básica</label><input id="sb-basica" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>Bono / variable (monto exacto)</label><input id="sb-bono" type="number" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Otros ingresos gravados <small>(horas extra, etc. — opcional. NO pongas aquí tu gratificación, ya se calcula sola)</small></label><input id="sb-otros" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>Utilidades recibidas este mes <small>(de un periodo anterior — opcional, monto único, no se proyecta a futuro)</small></label><input id="sb-utilidades" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>Renta 5ta según tu boleta real <small>(opcional, para comparar — incluye retención por utilidades si tu boleta la junta)</small></label><input id="sb-renta-real" type="number" step="0.01" placeholder="0.00"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:6px" onclick="guardarBoletaSueldo()">💾 Calcular y guardar</button>
+    </div>
+
+    <div id="sueldo-resultado-mes" style="display:none;margin-bottom:16px"></div>
+
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div class="section-title" style="font-size:13px;margin-bottom:10px">Proyección del año</div>
+      <div id="sueldo-proyeccion-anual" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px"></div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div class="section-title" style="font-size:13px;margin-bottom:10px">Evolución del año</div>
+      <div class="chart-tabs" style="margin-bottom:10px">
+        <div class="chart-tab active" id="sct0" onclick="setSueldoChartTab(0)">Ingreso vs Retención</div>
+        <div class="chart-tab" id="sct1" onclick="setSueldoChartTab(1)">Neto mensual</div>
+        <div class="chart-tab" id="sct2" onclick="setSueldoChartTab(2)">Tasa efectiva</div>
+      </div>
+      <div style="position:relative;height:220px">
+        <canvas id="sueldo-chart"></canvas>
+      </div>
+      <div id="sueldo-chart-legend" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--text3)"></div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div class="section-title" style="font-size:13px;margin-bottom:2px">Gratificación y CTS</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Calculadas con tu básica + el promedio de tu bono variable de cada semestre (D.S. 005-2002-TR).</div>
+      <div id="sueldo-grat-cts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px"></div>
+    </div>
+
+    <div class="card" style="padding:16px 20px">
+      <div class="section-title" style="font-size:13px;margin-bottom:10px">Boletas registradas</div>
+      <table class="account-table" style="width:100%">
+        <thead><tr><th>Mes</th><th style="text-align:right">Ingreso</th><th style="text-align:right">5ta estimada</th><th style="text-align:right">5ta real</th><th style="text-align:right">Dif.</th><th></th></tr></thead>
+        <tbody id="sueldo-boletas-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div class="modal-overlay" id="sueldo-config-overlay" onclick="if(event.target===this)cerrarConfigSueldo()">
+  <div class="modal" style="width:400px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title"><span>⚙ Configurar sueldo</span><button class="modal-close" onclick="cerrarConfigSueldo()">✕</button></div>
+    <div class="field">
+      <label>Sistema de pensión</label>
+      <select id="sc-sistema" onchange="onSistemaPensionChange()">
+        <option value="afp">AFP</option>
+        <option value="onp">ONP</option>
+      </select>
+    </div>
+    <div id="sc-afp-wrap">
+      <div class="field">
+        <label>¿Cuál AFP?</label>
+        <select id="sc-afp-nombre">
+          <option value="Integra">Integra</option>
+          <option value="Prima">Prima</option>
+          <option value="Profuturo">Profuturo</option>
+          <option value="Habitat">Habitat</option>
+        </select>
+      </div>
+      <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
+        <input type="checkbox" id="sc-comision-flujo" style="width:auto" onchange="onComisionFlujoChange()">
+        <label style="margin:0">Estoy en "comisión por flujo" <small style="display:block;color:var(--text3);font-weight:400">(poco común — solo si te afiliaste antes de 2013 y elegiste quedarte ahí. Si no sabes, probablemente NO aplica.)</small></label>
+      </div>
+      <div class="field" id="sc-comision-flujo-pct-wrap" style="display:none">
+        <label>% de comisión por flujo (mensual)</label>
+        <input id="sc-comision-flujo-pct" type="number" step="0.01" placeholder="Ej. 1.55">
+      </div>
+    </div>
+    <div class="field">
+      <label>Tipo de sueldo</label>
+      <select id="sc-tipo-sueldo">
+        <option value="variable">Variable (bono/comisión cambia cada mes)</option>
+        <option value="fijo">Fijo (siempre el mismo monto)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Fecha de inicio en tu trabajo actual</label>
+      <input id="sc-fecha-inicio" type="date">
+      <small style="color:var(--text3)">Si cambias de trabajo, actualiza esta fecha — así se reajusta bien la proyección de renta de 5ta y de tu gratificación/CTS (no se prorratea desde antes de que empezaras).</small>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row">
+      <input type="checkbox" id="sc-tiene-eps" style="width:auto">
+      <label style="margin:0">Tengo EPS <small style="display:block;color:var(--text3);font-weight:400">(si no, se asume EsSalud puro — cambia la bonificación extraordinaria de gratificación: 6.75% con EPS, 9% sin EPS)</small></label>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin:6px 0 2px;padding:8px;background:var(--bg3);border-radius:6px">
+      📌 Ya no hace falta que ingreses tu gratificación a mano — la app la calcula sola usando tu básica y el promedio de tu bono variable de cada semestre (a partir de las boletas que registres), siguiendo la fórmula legal (D.S. 005-2002-TR).
+    </div>
+    <div class="field">
+      <label>¿Cambiaste de trabajo este año? Ingreso bruto ya percibido en el empleo anterior <small>(opcional)</small></label>
+      <input id="sc-ingreso-anterior" type="number" step="0.01" placeholder="0.00">
+    </div>
+    <div class="field">
+      <label>Retención de 5ta ya efectuada en el empleo anterior este año <small>(opcional)</small></label>
+      <input id="sc-retencion-anterior" type="number" step="0.01" placeholder="0.00">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-secondary" onclick="cerrarConfigSueldo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarConfigSueldo()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sueldo-parametros-overlay" onclick="if(event.target===this)cerrarParametrosSueldo()">
+  <div class="modal" style="width:420px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title"><span>✏ Editar parámetros del año</span><button class="modal-close" onclick="cerrarParametrosSueldo()">✕</button></div>
+    <div class="field"><label>Año</label><input id="sp-anio" type="number" readonly style="opacity:.6"></div>
+    <div class="field"><label>UIT</label><input id="sp-uit" type="number" step="0.01"></div>
+    <div class="field"><label>AFP — Aporte obligatorio (%)</label><input id="sp-afp-aporte" type="number" step="0.01"></div>
+    <div class="field"><label>AFP — Prima de seguro (%)</label><input id="sp-afp-prima" type="number" step="0.01"></div>
+    <div class="field"><label>ONP — Tasa (%)</label><input id="sp-onp-tasa" type="number" step="0.01"></div>
+    <div style="font-size:11px;color:var(--text3);margin:10px 0 6px">Tramos progresivos (tasas fijas por ley — normalmente no cambian, solo los montos en soles al cambiar la UIT, que ya se recalculan solos):</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7">
+      Hasta 5 UIT: 8% · De 5 a 20 UIT: 14% · De 20 a 35 UIT: 17% · De 35 a 45 UIT: 20% · Más de 45 UIT: 30%
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-secondary" onclick="cerrarParametrosSueldo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarParametrosSueldo()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sueldo-simulador-overlay" onclick="if(event.target===this)cerrarSimuladorNeto()">
+  <div class="modal" style="width:400px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title"><span>🧮 Simular sueldo neto</span><button class="modal-close" onclick="cerrarSimuladorNeto()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Útil para saber qué neto recibirías con un sueldo distinto (ej. una oferta de otro trabajo). Usa tu configuración actual (AFP/ONP, EPS) y asume ese sueldo todo el año + 2 gratificaciones completas, sin bono variable.</div>
+    <div class="field"><label>Sueldo bruto mensual a simular</label><input id="sim-bruto" type="number" step="0.01" placeholder="Ej. 8000"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="calcularSimuladorNeto()">Calcular</button>
+    <div id="sim-resultado" style="display:none;margin-top:14px"></div>
+  </div>
+</div>
+
 <!-- ══ PAGE: COMBUSTIBLE ══ -->
 <div class="page" id="page-combustible">
 <div class="container">
@@ -2422,8 +2604,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 23:11'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Relojes Mundiales: (1) ahora se puede reordenar las ciudades con flechas ▲▼ en el panel de Config → Administrar (ej. mover São Paulo al primer lugar) — el orden elegido se guarda en Firestore y se refleja igual en el dashboard; (2) la hora en el dashboard se agrandó de 14px a 22px, casi al borde de la tarjeta, para que se lea mejor de un vistazo.';
+const APP_VERSION_DATE = '09/08/26 - 16:35'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Análisis de Sueldos, 4 mejoras grandes: (1) UTILIDADES — nuevo campo en cada boleta; se suman a lo ya percibido pero NO se proyectan a futuro (corregí de paso un bug real: "otros ingresos" se estaba multiplicando por los meses que faltan, como si un monto único se repitiera todos los meses — verificado contra el procedimiento oficial de SUNAT, orientacion.sunat.gob.pe Paso 1). (2) VALIDACIÓN — gratificación/CTS ahora usan tu última básica CONOCIDA (aunque no tengas boletas del periodo exacto) para poder proyectar "cuánto debería recibir" incluso sin datos completos, marcado como "⚠️ Estimado" cuando aplica ese respaldo. (3) GRÁFICOS — nueva tarjeta "Evolución del año" con 3 vistas (Ingreso vs Retención, Neto mensual, Tasa efectiva). (4) SIMULADOR DE SUELDO NETO — nuevo botón para simular cuánto neto recibirías con un sueldo bruto distinto (ej. evaluar una oferta de otro trabajo), usando tu AFP/EPS configurados.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2468,6 +2650,7 @@ let state={
 };
 
 let mainChart=null,projChart=null;
+let sueldoChart=null,currentSueldoChartTab=0;
 let hiddenMode=false,ahorroMoneda='PEN';
 let demoMode=false, realStateBackup=null;
 let selectedAccounts=new Set();
@@ -3411,6 +3594,7 @@ function showPage(name){
   if(name==='tc-tracker')  renderTCTracker();
   if(name==='inversiones') renderInversiones();
   if(name==='calendario')  renderCalendario();
+  if(name==='sueldos')     renderSueldos();
 }
 
 // ── HELPERS ───────────────────────────────────────────
@@ -12404,6 +12588,505 @@ function renderCalendario(){
       ${chips}${more}
     </div>`;
   }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  ANÁLISIS DE SUELDOS — renta de 5ta categoría, AFP/ONP,
+//  proyección anual. Parámetros por año (UIT, tramos, tasas)
+//  editables porque cambian cada enero. La retención mensual
+//  sigue el procedimiento oficial de SUNAT (Art. 40 del
+//  Reglamento de la LIR): NO es "impuesto anual ÷ 12" parejo,
+//  usa divisores distintos según el mes, restando lo ya
+//  retenido en los meses previos del mismo año.
+// ══════════════════════════════════════════════════════
+
+// Tramos progresivos de renta de 5ta — las TASAS son fijas por ley (no
+// cambian de año a año), solo los montos en soles cambian porque están
+// expresados en UIT y la UIT sí sube cada enero.
+const SUELDO_TRAMOS_UIT=[
+  {hastaUIT:5,tasa:0.08},{hastaUIT:20,tasa:0.14},{hastaUIT:35,tasa:0.17},
+  {hastaUIT:45,tasa:0.20},{hastaUIT:Infinity,tasa:0.30},
+];
+function sueldoParametrosDefault(anio){
+  return {anio, uit:5500, deduccionUIT:7, afpAporte:10, afpPrima:1.37, onpTasa:13};
+}
+function getSueldoParametros(anio){
+  if(!state.sueldoParametros) state.sueldoParametros={};
+  if(!state.sueldoParametros[anio]) state.sueldoParametros[anio]=sueldoParametrosDefault(anio);
+  return state.sueldoParametros[anio];
+}
+function calcularImpuestoAnualSueldo(rentaNeta,params){
+  if(rentaNeta<=0) return 0;
+  let impuesto=0,restante=rentaNeta,limiteAnterior=0;
+  for(const tramo of SUELDO_TRAMOS_UIT){
+    const limiteTramo=tramo.hastaUIT===Infinity?Infinity:tramo.hastaUIT*params.uit;
+    const anchoTramo=limiteTramo-limiteAnterior;
+    const montoEnTramo=Math.min(restante,anchoTramo);
+    if(montoEnTramo<=0) break;
+    impuesto+=montoEnTramo*tramo.tasa;
+    restante-=montoEnTramo;
+    limiteAnterior=limiteTramo;
+    if(restante<=0) break;
+  }
+  return impuesto;
+}
+// Divisor oficial SUNAT según el mes (0=enero…11=diciembre)
+function sueldoDivisorMes(mesIdx){
+  if(mesIdx<=2) return 12;   // ene-mar
+  if(mesIdx===3) return 9;   // abr
+  if(mesIdx<=6) return 8;    // may-jul
+  if(mesIdx===7) return 5;   // ago
+  if(mesIdx<=10) return 4;   // sep-nov
+  return 1;                  // dic: ajuste final, resto completo
+}
+function getBoletasSueldo(){ return state.sueldoBoletas||[]; }
+function getBoletasAnioSueldo(anio){ return getBoletasSueldo().filter(b=>b.anio===anio).sort((a,b)=>a.mes-b.mes); }
+
+// ── GRATIFICACIÓN Y CTS ──────────────────────────────
+// Fórmulas legales verificadas: Ley 27735 (gratificación), Ley 30334
+// (bonificación extraordinaria 6.75%/9%), D.S. 005-2002-TR Art.3 (promedio
+// de remuneración variable: si se percibió 3+ veces en el semestre, se
+// suma lo percibido en los 6 meses y se divide entre 6), D.Leg. 650 (CTS:
+// (RC÷12) × meses completos, RC incluye 1/6 de la última gratificación).
+function fechaInicioComoMes(cfg){
+  if(!cfg.fechaInicio) return null;
+  const d=new Date(cfg.fechaInicio+'T12:00:00');
+  return {anio:d.getFullYear(),mes:d.getMonth()};
+}
+// Promedio del bono variable en un semestre (mismo año) — como estamos
+// PROYECTANDO (puede que aún no pasen todos los meses), se usa el
+// promedio de los meses que SÍ tengas registrados como estimado, que se
+// va afinando conforme registres más boletas de ese semestre.
+function promedioVariableSemestre(anio,mesesSemestre){
+  const boletas=getBoletasAnioSueldo(anio).filter(b=>mesesSemestre.includes(b.mes));
+  if(boletas.length<3) return {promedio:0,cuenta:false,mesesRegistrados:boletas.length};
+  const suma=boletas.reduce((s,b)=>s+(b.bono||0),0);
+  return {promedio:suma/6,cuenta:true,mesesRegistrados:boletas.length,completo:boletas.length===6};
+}
+function mesesEnRangoDesdeInicio(rangoMeses,cfg){
+  const inicio=fechaInicioComoMes(cfg);
+  return rangoMeses.filter(mp=>{
+    if(!inicio) return true;
+    if(mp.anio>inicio.anio) return true;
+    if(mp.anio<inicio.anio) return false;
+    return mp.mes>=inicio.mes;
+  }).length;
+}
+// Última básica CONOCIDA en cualquier boleta registrada (de cualquier año o
+// mes) — se usa como respaldo cuando no hay ninguna boleta dentro del
+// semestre/periodo exacto que se está calculando, para poder dar una
+// estimación (con el sueldo fijo) aunque todavía no se haya registrado nada
+// de ese periodo específico. Prioriza la boleta más reciente EN O ANTES del
+// límite dado; si no hay ninguna antes, usa la más reciente que exista
+// (mejor una estimación con datos "futuros" que ninguna estimación).
+function ultimaBasicaConocida(anioLimite,mesLimite){
+  const todas=getBoletasSueldo().slice().sort((a,b)=>(a.anio-b.anio)||(a.mes-b.mes));
+  if(!todas.length) return 0;
+  const antesOEnLimite=todas.filter(b=>b.anio<anioLimite||(b.anio===anioLimite&&b.mes<=mesLimite));
+  return antesOEnLimite.length?antesOEnLimite[antesOEnLimite.length-1].basica:todas[0].basica;
+}
+// tipoSemestre: 'jul' (enero-junio, se paga en julio) o 'dic' (julio-diciembre, se paga en diciembre)
+function calcularGratificacion(anio,tipoSemestre){
+  const cfg=state.sueldoConfig||{};
+  const mesesSemestre=tipoSemestre==='jul'?[0,1,2,3,4,5]:[6,7,8,9,10,11];
+  const mesReferencia=tipoSemestre==='jul'?5:11; // básica de junio o de noviembre (mes anterior al pago)
+  const boletas=getBoletasAnioSueldo(anio);
+  const boletaRef=boletas.find(b=>b.mes===mesReferencia)||boletas.slice().reverse().find(b=>mesesSemestre.includes(b.mes));
+  const basica=boletaRef?boletaRef.basica:ultimaBasicaConocida(anio,mesReferencia);
+  const {promedio:promedioVar,cuenta}=promedioVariableSemestre(anio,mesesSemestre);
+  const mesesCompletos=mesesEnRangoDesdeInicio(mesesSemestre.map(m=>({anio,mes:m})),cfg);
+  const baseGrat=((basica+(cuenta?promedioVar:0))/6)*mesesCompletos;
+  const pctBonif=cfg.tieneEPS?0.0675:0.09;
+  const bonificacion=baseGrat*pctBonif;
+  return {baseGrat,bonificacion,total:baseGrat+bonificacion,mesesCompletos,basica,promedioVar,cuenta,esEstimado:!boletaRef};
+}
+// mesDeposito: 4=mayo (periodo nov[año-1]-abr[año]), 10=noviembre (periodo may-oct del mismo año)
+function calcularCTS(anioDeposito,mesDeposito){
+  const cfg=state.sueldoConfig||{};
+  let mesesPeriodo,mesReferencia,gratRelevante;
+  if(mesDeposito===4){
+    mesesPeriodo=[{anio:anioDeposito-1,mes:10},{anio:anioDeposito-1,mes:11},{anio:anioDeposito,mes:0},{anio:anioDeposito,mes:1},{anio:anioDeposito,mes:2},{anio:anioDeposito,mes:3}];
+    mesReferencia={anio:anioDeposito,mes:3};
+    gratRelevante=calcularGratificacion(anioDeposito-1,'dic');
+  } else {
+    mesesPeriodo=[{anio:anioDeposito,mes:4},{anio:anioDeposito,mes:5},{anio:anioDeposito,mes:6},{anio:anioDeposito,mes:7},{anio:anioDeposito,mes:8},{anio:anioDeposito,mes:9}];
+    mesReferencia={anio:anioDeposito,mes:9};
+    gratRelevante=calcularGratificacion(anioDeposito,'jul');
+  }
+  const todas=getBoletasSueldo();
+  const boletaRef=todas.find(b=>b.anio===mesReferencia.anio&&b.mes===mesReferencia.mes)
+    ||todas.slice().reverse().find(b=>mesesPeriodo.some(mp=>mp.anio===b.anio&&mp.mes===b.mes));
+  const basica=boletaRef?boletaRef.basica:ultimaBasicaConocida(mesReferencia.anio,mesReferencia.mes);
+  const boletasPeriodo=todas.filter(b=>mesesPeriodo.some(mp=>mp.anio===b.anio&&mp.mes===b.mes));
+  let promedioVar=0,cuentaVar=false;
+  if(boletasPeriodo.length>=3){ promedioVar=boletasPeriodo.reduce((s,b)=>s+(b.bono||0),0)/6; cuentaVar=true; }
+  const sextoGratificacion=(gratRelevante.baseGrat||0)/6;
+  const rc=basica+(cuentaVar?promedioVar:0)+sextoGratificacion;
+  const mesesCompletos=mesesEnRangoDesdeInicio(mesesPeriodo,cfg);
+  return {cts:(rc/12)*mesesCompletos,rc,basica,promedioVar,cuentaVar,sextoGratificacion,mesesCompletos,esEstimado:!boletaRef};
+}
+
+// Calcula la renta de 5ta ESTIMADA para (anio,mesIdx) según lo que ya se
+// registró de meses anteriores del mismo año + lo ingresado este mes,
+// proyectando los meses que faltan con el mismo ingreso de este mes. La
+// gratificación (SÍ afecta renta de 5ta) se suma automáticamente para las
+// 2 del año — la bonificación extraordinaria del 9%/6.75% NO se suma
+// porque es inafecta.
+// ingresoRecurrente = básica+bono (se asume que se repite cada mes futuro).
+// ingresoUnico = otros+utilidades (ya percibido, NO se proyecta a futuro —
+// sería un error asumir que las utilidades se repiten todos los meses).
+// Así lo indica el propio procedimiento de SUNAT (orientacion.sunat.gob.pe,
+// Paso 1): la proyección futura usa la remuneración ORDINARIA, mientras que
+// "pagos extraordinarios... participaciones [utilidades]... horas extras"
+// solo se suman como lo YA percibido en meses anteriores, sin proyectarse.
+function calcularRenta5taMes(anio,mesIdx,ingresoRecurrente,ingresoUnico){
+  ingresoUnico=ingresoUnico||0;
+  const cfg=state.sueldoConfig||{};
+  const params=getSueldoParametros(anio);
+  const boletasPrevias=getBoletasAnioSueldo(anio).filter(b=>b.mes<mesIdx);
+  const ingresoAcumuladoPrevio=boletasPrevias.reduce((s,b)=>s+(b.basica||0)+(b.bono||0)+(b.otros||0)+(b.utilidades||0),0)+(cfg.ingresoAnterior||0);
+  const retencionAcumuladaPrevia=boletasPrevias.reduce((s,b)=>s+(b.retencion5taEstimada||0),0)+(cfg.retencionAnterior||0);
+  const mesesQueFaltan=11-mesIdx; // meses DESPUÉS del actual
+  const gratJul=calcularGratificacion(anio,'jul').baseGrat;
+  const gratDic=calcularGratificacion(anio,'dic').baseGrat;
+  const rentaBrutaAnualProyectada=ingresoAcumuladoPrevio+ingresoRecurrente+ingresoUnico+(ingresoRecurrente*mesesQueFaltan)+gratJul+gratDic;
+  const rentaNeta=Math.max(0,rentaBrutaAnualProyectada-params.deduccionUIT*params.uit);
+  const impuestoAnual=calcularImpuestoAnualSueldo(rentaNeta,params);
+  const divisor=sueldoDivisorMes(mesIdx);
+  let retencionMes=(mesIdx===11)?(impuestoAnual-retencionAcumuladaPrevia):(impuestoAnual-retencionAcumuladaPrevia)/divisor;
+  return {retencionMes:Math.max(0,retencionMes),impuestoAnual,rentaBrutaAnualProyectada,rentaNeta};
+}
+// AFP/ONP se descuentan sobre el ingreso computable del MES (no proyectado)
+function calcularDescuentosPensionMes(ingresoMes){
+  const cfg=state.sueldoConfig||{};
+  const params=getSueldoParametros((new Date()).getFullYear());
+  if(cfg.sistemaPension==='onp'){
+    const total=ingresoMes*(params.onpTasa/100);
+    return {aporte:total,prima:0,comisionFlujo:0,total};
+  }
+  const aporte=ingresoMes*(params.afpAporte/100);
+  const prima=ingresoMes*(params.afpPrima/100);
+  const comisionFlujo=cfg.comisionFlujo?ingresoMes*((cfg.comisionFlujoPct||0)/100):0;
+  return {aporte,prima,comisionFlujo,total:aporte+prima+comisionFlujo};
+}
+
+function abrirConfigSueldo(){
+  const cfg=state.sueldoConfig||{};
+  document.getElementById('sc-sistema').value=cfg.sistemaPension||'afp';
+  document.getElementById('sc-afp-nombre').value=cfg.afpNombre||'Integra';
+  document.getElementById('sc-comision-flujo').checked=!!cfg.comisionFlujo;
+  document.getElementById('sc-comision-flujo-pct').value=cfg.comisionFlujoPct||'';
+  document.getElementById('sc-tipo-sueldo').value=cfg.tipoSueldo||'variable';
+  document.getElementById('sc-fecha-inicio').value=cfg.fechaInicio||'';
+  document.getElementById('sc-tiene-eps').checked=!!cfg.tieneEPS;
+  document.getElementById('sc-ingreso-anterior').value=cfg.ingresoAnterior||'';
+  document.getElementById('sc-retencion-anterior').value=cfg.retencionAnterior||'';
+  onSistemaPensionChange();
+  onComisionFlujoChange();
+  document.getElementById('sueldo-config-overlay').classList.add('open');
+}
+function cerrarConfigSueldo(){ document.getElementById('sueldo-config-overlay').classList.remove('open'); }
+function onSistemaPensionChange(){
+  document.getElementById('sc-afp-wrap').style.display=document.getElementById('sc-sistema').value==='afp'?'block':'none';
+}
+function onComisionFlujoChange(){
+  document.getElementById('sc-comision-flujo-pct-wrap').style.display=document.getElementById('sc-comision-flujo').checked?'block':'none';
+}
+function guardarConfigSueldo(){
+  state.sueldoConfig={
+    sistemaPension:document.getElementById('sc-sistema').value,
+    afpNombre:document.getElementById('sc-afp-nombre').value,
+    comisionFlujo:document.getElementById('sc-comision-flujo').checked,
+    comisionFlujoPct:parseFloat(document.getElementById('sc-comision-flujo-pct').value)||0,
+    tipoSueldo:document.getElementById('sc-tipo-sueldo').value,
+    fechaInicio:document.getElementById('sc-fecha-inicio').value||'',
+    tieneEPS:document.getElementById('sc-tiene-eps').checked,
+    ingresoAnterior:parseFloat(document.getElementById('sc-ingreso-anterior').value)||0,
+    retencionAnterior:parseFloat(document.getElementById('sc-retencion-anterior').value)||0,
+  };
+  saveState();
+  cerrarConfigSueldo();
+  renderSueldos();
+}
+
+function abrirParametrosSueldo(){
+  const anio=(new Date()).getFullYear();
+  const p=getSueldoParametros(anio);
+  document.getElementById('sp-anio').value=p.anio;
+  document.getElementById('sp-uit').value=p.uit;
+  document.getElementById('sp-afp-aporte').value=p.afpAporte;
+  document.getElementById('sp-afp-prima').value=p.afpPrima;
+  document.getElementById('sp-onp-tasa').value=p.onpTasa;
+  document.getElementById('sueldo-parametros-overlay').classList.add('open');
+}
+function cerrarParametrosSueldo(){ document.getElementById('sueldo-parametros-overlay').classList.remove('open'); }
+function guardarParametrosSueldo(){
+  const anio=parseInt(document.getElementById('sp-anio').value);
+  if(!state.sueldoParametros) state.sueldoParametros={};
+  state.sueldoParametros[anio]={
+    anio,
+    uit:parseFloat(document.getElementById('sp-uit').value)||5500,
+    deduccionUIT:7,
+    afpAporte:parseFloat(document.getElementById('sp-afp-aporte').value)||10,
+    afpPrima:parseFloat(document.getElementById('sp-afp-prima').value)||1.37,
+    onpTasa:parseFloat(document.getElementById('sp-onp-tasa').value)||13,
+  };
+  saveState();
+  cerrarParametrosSueldo();
+  renderSueldos();
+}
+
+function guardarBoletaSueldo(){
+  const mes=parseInt(document.getElementById('sb-mes').value);
+  const anio=parseInt(document.getElementById('sb-anio').value);
+  const basica=parseFloat(document.getElementById('sb-basica').value)||0;
+  const bono=parseFloat(document.getElementById('sb-bono').value)||0;
+  const otros=parseFloat(document.getElementById('sb-otros').value)||0;
+  const utilidades=parseFloat(document.getElementById('sb-utilidades').value)||0;
+  const rentaRealInput=document.getElementById('sb-renta-real').value;
+  const rentaReal=rentaRealInput!==''?parseFloat(rentaRealInput):null;
+  if(!basica&&!bono&&!otros&&!utilidades){ alert('Ingresa al menos la remuneración básica.'); return; }
+  const ingresoRecurrente=basica+bono; // se proyecta a futuro
+  const ingresoUnico=otros+utilidades; // NO se proyecta, solo cuenta este mes
+  const ingresoMes=ingresoRecurrente+ingresoUnico; // total percibido este mes (para AFP/ONP y neto)
+  const calc=calcularRenta5taMes(anio,mes,ingresoRecurrente,ingresoUnico);
+  const pension=calcularDescuentosPensionMes(ingresoMes);
+  if(!Array.isArray(state.sueldoBoletas)) state.sueldoBoletas=[];
+  const idx=state.sueldoBoletas.findIndex(b=>b.anio===anio&&b.mes===mes);
+  const boleta={
+    id:idx>=0?state.sueldoBoletas[idx].id:'sb-'+Date.now(),
+    anio,mes,basica,bono,otros,utilidades,
+    retencion5taEstimada:calc.retencionMes,
+    retencion5taReal:rentaReal,
+    pensionAporte:pension.aporte,pensionPrima:pension.prima,pensionComision:pension.comisionFlujo,
+  };
+  if(idx>=0) state.sueldoBoletas[idx]=boleta; else state.sueldoBoletas.push(boleta);
+  saveState();
+  renderResultadoMesSueldo(boleta,calc,pension);
+  renderSueldos();
+}
+function eliminarBoletaSueldo(id){
+  state.sueldoBoletas=(state.sueldoBoletas||[]).filter(b=>b.id!==id);
+  saveState();
+  renderSueldos();
+}
+function renderResultadoMesSueldo(boleta,calc,pension){
+  const cont=document.getElementById('sueldo-resultado-mes');
+  const ingresoMes=boleta.basica+boleta.bono+boleta.otros+(boleta.utilidades||0);
+  const netoEstimado=ingresoMes-pension.total-calc.retencionMes;
+  let filaComparacion='';
+  if(boleta.retencion5taReal!==null&&boleta.retencion5taReal!==undefined){
+    const diff=boleta.retencion5taReal-calc.retencionMes;
+    const color=Math.abs(diff)<2?'var(--green)':'var(--red)';
+    filaComparacion=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:12px">
+      Tu boleta real dice <b>${fmtS(boleta.retencion5taReal)}</b> — diferencia con lo estimado: <span style="color:${color};font-weight:600">${fmtS(Math.abs(diff))}</span>
+    </div>`;
+  }
+  cont.style.display='block';
+  cont.innerHTML=`<div class="card" style="padding:16px 20px;border:1px solid var(--accent)">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px">Resultado — ${MONTHS[boleta.mes]} ${boleta.anio}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;font-size:12px">
+      <div><div style="color:var(--text3)">Ingreso del mes</div><div style="font-weight:600">${fmtS(ingresoMes)}</div></div>
+      <div><div style="color:var(--text3)">AFP/ONP</div><div style="font-weight:600">${fmtS(pension.total)}</div></div>
+      <div><div style="color:var(--text3)">Renta 5ta estimada</div><div style="font-weight:600">${fmtS(calc.retencionMes)}</div></div>
+      <div><div style="color:var(--text3)">Neto estimado</div><div style="font-weight:700;color:var(--accent)">${fmtS(netoEstimado)}</div></div>
+    </div>
+    ${filaComparacion}
+  </div>`;
+}
+
+function renderSueldos(){
+  const cfg=state.sueldoConfig;
+  const sinConfig=document.getElementById('sueldo-sin-config');
+  const contenido=document.getElementById('sueldo-contenido');
+  if(!cfg){
+    sinConfig.style.display='block';
+    contenido.style.display='none';
+    return;
+  }
+  sinConfig.style.display='none';
+  contenido.style.display='block';
+
+  const hoy=new Date();
+  const anioActual=hoy.getFullYear();
+  document.getElementById('sb-anio').value=document.getElementById('sb-anio').value||anioActual;
+  if(!document.getElementById('sb-anio').value) document.getElementById('sb-anio').value=anioActual;
+  document.getElementById('sb-mes').value=hoy.getMonth();
+
+  // Parámetros del año actual, resumen
+  const params=getSueldoParametros(anioActual);
+  document.getElementById('sueldo-anio-parametros').textContent=params.anio;
+  document.getElementById('sueldo-parametros-resumen').innerHTML=`
+    <div><div style="color:var(--text3)">UIT</div><div style="font-weight:600">${fmtS(params.uit)}</div></div>
+    <div><div style="color:var(--text3)">Deducción (7 UIT)</div><div style="font-weight:600">${fmtS(params.deduccionUIT*params.uit)}</div></div>
+    <div><div style="color:var(--text3)">${cfg.sistemaPension==='onp'?'ONP':'AFP '+(cfg.afpNombre||'')}</div><div style="font-weight:600">${cfg.sistemaPension==='onp'?params.onpTasa+'%':(params.afpAporte+'% + '+params.afpPrima+'%')}${cfg.comisionFlujo?' + '+(cfg.comisionFlujoPct||0)+'%':''}</div></div>
+    <div><div style="color:var(--text3)">Tipo de sueldo</div><div style="font-weight:600">${cfg.tipoSueldo==='fijo'?'Fijo':'Variable'}</div></div>
+  `;
+
+  // Tabla de boletas registradas (año actual)
+  const boletas=getBoletasAnioSueldo(anioActual);
+  const tbody=document.getElementById('sueldo-boletas-tbody');
+  tbody.innerHTML=boletas.length?boletas.map(b=>{
+    const ingreso=b.basica+b.bono+b.otros+(b.utilidades||0);
+    const tieneReal=b.retencion5taReal!==null&&b.retencion5taReal!==undefined;
+    const diff=tieneReal?b.retencion5taReal-b.retencion5taEstimada:null;
+    const diffTxt=tieneReal?`<span style="color:${Math.abs(diff)<2?'var(--green)':'var(--red)'}">${diff>=0?'+':''}${fmtS(diff)}</span>`:'—';
+    const utilTxt=b.utilidades?` <span title="Incluye S/${b.utilidades.toFixed(2)} de utilidades" style="cursor:help">💰</span>`:'';
+    return `<tr>
+      <td>${MONTHS[b.mes]}</td>
+      <td style="text-align:right">${fmtS(ingreso)}${utilTxt}</td>
+      <td style="text-align:right">${fmtS(b.retencion5taEstimada)}</td>
+      <td style="text-align:right">${tieneReal?fmtS(b.retencion5taReal):'—'}</td>
+      <td style="text-align:right">${diffTxt}</td>
+      <td style="text-align:right"><span style="cursor:pointer;color:var(--text3)" onclick="eliminarBoletaSueldo('${b.id}')">✕</span></td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:12px">Todavía no registraste ninguna boleta este año.</td></tr>';
+
+  // Proyección anual (usa la última boleta registrada como punto de partida)
+  const proyCont=document.getElementById('sueldo-proyeccion-anual');
+  if(boletas.length){
+    const ultima=boletas[boletas.length-1];
+    const calc=calcularRenta5taMes(ultima.anio,ultima.mes,ultima.basica+ultima.bono,ultima.otros+(ultima.utilidades||0));
+    const ingresoAcumulado=boletas.reduce((s,b)=>s+b.basica+b.bono+b.otros+(b.utilidades||0),0);
+    const retencionAcumulada=boletas.reduce((s,b)=>s+b.retencion5taEstimada,0);
+    const tasaEfectiva=calc.rentaBrutaAnualProyectada>0?(calc.impuestoAnual/calc.rentaBrutaAnualProyectada*100):0;
+    proyCont.innerHTML=`
+      <div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text3)">Ingreso bruto anual proyectado</div><div style="font-size:18px;font-weight:600">${fmtS(calc.rentaBrutaAnualProyectada)}</div></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text3)">Renta 5ta anual proyectada</div><div style="font-size:18px;font-weight:600">${fmtS(calc.impuestoAnual)}</div></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text3)">Tasa efectiva</div><div style="font-size:18px;font-weight:600">${tasaEfectiva.toFixed(1)}%</div></div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:11px;color:var(--text3)">Retenido en el año a la fecha</div><div style="font-size:18px;font-weight:600">${fmtS(retencionAcumulada)}</div></div>
+    `;
+  } else {
+    proyCont.innerHTML='<div style="color:var(--text3);font-size:12px;grid-column:1/-1">Registra al menos una boleta para ver la proyección.</div>';
+  }
+
+  // Gratificación y CTS
+  const gratJul=calcularGratificacion(anioActual,'jul');
+  const gratDic=calcularGratificacion(anioActual,'dic');
+  const ctsMayo=calcularCTS(anioActual,4);
+  const ctsNov=calcularCTS(anioActual,10);
+  const tarjetaGrat=(titulo,g)=>`<div style="background:var(--bg3);border-radius:8px;padding:12px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${g.mesesCompletos}/6 meses)</small></div>
+    <div style="font-size:16px;font-weight:600">${fmtS(g.total)}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:2px">Base ${fmtS(g.baseGrat)} + bonif. ${fmtS(g.bonificacion)}${g.cuenta?'':' · sin bono variable aún (menos de 3 meses registrados)'}</div>
+    ${g.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':''}
+  </div>`;
+  const tarjetaCTS=(titulo,c)=>`<div style="background:var(--bg3);border-radius:8px;padding:12px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${c.mesesCompletos}/6 meses)</small></div>
+    <div style="font-size:16px;font-weight:600">${fmtS(c.cts)}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:2px">Remun. computable ${fmtS(c.rc)} (incluye 1/6 grat.: ${fmtS(c.sextoGratificacion)})</div>
+    ${c.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':''}
+  </div>`;
+  document.getElementById('sueldo-grat-cts').innerHTML=
+    tarjetaGrat('🎁 Gratificación julio '+anioActual,gratJul)+
+    tarjetaGrat('🎁 Gratificación diciembre '+anioActual,gratDic)+
+    tarjetaCTS('🏦 CTS mayo '+anioActual,ctsMayo)+
+    tarjetaCTS('🏦 CTS noviembre '+anioActual,ctsNov);
+
+  renderSueldoChart();
+}
+function setSueldoChartTab(i){
+  currentSueldoChartTab=i;
+  [0,1,2].forEach(n=>document.getElementById('sct'+n).classList.toggle('active',n===i));
+  renderSueldoChart();
+}
+function renderSueldoChart(){
+  const canvasEl=document.getElementById('sueldo-chart');
+  if(!canvasEl) return;
+  if(sueldoChart){ sueldoChart.destroy(); sueldoChart=null; }
+  const anioActual=(new Date()).getFullYear();
+  const boletas=getBoletasAnioSueldo(anioActual);
+  const legend=document.getElementById('sueldo-chart-legend');
+  if(!boletas.length){
+    legend.innerHTML='<span>Registra boletas para ver la evolución del año.</span>';
+    return;
+  }
+  const labels=boletas.map(b=>MONTHS_SHORT[b.mes]);
+  const ctx=canvasEl.getContext('2d');
+  if(currentSueldoChartTab===0){
+    const ingresos=boletas.map(b=>+(b.basica+b.bono+b.otros+(b.utilidades||0)).toFixed(2));
+    const retEst=boletas.map(b=>+b.retencion5taEstimada.toFixed(2));
+    const retReal=boletas.map(b=>b.retencion5taReal!==null&&b.retencion5taReal!==undefined?+b.retencion5taReal.toFixed(2):null);
+    const baseOpts=chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k');
+    sueldoChart=new Chart(ctx,{data:{labels,datasets:[
+      {type:'bar',label:'Ingreso',data:ingresos,backgroundColor:'rgba(91,141,239,.25)',borderColor:'#5b8def',borderWidth:1.5,borderRadius:3,yAxisID:'y'},
+      {type:'line',label:'5ta estimada',data:retEst,borderColor:'#f0a53c',borderWidth:2,pointRadius:3,tension:.3,yAxisID:'y1'},
+      {type:'line',label:'5ta real',data:retReal,borderColor:'#f05c5c',borderWidth:2,pointRadius:3,tension:.3,borderDash:[4,3],yAxisID:'y1'},
+    ]},options:{...baseOpts,scales:{
+      x:baseOpts.scales.x,
+      y:{position:'left',grid:baseOpts.scales.y.grid,ticks:baseOpts.scales.y.ticks},
+      y1:{position:'right',grid:{display:false},ticks:{...baseOpts.scales.y.ticks,callback:v=>'S/'+v.toFixed(0)}},
+    }}});
+    legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#5b8def;display:inline-block"></span>Ingreso</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f0a53c;display:inline-block"></span>5ta estimada</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f05c5c;display:inline-block"></span>5ta real</span>`;
+  } else if(currentSueldoChartTab===1){
+    const netos=boletas.map(b=>{
+      const ingreso=b.basica+b.bono+b.otros+(b.utilidades||0);
+      const pension=(b.pensionAporte||0)+(b.pensionPrima||0)+(b.pensionComision||0);
+      return +(ingreso-pension-b.retencion5taEstimada).toFixed(2);
+    });
+    sueldoChart=new Chart(ctx,{data:{labels,datasets:[
+      {type:'line',label:'Neto estimado',data:netos,borderColor:'#2dd4bf',borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:'#2dd4bf22'}},
+    ]},options:chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k')});
+    legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#2dd4bf;display:inline-block"></span>Neto mensual estimado</span>`;
+  } else {
+    const tasas=boletas.map(b=>{
+      const calc=calcularRenta5taMes(b.anio,b.mes,b.basica+b.bono,b.otros+(b.utilidades||0));
+      return calc.rentaBrutaAnualProyectada>0?+(calc.impuestoAnual/calc.rentaBrutaAnualProyectada*100).toFixed(2):0;
+    });
+    sueldoChart=new Chart(ctx,{data:{labels,datasets:[
+      {type:'line',label:'Tasa efectiva %',data:tasas,borderColor:'#a78bfa',borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:'#a78bfa22'}},
+    ]},options:chartOpts(v=>v.toFixed(1)+'%')});
+    legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#a78bfa;display:inline-block"></span>Tasa efectiva de impuesto (% del ingreso anual proyectado)</span>`;
+  }
+}
+
+// ── SIMULADOR DE SUELDO NETO (ej. evaluar una oferta de otro trabajo) ──
+// Escenario hipotético: asume el mismo bruto mensual los 12 meses + 2
+// gratificaciones completas (sin bono variable, porque es un sueldo que
+// aún no existe). Usa tu configuración actual (AFP/ONP, EPS). El impuesto
+// se reparte como promedio mensual (no con los divisores de SUNAT, que
+// solo tienen sentido para un año real en curso, no para un escenario
+// hipotético "de cero").
+function abrirSimuladorNeto(){
+  document.getElementById('sim-bruto').value='';
+  document.getElementById('sim-resultado').style.display='none';
+  document.getElementById('sueldo-simulador-overlay').classList.add('open');
+}
+function cerrarSimuladorNeto(){ document.getElementById('sueldo-simulador-overlay').classList.remove('open'); }
+function calcularSimuladorNeto(){
+  const bruto=parseFloat(document.getElementById('sim-bruto').value)||0;
+  if(bruto<=0){ alert('Ingresa un sueldo bruto mensual válido.'); return; }
+  const cfg=state.sueldoConfig||{};
+  const params=getSueldoParametros((new Date()).getFullYear());
+  const ingresoAnualOrdinario=bruto*12;
+  const gratAnual=bruto*2; // 2 gratificaciones completas, sin variable
+  const pctBonif=cfg.tieneEPS?0.0675:0.09;
+  const bonifExtraAnual=gratAnual*pctBonif; // inafecta, no se suma a la renta
+  const rentaBrutaAnual=ingresoAnualOrdinario+gratAnual;
+  const rentaNeta=Math.max(0,rentaBrutaAnual-params.deduccionUIT*params.uit);
+  const impuestoAnual=calcularImpuestoAnualSueldo(rentaNeta,params);
+  const impuestoMensualPromedio=impuestoAnual/12;
+  const pension=calcularDescuentosPensionMes(bruto);
+  const netoMensual=bruto-pension.total-impuestoMensualPromedio;
+  const cont=document.getElementById('sim-resultado');
+  cont.style.display='block';
+  cont.innerHTML=`
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--text3)">Neto mensual estimado (sueldo ordinario)</div>
+      <div style="font-size:22px;font-weight:700;color:var(--accent)">${fmtS(netoMensual)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+      <div><div style="color:var(--text3)">AFP/ONP mensual</div><div style="font-weight:600">${fmtS(pension.total)}</div></div>
+      <div><div style="color:var(--text3)">Renta 5ta mensual (prom.)</div><div style="font-weight:600">${fmtS(impuestoMensualPromedio)}</div></div>
+      <div><div style="color:var(--text3)">Renta 5ta anual total</div><div style="font-weight:600">${fmtS(impuestoAnual)}</div></div>
+      <div><div style="color:var(--text3)">Tasa efectiva</div><div style="font-weight:600">${(rentaBrutaAnual>0?impuestoAnual/rentaBrutaAnual*100:0).toFixed(1)}%</div></div>
+    </div>
+    <div style="border-top:1px solid var(--border2);margin-top:10px;padding-top:10px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Gratificación anual (jul+dic, 2 sueldos)</span><span style="font-weight:600">${fmtS(gratAnual)}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Bonificación extraordinaria (${(pctBonif*100).toFixed(2)}%, inafecta)</span><span style="font-weight:600;color:var(--green)">+${fmtS(bonifExtraAnual)}</span></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px">⚠️ Simplificado: asume el mismo sueldo todo el año, sin bono variable ni CTS. Para tu sueldo real usa el registro de boletas de arriba, que sí calcula con precisión mes a mes.</div>
+  `;
 }
 
 function changeCalMonth(delta){
