@@ -2604,8 +2604,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '09/08/26 - 16:35'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Análisis de Sueldos, 4 mejoras grandes: (1) UTILIDADES — nuevo campo en cada boleta; se suman a lo ya percibido pero NO se proyectan a futuro (corregí de paso un bug real: "otros ingresos" se estaba multiplicando por los meses que faltan, como si un monto único se repitiera todos los meses — verificado contra el procedimiento oficial de SUNAT, orientacion.sunat.gob.pe Paso 1). (2) VALIDACIÓN — gratificación/CTS ahora usan tu última básica CONOCIDA (aunque no tengas boletas del periodo exacto) para poder proyectar "cuánto debería recibir" incluso sin datos completos, marcado como "⚠️ Estimado" cuando aplica ese respaldo. (3) GRÁFICOS — nueva tarjeta "Evolución del año" con 3 vistas (Ingreso vs Retención, Neto mensual, Tasa efectiva). (4) SIMULADOR DE SUELDO NETO — nuevo botón para simular cuánto neto recibirías con un sueldo bruto distinto (ej. evaluar una oferta de otro trabajo), usando tu AFP/EPS configurados.';
+const APP_VERSION_DATE = '09/08/26 - 17:18'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregido cálculo de CTS y Gratificación cuando empiezas a mitad de un mes: antes solo contaba meses completos (todo o nada), ahora prorratea por DÍAS exactos usando el criterio legal de "meses de 30 días" — antes un inicio el 10 de diciembre se contaba como 0 o 1 mes completo (mal en ambos casos); ahora se cuenta como 21/30 correctamente. Además, el "1/6 de gratificación" que se suma a la remuneración computable del CTS ahora solo se incluye si en el semestre anterior se llegó a trabajar al menos 1 mes completo (si solo fueron unos días sueltos, no llegó a generarse una gratificación real que prorratear). Verificado al centavo contra la liquidación de CTS real de Miguel (mayo 2026): RC S/6,263.35 y CTS S/2,453.15, ambos coinciden exacto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12651,7 +12651,7 @@ function getBoletasAnioSueldo(anio){ return getBoletasSueldo().filter(b=>b.anio=
 function fechaInicioComoMes(cfg){
   if(!cfg.fechaInicio) return null;
   const d=new Date(cfg.fechaInicio+'T12:00:00');
-  return {anio:d.getFullYear(),mes:d.getMonth()};
+  return {anio:d.getFullYear(),mes:d.getMonth(),dia:d.getDate()};
 }
 // Promedio del bono variable en un semestre (mismo año) — como estamos
 // PROYECTANDO (puede que aún no pasen todos los meses), se usa el
@@ -12694,13 +12694,36 @@ function calcularGratificacion(anio,tipoSemestre){
   const boletaRef=boletas.find(b=>b.mes===mesReferencia)||boletas.slice().reverse().find(b=>mesesSemestre.includes(b.mes));
   const basica=boletaRef?boletaRef.basica:ultimaBasicaConocida(anio,mesReferencia);
   const {promedio:promedioVar,cuenta}=promedioVariableSemestre(anio,mesesSemestre);
-  const mesesCompletos=mesesEnRangoDesdeInicio(mesesSemestre.map(m=>({anio,mes:m})),cfg);
-  const baseGrat=((basica+(cuenta?promedioVar:0))/6)*mesesCompletos;
+  // Prorrateo por días (no solo meses completos) para el mes en que
+  // empezaste a trabajar — si arrancaste, por ejemplo, el 10 de diciembre,
+  // ese mes no cuenta como "mes completo" sino como 21/30 de un mes. Esto
+  // también evita inflar el "1/6 de gratificación" que se usa en el CTS.
+  const {mesesCompletos,dias}=mesesYDiasDesdeInicio(mesesSemestre.map(m=>({anio,mes:m})),cfg);
+  const remComputable=basica+(cuenta?promedioVar:0);
+  const baseGrat=(remComputable/6)*mesesCompletos+(remComputable/180)*dias;
   const pctBonif=cfg.tieneEPS?0.0675:0.09;
   const bonificacion=baseGrat*pctBonif;
-  return {baseGrat,bonificacion,total:baseGrat+bonificacion,mesesCompletos,basica,promedioVar,cuenta,esEstimado:!boletaRef};
+  return {baseGrat,bonificacion,total:baseGrat+bonificacion,mesesCompletos,dias,basica,promedioVar,cuenta,esEstimado:!boletaRef};
 }
 // mesDeposito: 4=mayo (periodo nov[año-1]-abr[año]), 10=noviembre (periodo may-oct del mismo año)
+// Para CTS, la ley SÍ prorratea por días (no solo meses completos) cuando
+// empiezas a mitad de un mes — usando el criterio estándar laboral peruano
+// de "meses de 30 días" (no los días reales del calendario). Ej.: si
+// empezaste el 10 de diciembre, ese mes cuenta como 30-10+1=21 días, no
+// como mes completo ni como 0.
+function mesesYDiasDesdeInicio(rangoMeses,cfg){
+  const inicio=fechaInicioComoMes(cfg);
+  if(!inicio) return {mesesCompletos:rangoMeses.length,dias:0};
+  let mesesCompletos=0,dias=0;
+  rangoMeses.forEach(mp=>{
+    const despues=mp.anio>inicio.anio||(mp.anio===inicio.anio&&mp.mes>inicio.mes);
+    const esMesInicio=mp.anio===inicio.anio&&mp.mes===inicio.mes;
+    if(despues) mesesCompletos++;
+    else if(esMesInicio) dias+=Math.max(0,30-inicio.dia+1);
+    // meses ANTES del inicio: no cuentan nada (ni días ni mes)
+  });
+  return {mesesCompletos,dias};
+}
 function calcularCTS(anioDeposito,mesDeposito){
   const cfg=state.sueldoConfig||{};
   let mesesPeriodo,mesReferencia,gratRelevante;
@@ -12720,10 +12743,15 @@ function calcularCTS(anioDeposito,mesDeposito){
   const boletasPeriodo=todas.filter(b=>mesesPeriodo.some(mp=>mp.anio===b.anio&&mp.mes===b.mes));
   let promedioVar=0,cuentaVar=false;
   if(boletasPeriodo.length>=3){ promedioVar=boletasPeriodo.reduce((s,b)=>s+(b.bono||0),0)/6; cuentaVar=true; }
-  const sextoGratificacion=(gratRelevante.baseGrat||0)/6;
+  // El 1/6 de gratificación solo se suma si en el semestre anterior
+  // llegaste a trabajar AL MENOS 1 mes completo — si solo tuviste unos
+  // días (ej. entraste a mitad del último mes del semestre), no llegó a
+  // generarse una gratificación real que pueda prorratearse dentro del CTS.
+  const sextoGratificacion=(gratRelevante.mesesCompletos>=1)?(gratRelevante.baseGrat||0)/6:0;
   const rc=basica+(cuentaVar?promedioVar:0)+sextoGratificacion;
-  const mesesCompletos=mesesEnRangoDesdeInicio(mesesPeriodo,cfg);
-  return {cts:(rc/12)*mesesCompletos,rc,basica,promedioVar,cuentaVar,sextoGratificacion,mesesCompletos,esEstimado:!boletaRef};
+  const {mesesCompletos,dias}=mesesYDiasDesdeInicio(mesesPeriodo,cfg);
+  const cts=(rc/12)*mesesCompletos+(rc/360)*dias;
+  return {cts,rc,basica,promedioVar,cuentaVar,sextoGratificacion,mesesCompletos,dias,esEstimado:!boletaRef};
 }
 
 // Calcula la renta de 5ta ESTIMADA para (anio,mesIdx) según lo que ya se
@@ -12745,7 +12773,10 @@ function calcularRenta5taMes(anio,mesIdx,ingresoRecurrente,ingresoUnico){
   const params=getSueldoParametros(anio);
   const boletasPrevias=getBoletasAnioSueldo(anio).filter(b=>b.mes<mesIdx);
   const ingresoAcumuladoPrevio=boletasPrevias.reduce((s,b)=>s+(b.basica||0)+(b.bono||0)+(b.otros||0)+(b.utilidades||0),0)+(cfg.ingresoAnterior||0);
-  const retencionAcumuladaPrevia=boletasPrevias.reduce((s,b)=>s+(b.retencion5taEstimada||0),0)+(cfg.retencionAnterior||0);
+  // Se prefiere la retención REAL (de tu boleta) sobre nuestro estimado
+  // viejo — así el cálculo se autocorrige con datos reales en vez de
+  // arrastrar un error de un mes anterior.
+  const retencionAcumuladaPrevia=boletasPrevias.reduce((s,b)=>s+(b.retencion5taReal!=null?b.retencion5taReal:(b.retencion5taEstimada||0)),0)+(cfg.retencionAnterior||0);
   const mesesQueFaltan=11-mesIdx; // meses DESPUÉS del actual
   const gratJul=calcularGratificacion(anio,'jul').baseGrat;
   const gratDic=calcularGratificacion(anio,'dic').baseGrat;
@@ -12804,8 +12835,9 @@ function guardarConfigSueldo(){
     ingresoAnterior:parseFloat(document.getElementById('sc-ingreso-anterior').value)||0,
     retencionAnterior:parseFloat(document.getElementById('sc-retencion-anterior').value)||0,
   };
-  saveState();
   cerrarConfigSueldo();
+  recalcularTodosLosAnios();
+  saveState();
   renderSueldos();
 }
 
@@ -12831,9 +12863,17 @@ function guardarParametrosSueldo(){
     afpPrima:parseFloat(document.getElementById('sp-afp-prima').value)||1.37,
     onpTasa:parseFloat(document.getElementById('sp-onp-tasa').value)||13,
   };
-  saveState();
   cerrarParametrosSueldo();
+  recalcularTodosLosAnios();
+  saveState();
   renderSueldos();
+}
+// Recalcula todos los años que tengan boletas registradas — se usa cuando
+// cambia algo "global" (config o parámetros del año) que puede afectar
+// cálculos ya guardados.
+function recalcularTodosLosAnios(){
+  const anios=[...new Set(getBoletasSueldo().map(b=>b.anio))];
+  anios.forEach(a=>recalcularBoletasAnio(a));
 }
 
 function guardarBoletaSueldo(){
@@ -12846,27 +12886,47 @@ function guardarBoletaSueldo(){
   const rentaRealInput=document.getElementById('sb-renta-real').value;
   const rentaReal=rentaRealInput!==''?parseFloat(rentaRealInput):null;
   if(!basica&&!bono&&!otros&&!utilidades){ alert('Ingresa al menos la remuneración básica.'); return; }
-  const ingresoRecurrente=basica+bono; // se proyecta a futuro
-  const ingresoUnico=otros+utilidades; // NO se proyecta, solo cuenta este mes
-  const ingresoMes=ingresoRecurrente+ingresoUnico; // total percibido este mes (para AFP/ONP y neto)
-  const calc=calcularRenta5taMes(anio,mes,ingresoRecurrente,ingresoUnico);
+  const ingresoRecurrente=basica+bono;
+  const ingresoUnico=otros+utilidades;
+  const ingresoMes=ingresoRecurrente+ingresoUnico;
   const pension=calcularDescuentosPensionMes(ingresoMes);
   if(!Array.isArray(state.sueldoBoletas)) state.sueldoBoletas=[];
   const idx=state.sueldoBoletas.findIndex(b=>b.anio===anio&&b.mes===mes);
   const boleta={
     id:idx>=0?state.sueldoBoletas[idx].id:'sb-'+Date.now(),
     anio,mes,basica,bono,otros,utilidades,
-    retencion5taEstimada:calc.retencionMes,
+    retencion5taEstimada:0, // se recalcula ahora mismo, junto con TODOS los meses
     retencion5taReal:rentaReal,
     pensionAporte:pension.aporte,pensionPrima:pension.prima,pensionComision:pension.comisionFlujo,
   };
   if(idx>=0) state.sueldoBoletas[idx]=boleta; else state.sueldoBoletas.push(boleta);
+  // Recalcula TODOS los meses del año en orden — así enero/febrero/etc. ya
+  // no se quedan con el estimado viejo de cuando aún faltaban meses por
+  // registrar (esto era la causa real de la "gran diferencia" reportada).
+  recalcularBoletasAnio(anio);
   saveState();
-  renderResultadoMesSueldo(boleta,calc,pension);
+  const boletaActualizada=state.sueldoBoletas.find(b=>b.anio===anio&&b.mes===mes);
+  const calcActual=calcularRenta5taMes(anio,mes,ingresoRecurrente,ingresoUnico);
+  renderResultadoMesSueldo(boletaActualizada,calcActual,pension);
   renderSueldos();
 }
+// Recalcula retencion5taEstimada de TODAS las boletas de un año, en orden
+// cronológico (enero→diciembre) — necesario porque cada mes depende de lo
+// ya retenido en los meses anteriores, y de la gratificación proyectada
+// (que a su vez depende de boletas de meses que pueden haberse agregado
+// DESPUÉS de las que ya estaban registradas).
+function recalcularBoletasAnio(anio){
+  const meses=getBoletasAnioSueldo(anio); // ya viene ordenado por mes
+  meses.forEach(b=>{
+    const calc=calcularRenta5taMes(anio,b.mes,b.basica+b.bono,b.otros+(b.utilidades||0));
+    const idx=state.sueldoBoletas.findIndex(x=>x.id===b.id);
+    if(idx>=0) state.sueldoBoletas[idx].retencion5taEstimada=calc.retencionMes;
+  });
+}
 function eliminarBoletaSueldo(id){
+  const boleta=(state.sueldoBoletas||[]).find(b=>b.id===id);
   state.sueldoBoletas=(state.sueldoBoletas||[]).filter(b=>b.id!==id);
+  if(boleta) recalcularBoletasAnio(boleta.anio);
   saveState();
   renderSueldos();
 }
@@ -12966,13 +13026,13 @@ function renderSueldos(){
   const ctsMayo=calcularCTS(anioActual,4);
   const ctsNov=calcularCTS(anioActual,10);
   const tarjetaGrat=(titulo,g)=>`<div style="background:var(--bg3);border-radius:8px;padding:12px">
-    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${g.mesesCompletos}/6 meses)</small></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${g.mesesCompletos} meses${g.dias?' + '+g.dias+' días':''})</small></div>
     <div style="font-size:16px;font-weight:600">${fmtS(g.total)}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">Base ${fmtS(g.baseGrat)} + bonif. ${fmtS(g.bonificacion)}${g.cuenta?'':' · sin bono variable aún (menos de 3 meses registrados)'}</div>
     ${g.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':''}
   </div>`;
   const tarjetaCTS=(titulo,c)=>`<div style="background:var(--bg3);border-radius:8px;padding:12px">
-    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${c.mesesCompletos}/6 meses)</small></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${c.mesesCompletos} meses${c.dias?' + '+c.dias+' días':''})</small></div>
     <div style="font-size:16px;font-weight:600">${fmtS(c.cts)}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">Remun. computable ${fmtS(c.rc)} (incluye 1/6 grat.: ${fmtS(c.sextoGratificacion)})</div>
     ${c.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':''}
