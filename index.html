@@ -879,6 +879,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <div class="config-row-label">Reportes en PDF<small>Resumen de cualquier mes, o resumen anual (wrap-up)</small></div>
             <button class="config-action-btn neutral" onclick="openReportesModal()">📄 Generar reporte</button>
           </div>
+          <div class="config-row">
+            <div class="config-row-label">Relojes Mundiales<small id="cfg-relojes-count">4 ciudades</small></div>
+            <button class="config-action-btn neutral" onclick="closeConfig();abrirGestionRelojes()">🌍 Administrar</button>
+          </div>
         </div>
 
         <!-- SECCIÓN: Tipo de Cambio -->
@@ -1023,14 +1027,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 
 <div class="modal-overlay" id="reloj-modal-overlay" onclick="if(event.target===this)cerrarAgregarReloj()">
-  <div class="modal" style="width:340px">
-    <div class="modal-title"><span>🌍 Agregar zona horaria</span><button class="modal-close" onclick="cerrarAgregarReloj()">✕</button></div>
+  <div class="modal" style="width:360px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title"><span>🌍 Relojes Mundiales</span><button class="modal-close" onclick="cerrarAgregarReloj()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Ciudades que se muestran en Resumen, arriba de "Última actualización".</div>
+    <div id="gestion-relojes-lista" style="margin-bottom:14px"></div>
     <div class="field">
-      <label>Ciudad</label>
+      <label>Agregar ciudad</label>
       <select id="reloj-ciudad"></select>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-      <button class="btn btn-secondary" onclick="cerrarAgregarReloj()">Cancelar</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-secondary" onclick="cerrarAgregarReloj()">Cerrar</button>
       <button class="btn btn-primary" onclick="guardarReloj()">+ Agregar</button>
     </div>
   </div>
@@ -2416,8 +2422,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 22:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Relojes Mundiales: agregada la fecha real de cada ciudad debajo de la hora (ej. "Dom, 9 ago") — útil porque Madrid/Moscú suelen estar en el día siguiente respecto a Lima. Formateada a mano (sin puntos, día de la semana con mayúscula) porque el formato que da el navegador en español trae puntos y minúsculas.';
+const APP_VERSION_DATE = '08/08/26 - 23:03'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Relojes Mundiales: quitado el botón "+" del dashboard (ya no se pueden agregar/quitar ciudades desde ahí, solo se ven). En su lugar, nuevo apartado "Relojes Mundiales" en ⚙ Config → Apariencia, con botón "🌍 Administrar" que abre un panel con la lista completa (cada una con botón "✕ Quitar") y un selector para agregar ciudades nuevas — todo en un solo lugar, sin cerrarse entre acciones para poder agregar/quitar varias seguidas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9391,17 +9397,23 @@ function renderRelojesMundiales(){
     const horaNum=parseInt(ahora.toLocaleTimeString('en-US',{timeZone:r.tz,hour:'2-digit',hour12:false}));
     const esDeDia=horaNum>=6&&horaNum<19;
     return `<div class="reloj-chip" style="position:relative;text-align:center;min-width:58px">
-      <span onclick="eliminarReloj('${r.id}')" title="Quitar" class="reloj-chip-x" style="position:absolute;top:-8px;right:-4px;font-size:9px;color:var(--text3);cursor:pointer;opacity:0;transition:opacity .15s">✕</span>
       <div style="font-size:9px;color:var(--text3);white-space:nowrap">${r.bandera} ${r.ciudad}</div>
       <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)">${hora}<span style="font-size:9px">${esDeDia?'☀️':'🌙'}</span></div>
       <div style="font-size:9px;color:var(--text3);white-space:nowrap;margin-top:1px">${fechaCorta(r.tz)}</div>
     </div>`;
   };
-  const addBtn=`<div onclick="abrirAgregarReloj()" title="Agregar zona horaria" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:26px;color:var(--text3);font-size:16px;border:1px dashed var(--border);border-radius:8px;align-self:stretch">+</div>`;
-  cont.innerHTML=(relojes.length?relojes.map(chip).join(''):'<div style="font-size:10px;color:var(--text3)">Sin relojes</div>')+addBtn;
+  cont.innerHTML=relojes.length?relojes.map(chip).join(''):'<div style="font-size:10px;color:var(--text3)">Sin relojes — agrégalos desde ⚙ Config → Relojes Mundiales</div>';
+  const cfgCount=document.getElementById('cfg-relojes-count');
+  if(cfgCount) cfgCount.textContent=relojes.length+' ciudad'+(relojes.length===1?'':'es');
 }
 setInterval(renderRelojesMundiales,1000);
-function abrirAgregarReloj(){
+function abrirGestionRelojes(){
+  renderGestionRelojesLista();
+  poblarSelectorCiudades();
+  document.getElementById('reloj-modal-overlay').classList.add('open');
+}
+function cerrarAgregarReloj(){ document.getElementById('reloj-modal-overlay').classList.remove('open'); }
+function poblarSelectorCiudades(){
   const yaAgregadas=new Set(relojesActuales().map(r=>r.ciudad));
   const disponibles=CATALOGO_ZONAS_HORARIAS.filter(c=>!yaAgregadas.has(c.ciudad));
   const sel=document.getElementById('reloj-ciudad');
@@ -9411,19 +9423,28 @@ function abrirAgregarReloj(){
     sel.innerHTML=disponibles.map((c,i)=>`<option value="${i}">${c.bandera} ${c.ciudad}, ${c.pais}</option>`).join('');
   }
   sel.dataset.disponibles=JSON.stringify(disponibles);
-  document.getElementById('reloj-modal-overlay').classList.add('open');
 }
-function cerrarAgregarReloj(){ document.getElementById('reloj-modal-overlay').classList.remove('open'); }
+function renderGestionRelojesLista(){
+  const cont=document.getElementById('gestion-relojes-lista');
+  if(!cont) return;
+  const relojes=relojesActuales();
+  cont.innerHTML=relojes.length?relojes.map(r=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
+      <span style="font-size:13px">${r.bandera} ${r.ciudad}<span style="color:var(--text3);font-size:11px"> · ${r.pais}</span></span>
+      <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" onclick="eliminarReloj('${r.id}')">✕ Quitar</button>
+    </div>`).join(''):'<div style="color:var(--text3);font-size:12px;padding:8px 0">Sin ciudades agregadas todavía.</div>';
+}
 function guardarReloj(){
   const sel=document.getElementById('reloj-ciudad');
   const disponibles=JSON.parse(sel.dataset.disponibles||'[]');
   const elegido=disponibles[parseInt(sel.value)];
-  if(!elegido){ cerrarAgregarReloj(); return; }
+  if(!elegido) return;
   if(!Array.isArray(state.relojesExtra)) state.relojesExtra=[];
   state.relojesExtra.push({id:'r-'+Date.now(), ...elegido});
   saveState();
   renderRelojesMundiales();
-  cerrarAgregarReloj();
+  renderGestionRelojesLista();
+  poblarSelectorCiudades();
 }
 function eliminarReloj(id){
   if(id.startsWith('d-')){
@@ -9436,6 +9457,8 @@ function eliminarReloj(id){
   }
   saveState();
   renderRelojesMundiales();
+  renderGestionRelojesLista();
+  poblarSelectorCiudades();
 }
 
 function renderDashboard(){
