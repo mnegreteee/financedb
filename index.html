@@ -2422,8 +2422,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 23:03'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Relojes Mundiales: quitado el botón "+" del dashboard (ya no se pueden agregar/quitar ciudades desde ahí, solo se ven). En su lugar, nuevo apartado "Relojes Mundiales" en ⚙ Config → Apariencia, con botón "🌍 Administrar" que abre un panel con la lista completa (cada una con botón "✕ Quitar") y un selector para agregar ciudades nuevas — todo en un solo lugar, sin cerrarse entre acciones para poder agregar/quitar varias seguidas.';
+const APP_VERSION_DATE = '08/08/26 - 23:11'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Relojes Mundiales: (1) ahora se puede reordenar las ciudades con flechas ▲▼ en el panel de Config → Administrar (ej. mover São Paulo al primer lugar) — el orden elegido se guarda en Firestore y se refleja igual en el dashboard; (2) la hora en el dashboard se agrandó de 14px a 22px, casi al borde de la tarjeta, para que se lea mejor de un vistazo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9376,7 +9376,29 @@ const CATALOGO_ZONAS_HORARIAS=[
 ];
 function relojesActuales(){
   const ocultos=new Set(state.relojesOcultos||[]);
-  return [...RELOJES_DEFAULT.filter(r=>!ocultos.has(r.id)), ...(state.relojesExtra||[])];
+  const base=[...RELOJES_DEFAULT.filter(r=>!ocultos.has(r.id)), ...(state.relojesExtra||[])];
+  // Orden manual guardado en state.relojesOrden (▲▼ en el panel de Config).
+  // Las que no estén todavía en ese orden (recién agregadas) van al final,
+  // en el orden en que se crearon.
+  const orden=state.relojesOrden||[];
+  if(!orden.length) return base;
+  const porId=new Map(base.map(r=>[r.id,r]));
+  const ordenados=orden.map(id=>porId.get(id)).filter(Boolean);
+  const faltantes=base.filter(r=>!orden.includes(r.id));
+  return [...ordenados, ...faltantes];
+}
+// Mueve un reloj un puesto hacia arriba (-1) o abajo (+1) en el orden.
+function moverReloj(id,dir){
+  const actuales=relojesActuales().map(r=>r.id);
+  if(!Array.isArray(state.relojesOrden)||!state.relojesOrden.length) state.relojesOrden=actuales.slice();
+  else actuales.forEach(rid=>{ if(!state.relojesOrden.includes(rid)) state.relojesOrden.push(rid); });
+  const idx=state.relojesOrden.indexOf(id);
+  const nuevoIdx=idx+dir;
+  if(idx===-1||nuevoIdx<0||nuevoIdx>=state.relojesOrden.length) return;
+  [state.relojesOrden[idx],state.relojesOrden[nuevoIdx]]=[state.relojesOrden[nuevoIdx],state.relojesOrden[idx]];
+  saveState();
+  renderRelojesMundiales();
+  renderGestionRelojesLista();
 }
 function renderRelojesMundiales(){
   const cont=document.getElementById('relojes-mundiales');
@@ -9396,9 +9418,9 @@ function renderRelojesMundiales(){
     const hora=ahora.toLocaleTimeString('es-PE',{timeZone:r.tz,hour:'2-digit',minute:'2-digit',hour12:false});
     const horaNum=parseInt(ahora.toLocaleTimeString('en-US',{timeZone:r.tz,hour:'2-digit',hour12:false}));
     const esDeDia=horaNum>=6&&horaNum<19;
-    return `<div class="reloj-chip" style="position:relative;text-align:center;min-width:58px">
+    return `<div class="reloj-chip" style="position:relative;text-align:center;min-width:70px">
       <div style="font-size:9px;color:var(--text3);white-space:nowrap">${r.bandera} ${r.ciudad}</div>
-      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)">${hora}<span style="font-size:9px">${esDeDia?'☀️':'🌙'}</span></div>
+      <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--accent);line-height:1.1;white-space:nowrap">${hora}<span style="font-size:11px">${esDeDia?'☀️':'🌙'}</span></div>
       <div style="font-size:9px;color:var(--text3);white-space:nowrap;margin-top:1px">${fechaCorta(r.tz)}</div>
     </div>`;
   };
@@ -9428,9 +9450,15 @@ function renderGestionRelojesLista(){
   const cont=document.getElementById('gestion-relojes-lista');
   if(!cont) return;
   const relojes=relojesActuales();
-  cont.innerHTML=relojes.length?relojes.map(r=>`
+  cont.innerHTML=relojes.length?relojes.map((r,i)=>`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
-      <span style="font-size:13px">${r.bandera} ${r.ciudad}<span style="color:var(--text3);font-size:11px"> · ${r.pais}</span></span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="display:flex;flex-direction:column;line-height:1">
+          <span onclick="moverReloj('${r.id}',-1)" title="Subir" style="cursor:${i===0?'default':'pointer'};opacity:${i===0?.25:.7};font-size:10px">▲</span>
+          <span onclick="moverReloj('${r.id}',1)" title="Bajar" style="cursor:${i===relojes.length-1?'default':'pointer'};opacity:${i===relojes.length-1?.25:.7};font-size:10px">▼</span>
+        </span>
+        <span style="font-size:13px">${r.bandera} ${r.ciudad}<span style="color:var(--text3);font-size:11px"> · ${r.pais}</span></span>
+      </div>
       <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" onclick="eliminarReloj('${r.id}')">✕ Quitar</button>
     </div>`).join(''):'<div style="color:var(--text3);font-size:12px;padding:8px 0">Sin ciudades agregadas todavía.</div>';
 }
