@@ -435,6 +435,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 /* ══ DASHBOARD DE INICIO ══ */
 .dash-hero{background:linear-gradient(135deg,var(--bg2) 0%,var(--bg3) 100%);border:1px solid var(--border);border-radius:16px;padding:28px 32px;margin-bottom:22px;position:relative;overflow:hidden;}
+.reloj-chip:hover .reloj-chip-x{opacity:.7!important;}
 .dash-hero::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:var(--accent);opacity:.04;}
 .dash-hero::after{content:'';position:absolute;bottom:-60px;right:60px;width:140px;height:140px;border-radius:50%;background:var(--purple);opacity:.04;}
 .dash-greeting{font-size:13px;color:var(--text2);margin-bottom:4px;}
@@ -511,6 +512,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   .container{padding:12px;}
   /* Dashboard */
   .dash-kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
+  #relojes-mundiales{flex-wrap:wrap;justify-content:flex-start!important;gap:10px!important;}
   .dash-split,.dash-split-auto{grid-template-columns:1fr;gap:10px;}
   .dash-shortcut-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
   .dash-hero{padding:18px 16px;}
@@ -1040,9 +1042,24 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         </div>
       </div>
       <div style="text-align:right">
+        <div id="relojes-mundiales" style="display:flex;gap:14px;justify-content:flex-end;margin-bottom:12px"></div>
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:4px">Última actualización</div>
         <div style="font-family:var(--mono);font-size:12px;color:var(--text2)" id="dash-last-upd">—</div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px" id="dash-month-label">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="reloj-modal-overlay" onclick="if(event.target===this)cerrarAgregarReloj()">
+    <div class="modal" style="width:340px">
+      <div class="modal-title"><span>🌍 Agregar zona horaria</span><button class="modal-close" onclick="cerrarAgregarReloj()">✕</button></div>
+      <div class="field">
+        <label>Ciudad</label>
+        <select id="reloj-ciudad"></select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-secondary" onclick="cerrarAgregarReloj()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarReloj()">+ Agregar</button>
       </div>
     </div>
   </div>
@@ -2399,8 +2416,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 18:37'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corregido bug de seguridad importante: como tu app y la de Nathy viven bajo el mismo dominio de GitHub Pages (mnegreteee.github.io), compartían el localStorage del navegador — si alguien abría ambas apps en el mismo navegador, tu data podía aparecer, y en el peor caso GUARDARSE, dentro del Firestore real de Nathy (o viceversa). Se le puso un prefijo único ("miguel_") a TODAS las claves de localStorage que usa tu app, así ya es técnicamente imposible que se mezclen entre las dos sin importar el navegador. Nota: tu caché local anterior queda huérfana bajo la clave vieja (sin prefijo) — la próxima vez que abras tu app, cargará de cero desde Firestore (tus datos reales, sin pérdida) en vez de usar el caché instantáneo, solo una vez. Se mantiene todo lo demás: deduplicación de saldos, meses arrastrados, Km actual manual, último día del mes.';
+const APP_VERSION_DATE = '08/08/26 - 22:43'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Reubicados los "Relojes Mundiales": ya no están en su propia tarjeta debajo del Patrimonio Neto, ahora viven arriba de "Última actualización", en la esquina superior derecha del hero — formato compacto (solo hora HH:MM + ☀️/🌙, sin fecha/país para ahorrar espacio). El botón "✕" para quitar cada uno solo aparece al pasar el mouse por encima (antes siempre visible), y el "+" para agregar zona horaria ahora es un cuadradito discreto al final de la fila en vez de un botón de texto en el header. Misma lógica de fondo (catálogo de ~30 ciudades, persistencia en Firestore).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9304,6 +9321,113 @@ function applyTCHistorico(){
 // ══════════════════════════════════════════════════════
 //  DASHBOARD DE INICIO
 // ══════════════════════════════════════════════════════
+// ── RELOJES MUNDIALES ────────────────────────────────
+// Lima siempre primero (es "casa") y fija; las demás (Madrid/Moscú/Miami) son
+// las que Miguel pidió ver por defecto — se pueden quitar igual que cualquier
+// zona agregada después. Lo que el usuario agregue se guarda en
+// state.relojesExtra (persistido en Firestore).
+const RELOJES_DEFAULT=[
+  {id:'d-lima',ciudad:'Lima',pais:'Perú',tz:'America/Lima',bandera:'🇵🇪'},
+  {id:'d-madrid',ciudad:'Madrid',pais:'España',tz:'Europe/Madrid',bandera:'🇪🇸'},
+  {id:'d-moscu',ciudad:'Moscú',pais:'Rusia',tz:'Europe/Moscow',bandera:'🇷🇺'},
+  {id:'d-miami',ciudad:'Miami',pais:'Estados Unidos',tz:'America/New_York',bandera:'🇺🇸'},
+];
+// Catálogo de ciudades disponibles para agregar — cubre las zonas horarias
+// más comunes; si en algún momento se necesita una que no está aquí, se
+// agrega una línea más a esta lista.
+const CATALOGO_ZONAS_HORARIAS=[
+  {ciudad:'Lima',pais:'Perú',tz:'America/Lima',bandera:'🇵🇪'},
+  {ciudad:'Bogotá',pais:'Colombia',tz:'America/Bogota',bandera:'🇨🇴'},
+  {ciudad:'Ciudad de México',pais:'México',tz:'America/Mexico_City',bandera:'🇲🇽'},
+  {ciudad:'Santiago',pais:'Chile',tz:'America/Santiago',bandera:'🇨🇱'},
+  {ciudad:'Buenos Aires',pais:'Argentina',tz:'America/Argentina/Buenos_Aires',bandera:'🇦🇷'},
+  {ciudad:'São Paulo',pais:'Brasil',tz:'America/Sao_Paulo',bandera:'🇧🇷'},
+  {ciudad:'Miami',pais:'Estados Unidos',tz:'America/New_York',bandera:'🇺🇸'},
+  {ciudad:'Nueva York',pais:'Estados Unidos',tz:'America/New_York',bandera:'🇺🇸'},
+  {ciudad:'Chicago',pais:'Estados Unidos',tz:'America/Chicago',bandera:'🇺🇸'},
+  {ciudad:'Los Ángeles',pais:'Estados Unidos',tz:'America/Los_Angeles',bandera:'🇺🇸'},
+  {ciudad:'Toronto',pais:'Canadá',tz:'America/Toronto',bandera:'🇨🇦'},
+  {ciudad:'Madrid',pais:'España',tz:'Europe/Madrid',bandera:'🇪🇸'},
+  {ciudad:'Londres',pais:'Reino Unido',tz:'Europe/London',bandera:'🇬🇧'},
+  {ciudad:'París',pais:'Francia',tz:'Europe/Paris',bandera:'🇫🇷'},
+  {ciudad:'Berlín',pais:'Alemania',tz:'Europe/Berlin',bandera:'🇩🇪'},
+  {ciudad:'Roma',pais:'Italia',tz:'Europe/Rome',bandera:'🇮🇹'},
+  {ciudad:'Lisboa',pais:'Portugal',tz:'Europe/Lisbon',bandera:'🇵🇹'},
+  {ciudad:'Moscú',pais:'Rusia',tz:'Europe/Moscow',bandera:'🇷🇺'},
+  {ciudad:'Estambul',pais:'Turquía',tz:'Europe/Istanbul',bandera:'🇹🇷'},
+  {ciudad:'Dubái',pais:'Emiratos Árabes Unidos',tz:'Asia/Dubai',bandera:'🇦🇪'},
+  {ciudad:'El Cairo',pais:'Egipto',tz:'Africa/Cairo',bandera:'🇪🇬'},
+  {ciudad:'Johannesburgo',pais:'Sudáfrica',tz:'Africa/Johannesburg',bandera:'🇿🇦'},
+  {ciudad:'Nueva Delhi',pais:'India',tz:'Asia/Kolkata',bandera:'🇮🇳'},
+  {ciudad:'Bangkok',pais:'Tailandia',tz:'Asia/Bangkok',bandera:'🇹🇭'},
+  {ciudad:'Singapur',pais:'Singapur',tz:'Asia/Singapore',bandera:'🇸🇬'},
+  {ciudad:'Hong Kong',pais:'China',tz:'Asia/Hong_Kong',bandera:'🇭🇰'},
+  {ciudad:'Pekín',pais:'China',tz:'Asia/Shanghai',bandera:'🇨🇳'},
+  {ciudad:'Tokio',pais:'Japón',tz:'Asia/Tokyo',bandera:'🇯🇵'},
+  {ciudad:'Seúl',pais:'Corea del Sur',tz:'Asia/Seoul',bandera:'🇰🇷'},
+  {ciudad:'Sídney',pais:'Australia',tz:'Australia/Sydney',bandera:'🇦🇺'},
+  {ciudad:'Auckland',pais:'Nueva Zelanda',tz:'Pacific/Auckland',bandera:'🇳🇿'},
+];
+function relojesActuales(){
+  const ocultos=new Set(state.relojesOcultos||[]);
+  return [...RELOJES_DEFAULT.filter(r=>!ocultos.has(r.id)), ...(state.relojesExtra||[])];
+}
+function renderRelojesMundiales(){
+  const cont=document.getElementById('relojes-mundiales');
+  if(!cont) return;
+  const relojes=relojesActuales();
+  const ahora=new Date();
+  const chip=(r)=>{
+    const hora=ahora.toLocaleTimeString('es-PE',{timeZone:r.tz,hour:'2-digit',minute:'2-digit',hour12:false});
+    const horaNum=parseInt(ahora.toLocaleTimeString('en-US',{timeZone:r.tz,hour:'2-digit',hour12:false}));
+    const esDeDia=horaNum>=6&&horaNum<19;
+    return `<div class="reloj-chip" style="position:relative;text-align:center;min-width:52px">
+      <span onclick="eliminarReloj('${r.id}')" title="Quitar" class="reloj-chip-x" style="position:absolute;top:-8px;right:-4px;font-size:9px;color:var(--text3);cursor:pointer;opacity:0;transition:opacity .15s">✕</span>
+      <div style="font-size:9px;color:var(--text3);white-space:nowrap">${r.bandera} ${r.ciudad}</div>
+      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)">${hora}<span style="font-size:9px">${esDeDia?'☀️':'🌙'}</span></div>
+    </div>`;
+  };
+  const addBtn=`<div onclick="abrirAgregarReloj()" title="Agregar zona horaria" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:26px;color:var(--text3);font-size:16px;border:1px dashed var(--border);border-radius:8px;align-self:stretch">+</div>`;
+  cont.innerHTML=(relojes.length?relojes.map(chip).join(''):'<div style="font-size:10px;color:var(--text3)">Sin relojes</div>')+addBtn;
+}
+setInterval(renderRelojesMundiales,1000);
+function abrirAgregarReloj(){
+  const yaAgregadas=new Set(relojesActuales().map(r=>r.ciudad));
+  const disponibles=CATALOGO_ZONAS_HORARIAS.filter(c=>!yaAgregadas.has(c.ciudad));
+  const sel=document.getElementById('reloj-ciudad');
+  if(!disponibles.length){
+    sel.innerHTML='<option value="">Ya agregaste todas las ciudades disponibles</option>';
+  } else {
+    sel.innerHTML=disponibles.map((c,i)=>`<option value="${i}">${c.bandera} ${c.ciudad}, ${c.pais}</option>`).join('');
+  }
+  sel.dataset.disponibles=JSON.stringify(disponibles);
+  document.getElementById('reloj-modal-overlay').classList.add('open');
+}
+function cerrarAgregarReloj(){ document.getElementById('reloj-modal-overlay').classList.remove('open'); }
+function guardarReloj(){
+  const sel=document.getElementById('reloj-ciudad');
+  const disponibles=JSON.parse(sel.dataset.disponibles||'[]');
+  const elegido=disponibles[parseInt(sel.value)];
+  if(!elegido){ cerrarAgregarReloj(); return; }
+  if(!Array.isArray(state.relojesExtra)) state.relojesExtra=[];
+  state.relojesExtra.push({id:'r-'+Date.now(), ...elegido});
+  saveState();
+  renderRelojesMundiales();
+  cerrarAgregarReloj();
+}
+function eliminarReloj(id){
+  if(id.startsWith('d-')){
+    // Es una de las 4 por defecto — se puede quitar igual, se guarda la
+    // exclusión en state.relojesOcultos para no perderla si se agregan más.
+    if(!Array.isArray(state.relojesOcultos)) state.relojesOcultos=[];
+    if(!state.relojesOcultos.includes(id)) state.relojesOcultos.push(id);
+  } else {
+    state.relojesExtra=(state.relojesExtra||[]).filter(r=>r.id!==id);
+  }
+  saveState();
+  renderRelojesMundiales();
+}
+
 function renderDashboard(){
   const now   = new Date();
   const curY  = now.getFullYear();
@@ -12450,7 +12574,7 @@ function seedDemo(){
 })();
 
 // ── INIT ─────────────────────────────────────────────
-loadTheme();loadCompact();
+loadTheme();loadCompact();renderRelojesMundiales();
 (function(){
   const el = document.getElementById('app-version-label');
   if(el) el.textContent = 'Versión '+APP_VERSION_DATE;
