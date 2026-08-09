@@ -1022,6 +1022,20 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 </div>
 
+<div class="modal-overlay" id="reloj-modal-overlay" onclick="if(event.target===this)cerrarAgregarReloj()">
+  <div class="modal" style="width:340px">
+    <div class="modal-title"><span>🌍 Agregar zona horaria</span><button class="modal-close" onclick="cerrarAgregarReloj()">✕</button></div>
+    <div class="field">
+      <label>Ciudad</label>
+      <select id="reloj-ciudad"></select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-secondary" onclick="cerrarAgregarReloj()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarReloj()">+ Agregar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ PAGE: DASHBOARD ══ -->
 <div class="page active" id="page-dashboard">
 <div class="container">
@@ -1046,20 +1060,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:4px">Última actualización</div>
         <div style="font-family:var(--mono);font-size:12px;color:var(--text2)" id="dash-last-upd">—</div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px" id="dash-month-label">—</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" id="reloj-modal-overlay" onclick="if(event.target===this)cerrarAgregarReloj()">
-    <div class="modal" style="width:340px">
-      <div class="modal-title"><span>🌍 Agregar zona horaria</span><button class="modal-close" onclick="cerrarAgregarReloj()">✕</button></div>
-      <div class="field">
-        <label>Ciudad</label>
-        <select id="reloj-ciudad"></select>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-        <button class="btn btn-secondary" onclick="cerrarAgregarReloj()">Cancelar</button>
-        <button class="btn btn-primary" onclick="guardarReloj()">+ Agregar</button>
       </div>
     </div>
   </div>
@@ -2416,8 +2416,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '08/08/26 - 22:43'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Reubicados los "Relojes Mundiales": ya no están en su propia tarjeta debajo del Patrimonio Neto, ahora viven arriba de "Última actualización", en la esquina superior derecha del hero — formato compacto (solo hora HH:MM + ☀️/🌙, sin fecha/país para ahorrar espacio). El botón "✕" para quitar cada uno solo aparece al pasar el mouse por encima (antes siempre visible), y el "+" para agregar zona horaria ahora es un cuadradito discreto al final de la fila en vez de un botón de texto en el header. Misma lógica de fondo (catálogo de ~30 ciudades, persistencia en Firestore).';
+const APP_VERSION_DATE = '08/08/26 - 22:56'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Relojes Mundiales: agregada la fecha real de cada ciudad debajo de la hora (ej. "Dom, 9 ago") — útil porque Madrid/Moscú suelen estar en el día siguiente respecto a Lima. Formateada a mano (sin puntos, día de la semana con mayúscula) porque el formato que da el navegador en español trae puntos y minúsculas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9377,14 +9377,24 @@ function renderRelojesMundiales(){
   if(!cont) return;
   const relojes=relojesActuales();
   const ahora=new Date();
+  // Arma "Dom, 9 ago" a mano (sin puntos, día de la semana con mayúscula) —
+  // el formato que da Intl directo en es-PE trae puntos y minúsculas
+  // ("dom., 9 ago."), así que se limpia parte por parte.
+  const fechaCorta=(tz)=>{
+    const partes=new Intl.DateTimeFormat('es-PE',{timeZone:tz,weekday:'short',day:'numeric',month:'short'}).formatToParts(ahora);
+    const get=(t)=>(partes.find(p=>p.type===t)?.value||'').replace('.','');
+    const dia=get('weekday'); const diaCap=dia.charAt(0).toUpperCase()+dia.slice(1);
+    return `${diaCap}, ${get('day')} ${get('month')}`;
+  };
   const chip=(r)=>{
     const hora=ahora.toLocaleTimeString('es-PE',{timeZone:r.tz,hour:'2-digit',minute:'2-digit',hour12:false});
     const horaNum=parseInt(ahora.toLocaleTimeString('en-US',{timeZone:r.tz,hour:'2-digit',hour12:false}));
     const esDeDia=horaNum>=6&&horaNum<19;
-    return `<div class="reloj-chip" style="position:relative;text-align:center;min-width:52px">
+    return `<div class="reloj-chip" style="position:relative;text-align:center;min-width:58px">
       <span onclick="eliminarReloj('${r.id}')" title="Quitar" class="reloj-chip-x" style="position:absolute;top:-8px;right:-4px;font-size:9px;color:var(--text3);cursor:pointer;opacity:0;transition:opacity .15s">✕</span>
       <div style="font-size:9px;color:var(--text3);white-space:nowrap">${r.bandera} ${r.ciudad}</div>
       <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)">${hora}<span style="font-size:9px">${esDeDia?'☀️':'🌙'}</span></div>
+      <div style="font-size:9px;color:var(--text3);white-space:nowrap;margin-top:1px">${fechaCorta(r.tz)}</div>
     </div>`;
   };
   const addBtn=`<div onclick="abrirAgregarReloj()" title="Agregar zona horaria" style="cursor:pointer;display:flex;align-items:center;justify-content:center;min-width:26px;color:var(--text3);font-size:16px;border:1px dashed var(--border);border-radius:8px;align-self:stretch">+</div>`;
