@@ -2161,6 +2161,17 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <!-- Cards grid -->
     <div class="tc-grid" id="tc-cards-grid"></div>
 
+    <!-- Consumos Frecuentes: acceso rápido de 1 toque -->
+    <div class="card" style="padding:18px;margin-bottom:32px" id="tc-frecuentes-wrap">
+      <div class="section-header">
+        <div class="section-title">⚡ Consumos Frecuentes</div>
+        <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirConsumoFrecuenteModal()">+ Nuevo</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Toca uno para registrarlo al instante, con la fecha y hora de ahora mismo.</div>
+      <div id="tc-frecuentes-sugerencias" style="margin-bottom:12px"></div>
+      <div id="tc-frecuentes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px"></div>
+    </div>
+
     <!-- Resumen global -->
     <div class="card" style="padding:18px;margin-bottom:32px" id="tc-global-wrap">
       <div class="section-header">
@@ -2636,8 +2647,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '10/08/26 - 21:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Minijuegos: se agregaron 12 juegos más (ahora son 14 en total) — 🐤 Flappy Bird y 🧱 Breakout (canvas, como Dino/Snake); 🔨 Whack-a-mole, 🎹 Piano Tiles, 🔢 2048, 💣 Buscaminas, 🧩 Puzzle 15, 🔤 Wordle en español, 🃏 Memoria, 🎵 Simón dice, ❌ Tres en raya y 🔴 Conecta 4 (vs. una IA simple) hechos con grillas HTML normales. La página ahora abre con un menú de 14 tarjetas (con tu mejor puntaje de cada una) en vez de pestañas. Verificado con pruebas automatizadas: colisiones, fusión de fichas (2048), detección de minas/parejas/líneas ganadoras, generación de secuencias — los 14 juegos pasaron sin errores.';
+const APP_VERSION_DATE = '12/08/26 - 22:14'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Consumos Frecuentes — ajuste pedido: la detección automática ahora exige que el NOMBRE y el MONTO sean exactamente iguales (antes solo miraba el nombre, lo que mezclaba montos distintos del mismo lugar); y el umbral bajó a "3 o más" veces (antes exigía más de 3). Ej.: si "Starbucks S/18.50" aparece 2 veces y "Starbucks S/25.00" aparece 3 veces en los últimos 2 meses, ahora solo se sugiere el de S/25.00 — antes se hubieran mezclado como 5 y sugerido con un monto promedio/moda que no reflejaba ninguno de los dos exactos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8123,7 +8134,7 @@ function getAllCategorias(){
 function updateCategorySelects(){
   const cats = Object.keys(getAllCategorias());
   // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
-  ['f-cat','tc-m-cat'].forEach(id=>{
+  ['f-cat','tc-m-cat','cf-cat'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -8280,6 +8291,168 @@ function renderTarjetas(){
   renderTCGlobal();
   renderTCChartsExtra();
   try{ renderTCHeatmap(); }catch(err){ console.error('Error renderizando Mapa de Consumos con Tarjeta:', err); }
+  renderConsumosFrecuentes();
+}
+
+// ── CONSUMOS FRECUENTES (registro de 1 toque) ─────────
+const CF_SUGERENCIA_MIN_REPETICIONES=3; // 3 o más veces (mismo nombre Y mismo monto)
+const CF_SUGERENCIA_DIAS=60; // "últimos 2 meses" ≈ 60 días
+function cfNombreNormalizado(desc){ return (desc||'').trim().toLowerCase().replace(/\s+/g,' '); }
+// Recorre los consumos de TODAS las tarjetas (todos los meses) de los
+// últimos ~2 meses, agrupa por descripción (sin importar mayúsculas/
+// espacios) y devuelve los que se repitieron más de 3 veces — excluyendo
+// los que ya son un acceso rápido, o los que el usuario ya descartó antes.
+function cfClaveGrupo(desc,monto){ return cfNombreNormalizado(desc)+'|'+Number(monto).toFixed(2); }
+function detectarConsumosFrecuentesSugeridos(){
+  const limite=new Date(); limite.setDate(limite.getDate()-CF_SUGERENCIA_DIAS);
+  const limiteStr=limite.getFullYear()+'-'+String(limite.getMonth()+1).padStart(2,'0')+'-'+String(limite.getDate()).padStart(2,'0');
+  const yaExisten=new Set((state.consumosFrecuentes||[]).map(cf=>cfClaveGrupo(cf.nombre,cf.monto)));
+  const ignorados=new Set(state.consumosFrecuentesIgnorados||[]);
+  const grupos={}; // "nombreNormalizado|monto" -> [{monto,tarjetaId,currency,cat,fecha,descOriginal}]
+  (state.tarjetas||[]).forEach(t=>{
+    Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>{
+      if(!m.desc || m.fecha<limiteStr || !m.monto) return;
+      const key=cfClaveGrupo(m.desc,m.monto);
+      if(!cfNombreNormalizado(m.desc) || yaExisten.has(key) || ignorados.has(key)) return;
+      if(!grupos[key]) grupos[key]=[];
+      grupos[key].push({monto:m.monto,tarjetaId:t.id,currency:m.currency||t.currency||'PEN',cat:m.cat||'',fecha:m.fecha,descOriginal:m.desc});
+    }));
+  });
+  const moda=(arr)=>{
+    const cuenta={};
+    arr.forEach(v=>{ if(v!==undefined&&v!=='') cuenta[v]=(cuenta[v]||0)+1; });
+    const entries=Object.entries(cuenta).sort((a,b)=>b[1]-a[1]);
+    return entries.length?entries[0][0]:null;
+  };
+  const sugerencias=[];
+  Object.entries(grupos).forEach(([key,matches])=>{
+    if(matches.length<CF_SUGERENCIA_MIN_REPETICIONES) return;
+    matches.sort((a,b)=>b.fecha.localeCompare(a.fecha)); // más reciente primero, para desempates
+    const nombreSugerido=matches[0].descOriginal.trim(); // conserva may/min tal como se escribió la última vez, sin espacios de sobra
+    const montoSugerido=matches[0].monto; // el monto ya es el mismo en todo el grupo (es parte de la clave)
+    const tarjetaSugerida=moda(matches.map(m=>m.tarjetaId));
+    const currencySugerida=moda(matches.map(m=>m.currency))||'PEN';
+    const catSugerida=moda(matches.map(m=>m.cat).filter(Boolean))||'';
+    sugerencias.push({key,nombre:nombreSugerido,monto:montoSugerido,tarjetaId:tarjetaSugerida,currency:currencySugerida,cat:catSugerida,veces:matches.length});
+  });
+  return sugerencias.sort((a,b)=>b.veces-a.veces);
+}
+function renderConsumosFrecuentesSugerencias(){
+  const cont=document.getElementById('tc-frecuentes-sugerencias'); if(!cont) return;
+  const sugerencias=detectarConsumosFrecuentesSugeridos();
+  if(!sugerencias.length){ cont.innerHTML=''; return; }
+  cont.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">💡 Consumos que se repiten seguido — ¿los agrego como acceso rápido?</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+    ${sugerencias.map(s=>{
+      const sym=s.currency==='USD'?'$':'S/';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg3);border:1px dashed var(--accent);border-radius:8px;padding:8px 10px">
+        <div style="font-size:12px">${escapeHtml(s.nombre)} — ${sym} ${s.monto.toFixed(2)} <span style="color:var(--text3)">(${s.veces} veces en los últimos 2 meses)</span></div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" onclick="cfIgnorarSugerencia('${s.key}')">Ignorar</button>
+          <button class="btn btn-primary" style="font-size:10px;padding:3px 8px" onclick="cfAceptarSugerencia('${s.key}')">+ Agregar</button>
+        </div>
+      </div>`;
+    }).join('')}
+    </div>`;
+}
+function cfAceptarSugerencia(key){
+  const s=detectarConsumosFrecuentesSugeridos().find(x=>x.key===key);
+  if(!s) return;
+  if(!Array.isArray(state.consumosFrecuentes)) state.consumosFrecuentes=[];
+  state.consumosFrecuentes.push({id:'cf'+Date.now(),nombre:s.nombre,monto:s.monto,currency:s.currency,tarjetaId:s.tarjetaId,cat:s.cat});
+  saveState();
+  renderConsumosFrecuentes();
+  toast('⚡ "'+s.nombre+'" agregado como acceso rápido');
+}
+function cfIgnorarSugerencia(key){
+  if(!Array.isArray(state.consumosFrecuentesIgnorados)) state.consumosFrecuentesIgnorados=[];
+  if(!state.consumosFrecuentesIgnorados.includes(key)) state.consumosFrecuentesIgnorados.push(key);
+  saveState();
+  renderConsumosFrecuentes();
+}
+
+function renderConsumosFrecuentes(){
+  renderConsumosFrecuentesSugerencias();
+  const cont=document.getElementById('tc-frecuentes-grid'); if(!cont) return;
+  const lista=state.consumosFrecuentes||[];
+  if(!lista.length){
+    cont.innerHTML='<div style="grid-column:1/-1;color:var(--text3);font-size:12px;padding:6px 0">Todavía no tienes ninguno — crea uno con "+ Nuevo" (ej. Bembos S/24.80).</div>';
+    return;
+  }
+  cont.innerHTML=lista.map(cf=>{
+    const t=getTarjeta(cf.tarjetaId);
+    const sym=cf.currency==='USD'?'$':'S/';
+    return `<div style="position:relative;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer" onclick="registrarConsumoFrecuente('${cf.id}')">
+      <span onclick="event.stopPropagation();abrirConsumoFrecuenteModal('${cf.id}')" title="Editar" style="position:absolute;top:3px;right:5px;font-size:10px;color:var(--text3);cursor:pointer">✏</span>
+      <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(cf.nombre)}</div>
+      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);margin-top:2px">${sym} ${cf.monto.toFixed(2)}</div>
+      <div style="font-size:9px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t?t.banco+(t.cat?' '+t.cat:''):'⚠️ sin tarjeta'}</div>
+    </div>`;
+  }).join('');
+}
+function abrirConsumoFrecuenteModal(id){
+  updateCategorySelects();
+  const sel=document.getElementById('cf-tarjeta');
+  sel.innerHTML=(state.tarjetas||[]).map(t=>`<option value="${t.id}">${escapeHtml(t.banco)}${t.cat?' '+escapeHtml(t.cat):''}</option>`).join('');
+  if(!(state.tarjetas||[]).length){ alert('Primero agrega al menos una tarjeta.'); return; }
+  document.getElementById('cf-cat-hint').textContent='';
+  const cf=id?(state.consumosFrecuentes||[]).find(x=>x.id===id):null;
+  document.getElementById('cf-modal-title').textContent=cf?'⚡ Editar consumo frecuente':'⚡ Nuevo consumo frecuente';
+  document.getElementById('cf-nombre').value=cf?cf.nombre:'';
+  document.getElementById('cf-monto').value=cf?cf.monto:'';
+  document.getElementById('cf-currency').value=cf?(cf.currency||'PEN'):'PEN';
+  document.getElementById('cf-tarjeta').value=cf?cf.tarjetaId:sel.value;
+  document.getElementById('cf-cat').value=cf?(cf.cat||''):'';
+  document.getElementById('cf-overlay').dataset.editId=id||'';
+  document.getElementById('cf-btn-eliminar').style.display=id?'inline-block':'none';
+  document.getElementById('cf-overlay').classList.add('open');
+}
+function cerrarConsumoFrecuenteModal(){ document.getElementById('cf-overlay').classList.remove('open'); }
+function guardarConsumoFrecuenteModal(){
+  const nombre=(document.getElementById('cf-nombre').value||'').trim();
+  const monto=parseFloat(document.getElementById('cf-monto').value);
+  const currency=document.getElementById('cf-currency').value||'PEN';
+  const tarjetaId=document.getElementById('cf-tarjeta').value;
+  const cat=document.getElementById('cf-cat').value||'';
+  if(!nombre||!monto||monto<=0){ alert('Completa el nombre y un monto válido.'); return; }
+  if(!tarjetaId){ alert('Elige una tarjeta.'); return; }
+  const editId=document.getElementById('cf-overlay').dataset.editId;
+  if(!Array.isArray(state.consumosFrecuentes)) state.consumosFrecuentes=[];
+  if(editId){
+    const cf=state.consumosFrecuentes.find(x=>x.id===editId);
+    if(cf) Object.assign(cf,{nombre,monto,currency,tarjetaId,cat});
+  } else {
+    state.consumosFrecuentes.push({id:'cf'+Date.now(),nombre,monto,currency,tarjetaId,cat});
+  }
+  saveState();
+  cerrarConsumoFrecuenteModal();
+  renderConsumosFrecuentes();
+  toast(editId?'Consumo frecuente actualizado':'Consumo frecuente creado');
+}
+function eliminarConsumoFrecuente(id){
+  if(!confirm('¿Eliminar este consumo frecuente? (esto no borra los consumos ya registrados con él, solo el acceso rápido)')) return;
+  state.consumosFrecuentes=(state.consumosFrecuentes||[]).filter(x=>x.id!==id);
+  saveState();
+  renderConsumosFrecuentes();
+}
+// Registra el consumo YA MISMO con fecha/hora actual — sin abrir ningún formulario.
+function registrarConsumoFrecuente(id){
+  const cf=(state.consumosFrecuentes||[]).find(x=>x.id===id);
+  if(!cf) return;
+  const t=getTarjeta(cf.tarjetaId);
+  if(!t){ alert('La tarjeta de este acceso rápido ya no existe. Edítalo para elegir otra.'); return; }
+  const fecha=todayISO(), hora=horaLimaActual();
+  const mk=getBillingMonthKey(fecha, t);
+  if(!t.movs) t.movs={};
+  if(!t.movs[mk]) t.movs[mk]=[];
+  const nuevoMov={id:'tcm'+Date.now(),desc:cf.nombre,fecha,hora,monto:cf.monto,pagado:false,cat:cf.cat||'',currency:cf.currency||'PEN'};
+  t.movs[mk].push(nuevoMov);
+  const sym=nuevoMov.currency==='USD'?'$':'S/';
+  logActividad('tc_consumo', `${cf.nombre} — ${sym} ${cf.monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:t.id, monthKey:mk, consumoId:nuevoMov.id});
+  saveState();
+  renderTarjetas();
+  if(t.id===currentTCId && document.getElementById('tc-detail-view').style.display!=='none') renderTCDetail();
+  toast(`✅ ${cf.nombre} — ${sym}${cf.monto.toFixed(2)} registrado (${hora})`);
 }
 
 // Suma un arreglo de consumos separando soles y dólares — cada consumo puede
@@ -15442,6 +15615,29 @@ if(state.projGoals){
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTCMovModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveTCMov()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONSUMO FRECUENTE (crear/editar preset) -->
+<div class="modal-overlay" id="cf-overlay" onclick="if(event.target===this)cerrarConsumoFrecuenteModal()">
+  <div class="modal modal-sm" style="width:360px">
+    <div class="modal-title"><span id="cf-modal-title">⚡ Nuevo consumo frecuente</span><button class="modal-close" onclick="cerrarConsumoFrecuenteModal()">✕</button></div>
+    <div class="field"><label>Nombre <span style="font-size:10px;color:var(--text3)">(ej. Bembos, Starbucks...)</span></label><input id="cf-nombre" type="text" placeholder="Bembos" onblur="suggestCategoriaFor('cf-nombre','cf-cat','cf-cat-hint')"></div>
+    <div class="field-row">
+      <div class="field"><label>Monto</label><input id="cf-monto" type="number" step="0.01" placeholder="24.80"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="cf-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Tarjeta</label><select id="cf-tarjeta"></select></div>
+    <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional)</span> <span id="cf-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
+      <select id="cf-cat" onchange="document.getElementById('cf-cat-hint').textContent=''"></select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" id="cf-btn-eliminar" style="display:none;margin-right:auto;color:var(--red)" onclick="eliminarConsumoFrecuente(document.getElementById('cf-overlay').dataset.editId);cerrarConsumoFrecuenteModal()">Eliminar</button>
+      <button class="btn" onclick="cerrarConsumoFrecuenteModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarConsumoFrecuenteModal()">Guardar</button>
     </div>
   </div>
 </div>
