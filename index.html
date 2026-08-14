@@ -1049,7 +1049,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="container">
 
   <div class="dash-hero">
-    <div class="dash-greeting" id="dash-greeting">Bienvenido 👋</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="dash-greeting" id="dash-greeting">Bienvenido 👋</div>
+      <span id="dash-racha-badge" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap"></span>
+    </div>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div>
         <div class="dash-patrimonio-label">Patrimonio Neto Total</div>
@@ -2647,8 +2650,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '12/08/26 - 22:14'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Consumos Frecuentes — ajuste pedido: la detección automática ahora exige que el NOMBRE y el MONTO sean exactamente iguales (antes solo miraba el nombre, lo que mezclaba montos distintos del mismo lugar); y el umbral bajó a "3 o más" veces (antes exigía más de 3). Ej.: si "Starbucks S/18.50" aparece 2 veces y "Starbucks S/25.00" aparece 3 veces en los últimos 2 meses, ahora solo se sugiere el de S/25.00 — antes se hubieran mezclado como 5 y sugerido con un monto promedio/moda que no reflejaba ninguno de los dos exactos.';
+const APP_VERSION_DATE = '13/08/26 - 08:27'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Dos mejoras nuevas: (1) DETECCIÓN DE DUPLICADOS — al guardar un movimiento nuevo o un consumo de tarjeta, si ya existe uno con el mismo nombre (sin importar mayúsculas/espacios), monto y fecha, te avisa antes de guardarlo por si lo metiste sin querer 2 veces (no bloquea, solo confirma). No aplica a los accesos rápidos de Consumos Frecuentes, esos están pensados justamente para repetir rápido. (2) RACHA DE REGISTRO DIARIO — nuevo badge 🔥 junto al saludo del Resumen, cuenta días seguidos con al menos un movimiento o consumo de tarjeta registrado (estilo Duolingo): si hoy todavía no registraste nada la racha no se rompe todavía (sigue contando desde ayer), recién se rompe si pasa un día entero sin nada. Verificado con varios escenarios: duplicado detectado/no detectado por monto o fecha distinta, racha activa/en pausa/rota.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6166,6 +6169,58 @@ function deleteMovimiento(id,e){
   revertAccount(m);state.movimientos=state.movimientos.filter(x=>x.id!==id);
   saveState();render();
 }
+// ── DETECCIÓN DE DUPLICADOS ───────────────────────────
+// Compara descripción (sin importar mayúsculas/espacios) + monto + fecha —
+// si ya existe algo así, avisa antes de guardar (no bloquea, solo
+// confirma) para pescar el típico "toqué guardar 2 veces sin querer".
+function _dupNorm(s){ return (s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function detectarDuplicadoMovimiento(desc,amount,date,type,excludeId){
+  return (state.movimientos||[]).find(m=>
+    m.id!==excludeId && m.type===type && m.date===date &&
+    Math.abs(m.amount-amount)<0.01 && _dupNorm(m.desc)===_dupNorm(desc)
+  );
+}
+function detectarDuplicadoConsumoTC(tarjetaId,desc,monto,fecha,excludeId){
+  const t=getTarjeta(tarjetaId); if(!t||!t.movs) return null;
+  for(const arr of Object.values(t.movs)){
+    const found=(arr||[]).find(m=>m.id!==excludeId && m.fecha===fecha && Math.abs(m.monto-monto)<0.01 && _dupNorm(m.desc)===_dupNorm(desc));
+    if(found) return found;
+  }
+  return null;
+}
+
+// ── RACHA DE REGISTRO DIARIO ──────────────────────────
+// Cuenta días CONSECUTIVOS (terminando hoy o ayer) en los que se registró
+// al menos un movimiento normal o un consumo de tarjeta — igual que una
+// racha de Duolingo. Si hoy todavía no registraste nada, no se rompe la
+// racha todavía (se sigue contando desde ayer), recién se rompe si pasa un
+// día completo sin ningún registro.
+function calcularRachaRegistro(){
+  const fechas=new Set();
+  (state.movimientos||[]).forEach(m=>{ if(m.date) fechas.add(m.date); });
+  (state.tarjetas||[]).forEach(t=>Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>{ if(m.fecha) fechas.add(m.fecha); })));
+  const fmtFecha=(d)=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const hoy=new Date();
+  const hoyStr=fmtFecha(hoy);
+  const cursor=new Date(hoy);
+  if(!fechas.has(hoyStr)) cursor.setDate(cursor.getDate()-1); // hoy aún no cuenta como "roto"
+  let racha=0;
+  while(fechas.has(fmtFecha(cursor))){
+    racha++;
+    cursor.setDate(cursor.getDate()-1);
+  }
+  return {racha, registroHoy:fechas.has(hoyStr)};
+}
+function renderRachaRegistro(){
+  const badge=document.getElementById('dash-racha-badge');
+  if(!badge) return;
+  const {racha, registroHoy}=calcularRachaRegistro();
+  if(racha<1){ badge.style.display='none'; return; }
+  badge.style.display='inline-block';
+  badge.style.color=registroHoy?'var(--accent)':'var(--text3)';
+  badge.textContent=`🔥 ${racha} día${racha===1?'':'s'} seguido${racha===1?'':'s'}`+(registroHoy?'':' — ¡registra algo hoy para no perderla!');
+}
+
 function saveMovimiento(){
   const desc=document.getElementById('f-desc').value.trim();
   const amount=parseFloat(document.getElementById('f-amount').value);
@@ -6176,6 +6231,13 @@ function saveMovimiento(){
   const cat=document.getElementById('f-cat').value;
   const note=document.getElementById('f-note').value.trim();
   if(!desc||isNaN(amount)||amount<=0||!date){alert('Completa todos los campos.');return;}
+  if(!state.editId){
+    const dup=detectarDuplicadoMovimiento(desc,amount,date,currentType);
+    if(dup){
+      const sym=currency==='USD'?'$':'S/';
+      if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${amount.toFixed(2)} ese mismo día${dup.hora?' a las '+dup.hora:''}. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
+    }
+  }
   if(state.editId){const old=state.movimientos.find(x=>x.id===state.editId);if(old)revertAccount(old);state.movimientos=state.movimientos.filter(x=>x.id!==state.editId);}
   const mov={id:state.editId||Date.now().toString(),type:currentType,desc,amount,account,date,currency};
   // Firestore rechaza campos con valor "undefined" — si no hay categoría o
@@ -8885,6 +8947,13 @@ function saveTCMov(){
   const tarjetaId=document.getElementById('tc-m-tarjeta').value;
   const t=getTarjeta(tarjetaId); if(!t) return;
   if(!t.movs) t.movs={};
+  if(!editingTCMovId){
+    const dup=detectarDuplicadoConsumoTC(tarjetaId,desc,monto,fecha);
+    if(dup){
+      const sym=currency==='USD'?'$':'S/';
+      if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${monto.toFixed(2)} ese mismo día${dup.hora?' a las '+dup.hora:''} en esta tarjeta. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
+    }
+  }
 
   if(editingTCMovId){
     // Find the mov in ANY month (it may have been in a different period)
@@ -9891,6 +9960,7 @@ function renderDashboard(){
   const name  = (state.ownerName||'').trim() || (currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
   const el=document.getElementById('dash-greeting');
   if(el) el.textContent = greet+' '+name+' 👋';
+  renderRachaRegistro();
 
   // ── Disponible actual ──────────────────────────────
   const saldoCur  = reconstructSaldoAt(curY, curM);
