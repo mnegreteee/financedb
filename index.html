@@ -2650,8 +2650,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '14/08/26 - 15:49'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Minijuegos: mejora visual de los 14 juegos, sin tocar la lógica/reglas de ninguno. Dino Runner: cielo con degradado, nubes, piso con textura punteada, dino con patas animadas al correr y cactus con "brazos". Snake: cuadrícula tenue, cabeza con ojitos según dirección, comida estilo manzana con tallo. Flappy Bird: pájaro con pico/ala/ojo que se inclina según sube o baja, tuberías con remates. Breakout: ladrillos con color distinto por fila, paleta redondeada, pelota con brillito. Buscaminas: números con los colores clásicos (1 azul, 2 verde, 3 rojo...). Simón: los 4 cuadrantes ahora forman un círculo completo, con resplandor al iluminarse. Conecta 4: fichas con degradado tipo esfera 3D. Memoria: cartas con reverso "❔" y sombra al encontrar par. Tres en raya: nuevo resaltado verde de la línea ganadora. Puzzle 15, Piano Tiles y 2048: sombras/degradados para que las fichas no se vean tan planas. Verificado que los 14 juegos siguen abriendo y funcionando sin errores tras el cambio.';
+const APP_VERSION_DATE = '14/08/26 - 21:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Minijuegos: último ajuste de tamaño responsivo — las fichas de Wordle estaban en 34px fijos (se quedaban chiquitas en desktop). Ahora usan clamp(34px,9vw,54px), igual criterio que el resto. Con esto, los 14 juegos quedan consistentes: gráficos mejorados (fondos con degradado, sombras, formas más trabajadas) + tamaño que se adapta solo — grandes en computadora, ajustados al ancho real en celular/pantallas chicas. Verificado una vez más que los 14 abren y funcionan sin errores tras todos los cambios de esta ronda.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -13519,7 +13519,7 @@ function mjAbrirJuego(id){
   if(cfg.tipo==='canvas'){
     canvasWrap.style.display='flex'; domArea.style.display='none'; domArea.innerHTML='';
     const canvas=document.getElementById('mj-canvas');
-    const anchoDisponible=Math.min(360, (canvas.parentElement.clientWidth||360)-4);
+    const anchoDisponible=Math.min(640, (canvas.parentElement.clientWidth||360)-4);
     canvas.width=anchoDisponible;
     canvas.height=Math.round(anchoDisponible*0.42);
     mjCtx=canvas.getContext('2d');
@@ -14047,7 +14047,7 @@ function mjWhackInit(){
   mjWhack={score:0,tiempo:30,corriendo:false,activo:-1};
   const area=document.getElementById('mj-dom-area');
   area.innerHTML=`<div id="mj-whack-tiempo" style="font-size:12px;color:var(--text3);margin-bottom:8px">Tiempo: 30s</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:260px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(88vw,420px);margin:0 auto">
       ${[0,1,2,3,4,5,6,7,8].map(i=>`<div id="mj-hole-${i}" onclick="mjWhackGolpear(${i})" style="aspect-ratio:1;background:radial-gradient(circle at 50% 60%,var(--bg1),var(--bg3));box-shadow:inset 0 3px 6px rgba(0,0,0,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer">🕳️</div>`).join('')}
     </div>`;
 }
@@ -14088,11 +14088,16 @@ function mjWhackFin(){
 // ── PIANO TILES ──────────────────────────────────────
 let mjPiano;
 function mjPianoInit(){
-  mjPiano={cols:4,bloques:[],score:0,corriendo:false,velocidad:3};
+  mjPiano={cols:4,bloques:[],score:0,corriendo:false,velocidad:3,alturaTotal:300};
   const area=document.getElementById('mj-dom-area');
-  area.innerHTML=`<div id="mj-piano-wrap" style="position:relative;width:240px;height:300px;margin:0 auto;background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+  area.innerHTML=`<div id="mj-piano-wrap" style="position:relative;width:min(88vw,340px);aspect-ratio:4/5;margin:0 auto;background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden">
     ${[0,1,2,3].map(c=>`<div onclick="mjPianoTocar(${c})" style="position:absolute;left:${c*25}%;top:0;width:25%;height:100%;border-right:${c<3?'1px solid var(--border)':'none'}"></div>`).join('')}
   </div>`;
+  // El alto real puede variar según pantalla (por el aspect-ratio responsivo)
+  // — se mide una vez acá para que la física de las fichas cayendo use el
+  // tamaño de verdad, no un número fijo que ya no coincide con lo que se ve.
+  const wrap=document.getElementById('mj-piano-wrap');
+  if(wrap && wrap.clientHeight>0) mjPiano.alturaTotal=wrap.clientHeight;
 }
 function mjPianoStart(){
   mjPianoInit();
@@ -14110,7 +14115,7 @@ function mjPianoLoop(){
   if(!document.getElementById('page-minijuegos').classList.contains('active')) return;
   const wrap=document.getElementById('mj-piano-wrap');
   if(!wrap) return;
-  const alturaTotal=300;
+  const alturaTotal=mjPiano.alturaTotal||300;
   mjPiano.bloques.forEach(b=>b.y+=mjPiano.velocidad);
   if(mjPiano.bloques.length && mjPiano.bloques[mjPiano.bloques.length-1].y>90) mjPianoAgregarBloque();
   // Perdiste si un bloque llegó abajo sin tocarlo
@@ -14131,7 +14136,7 @@ function mjPianoLoop(){
 }
 function mjPianoTocar(col){
   if(!mjPiano.corriendo) return;
-  const candidato=mjPiano.bloques.find(b=>b.col===col && !b.tocado && b.y+b.alto>0 && b.y<300);
+  const candidato=mjPiano.bloques.find(b=>b.col===col && !b.tocado && b.y+b.alto>0 && b.y<(mjPiano.alturaTotal||300));
   if(candidato){
     candidato.tocado=true;
     mjPiano.score++; mjSetScore(mjPiano.score);
@@ -14154,7 +14159,7 @@ function mj2048Init(){
 function mj2048Render(){
   const area=document.getElementById('mj-dom-area');
   const colores={0:'transparent',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
-  area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:240px;margin:0 auto;background:var(--bg3);padding:6px;border-radius:8px">
+  area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:min(88vw,400px);margin:0 auto;background:var(--bg3);padding:6px;border-radius:8px">
     ${mj2048.grid.flat().map(v=>`<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:5px;font-weight:700;font-size:${v>=1024?'13px':'16px'};background:${colores[v]||'#3c3a32'};color:${v<=4?'#776e65':'#fff'};box-shadow:${v?'0 2px 3px rgba(0,0,0,.15)':'inset 0 1px 3px rgba(0,0,0,.08)'}">${v||''}</div>`).join('')}
   </div>`;
 }
@@ -14256,7 +14261,7 @@ function mjMinesRender(){
   const m=mjMines;
   const area=document.getElementById('mj-dom-area');
   const coloresNumero=['','#4a90d9','#4caf50','#e05252','#7b52d9','#e8871e','#3aa5a5','#333','#888'];
-  let html=`<div style="display:grid;grid-template-columns:repeat(${m.cols},1fr);gap:3px;width:280px;margin:0 auto;background:var(--bg3);padding:6px;border-radius:8px">`;
+  let html=`<div style="display:grid;grid-template-columns:repeat(${m.cols},1fr);gap:3px;width:min(88vw,460px);margin:0 auto;background:var(--bg3);padding:6px;border-radius:8px">`;
   for(let r=0;r<m.filas;r++) for(let c=0;c<m.cols;c++){
     const rev=m.revelado[r][c], flag=m.bandera[r][c], val=m.grid[r][c];
     let contenido='', bg='var(--bg2)', sombra='inset 0 1px 2px rgba(0,0,0,.08)';
@@ -14333,7 +14338,7 @@ function mjPuzzle15Vecinos(pos){
 function mjPuzzle15Render(){
   const area=document.getElementById('mj-dom-area');
   area.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Movimientos: ${mjPuzzle15.movimientos}</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:200px;margin:0 auto">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:min(88vw,340px);margin:0 auto">
     ${mjPuzzle15.orden.map((v,i)=>`<div onclick="mjPuzzle15Click(${i})" style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:${v?'linear-gradient(135deg,var(--accent),var(--accent2,var(--accent)))':'var(--bg3)'};color:#fff;border-radius:6px;font-weight:700;font-size:15px;box-shadow:${v?'0 2px 4px rgba(0,0,0,.2)':'inset 0 2px 4px rgba(0,0,0,.1)'};cursor:${v?'pointer':'default'}">${v||''}</div>`).join('')}
     </div>`;
 }
@@ -14380,12 +14385,12 @@ function mjWordleRender(){
           letra=intento.letras[i];
           bg = intento.resultado[i]==='correcto'?'#6aaa64':intento.resultado[i]==='presente'?'#c9b458':'var(--bg2)';
         }
-        return `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:${bg};color:${intento?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:4px;font-weight:700">${letra}</div>`;
+        return `<div style="width:clamp(34px,9vw,54px);height:clamp(34px,9vw,54px);display:flex;align-items:center;justify-content:center;background:${bg};color:${intento?'#fff':'var(--text2)'};border:1px solid var(--border);border-radius:4px;font-weight:700;font-size:clamp(14px,4vw,22px)">${letra}</div>`;
       }).join('')}
     </div>`).join('')}
   </div>
   <div style="display:flex;gap:6px;justify-content:center">
-    <input id="mj-wordle-input" maxlength="5" style="width:120px;text-transform:uppercase;text-align:center;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text1)" onkeydown="if(event.key==='Enter')mjWordleEnviar()">
+    <input id="mj-wordle-input" maxlength="5" style="width:clamp(120px,30vw,180px);text-transform:uppercase;text-align:center;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text1)" onkeydown="if(event.key==='Enter')mjWordleEnviar()">
     <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="mjWordleEnviar()">Enviar</button>
   </div>`;
 }
@@ -14433,7 +14438,7 @@ function mjMemoriaInit(){
 }
 function mjMemoriaRender(){
   const area=document.getElementById('mj-dom-area');
-  area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:240px;margin:0 auto">
+  area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(88vw,400px);margin:0 auto">
     ${mjMemoria.cartas.map(c=>{
       const abierta=c.volteada||c.encontrada;
       const fondo=abierta?'var(--bg1)':'linear-gradient(135deg,var(--accent),var(--accent2,var(--accent)))';
@@ -14484,7 +14489,7 @@ function mjSimonInit(){
 function mjSimonRender(activo){
   const area=document.getElementById('mj-dom-area');
   const radios=['100% 0 0 0','0 100% 0 0','0 0 0 100%','0 0 100% 0']; // círculo completo entre los 4 cuadrantes
-  area.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;width:180px;height:180px;margin:0 auto">
+  area.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;width:min(88vw,320px);aspect-ratio:1;margin:0 auto">
     ${MJ_SIMON_COLORES.map((c,i)=>`<div onclick="mjSimonClick(${c.id})" style="background:${c.color};opacity:${activo===c.id?1:0.6};border-radius:${radios[i]};cursor:pointer;transition:opacity .12s,box-shadow .12s;box-shadow:${activo===c.id?'0 0 18px '+c.color+', inset 0 0 12px rgba(255,255,255,.4)':'inset 0 -3px 6px rgba(0,0,0,.15)'}"></div>`).join('')}
   </div>`;
 }
@@ -14535,7 +14540,7 @@ function mjTicTacToeInit(){
 function mjTicTacToeRender(){
   const area=document.getElementById('mj-dom-area');
   const linea=mjTTT.lineaGanadora||[];
-  area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:180px;margin:0 auto">
+  area.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:min(88vw,320px);margin:0 auto">
     ${mjTTT.tablero.map((v,i)=>`<div onclick="mjTicTacToeClick(${i})" style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;background:${linea.includes(i)?'#5a9c5a44':'var(--bg3)'};border-radius:8px;box-shadow:${v?'inset 0 1px 3px rgba(0,0,0,.15)':'inset 0 2px 4px rgba(0,0,0,.06)'};cursor:pointer;color:${v==='X'?'var(--accent)':'#e05252'};transition:background .2s">${v}</div>`).join('')}
   </div>`;
 }
@@ -14596,7 +14601,7 @@ function mjConecta4Init(){
 function mjConecta4Render(){
   const c=mjC4;
   const area=document.getElementById('mj-dom-area');
-  let html=`<div style="display:grid;grid-template-columns:repeat(${c.cols},1fr);gap:4px;width:280px;margin:0 auto;background:var(--accent);padding:6px;border-radius:8px;box-shadow:0 3px 8px rgba(0,0,0,.15)">`;
+  let html=`<div style="display:grid;grid-template-columns:repeat(${c.cols},1fr);gap:4px;width:min(88vw,460px);margin:0 auto;background:var(--accent);padding:6px;border-radius:8px;box-shadow:0 3px 8px rgba(0,0,0,.15)">`;
   for(let r=0;r<c.filas;r++) for(let col=0;col<c.cols;col++){
     const v=c.tablero[r][col];
     const relleno = v==='R'?'radial-gradient(circle at 35% 30%,#f08080,#c93838)':v==='Y'?'radial-gradient(circle at 35% 30%,#f5db7d,#d4a91e)':'var(--bg1)';
