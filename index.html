@@ -885,6 +885,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <div class="config-row-label">Relojes Mundiales<small id="cfg-relojes-count">4 ciudades</small></div>
             <button class="config-action-btn neutral" onclick="closeConfig();abrirGestionRelojes()">🌍 Administrar</button>
           </div>
+          <div class="config-row">
+            <div class="config-row-label">País en movimientos<small id="cfg-pais-status">Detectando ubicación en segundo plano para guardar el país de cada consumo</small></div>
+            <button class="config-action-btn neutral" id="cfg-pais-btn" onclick="togglePaisDeteccion()">🟢 Activado</button>
+          </div>
         </div>
 
         <!-- SECCIÓN: Tipo de Cambio -->
@@ -2650,8 +2654,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '14/08/26 - 21:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Minijuegos: último ajuste de tamaño responsivo — las fichas de Wordle estaban en 34px fijos (se quedaban chiquitas en desktop). Ahora usan clamp(34px,9vw,54px), igual criterio que el resto. Con esto, los 14 juegos quedan consistentes: gráficos mejorados (fondos con degradado, sombras, formas más trabajadas) + tamaño que se adapta solo — grandes en computadora, ajustados al ancho real en celular/pantallas chicas. Verificado una vez más que los 14 abren y funcionan sin errores tras todos los cambios de esta ronda.';
+const APP_VERSION_DATE = '16/08/26 - 11:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: "País en movimientos" — al registrar un movimiento o consumo de tarjeta (formulario normal o Consumos Frecuentes), la app detecta tu país en segundo plano (geolocalización + reverse-geocoding gratis de OpenStreetMap, sin API key) y lo guarda junto al movimiento. Nunca bloquea el guardado: si no hay permiso, falla, o aún no terminó de detectar, se guarda igual, sin país. Se cachea 6 horas para no pedir ubicación en cada registro. Se muestra la banderita del país junto a la descripción en la lista de Movimientos y en la tabla de Consumos de Tarjeta. Nuevo interruptor en Configuración → Apariencia para desactivarlo si prefieres no usarlo. Verificado con pruebas automatizadas: detección, guardado con país, guardado sin país cuando no hay caché (no rompe nada), y el toggle on/off.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3707,6 +3711,7 @@ function isPageActive(name){ const e=document.getElementById('page-'+name); retu
 
 function render(){
   updateTitles();
+  renderPaisConfigBtn();
   // Las siguientes son específicas de la página Finanzas — evita recalcularlas
   // (incl. la tabla anual, que reconstruye saldos de los 12 meses) cuando el
   // usuario está viendo otra página, donde ese trabajo sería invisible.
@@ -4798,6 +4803,7 @@ function renderMovimientos(){
     const sign=m.type==='expense'?'-':'+';
     const amtStr=sign+(m.currency==='USD'?fmtD(m.amount):fmtS(m.amount));
     const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})+(m.hora?' · '+m.hora:'');
+    const paisHtml=m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:'';
     const catHtml=m.cat?`<span class="cat-pill" style="background:${allColors[m.cat]||'#666'}22;color:${allColors[m.cat]||'#999'}">${m.cat}</span>`:'';
     const noteHtml=m.note?`<div class="mov-note">📝 ${escapeHtml(m.note)}</div>`:'';
     const checkbox=movBulkMode?`<input type="checkbox" onclick="event.stopPropagation()" onchange="onMovCheckToggle('${m.id}',this.checked)" ${movBulkSelected.has(m.id)?'checked':''} style="margin-right:8px;flex-shrink:0">`:'';
@@ -4806,7 +4812,7 @@ function renderMovimientos(){
       <div class="swipe-delete-bg" onclick="deleteMovimiento('${m.id}',event)">🗑 Eliminar</div>
       <div class="mov-item ${cls} swipe-target" ${clickHandler} ontouchstart="swipeStart(event,this)" ontouchmove="swipeMove(event,this)" ontouchend="swipeEnd(event,this,'${m.id}')">
       <div class="mov-left">${checkbox}<div class="mov-dot ${cls}">${ic}</div>
-        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}</div><div class="mov-meta">${dateStr} · ${m.account}</div>${noteHtml}</div>
+        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}</div><div class="mov-meta">${dateStr} · ${m.account}${paisHtml}</div>${noteHtml}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;margin-left:8px">
         <div class="mov-amount ${cls}">${M(amtStr)}</div>
@@ -6126,6 +6132,7 @@ function openModal(){
   updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
   setType('income');
   document.getElementById('modal-overlay').classList.add('open');
+  detectarPaisEnSegundoPlano(); // respaldo, por si el caché venció o el permiso se dio recién
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 let currentType='income';
@@ -6221,6 +6228,73 @@ function renderRachaRegistro(){
   badge.textContent=`🔥 ${racha} día${racha===1?'':'s'} seguido${racha===1?'':'s'}`+(registroHoy?'':' — ¡registra algo hoy para no perderla!');
 }
 
+// ── DETECCIÓN DE PAÍS (silenciosa, en segundo plano) ─────────────────
+// Usa geolocalización del navegador + reverse-geocoding gratis de
+// OpenStreetMap (sin API key). El resultado se cachea unas horas en
+// localStorage para no pedir ubicación en cada movimiento — se dispara en
+// segundo plano al cargar la app y al abrir los modales de registro, así
+// para cuando el usuario le da "Guardar" ya suele estar listo. NUNCA
+// bloquea el guardado: si no hay permiso, falla, o aún no terminó de
+// detectar, el movimiento se guarda igual, simplemente sin país.
+const PAIS_CACHE_KEY='miguel_mf_pais_cache';
+const PAIS_CACHE_HORAS=6; // se vuelve a chequear cada 6h (por si viajas)
+let paisDetectando=false;
+function getPaisCache(){
+  try{
+    const raw=localStorage.getItem(PAIS_CACHE_KEY);
+    if(!raw) return null;
+    const data=JSON.parse(raw);
+    if(Date.now()-data.ts>PAIS_CACHE_HORAS*3600*1000) return null;
+    return data;
+  }catch(e){ return null; }
+}
+function setPaisCache(pais,code){
+  try{ localStorage.setItem(PAIS_CACHE_KEY, JSON.stringify({pais,code,ts:Date.now()})); }catch(e){}
+}
+function codigoPaisAEmoji(code){
+  if(!code||code.length!==2) return '🏳️';
+  return code.toUpperCase().replace(/./g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));
+}
+// Dispara la detección en segundo plano (fire-and-forget) — no hace falta
+// esperar su resultado en ningún lado, solo va llenando el caché.
+function detectarPaisEnSegundoPlano(){
+  if(paisDetectando||getPaisCache()) return;
+  if(!navigator.geolocation||state.deteccionPaisActiva===false) return;
+  paisDetectando=true;
+  navigator.geolocation.getCurrentPosition(
+    async(pos)=>{
+      try{
+        const {latitude,longitude}=pos.coords;
+        const res=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=3&addressdetails=1`,{headers:{'Accept-Language':'es'}});
+        const data=await res.json();
+        const code=data.address&&data.address.country_code?data.address.country_code.toUpperCase():null;
+        const pais=data.address&&data.address.country?data.address.country:null;
+        if(pais&&code) setPaisCache(pais,code);
+      }catch(e){ /* silencioso a propósito */ }
+      finally{ paisDetectando=false; }
+    },
+    ()=>{ paisDetectando=false; }, // permiso denegado u otro error -> silencioso
+    {timeout:6000,maximumAge:3600000}
+  );
+}
+
+function togglePaisDeteccion(){
+  state.deteccionPaisActiva = state.deteccionPaisActiva===false ? true : false;
+  saveState();
+  renderPaisConfigBtn();
+  if(state.deteccionPaisActiva!==false) detectarPaisEnSegundoPlano();
+}
+function renderPaisConfigBtn(){
+  const btn=document.getElementById('cfg-pais-btn');
+  const status=document.getElementById('cfg-pais-status');
+  if(!btn) return;
+  const activo=state.deteccionPaisActiva!==false;
+  btn.textContent=activo?'🟢 Activado':'⚪ Desactivado';
+  if(status) status.textContent=activo
+    ? 'Detectando ubicación en segundo plano para guardar el país de cada consumo'
+    : 'Desactivado — los movimientos nuevos no guardarán país';
+}
+
 function saveMovimiento(){
   const desc=document.getElementById('f-desc').value.trim();
   const amount=parseFloat(document.getElementById('f-amount').value);
@@ -6246,6 +6320,12 @@ function saveMovimiento(){
   if(cat) mov.cat=cat;
   if(note) mov.note=note;
   if(hora) mov.hora=hora;
+  // País: solo si YA se detectó en segundo plano (caché lista) — nunca se
+  // espera a que termine, para no demorar el guardado ni un segundo.
+  if(!state.editId){
+    const paisCache=getPaisCache();
+    if(paisCache){ mov.pais=paisCache.pais; mov.paisCode=paisCache.code; }
+  }
   if(currency==='PEN'){
     if(currentType==='income')state.cuentas[account]=(state.cuentas[account]||0)+amount;
     else if(currentType==='expense')state.cuentas[account]=(state.cuentas[account]||0)-amount;
@@ -8508,6 +8588,8 @@ function registrarConsumoFrecuente(id){
   if(!t.movs) t.movs={};
   if(!t.movs[mk]) t.movs[mk]=[];
   const nuevoMov={id:'tcm'+Date.now(),desc:cf.nombre,fecha,hora,monto:cf.monto,pagado:false,cat:cf.cat||'',currency:cf.currency||'PEN'};
+  const paisCache=getPaisCache();
+  if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
   t.movs[mk].push(nuevoMov);
   const sym=nuevoMov.currency==='USD'?'$':'S/';
   logActividad('tc_consumo', `${cf.nombre} — ${sym} ${cf.monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:t.id, monthKey:mk, consumoId:nuevoMov.id});
@@ -8731,7 +8813,7 @@ function renderTCDetail(){
     const mFmt=mSym+' '+Math.abs(m.monto).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
     return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}</td>
+    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${m.fecha}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
     <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
@@ -8893,6 +8975,7 @@ function openAddMovTC(){
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value='';
   document.getElementById('tc-mov-overlay').classList.add('open');
+  detectarPaisEnSegundoPlano();
 }
 // Igual que openAddMovTC(), pero para cuando se agrega desde la lista principal
 // de Tarjetas (sin haber entrado antes al detalle de ninguna) — por eso pide
@@ -8912,6 +8995,7 @@ function openAddMovTCFromList(){
   document.getElementById('tc-m-cat').value='';
   onConsumoTarjetaChange(); // fija la moneda según la primera tarjeta seleccionada
   document.getElementById('tc-mov-overlay').classList.add('open');
+  detectarPaisEnSegundoPlano();
 }
 
 function editTCMov(movId){
@@ -8931,6 +9015,7 @@ function editTCMov(movId){
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value=m.cat||'';
   document.getElementById('tc-mov-overlay').classList.add('open');
+  detectarPaisEnSegundoPlano();
 }
 
 function closeTCMovModal(){ document.getElementById('tc-mov-overlay').classList.remove('open'); }
@@ -8984,6 +9069,8 @@ function saveTCMov(){
     if(!t.movs[newMk]) t.movs[newMk]=[];
     const nuevoMov={id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat,currency};
     if(hora) nuevoMov.hora=hora;
+    const paisCache=getPaisCache();
+    if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
     t.movs[newMk].push(nuevoMov);
     const symTC=currency==='USD'?'$':'S/';
     logActividad('tc_consumo', `${desc} — ${symTC} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:newMk, consumoId:nuevoMov.id});
@@ -14956,6 +15043,7 @@ function initFirebase(){
         showApp();
         updateBrowserNotifsBtn();
         checkBrowserNotifications();
+        detectarPaisEnSegundoPlano(); // dispara la detección de país al entrar, así ya está lista cuando registres algo
         // Mientras la pestaña siga abierta, se vuelve a revisar cada hora —
         // por si cruza medianoche, o cambia algo (ej. una tarjeta a punto de
         // cerrar durante el día). Se limpia cualquier intervalo anterior
