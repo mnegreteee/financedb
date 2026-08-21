@@ -126,7 +126,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .mc-pos{color:var(--green);}.mc-neg{color:var(--red);}.mc-zero{color:var(--text3);}
 
 /* ── CARDS ── */
-.main-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
+.main-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden;box-shadow:var(--card-shadow);}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .card.c-green::before{background:var(--green);}
@@ -138,6 +138,13 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .card-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:6px;}
 .card-value{font-family:var(--mono);font-size:19px;font-weight:500;letter-spacing:-0.5px;margin-bottom:3px;}
 .card-sub{font-size:11px;color:var(--text3);}
+/* Tarjeta de "Proyección de cierre" en el dashboard — mismo estilo de
+   tarjeta, pero clickeable (lleva a la pestaña Proyección). */
+.card.c-proj{cursor:pointer;transition:transform .12s,border-color .12s;}
+.card.c-proj::before{background:linear-gradient(90deg,var(--accent),#2dd4bf)!important;}
+.card.c-proj:hover{transform:translateY(-2px);border-color:var(--accent);}
+.card.c-proj .card-value{color:var(--accent);}
+.card.c-proj .proj-chevron{position:absolute;top:16px;right:16px;color:var(--text3);font-size:16px;}
 .card-equiv{font-size:11px;color:var(--text3);margin-top:2px;}
 .badge{display:inline-flex;align-items:center;gap:3px;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:500;font-family:var(--mono);}
 .badge-green{background:var(--green-bg);color:var(--green);}
@@ -1209,6 +1216,12 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="card-value money" id="sum-disp-cur">S/ 0.00</div>
       <div class="card-sub" id="sub-disp-cur">—</div>
     </div>
+    <div class="card c-proj" onclick="showPage('proyeccion')">
+      <div class="card-label">📅 Proyección de cierre</div>
+      <div class="card-value money" id="sum-proyeccion-cierre">S/ 0.00</div>
+      <div class="card-sub">Ver detalle →</div>
+      <div class="proj-chevron">›</div>
+    </div>
     <div class="card c-purple">
       <div class="card-label">Ahorro Soles</div>
       <div class="card-value money" id="sum-ahorro-soles">S/ 0.00</div>
@@ -1366,9 +1379,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <!-- ══ PAGE: PROYECCIÓN ══ -->
 <div class="page" id="page-proyeccion">
 <div class="container">
-  <div class="month-nav"><h1>📈 Proyección de Ahorro</h1></div>
+  <div class="month-nav"><h1>📈 Proyección</h1></div>
 
-  <!-- ══ PROYECCIÓN DE CIERRE DE MES ══ -->
+  <!-- ══ BLOQUE 1: CIERRE DE ESTE MES (corto plazo) ══ -->
+  <div style="font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--text3);margin-bottom:10px">🗓️ CIERRE DE ESTE MES</div>
   <div class="card" style="padding:20px;margin-bottom:14px">
     <div class="section-header"><div class="section-title" id="cierre-titulo">📅 Proyección de cierre de mes</div></div>
     <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:var(--accent)" id="cierre-hero-pen">S/ 0.00</div>
@@ -1395,6 +1409,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="chart-wrap" style="height:200px"><canvas id="cierre-tendencia"></canvas></div>
   </div>
 
+  <!-- ══ Separador claro entre los 2 temas — para que no parezcan la misma sección ══ -->
+  <div style="display:flex;align-items:center;gap:10px;margin:28px 0 16px">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--text3);white-space:nowrap">🎯 AHORRO A LARGO PLAZO</div>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+
+  <!-- ══ BLOQUE 2: PROYECCIÓN DE AHORRO (largo plazo, metas) ══ -->
   <div class="projection-card">
     <div class="section-header"><div class="section-title">Meta de ahorro</div></div>
     <div class="proj-goal-row">
@@ -2682,8 +2704,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 06:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corregidos 2 bugs reales en "Proyección de cierre de mes": (1) El "Disponible actual" usaba el campo vivo de state.cuentas, que puede desincronizarse del saldo real (mismo problema ya detectado antes con el bot) — ahora usa el mismo cálculo RECONSTRUIDO (snapshots + historial) que ya usa el dashboard, para que coincida exacto. (2) El "monto a proyectar" de cada pago frecuente pendiente ahora: para pagos tipo "base con descuentos" (ej. Préstamo Ripley) calcula el monto REAL restando los descuentos acumulados (antes usaba el monto base completo, sin descontar nada); y para el resto (sueldo, intereses, etc.) ahora busca hacia ATRÁS hasta 12 meses el último monto real registrado (antes solo miraba el mes inmediatamente anterior, así que si un mes se saltaba el registro, perdía la referencia real y caía al monto fijo configurado). Las tarjetas de crédito no se tocaron (ya estaban correctas). Verificado con pruebas automatizadas reproduciendo exactamente los 3 escenarios reportados.';
+const APP_VERSION_DATE = '21/08/26 - 07:19'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva tarjeta "📅 Proyección de cierre" en el dashboard de Finanzas, justo después de "Disponible actual" — muestra el monto proyectado y al tocarla (toda la tarjeta es clickeable) te lleva directo a la pestaña Proyección. Se ve distinta a las demás a propósito (borde degradado azul→verde, se eleva al pasar el mouse en desktop, flechita "›") para que se note que es interactiva. La grilla de tarjetas del dashboard pasó de 6 a 7 columnas en pantallas grandes para que las 7 quepan en una sola fila (antes la última quedaba sola en una 2da fila). En móvil no cambia nada, sigue en 2 columnas — la tarjeta nueva cae justo debajo de "Disponible actual". El valor siempre es el de la Proyección del mes real actual, sin importar qué mes estés navegando en el dashboard. Verificado: la tarjeta muestra el monto correcto, el clic navega bien a Proyección, y la grilla de 7 columnas quedó aplicada.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4235,6 +4257,16 @@ function renderSummaryCards(){
   const dc = dcRaw !== null ? dcRaw : (esMesActualReal ? sumaDisponibleDe(state.cuentas) : 0);
   document.getElementById('sum-disp-cur').textContent=M(fmtS(dc));
   document.getElementById('sum-disp-cur').style.color=dc>=0?'var(--accent)':'var(--red)';
+
+  // Proyección de cierre: siempre es la del mes REAL actual (no cambia
+  // aunque estés navegando meses pasados en este dashboard — el concepto
+  // de "cierre de este mes" no depende de qué mes estés mirando acá).
+  const projCard=document.getElementById('sum-proyeccion-cierre');
+  if(projCard){
+    const proj=calcularProyeccionCierre();
+    projCard.textContent=M(fmtS(proj.proyeccionPen));
+  }
+
   if(dp!==null){
     const diff=dc-dp;
     document.getElementById('sub-disp-cur').innerHTML=`<span style="color:${diff>=0?'var(--green)':'var(--red)'}">${M((diff>=0?'+':'')+fmtS(Math.abs(diff)))}</span> vs anterior`;
