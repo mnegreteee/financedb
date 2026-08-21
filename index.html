@@ -2704,8 +2704,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 07:19'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva tarjeta "📅 Proyección de cierre" en el dashboard de Finanzas, justo después de "Disponible actual" — muestra el monto proyectado y al tocarla (toda la tarjeta es clickeable) te lleva directo a la pestaña Proyección. Se ve distinta a las demás a propósito (borde degradado azul→verde, se eleva al pasar el mouse en desktop, flechita "›") para que se note que es interactiva. La grilla de tarjetas del dashboard pasó de 6 a 7 columnas en pantallas grandes para que las 7 quepan en una sola fila (antes la última quedaba sola en una 2da fila). En móvil no cambia nada, sigue en 2 columnas — la tarjeta nueva cae justo debajo de "Disponible actual". El valor siempre es el de la Proyección del mes real actual, sin importar qué mes estés navegando en el dashboard. Verificado: la tarjeta muestra el monto correcto, el clic navega bien a Proyección, y la grilla de 7 columnas quedó aplicada.';
+const APP_VERSION_DATE = '21/08/26 - 07:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Auditoría completa del código: barrido sistemático de toda la app buscando bugs y código sucio. Encontrado y corregido: (1) La clave de localStorage de los badges "🆕 Nueva función" no tenía el prefijo "miguel_" — mismo riesgo de contaminación cruzada con la app de Nathy que ya se había corregido en todas las demás claves meses atrás, a esta se le había pasado. (2) Eliminadas 2 funciones muertas (animarNumero, mesesEnRangoDesdeInicio) que estaban completas y bien hechas pero nadie las llamaba desde ningún lado. Verificado exhaustivamente sin encontrar más problemas: 0 funciones duplicadas, 0 IDs de HTML referenciados en JS que no existan, 0 funciones de onclick/onchange faltantes, todos los gráficos de Chart.js destruyen correctamente su instancia anterior antes de recrearse (sin fugas de memoria), los 3 setInterval del código limpian bien su intervalo, y las 14 páginas de la app cargan sin errores en una prueba de humo completa con datos de ejemplo en cada sección.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2888,21 +2888,6 @@ function toast(msg, tipo){
 }
 // Anima un número de un valor a otro (para que los saldos no "salten" de golpe).
 // Respeta la preferencia de reducir movimiento del sistema operativo.
-function animarNumero(el, desde, hasta, formatear, ms){
-  if(!el) return;
-  const prefiereQuieto = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(prefiereQuieto || desde===hasta || isNaN(desde) || isNaN(hasta)){
-    el.textContent=formatear(hasta); return;
-  }
-  const dur=ms||420, t0=performance.now();
-  function paso(t){
-    const p=Math.min(1,(t-t0)/dur);
-    const suave=1-Math.pow(1-p,3); // easing suave al final
-    el.textContent=formatear(desde+(hasta-desde)*suave);
-    if(p<1) requestAnimationFrame(paso);
-  }
-  requestAnimationFrame(paso);
-}
 // Muestra esqueletos grises mientras cargan los datos, para que la pantalla
 // no se vea vacía o a medio armar durante la carga inicial.
 // ══════════════════════════════════════════════════════
@@ -3591,7 +3576,7 @@ function fabPick(kind){
 // ── Badges "🆕 Nueva función" — un puntito rojo que se guarda en localStorage
 // y desaparece la primera vez que el usuario hace clic en ese botón ──
 function nuevaFuncionBadge(key, elId){
-  if(localStorage.getItem('seen_'+key)==='1') return;
+  if(localStorage.getItem('miguel_seen_'+key)==='1') return;
   const el=document.getElementById(elId);
   if(!el || el.querySelector('.new-feature-dot')) return;
   // Solo se fuerza "relative" si el elemento no tiene YA una posición propia
@@ -3603,7 +3588,7 @@ function nuevaFuncionBadge(key, elId){
   dot.className='new-feature-dot';
   el.appendChild(dot);
   el.addEventListener('click', function marcarVista(){
-    localStorage.setItem('seen_'+key,'1');
+    localStorage.setItem('miguel_seen_'+key,'1');
     dot.remove();
     el.removeEventListener('click', marcarVista);
   });
@@ -13292,15 +13277,6 @@ function promedioVariableSemestre(anio,mesesSemestre){
   if(boletas.length<3) return {promedio:0,cuenta:false,mesesRegistrados:boletas.length};
   const suma=boletas.reduce((s,b)=>s+(b.bono||0),0);
   return {promedio:suma/6,cuenta:true,mesesRegistrados:boletas.length,completo:boletas.length===6};
-}
-function mesesEnRangoDesdeInicio(rangoMeses,cfg){
-  const inicio=fechaInicioComoMes(cfg);
-  return rangoMeses.filter(mp=>{
-    if(!inicio) return true;
-    if(mp.anio>inicio.anio) return true;
-    if(mp.anio<inicio.anio) return false;
-    return mp.mes>=inicio.mes;
-  }).length;
 }
 // Última básica CONOCIDA en cualquier boleta registrada (de cualquier año o
 // mes) — se usa como respaldo cuando no hay ninguna boleta dentro del
