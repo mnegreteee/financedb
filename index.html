@@ -1219,7 +1219,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="card c-proj" onclick="showPage('proyeccion')">
       <div class="card-label">📅 Proyección de cierre</div>
       <div class="card-value money" id="sum-proyeccion-cierre">S/ 0.00</div>
-      <div class="card-sub">Ver detalle →</div>
+      <div class="card-sub" id="sum-proyeccion-sub">Ver detalle →</div>
       <div class="proj-chevron">›</div>
     </div>
     <div class="card c-purple">
@@ -2704,8 +2704,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 07:41'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corregidos 2 bugs más en "Proyección de cierre de mes": (1) La moneda de cada pago frecuente se leía de un campo que no existe (pf.moneda) en vez del campo real (pf.currency) — por eso "Intereses Dólares" se mostraba en soles aunque de verdad lo recibas en dólares: la app siempre asumía PEN para todo, sin importar la moneda real configurada. (2) Los pagos frecuentes pendientes que entran o salen de una cuenta de AHORRO (Ahorro Soles/Dólares, o una personalizada de tipo ahorro) ahora se excluyen por completo de la proyección — no afectan el "disponible" que se está proyectando, así que no correspondía restarlos/sumarlos ahí. Verificado con pruebas automatizadas reproduciendo ambos casos reportados.';
+const APP_VERSION_DATE = '21/08/26 - 13:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'La tarjeta "📅 Proyección de cierre" del dashboard ahora tiene en cuenta qué mes estás viendo: en el mes actual real muestra la proyección de verdad (con ingresos/gastos pendientes, como siempre); si navegas a un mes ya pasado con las flechas ‹›, en vez de seguir mostrando la proyección de hoy (que no tenía sentido para un mes ya cerrado), ahora muestra el mismo valor que "Disponible actual" de ese mes — porque un mes que ya terminó no se proyecta, ya se sabe con certeza cómo cerró. El subtítulo de la tarjeta también cambia ("Ver detalle →" vs "Mes cerrado — es el disponible real") para dejarlo claro. Verificado navegando entre el mes actual y uno pasado, y volviendo — todo recalcula correctamente en cada caso.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4256,13 +4256,22 @@ function renderSummaryCards(){
   document.getElementById('sum-disp-cur').textContent=M(fmtS(dc));
   document.getElementById('sum-disp-cur').style.color=dc>=0?'var(--accent)':'var(--red)';
 
-  // Proyección de cierre: siempre es la del mes REAL actual (no cambia
-  // aunque estés navegando meses pasados en este dashboard — el concepto
-  // de "cierre de este mes" no depende de qué mes estés mirando acá).
+  // Proyección de cierre: si estás viendo el mes REAL actual, es la
+  // proyección de verdad (con ingresos/gastos pendientes). Si navegaste a
+  // un mes ya pasado, ese mes ya cerró — no hay nada que "proyectar", así
+  // que simplemente muestra el mismo "Disponible actual" de ese mes (el
+  // cierre real ya conocido, no una estimación).
   const projCard=document.getElementById('sum-proyeccion-cierre');
+  const projSub=document.getElementById('sum-proyeccion-sub');
   if(projCard){
-    const proj=calcularProyeccionCierre();
-    projCard.textContent=M(fmtS(proj.proyeccionPen));
+    if(esMesActualReal){
+      const proj=calcularProyeccionCierre();
+      projCard.textContent=M(fmtS(proj.proyeccionPen));
+      if(projSub) projSub.textContent='Ver detalle →';
+    } else {
+      projCard.textContent=M(fmtS(dc));
+      if(projSub) projSub.textContent='Mes cerrado — es el disponible real';
+    }
   }
 
   if(dp!==null){
