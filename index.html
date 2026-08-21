@@ -1367,6 +1367,34 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="page" id="page-proyeccion">
 <div class="container">
   <div class="month-nav"><h1>📈 Proyección de Ahorro</h1></div>
+
+  <!-- ══ PROYECCIÓN DE CIERRE DE MES ══ -->
+  <div class="card" style="padding:20px;margin-bottom:14px">
+    <div class="section-header"><div class="section-title" id="cierre-titulo">📅 Proyección de cierre de mes</div></div>
+    <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:var(--accent)" id="cierre-hero-pen">S/ 0.00</div>
+    <div style="font-size:13px;color:var(--text3);margin-top:2px" id="cierre-hero-usd" style="display:none"></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px" id="cierre-vs-anterior"></div>
+  </div>
+
+  <div class="card" style="padding:18px;margin-bottom:14px">
+    <div class="section-header"><div class="section-title">Desglose</div></div>
+    <div class="chart-wrap" style="height:180px"><canvas id="cierre-waterfall"></canvas></div>
+    <div id="cierre-desglose-lista" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" style="padding:18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer" onclick="toggleCierreDetalle()">
+      <div class="section-title" style="margin:0">📋 Detalle de lo pendiente</div>
+      <span id="cierre-detalle-arrow" style="color:var(--text3);font-size:12px">▼</span>
+    </div>
+    <div id="cierre-detalle-lista"></div>
+  </div>
+
+  <div class="card" style="padding:18px;margin-bottom:14px">
+    <div class="section-header"><div class="section-title">Tendencia — últimos 6 meses vs. proyección</div></div>
+    <div class="chart-wrap" style="height:200px"><canvas id="cierre-tendencia"></canvas></div>
+  </div>
+
   <div class="projection-card">
     <div class="section-header"><div class="section-title">Meta de ahorro</div></div>
     <div class="proj-goal-row">
@@ -2654,8 +2682,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '16/08/26 - 11:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: "País en movimientos" — al registrar un movimiento o consumo de tarjeta (formulario normal o Consumos Frecuentes), la app detecta tu país en segundo plano (geolocalización + reverse-geocoding gratis de OpenStreetMap, sin API key) y lo guarda junto al movimiento. Nunca bloquea el guardado: si no hay permiso, falla, o aún no terminó de detectar, se guarda igual, sin país. Se cachea 6 horas para no pedir ubicación en cada registro. Se muestra la banderita del país junto a la descripción en la lista de Movimientos y en la tabla de Consumos de Tarjeta. Nuevo interruptor en Configuración → Apariencia para desactivarlo si prefieres no usarlo. Verificado con pruebas automatizadas: detección, guardado con país, guardado sin país cuando no hay caché (no rompe nada), y el toggle on/off.';
+const APP_VERSION_DATE = '20/08/26 - 22:49'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo en Proyección: "Proyección de cierre de mes" — estima cuánto vas a tener al final del mes con: Disponible actual + Ingresos fijos pendientes (sueldo, etc.) − Gastos fijos pendientes (pagados con cuenta) − Deuda de tarjetas a pagar este mes. Para cada pago frecuente pendiente usa el MONTO REAL que registraste el mes pasado en vez del monto fijo configurado (así el sueldo con bono variable proyecta bien solo). Los pagos frecuentes que se pagan CON TARJETA no se restan aparte del disponible — ya quedan reflejados en la línea de tarjetas, para no contarlos 2 veces. Incluye: número grande de proyección, gráfico de cascada (desglose visual), lista detallada de qué está pendiente exactamente, y gráfico de tendencia comparando los últimos 6 meses reales contra la proyección de este mes. Verificado con pruebas automatizadas: uso del monto real vs. fijo, exclusión de pagos con tarjeta y de los ya registrados, y el cálculo final exacto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2699,7 +2727,7 @@ let state={
   currentTab:'todos',editId:null
 };
 
-let mainChart=null,projChart=null;
+let mainChart=null,projChart=null,cierreWaterfallChart=null,cierreTendenciaChart=null;
 let sueldoChart=null,currentSueldoChartTab=0;
 let hiddenMode=false,ahorroMoneda='PEN';
 let demoMode=false, realStateBackup=null;
@@ -3704,6 +3732,84 @@ function getDisponible(y,m){
   if(!tieneDatosHasta(y,m)) return null;
   const s=reconstructSaldoAt(y,m);
   return sumaDisponibleDe(s);
+}
+
+// ══════════════════════════════════════════════════════
+//  PROYECCIÓN DE CIERRE DE MES — cuánto vas a tener al final del mes,
+//  considerando lo que ya tienes + lo fijo que aún falta (sueldo, gastos
+//  recurrentes, tarjetas). Fórmula (separada en soles y dólares):
+//
+//    Disponible actual (S/, cuentas operativas)
+//  + Ingresos fijos pendientes de este mes (pagados a una CUENTA)
+//  − Gastos fijos pendientes de este mes (pagados con una CUENTA)
+//  − Deuda "a pagar" de tarjetas de crédito este mes
+//  = Proyección de cierre
+//
+//  Los pagos frecuentes pagados CON TARJETA no se restan aparte — ya
+//  quedan reflejados en la línea de "tarjetas a pagar" una vez facturados,
+//  restarlos también sería contar el mismo gasto 2 veces.
+//
+//  Para el monto de cada pago frecuente pendiente, se usa el monto REAL
+//  que se registró el mes pasado (más preciso que el "fijo" configurado,
+//  útil para sueldos con bono variable) — si nunca se registró antes, se
+//  usa el monto fijo configurado como respaldo.
+// ══════════════════════════════════════════════════════
+function calcularProyeccionCierre(){
+  const hoy=new Date();
+  const y=hoy.getFullYear(), m=hoy.getMonth();
+  const mk=tcMonthKey(y,m);
+  const mesAnt=m===0?11:m-1, anioAnt=m===0?y-1:y;
+  const mkAnt=tcMonthKey(anioAnt,mesAnt);
+
+  const disponibleActual=sumaDisponibleDe(state.cuentas);
+
+  // Pagos frecuentes pendientes de este mes (mensuales, no registrados aún)
+  const pendientes=(state.pagosFrecuentes||[]).filter(p=>
+    (p.frecuencia||'mensual')==='mensual' && !(p.pagosRegistrados&&p.pagosRegistrados[mk])
+  );
+  const detalle=[];
+  let ingPen=0, ingUsd=0, gastoPen=0, gastoUsd=0;
+  pendientes.forEach(pf=>{
+    // Monto a proyectar: el REAL del mes pasado si existe, si no el fijo configurado.
+    const regAnt=pf.pagosRegistrados&&pf.pagosRegistrados[mkAnt];
+    const monto=(regAnt&&typeof regAnt.monto==='number')?regAnt.monto:(pf.montoFijo||0);
+    if(monto<=0) return;
+    const esUSD=pf.moneda==='USD';
+    const esIngreso=pf.tipo==='ingreso';
+    const pagaConTarjeta=pf.metodoPago==='tarjeta';
+    if(esIngreso){
+      if(esUSD) ingUsd+=monto; else ingPen+=monto;
+      detalle.push({nombre:pf.nombre,monto,moneda:esUSD?'USD':'PEN',signo:1,esEstimado:!regAnt});
+    } else if(!pagaConTarjeta){
+      // Solo se resta del disponible si sale de una CUENTA — si es con
+      // tarjeta, ya se refleja en "tarjetas a pagar" cuando se facture.
+      if(esUSD) gastoUsd+=monto; else gastoPen+=monto;
+      detalle.push({nombre:pf.nombre,monto,moneda:esUSD?'USD':'PEN',signo:-1,esEstimado:!regAnt});
+    }
+  });
+
+  // Tarjetas a pagar este mes — reusa EXACTO el mismo cálculo que ya se ve
+  // en cada tarjeta individual ("A pagar {mes}"), para que coincida 1 a 1.
+  const {pagoMes,pagoAnio}=getSiguienteMesCalendario();
+  const pendienteMk=tcMonthKey(pagoAnio,pagoMes);
+  let tarjetaPen=0, tarjetaUsd=0;
+  const detalleTarjetas=[];
+  (state.tarjetas||[]).forEach(t=>{
+    const movsDelPeriodo=(t.movs&&t.movs[pendienteMk])||[];
+    const {pen,usd}=sumTCByCurrency(movsDelPeriodo.filter(mv=>!mv.pagado), t.currency);
+    if(pen>0||usd>0){
+      tarjetaPen+=pen; tarjetaUsd+=usd;
+      detalleTarjetas.push({nombre:`${t.banco}${t.cat?' '+t.cat:''}`,pen,usd});
+    }
+  });
+
+  const proyeccionPen=disponibleActual+ingPen-gastoPen-tarjetaPen;
+  const proyeccionUsd=ingUsd-gastoUsd-tarjetaUsd; // no hay "disponible" en dólares (cuentas operativas son siempre soles)
+
+  return {
+    disponibleActual, ingPen, ingUsd, gastoPen, gastoUsd, tarjetaPen, tarjetaUsd,
+    proyeccionPen, proyeccionUsd, detalle, detalleTarjetas,
+  };
 }
 
 // ── RENDER MAIN ───────────────────────────────────────
@@ -6624,7 +6730,108 @@ function renderMetasAhorro(){
   }).join('');
 }
 
+let cierreDetalleAbierto=false;
+function toggleCierreDetalle(){
+  cierreDetalleAbierto=!cierreDetalleAbierto;
+  document.getElementById('cierre-detalle-lista').style.display=cierreDetalleAbierto?'block':'none';
+  document.getElementById('cierre-detalle-arrow').textContent=cierreDetalleAbierto?'▲':'▼';
+}
+function renderCierreProyeccion(){
+  const c=calcularProyeccionCierre();
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const tickColor=isDark?'#e0e0e2':'#3a3b44';
+  const gridColor=isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)';
+  const verde=isDark?'#4ade80':'#16a34a', rojo=isDark?'#f87171':'#dc2626', accent=getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#5b8def';
+  const fmtN=v=>v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+
+  const hoy=new Date();
+  document.getElementById('cierre-titulo').textContent=`📅 Proyección de cierre — ${tcMesesLong()[hoy.getMonth()]} ${hoy.getFullYear()}`;
+  document.getElementById('cierre-hero-pen').textContent='S/ '+fmtN(c.proyeccionPen);
+  document.getElementById('cierre-hero-pen').style.color=c.proyeccionPen>=0?'var(--accent)':'var(--red)';
+  const usdEl=document.getElementById('cierre-hero-usd');
+  if(Math.abs(c.proyeccionUsd)>0.004){ usdEl.style.display='block'; usdEl.textContent='$ '+fmtN(c.proyeccionUsd)+' aparte, en dólares'; }
+  else { usdEl.style.display='none'; }
+
+  // Comparación vs. cómo cerró el mes pasado (mismo criterio que "Disponible")
+  const mesAnt=hoy.getMonth()===0?11:hoy.getMonth()-1, anioAnt=hoy.getMonth()===0?hoy.getFullYear()-1:hoy.getFullYear();
+  const cierreAnterior=getDisponible(anioAnt,mesAnt);
+  const vsEl=document.getElementById('cierre-vs-anterior');
+  if(cierreAnterior!==null && cierreAnterior>0){
+    const pct=((c.proyeccionPen-cierreAnterior)/Math.abs(cierreAnterior))*100;
+    vsEl.innerHTML=`${pct>=0?'↑':'↓'} ${Math.abs(pct).toFixed(0)}% ${pct>=0?'más':'menos'} que como cerraste ${tcMesesLong()[mesAnt]}`;
+    vsEl.style.color=pct>=0?verde:rojo;
+  } else { vsEl.textContent=''; }
+
+  // ── Desglose (cascada) ──
+  const acumIng=c.disponibleActual+c.ingPen;
+  const acumGasto=acumIng-c.gastoPen;
+  if(cierreWaterfallChart){cierreWaterfallChart.destroy();cierreWaterfallChart=null;}
+  cierreWaterfallChart=new Chart(document.getElementById('cierre-waterfall'),{
+    type:'bar',
+    data:{
+      labels:['Disponible','+ Ingresos','− Gastos','− Tarjetas','= Cierre'],
+      datasets:[{
+        data:[[0,c.disponibleActual],[c.disponibleActual,acumIng],[acumGasto,acumIng],[c.proyeccionPen,acumGasto],[0,c.proyeccionPen]],
+        backgroundColor:[accent,verde,rojo,rojo,c.proyeccionPen>=0?verde:rojo],
+        borderRadius:4,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const[a,b]=ctx.raw;return 'S/ '+fmtN(Math.abs(b-a));}}}},
+      scales:{
+        y:{ticks:{color:tickColor,callback:v=>'S/'+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
+        x:{ticks:{color:tickColor,font:{size:10}},grid:{display:false}},
+      }
+    }
+  });
+  document.getElementById('cierre-desglose-lista').innerHTML=`
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>💰 Disponible actual</span><span style="font-weight:600">S/ ${fmtN(c.disponibleActual)}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>➕ Ingresos pendientes</span><span style="font-weight:600;color:${verde}">+ S/ ${fmtN(c.ingPen)}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>➖ Gastos pendientes</span><span style="font-weight:600;color:${rojo}">− S/ ${fmtN(c.gastoPen)}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span>💳 Tarjetas a pagar</span><span style="font-weight:600;color:${rojo}">− S/ ${fmtN(c.tarjetaPen)}</span></div>
+  `;
+
+  // ── Detalle de lo pendiente (colapsable) ──
+  const filas=[...c.detalle.map(d=>({
+      label:(d.signo>0?'➕ ':'➖ ')+escapeHtml(d.nombre)+(d.esEstimado?' <small style="color:var(--text3)">(estimado, sin registro previo)</small>':''),
+      monto:d.monto,moneda:d.moneda,signo:d.signo,
+    })),
+    ...c.detalleTarjetas.map(t=>({label:'💳 '+escapeHtml(t.nombre)+' (a pagar)',monto:t.pen||t.usd,moneda:t.pen?'PEN':'USD',signo:-1})),
+  ];
+  document.getElementById('cierre-detalle-lista').innerHTML = filas.length
+    ? filas.map(f=>`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:5px 0"><span>${f.label}</span><span style="color:${f.signo>0?verde:rojo};font-weight:600">${f.signo>0?'+':'−'} ${f.moneda==='USD'?'$':'S/'} ${fmtN(f.monto)}</span></div>`).join('')
+    : `<div style="font-size:12px;color:var(--text3)">Sin pagos frecuentes pendientes ni tarjetas por pagar este mes.</div>`;
+  document.getElementById('cierre-detalle-lista').style.display=cierreDetalleAbierto?'block':'none';
+
+  // ── Tendencia: últimos 6 meses reales + proyección de este mes ──
+  const labelsT=[], dataT=[], coloresT=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);
+    const val=getDisponible(d.getFullYear(),d.getMonth());
+    labelsT.push(MONTHS_SHORT[d.getMonth()]);
+    dataT.push(val===null?null:+val.toFixed(2));
+    coloresT.push(isDark?'#2c2c2a':'#e5e5e5');
+  }
+  labelsT.push(MONTHS_SHORT[hoy.getMonth()]+' (proy.)');
+  dataT.push(+c.proyeccionPen.toFixed(2));
+  coloresT.push(accent);
+  if(cierreTendenciaChart){cierreTendenciaChart.destroy();cierreTendenciaChart=null;}
+  cierreTendenciaChart=new Chart(document.getElementById('cierre-tendencia'),{
+    type:'bar',
+    data:{labels:labelsT,datasets:[{data:dataT,backgroundColor:coloresT,borderRadius:4}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{ticks:{color:tickColor,callback:v=>'S/'+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
+        x:{ticks:{color:tickColor},grid:{display:false}},
+      }
+    }
+  });
+}
 function renderProyeccion(){
+  renderCierreProyeccion();
   renderMetasAhorro();
   const goalS=parseFloat(document.getElementById('proj-goal-soles').value)||20000;
   const goalD=parseFloat(document.getElementById('proj-goal-dolar').value)||3000;
