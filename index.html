@@ -2682,8 +2682,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '20/08/26 - 22:49'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo en Proyección: "Proyección de cierre de mes" — estima cuánto vas a tener al final del mes con: Disponible actual + Ingresos fijos pendientes (sueldo, etc.) − Gastos fijos pendientes (pagados con cuenta) − Deuda de tarjetas a pagar este mes. Para cada pago frecuente pendiente usa el MONTO REAL que registraste el mes pasado en vez del monto fijo configurado (así el sueldo con bono variable proyecta bien solo). Los pagos frecuentes que se pagan CON TARJETA no se restan aparte del disponible — ya quedan reflejados en la línea de tarjetas, para no contarlos 2 veces. Incluye: número grande de proyección, gráfico de cascada (desglose visual), lista detallada de qué está pendiente exactamente, y gráfico de tendencia comparando los últimos 6 meses reales contra la proyección de este mes. Verificado con pruebas automatizadas: uso del monto real vs. fijo, exclusión de pagos con tarjeta y de los ya registrados, y el cálculo final exacto.';
+const APP_VERSION_DATE = '21/08/26 - 06:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregidos 2 bugs reales en "Proyección de cierre de mes": (1) El "Disponible actual" usaba el campo vivo de state.cuentas, que puede desincronizarse del saldo real (mismo problema ya detectado antes con el bot) — ahora usa el mismo cálculo RECONSTRUIDO (snapshots + historial) que ya usa el dashboard, para que coincida exacto. (2) El "monto a proyectar" de cada pago frecuente pendiente ahora: para pagos tipo "base con descuentos" (ej. Préstamo Ripley) calcula el monto REAL restando los descuentos acumulados (antes usaba el monto base completo, sin descontar nada); y para el resto (sueldo, intereses, etc.) ahora busca hacia ATRÁS hasta 12 meses el último monto real registrado (antes solo miraba el mes inmediatamente anterior, así que si un mes se saltaba el registro, perdía la referencia real y caía al monto fijo configurado). Las tarjetas de crédito no se tocaron (ya estaban correctas). Verificado con pruebas automatizadas reproduciendo exactamente los 3 escenarios reportados.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3754,14 +3754,29 @@ function getDisponible(y,m){
 //  útil para sueldos con bono variable) — si nunca se registró antes, se
 //  usa el monto fijo configurado como respaldo.
 // ══════════════════════════════════════════════════════
+// Busca hacia atrás (hasta 12 meses) el último monto REAL registrado de un
+// pago frecuente — no se limita al mes inmediatamente anterior, por si un
+// mes se saltó el registro (vacaciones, olvido, etc.) igual encuentra el
+// último real disponible en vez de caer directo al monto fijo configurado.
+function ultimoMontoRegistradoPF(pf, y, m){
+  if(!pf.pagosRegistrados) return null;
+  let yy=y, mm=m;
+  for(let i=0;i<12;i++){
+    mm--; if(mm<0){ mm=11; yy--; }
+    const reg=pf.pagosRegistrados[tcMonthKey(yy,mm)];
+    if(reg && typeof reg.monto==='number') return reg.monto;
+  }
+  return null;
+}
 function calcularProyeccionCierre(){
   const hoy=new Date();
   const y=hoy.getFullYear(), m=hoy.getMonth();
   const mk=tcMonthKey(y,m);
-  const mesAnt=m===0?11:m-1, anioAnt=m===0?y-1:y;
-  const mkAnt=tcMonthKey(anioAnt,mesAnt);
 
-  const disponibleActual=sumaDisponibleDe(state.cuentas);
+  // Mismo cálculo RECONSTRUIDO que usa el dashboard (snapshots + historial)
+  // — NO el campo "vivo" de state.cuentas, que puede desincronizarse (ver
+  // el mismo problema que ya detectamos con el bot de Telegram).
+  const disponibleActual=getDisponible(y,m) ?? sumaDisponibleDe(state.cuentas);
 
   // Pagos frecuentes pendientes de este mes (mensuales, no registrados aún)
   const pendientes=(state.pagosFrecuentes||[]).filter(p=>
@@ -3770,21 +3785,34 @@ function calcularProyeccionCierre(){
   const detalle=[];
   let ingPen=0, ingUsd=0, gastoPen=0, gastoUsd=0;
   pendientes.forEach(pf=>{
-    // Monto a proyectar: el REAL del mes pasado si existe, si no el fijo configurado.
-    const regAnt=pf.pagosRegistrados&&pf.pagosRegistrados[mkAnt];
-    const monto=(regAnt&&typeof regAnt.monto==='number')?regAnt.monto:(pf.montoFijo||0);
+    let monto, esEstimado;
+    if(pf.tipoMonto==='base_descuentos'){
+      // "Base con descuentos" (ej. Préstamo Ripley) — el monto real a pagar
+      // este mes es el BASE menos lo que ya se descontó/acumuló, igual
+      // criterio que ya usa la propia tarjeta de Pagos Frecuentes.
+      const totalDesc=(pf.descuentosPendientes||[]).reduce((s,d)=>s+d.monto,0);
+      monto=Math.max(0,(pf.montoFijo||0)-totalDesc);
+      esEstimado=false; // es un cálculo exacto, no una estimación
+    } else {
+      // Ingreso/gasto normal (sueldo, intereses, alquiler...): se usa el
+      // ÚLTIMO monto real registrado (buscando hacia atrás si hace falta),
+      // y solo si nunca se registró nada, se cae al monto fijo configurado.
+      const ultimoReal=ultimoMontoRegistradoPF(pf,y,m);
+      monto=ultimoReal!==null?ultimoReal:(pf.montoFijo||0);
+      esEstimado=(ultimoReal===null);
+    }
     if(monto<=0) return;
     const esUSD=pf.moneda==='USD';
     const esIngreso=pf.tipo==='ingreso';
     const pagaConTarjeta=pf.metodoPago==='tarjeta';
     if(esIngreso){
       if(esUSD) ingUsd+=monto; else ingPen+=monto;
-      detalle.push({nombre:pf.nombre,monto,moneda:esUSD?'USD':'PEN',signo:1,esEstimado:!regAnt});
+      detalle.push({nombre:pf.nombre,monto,moneda:esUSD?'USD':'PEN',signo:1,esEstimado});
     } else if(!pagaConTarjeta){
       // Solo se resta del disponible si sale de una CUENTA — si es con
       // tarjeta, ya se refleja en "tarjetas a pagar" cuando se facture.
       if(esUSD) gastoUsd+=monto; else gastoPen+=monto;
-      detalle.push({nombre:pf.nombre,monto,moneda:esUSD?'USD':'PEN',signo:-1,esEstimado:!regAnt});
+      detalle.push({nombre:pf.nombre,monto,moneda:esUSD?'USD':'PEN',signo:-1,esEstimado});
     }
   });
 
