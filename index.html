@@ -2704,8 +2704,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 07:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Auditoría completa del código: barrido sistemático de toda la app buscando bugs y código sucio. Encontrado y corregido: (1) La clave de localStorage de los badges "🆕 Nueva función" no tenía el prefijo "miguel_" — mismo riesgo de contaminación cruzada con la app de Nathy que ya se había corregido en todas las demás claves meses atrás, a esta se le había pasado. (2) Eliminadas 2 funciones muertas (animarNumero, mesesEnRangoDesdeInicio) que estaban completas y bien hechas pero nadie las llamaba desde ningún lado. Verificado exhaustivamente sin encontrar más problemas: 0 funciones duplicadas, 0 IDs de HTML referenciados en JS que no existan, 0 funciones de onclick/onchange faltantes, todos los gráficos de Chart.js destruyen correctamente su instancia anterior antes de recrearse (sin fugas de memoria), los 3 setInterval del código limpian bien su intervalo, y las 14 páginas de la app cargan sin errores en una prueba de humo completa con datos de ejemplo en cada sección.';
+const APP_VERSION_DATE = '21/08/26 - 07:41'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregidos 2 bugs más en "Proyección de cierre de mes": (1) La moneda de cada pago frecuente se leía de un campo que no existe (pf.moneda) en vez del campo real (pf.currency) — por eso "Intereses Dólares" se mostraba en soles aunque de verdad lo recibas en dólares: la app siempre asumía PEN para todo, sin importar la moneda real configurada. (2) Los pagos frecuentes pendientes que entran o salen de una cuenta de AHORRO (Ahorro Soles/Dólares, o una personalizada de tipo ahorro) ahora se excluyen por completo de la proyección — no afectan el "disponible" que se está proyectando, así que no correspondía restarlos/sumarlos ahí. Verificado con pruebas automatizadas reproduciendo ambos casos reportados.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3775,6 +3775,16 @@ function ultimoMontoRegistradoPF(pf, y, m){
   }
   return null;
 }
+// ¿Esta cuenta es de tipo AHORRO? (la por defecto "Ahorro Soles"/"Ahorro
+// Dólares", o una personalizada marcada como tipo "ahorro"). Se usa para
+// excluir de la Proyección de cierre los pagos frecuentes que entran/salen
+// de una cuenta de ahorro — esas no forman parte del "disponible" que se
+// está proyectando (mismo criterio ya usado en "Disponible actual").
+function esCuentaDeAhorro(nombreCuenta){
+  if(nombreCuenta==='Ahorro Soles'||nombreCuenta==='Ahorro Dólares') return true;
+  const c=(state.customCuentas||{})[nombreCuenta];
+  return !!(c && c.type==='ahorro');
+}
 function calcularProyeccionCierre(){
   const hoy=new Date();
   const y=hoy.getFullYear(), m=hoy.getMonth();
@@ -3809,7 +3819,10 @@ function calcularProyeccionCierre(){
       esEstimado=(ultimoReal===null);
     }
     if(monto<=0) return;
-    const esUSD=pf.moneda==='USD';
+    // Si el pago frecuente entra/sale de una cuenta de AHORRO, no afecta el
+    // "disponible" que se está proyectando — se excluye por completo.
+    if(pf.metodoPago==='cuenta' && esCuentaDeAhorro(pf.destino)) return;
+    const esUSD=pf.currency==='USD';
     const esIngreso=pf.tipo==='ingreso';
     const pagaConTarjeta=pf.metodoPago==='tarjeta';
     if(esIngreso){
