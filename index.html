@@ -456,7 +456,8 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-var-nt{background:var(--bg4);color:var(--text3);}
 
 .dash-kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px;}
-.dash-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;}
+.dash-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;transition:transform .12s,border-color .12s;}
+.dash-kpi:hover{transform:translateY(-2px);border-color:var(--border2);}
 .dash-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .dash-kpi.kpi-green::before{background:var(--green);}
 .dash-kpi.kpi-red::before{background:var(--red);}
@@ -1125,32 +1126,32 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div class="dash-kpi-grid">
-    <div class="dash-kpi kpi-blue">
+    <div class="dash-kpi kpi-blue" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
       <div class="dash-kpi-icon">💼</div>
       <div class="dash-kpi-label">Disponible actual</div>
       <div class="dash-kpi-val money" id="kpi-disponible">—</div>
       <div class="dash-kpi-sub" id="kpi-disponible-sub">cuentas operativas</div>
     </div>
-    <div class="dash-kpi kpi-purple">
+    <div class="dash-kpi kpi-purple" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
       <div class="dash-kpi-icon">🏦</div>
       <div class="dash-kpi-label">Ahorro total</div>
       <div class="dash-kpi-val money" id="kpi-ahorro">—</div>
       <div class="dash-kpi-sub" id="kpi-ahorro-sub">—</div>
     </div>
-    <div class="dash-kpi kpi-red">
+    <div class="dash-kpi kpi-red" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
       <div class="dash-kpi-icon">💳</div>
       <div class="dash-kpi-label">Deuda tarjetas</div>
       <div class="dash-kpi-val money" id="kpi-deuda-tc">—</div>
       <div class="dash-kpi-sub" id="kpi-deuda-tc-sub">pendiente de pago</div>
       <div class="dash-kpi-sub" id="kpi-deuda-tc-atrasado" style="display:none;color:var(--red);font-weight:600"></div>
     </div>
-    <div class="dash-kpi kpi-amber">
+    <div class="dash-kpi kpi-amber" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
       <div class="dash-kpi-icon">📅</div>
       <div class="dash-kpi-label" id="kpi-pagar-mes-label">A pagar próximo mes</div>
       <div class="dash-kpi-val money" id="kpi-pagar-mes">—</div>
       <div class="dash-kpi-sub" id="kpi-pagar-mes-sub">período actual tarjetas</div>
     </div>
-    <div class="dash-kpi kpi-teal">
+    <div class="dash-kpi kpi-teal" style="cursor:pointer" onclick="showPage('inversiones')" title="Ver Inversiones">
       <div class="dash-kpi-icon">📈</div>
       <div class="dash-kpi-label">Inversiones</div>
       <div class="dash-kpi-val money" id="kpi-inversiones">—</div>
@@ -2751,8 +2752,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 09:20'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🚨 CORRECCIÓN CRÍTICA — causó una pérdida real de datos en la copia de Nathy. El registro de sesiones ("Historial de Inicios de Sesión") usaba saveState(), que reescribe TODO el documento con lo que haya en memoria en ese momento — si el resto de los datos reales no había terminado de cargar bien cuando esto se disparaba (ej. un parpadeo de red), se sobreescribían/borraban movimientos y demás datos reales. Ahora el registro de sesiones usa una escritura acotada que lee la nube real y modifica SOLO el campo de sesiones, sin tocar nada más, pase lo que pase con el estado local. También se blindó seedDemo() con una segunda condición (_remoteDocExisted===true bloquea el sembrado) para que jamás pueda reactivarse sobre una cuenta que ya tiene datos reales, aunque la lista de movimientos aparezca vacía por cualquier motivo transitorio. Verificado reproduciendo el escenario exacto que causó el problema (estado local vacío + subcolección de movimientos vacía) — con el arreglo, los datos reales de Firestore quedan intactos en ambos casos.';
+const APP_VERSION_DATE = '22/08/26 - 09:34'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Las 5 tarjetas KPI del Resumen (Disponible actual, Ahorro total, Deuda tarjetas, A pagar próximo mes, Inversiones) ahora son clickeables — te llevan directo a su sección correspondiente. "Disponible actual" y "Ahorro total" te llevan a Finanzas y saltan al mes actual de una (aunque estuvieras viendo otro mes ahí); "Deuda tarjetas" y "A pagar próximo mes" van a Tarjetas; "Inversiones" va a Inversiones. Con un pequeño efecto visual al pasar el mouse para que se note que son clickeables. Verificado con pruebas automatizadas que cada una navega al destino correcto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -2854,6 +2855,19 @@ let _lastSyncedMovs = {};
 // agregar UNO sin tener que leer y reescribir todo el historial.
 function syncMovimientosSubcollection(){
   if(!DOC_REF) return Promise.resolve();
+  // 🚨 CIRCUITO DE SEGURIDAD (agregado tras un incidente real de pérdida de
+  // datos): si el estado local aparece con CERO movimientos pero la última
+  // sincronización conocida SÍ tenía varios, es mucho más probable que sea
+  // un problema pasajero de carga (red, timing) que un vaciado real — en
+  // ese caso NO se borra nada en la nube, se deja tal cual está hasta el
+  // próximo guardado normal (cuando el estado local ya esté completo). El
+  // único camino real para vaciar todo a propósito sigue funcionando sin
+  // problema: "Borrar TODOS los datos" no pasa por aquí, borra directo.
+  const huboDatosAntes=Object.keys(_lastSyncedMovs).length>0;
+  if(state.movimientos.length===0 && huboDatosAntes){
+    console.warn('syncMovimientosSubcollection: bloqueado un posible borrado masivo accidental — el estado local aparece vacío pero había movimientos ya sincronizados. No se tocó la nube.');
+    return Promise.resolve();
+  }
   const movsRef = DOC_REF.collection('movimientos');
   const currentIds = new Set();
   const ops = []; // [{type:'set'|'delete', id, data?}]
