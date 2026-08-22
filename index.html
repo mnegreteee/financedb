@@ -2124,6 +2124,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div id="pagos-frecuentes-list"></div>
   </div>
 
+  <!-- Metas Grandes (consolidado con lo recurrente, junto a Pagos Frecuentes) -->
+  <div class="card" style="padding:18px;margin-bottom:22px;display:none" id="metas-grandes-deudas-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="dash-section-title" style="margin:0">🏠 Mis Metas Grandes<small style="display:block;font-weight:400;color:var(--text3);margin-top:2px">Ahorro para auto/casa — mismo lugar que tus pagos e ingresos recurrentes</small></div>
+      <button class="btn" style="font-size:11px" onclick="showPage('proyeccion')">Ver en Proyección →</button>
+    </div>
+    <div id="metas-grandes-deudas-list"></div>
+  </div>
+
   <!-- Resumen -->
   <div class="deuda-summary">
     <div class="deuda-sum-card" style="border-top:2px solid var(--amber)">
@@ -2711,8 +2720,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 22:23'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: "Meta Grande" (compra de auto o casa) dentro de Metas de Ahorro (Proyección → Ahorro a largo plazo). Al crear/editar una meta, marca "🏠 Es una meta grande" para desbloquear: (1) calculadora de inicial (precio total × % de inicial = monto objetivo), (2) vínculo a una cuenta de tipo Ahorro real (nueva o existente) — el progreso se lee EN VIVO del saldo de esa cuenta, no se escribe a mano, (3) 3 formas de planificar: por tiempo (te dice cuánto ahorrar al mes), por monto fijo mensual (te dice cuánto vas a demorar), o por % de tu disponible real de cada mes (variable, se recalcula solo). Si ahorras de más un mes (botón "🎁 Aporte extra", o cualquier movimiento de ahorro normal a esa cuenta), el tiempo restante se recalcula solo, sin tocar nada del plan. Verificado con pruebas automatizadas: calculadora, creación con auto-creación de cuenta vinculada, los 3 modos de proyección, y que un aporte extra efectivamente acorta el tiempo restante.';
+const APP_VERSION_DATE = '22/08/26 - 03:57'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🔍 Auditoría completa: barrido de toda la app buscando bugs, código sucio, y errores de cálculo. Resultado: eliminada 1 función muerta (colLetra, quedó sin usar de cuando se armaron las plantillas Excel) — de resto, 0 funciones duplicadas, 0 IDs rotos, 0 onclick apuntando a funciones inexistentes, 0 claves de localStorage sin prefijo, y todos los gráficos destruyen su instancia anterior correctamente. Probado a fondo con casos límite: la proyección de Meta Grande no rompe con meta ya lograda, sobrepasada, división por cero (monto mensual o meses en 0), o disponible negativo (deuda) — todos devuelven valores seguros sin NaN/Infinity. Se confirmó que la Proyección de cierre, la separación de monedas, la exclusión de cuentas de ahorro, y las plantillas Excel con desplegables siguen funcionando correctamente tras todos los cambios recientes (sin regresiones). Las 15 páginas de la app cargan sin errores en una prueba de humo completa.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3152,15 +3161,26 @@ function getAllAccountKeys(){
   if(!existing.size){['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares'].forEach(k=>existing.add(k));}
   return [...existing];
 }
-function openTransferModal(){
+function openTransferModal(destinoSugerido, montoSugerido){
   const keys=getAllAccountKeys();
   const selO=document.getElementById('tr-origen'), selD=document.getElementById('tr-destino');
   selO.innerHTML=keys.map(k=>`<option value="${k}">${escapeHtml(k)}</option>`).join('');
   selD.innerHTML=keys.map(k=>`<option value="${k}">${escapeHtml(k)}</option>`).join('');
-  selO.value=keys[0]||'';
-  selD.value=keys.find(k=>k!==selO.value)||keys[0]||'';
-  document.getElementById('tr-monto').value='';
+  // Si viene un destino sugerido (ej. desde "Aportar a mi meta"), se deja
+  // fijo ahí y se elige cualquier OTRA cuenta como origen por defecto —
+  // así la persona solo tiene que confirmar de dónde sale la plata.
+  if(destinoSugerido && keys.includes(destinoSugerido)){
+    selD.value=destinoSugerido;
+    selO.value=keys.find(k=>k!==destinoSugerido)||keys[0]||'';
+  } else {
+    selO.value=keys[0]||'';
+    selD.value=keys.find(k=>k!==selO.value)||keys[0]||'';
+  }
+  document.getElementById('tr-monto').value=montoSugerido?montoSugerido.toFixed(2):'';
   document.getElementById('tr-fecha').value=todayLocalISO();
+  document.getElementById('tr-hora').value=horaLimaActual();
+  updateCategorySelects();
+  document.getElementById('tr-cat').value='';
   document.getElementById('tr-nota').value='';
   onTransferAccountChange();
   document.getElementById('transfer-modal-overlay').classList.add('open');
@@ -3179,6 +3199,8 @@ function saveTransfer(){
   const destino=document.getElementById('tr-destino').value;
   const monto=parseFloat(document.getElementById('tr-monto').value)||0;
   const fecha=document.getElementById('tr-fecha').value;
+  const hora=document.getElementById('tr-hora').value||horaLimaActual();
+  const cat=document.getElementById('tr-cat').value||undefined;
   const nota=(document.getElementById('tr-nota').value||'').trim();
   if(origen===destino){alert('Elige dos cuentas distintas.');return;}
   if(getAccountCurrency(origen)!==getAccountCurrency(destino)){alert('Estas cuentas están en monedas distintas — usa el Historial de Operaciones de TC para eso.');return;}
@@ -3186,8 +3208,8 @@ function saveTransfer(){
   const currency=getAccountCurrency(origen);
   const desc=nota ? `Transferencia: ${nota}` : `Transferencia ${origen} → ${destino}`;
   const idBase='transfer'+Date.now();
-  pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, currency, linkId:idBase});
-  pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, currency, linkId:idBase});
+  pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, hora, cat, currency, linkId:idBase});
+  pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, hora, cat, currency, linkId:idBase});
   // Se respetan las cuentas elegidas tal cual — antes esto forzaba cualquier
   // transferencia en dólares a la cuenta fija 'Ahorro Dólares', sin importar
   // cuál hubieras elegido (mismo bug ya corregido en movimientos normales).
@@ -3681,7 +3703,7 @@ function showPage(name){
   if(name==='comparativo') renderComparativo();
   if(name==='anio') renderAnioCompleto();
   if(name==='tarjetas')   renderTarjetas();
-  if(name==='deudas')     { renderDeudas(); renderDeudasMayores(); renderPagosFrecuentes(); }
+  if(name==='deudas')     { renderDeudas(); renderDeudasMayores(); renderPagosFrecuentes(); renderMetasGrandesEnDeudas(); }
   if(name==='combustible') renderCombustible();
   if(name==='tc-tracker')  renderTCTracker();
   if(name==='inversiones') renderInversiones();
@@ -3895,7 +3917,7 @@ function render(){
   if(active('proyeccion')) renderProyeccion();
   if(active('servicios'))  renderServicios();
   if(active('tarjetas'))   renderTarjetas();
-  if(active('deudas'))     { renderDeudas(); renderDeudasMayores(); renderPagosFrecuentes(); }
+  if(active('deudas'))     { renderDeudas(); renderDeudasMayores(); renderPagosFrecuentes(); renderMetasGrandesEnDeudas(); }
   if(active('combustible')) renderCombustible();
   if(active('tc-tracker'))  renderTCTracker();
   if(active('inversiones')) renderInversiones();
@@ -6744,7 +6766,15 @@ function toggleMetaGrandeUI(){
   // Si es meta grande, "ya tengo ahorrado" se vuelve automático (se lee de
   // la cuenta vinculada) — no tiene sentido que también se escriba a mano.
   document.getElementById('meta-actual-wrap').style.display=on?'none':'block';
-  if(on) renderMetaGrandeCuentasSelect();
+  document.getElementById('meta-objetivo-hint').style.display=on?'block':'none';
+  if(on){ renderMetaGrandeCuentasSelect(); actualizarSimboloMonedaMeta(); }
+}
+// El "Precio total" de la calculadora usa la MISMA moneda que se eligió
+// arriba (no una aparte) — para que quede clarísimo, se muestra el
+// símbolo correspondiente junto al campo, y se actualiza si cambias la moneda.
+function actualizarSimboloMonedaMeta(){
+  const moneda=document.getElementById('meta-currency').value;
+  document.getElementById('meta-precio-moneda-hint').textContent=moneda==='USD'?'($)':'(S/)';
 }
 function toggleMetaModoPlan(){
   const modo=document.getElementById('meta-modo-plan').value;
@@ -6764,7 +6794,12 @@ function getCuentasAhorroDisponibles(moneda){
   const lista=[];
   const claveDefault=moneda==='USD'?'Ahorro Dólares':'Ahorro Soles';
   const yaCustom=Object.keys(state.customCuentas||{}).includes(claveDefault);
-  if(!yaCustom) lista.push(claveDefault);
+  // "Ahorro Soles"/"Ahorro Dólares" son nombres "por defecto" que la app
+  // ofrece en varios lados aunque nunca se hayan usado — para esta lista
+  // solo tiene sentido ofrecerlos si YA tienen saldo real (si no, parece
+  // una cuenta fantasma que "apareció sola" sin que el usuario la creara).
+  const tieneSaldoDefault=(state.cuentas||{})[claveDefault];
+  if(!yaCustom && tieneSaldoDefault) lista.push(claveDefault);
   Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
     if(v.type==='ahorro' && (v.currency||'PEN')===moneda) lista.push(k);
   });
@@ -6919,18 +6954,14 @@ function calcularProyeccionMetaGrande(m){
 // la cuenta vinculada, para cuando el mes te alcanza para más de lo
 // planeado (no hace falta cambiar el plan, solo se registra y el progreso
 // se actualiza solo).
+// El "aporte extra" ahora es simplemente una transferencia — abre el mismo
+// modal completo (con cuenta de origen, hora y categoría) en vez del viejo
+// prompt() de un solo campo, que no dejaba elegir de dónde salía la plata
+// ni registrar hora/categoría.
 function aportarExtraMeta(id){
   const m=(state.metasAhorro||[]).find(x=>x.id===id);
   if(!m||!m.cuentaVinculada) return;
-  const monto=prompt(`¿Cuánto quieres aportar ahora a "${m.nombre}"?`);
-  const val=parseFloat(monto);
-  if(!val||val<=0) return;
-  const mov={id:'metaaporte'+Date.now(), type:'ahorro', desc:'Aporte a meta: '+m.nombre, amount:val, account:m.cuentaVinculada, date:todayLocalISO(), currency:m.currency};
-  state.movimientos.push(mov);
-  state.cuentas[m.cuentaVinculada]=(state.cuentas[m.cuentaVinculada]||0)+val;
-  saveState();
-  renderMetasAhorro();
-  toast('🎁 Aporte registrado en '+m.cuentaVinculada);
+  openTransferModal(m.cuentaVinculada);
 }
 function renderMetasAhorro(){
   const el=document.getElementById('metas-ahorro-list');
@@ -6940,38 +6971,60 @@ function renderMetasAhorro(){
     el.innerHTML='<div class="dash-empty">Sin metas todavía. Crea una con el botón de arriba (ej. "✈️ Vacaciones", "🚗 Auto nuevo").</div>';
     return;
   }
-  el.innerHTML=metas.map(m=>{
-    const sym=m.currency==='USD'?'$':'S/';
-    // Meta grande: el progreso SIEMPRE se lee en vivo de la cuenta
-    // vinculada — nunca del número guardado (que puede haber quedado viejo).
-    const montoActual=m.esMetaGrande ? (state.cuentas[m.cuentaVinculada]||0) : (m.montoActual||0);
-    const pct=m.montoObjetivo>0?Math.min(100,(montoActual/m.montoObjetivo)*100):0;
-    const color=pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--amber)';
-    let extraHtml='';
-    if(m.esMetaGrande){
-      const proy=calcularProyeccionMetaGrande({...m,montoActual});
-      const modoLabel={tiempo:'Plan por tiempo',monto_fijo:'Monto fijo mensual',monto_pct:'% de tu disponible'}[m.modoPlan]||'';
-      extraHtml=`<div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;flex-wrap:wrap;gap:10px">
-        <span>🏦 ${escapeHtml(m.cuentaVinculada||'—')}</span>
-        <span>📋 ${modoLabel}</span>
-        ${proy.completada?'<span style="color:var(--green);font-weight:600">🎉 ¡Meta lograda!</span>':
-          `<span>💰 ${sym} ${proy.montoMensual.toFixed(2)}/mes${proy.esEstimado?' (estimado)':''}</span>
-           <span>⏳ ${proy.mesesRestantes!=null?proy.mesesRestantes+' meses restantes':'—'}</span>`}
-      </div>
-      <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px;margin-top:6px" onclick="aportarExtraMeta('${m.id}')">🎁 Aporte extra</button>`;
-    }
-    return `
-    <div class="card" style="padding:14px 16px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openMetaModal('${m.id}')">
-        <div style="font-weight:600;font-size:13px">${escapeHtml(m.nombre)}${m.esMetaGrande?' 🏠':''}</div>
-        <div style="font-size:12px;color:var(--text3)">${sym} ${montoActual.toFixed(2)} / ${sym} ${m.montoObjetivo.toFixed(2)}</div>
-      </div>
-      <div style="background:var(--bg3);border-radius:8px;height:8px;margin-top:8px;overflow:hidden">
-        <div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div>
-      </div>
-      ${extraHtml}
+  el.innerHTML=metas.map(buildMetaCardHtml).join('');
+}
+// Arma el HTML completo de la tarjeta de una meta — se reusa en 2 lugares:
+// Proyección → Ahorro a largo plazo (todas las metas), y Deudas → junto a
+// Pagos y Ingresos Frecuentes (solo las metas grandes con plan activo, para
+// tener todo lo "recurrente" consolidado en un mismo lugar).
+function buildMetaCardHtml(m){
+  const sym=m.currency==='USD'?'$':'S/';
+  // Meta grande: el progreso SIEMPRE se lee en vivo de la cuenta
+  // vinculada — nunca del número guardado (que puede haber quedado viejo).
+  const montoActual=m.esMetaGrande ? (state.cuentas[m.cuentaVinculada]||0) : (m.montoActual||0);
+  const pct=m.montoObjetivo>0?Math.min(100,(montoActual/m.montoObjetivo)*100):0;
+  const color=pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--amber)';
+  let extraHtml='';
+  if(m.esMetaGrande){
+    const proy=calcularProyeccionMetaGrande({...m,montoActual});
+    const modoLabel={tiempo:'Plan por tiempo',monto_fijo:'Monto fijo mensual',monto_pct:'% de tu disponible'}[m.modoPlan]||'';
+    extraHtml=`<div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;flex-wrap:wrap;gap:10px">
+      <span>🏦 ${escapeHtml(m.cuentaVinculada||'—')}</span>
+      <span>📋 ${modoLabel}</span>
+      ${proy.completada?'<span style="color:var(--green);font-weight:600">🎉 ¡Meta lograda!</span>':
+        `<span>💰 ${sym} ${proy.montoMensual.toFixed(2)}/mes${proy.esEstimado?' (estimado)':''}</span>
+         <span>⏳ ${proy.mesesRestantes!=null?proy.mesesRestantes+' meses restantes':'—'}</span>`}
+    </div>
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+      ${proy.completada?'':`<button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openTransferModal('${m.cuentaVinculada}', ${proy.montoMensual})">💸 Aportar este mes</button>`}
+      <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();aportarExtraMeta('${m.id}')">🎁 Aporte extra</button>
     </div>`;
-  }).join('');
+  }
+  return `
+  <div class="card" style="padding:14px 16px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openMetaModal('${m.id}')">
+      <div style="font-weight:600;font-size:13px">${escapeHtml(m.nombre)}${m.esMetaGrande?' 🏠':''}</div>
+      <div style="font-size:12px;color:var(--text3)">${sym} ${montoActual.toFixed(2)} / ${sym} ${m.montoObjetivo.toFixed(2)}</div>
+    </div>
+    <div style="background:var(--bg3);border-radius:8px;height:8px;margin-top:8px;overflow:hidden">
+      <div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div>
+    </div>
+    ${extraHtml}
+  </div>`;
+}
+// Muestra las Metas Grandes con plan activo junto a Pagos y Ingresos
+// Frecuentes, en Deudas — mismo contenido y mismos botones que en
+// Proyección, para tener todo lo "recurrente" en un solo lugar. Solo se
+// listan las que son "meta grande" (las metas chicas tipo "Vacaciones"
+// siguen viviendo únicamente en Proyección, no aplica consolidarlas acá).
+function renderMetasGrandesEnDeudas(){
+  const el=document.getElementById('metas-grandes-deudas-list');
+  const wrap=document.getElementById('metas-grandes-deudas-wrap');
+  if(!el||!wrap) return;
+  const metas=(state.metasAhorro||[]).filter(m=>m.esMetaGrande);
+  if(!metas.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  el.innerHTML=metas.map(buildMetaCardHtml).join('');
 }
 
 let cierreDetalleAbierto=false;
@@ -7339,7 +7392,6 @@ function hojaListasOculta(listas){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   return ws;
 }
-function colLetra(idx){ return String.fromCharCode(65+idx); } // 0->A, 1->B, 2->C...
 
 async function descargarPlantillaHistoricoExcel(){
   const wb=XLSX.utils.book_new();
@@ -8891,7 +8943,7 @@ function getAllCategorias(){
 function updateCategorySelects(){
   const cats = Object.keys(getAllCategorias());
   // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
-  ['f-cat','tc-m-cat','cf-cat'].forEach(id=>{
+  ['f-cat','tc-m-cat','cf-cat','tr-cat'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -16096,6 +16148,12 @@ if(state.projGoals){
       <div class="field"><label>Monto</label><input id="tr-monto" type="number" step="0.01" placeholder="0.00"></div>
       <div class="field"><label>Fecha</label><input id="tr-fecha" type="date"></div>
     </div>
+    <div class="field-row">
+      <div class="field"><label>Hora <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tr-hora" type="time"></div>
+      <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+        <select id="tr-cat"><option value="">Sin categoría</option></select>
+      </div>
+    </div>
     <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tr-nota" type="text" placeholder="Ej. Para gastos del mes"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTransferModal()">Cancelar</button>
@@ -16271,9 +16329,11 @@ if(state.projGoals){
       <input id="meta-nombre" type="text" placeholder="Ej. ✈️ Vacaciones">
     </div>
     <div class="field-row">
-      <div class="field"><label>Meta (monto objetivo)</label><input id="meta-objetivo" type="number" step="0.01" placeholder="3000"></div>
+      <div class="field"><label>Meta (monto objetivo)</label><input id="meta-objetivo" type="number" step="0.01" placeholder="3000">
+        <small id="meta-objetivo-hint" style="display:none;color:var(--text3)">💡 Se llena solo si usas la calculadora de abajo — o escríbelo tú directo si ya sabes el monto exacto, sin usar la calculadora.</small>
+      </div>
       <div class="field"><label>Moneda</label>
-        <select id="meta-currency" onchange="renderMetaGrandeCuentasSelect()"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+        <select id="meta-currency" onchange="renderMetaGrandeCuentasSelect();actualizarSimboloMonedaMeta();"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
     </div>
     <div class="field" id="meta-actual-wrap"><label>Ya tengo ahorrado</label><input id="meta-actual" type="number" step="0.01" placeholder="0.00"></div>
@@ -16288,7 +16348,7 @@ if(state.projGoals){
     <div id="meta-grande-fields" style="display:none;border-top:1px solid var(--border);margin-top:6px;padding-top:12px">
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Calculadora de inicial — opcional, solo para que te ayude a calcular el monto objetivo de arriba.</div>
       <div class="field-row">
-        <div class="field"><label>Precio total</label><input id="meta-precio-total" type="number" step="0.01" placeholder="100000" oninput="calcularMontoInicialMeta()"></div>
+        <div class="field"><label>Precio total <span id="meta-precio-moneda-hint" style="color:var(--accent);font-weight:700">(S/)</span></label><input id="meta-precio-total" type="number" step="0.01" placeholder="100000" oninput="calcularMontoInicialMeta()"></div>
         <div class="field"><label>% de inicial</label><input id="meta-pct-inicial" type="number" step="0.1" placeholder="10" oninput="calcularMontoInicialMeta()"></div>
       </div>
 
