@@ -2711,8 +2711,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 21:47'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo en Configuración: botón "📥 Plantilla" junto a "Histórico Excel" y "Cargar histórico TC" — descarga una plantilla de Excel lista para llenar, con desplegables REALES (no solo texto de ejemplo): Moneda, Banco y Categoría se eligen de una lista, armada con tus propias cuentas/tarjetas/categorías ya creadas en la app (no una lista genérica). Detalle técnico: la librería que ya usa la app para leer/escribir Excel no puede escribir desplegables, así que se arma el archivo normal y se le inyecta el desplegable directamente en el XML interno (agregado JSZip vía CDN solo para esto). Las opciones se guardan en una hoja oculta y se referencian por rango de celdas (no como texto en la fórmula) para no toparse con el límite de 255 caracteres de Excel si hay muchas categorías personalizadas. De paso se corrigió que "Cargar histórico TC" no leía la columna CATEGORIA aunque el importador normal sí — ahora ambos la soportan igual. Si no tienes ninguna tarjeta creada, el botón de plantilla TC te avisa en vez de generar un archivo inútil. Verificado con pruebas automatizadas: contenido dinámico correcto (incluye cuentas/categorías/tarjetas personalizadas), hoja de opciones oculta, desplegables reconocidos por una librería distinta a la que los generó, y el archivo se abre sin errores.';
+const APP_VERSION_DATE = '21/08/26 - 21:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🐛 Arreglado: las plantillas descargables (Histórico Excel / Histórico TC) le salían a Excel real como "archivo dañado" al abrirlas, con la opción de "reparar" — el contenido estaba bien, pero el desplegable se insertaba en la posición equivocada dentro del archivo. Excel exige un orden estricto de etiquetas internas, y SheetJS agrega una etiqueta al final (ignoredErrors) que debía ir DESPUÉS del desplegable, no antes — se insertaba pegado al final a ciegas, en la posición incorrecta. Ahora se busca la posición exacta correcta según el estándar de Excel antes de insertarlo. Verificado con 2 herramientas independientes (openpyxl y una reconversión completa de LibreOffice) que el orden ya es el correcto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7128,7 +7128,24 @@ async function inyectarDesplegablesYDescargar(wb, sheetIndexData, validaciones, 
   const bloques=validaciones.map(v=>
     `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${v.sqref}"><formula1>${v.rango}</formula1></dataValidation>`
   ).join('');
-  xml=xml.replace('</worksheet>', `<dataValidations count="${validaciones.length}">${bloques}</dataValidations></worksheet>`);
+  const dvXml=`<dataValidations count="${validaciones.length}">${bloques}</dataValidations>`;
+  // El esquema de Excel exige un ORDEN estricto de etiquetas dentro de
+  // <worksheet> — <dataValidations> debe ir ANTES de <hyperlinks>,
+  // <pageMargins>, <pageSetup>, <ignoredErrors>, etc. (que es justo lo que
+  // SheetJS suele escribir al final). Pegarlo pegado a "</worksheet>" a
+  // ciegas (como se hacía antes) genera un archivo que Excel marca como
+  // dañado y ofrece "reparar" al abrirlo, aunque el contenido esté bien —
+  // por eso se busca la primera etiqueta posterior que ya esté presente, y
+  // se inserta justo antes de esa, no al final.
+  const etiquetasPosteriores=['<hyperlinks','<printOptions','<pageMargins','<pageSetup','<headerFooter','<rowBreaks','<colBreaks','<customProperties','<cellWatches','<ignoredErrors','<smartTags','<drawing','<picture','<oleObjects','<controls','<webPublishItems','<tableParts','<extLst'];
+  let posInsercion=-1;
+  for(const tag of etiquetasPosteriores){
+    const idx=xml.indexOf(tag);
+    if(idx!==-1 && (posInsercion===-1 || idx<posInsercion)) posInsercion=idx;
+  }
+  xml = posInsercion!==-1
+    ? xml.slice(0,posInsercion) + dvXml + xml.slice(posInsercion)
+    : xml.replace('</worksheet>', dvXml+'</worksheet>');
   zip.file(sheetPath, xml);
   const outBuf=await zip.generateAsync({type:'arraybuffer'});
   const blob=new Blob([outBuf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
