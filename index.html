@@ -997,6 +997,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           </div>
         </div>
 
+        <!-- SECCIÓN: Seguridad -->
+        <div class="config-section">
+          <div class="config-section-title">Seguridad</div>
+          <div class="config-row">
+            <div class="config-row-label">Historial de inicios de sesión<small>Dispositivo, fecha/hora y ubicación aproximada de cada acceso</small></div>
+            <button class="config-action-btn neutral" onclick="abrirHistorialSesiones();closeConfig()">🔒 Ver accesos</button>
+          </div>
+        </div>
+
         <!-- SECCIÓN: Data — Borrar -->
         <div class="config-section">
           <div class="config-section-title">Data — Eliminar</div>
@@ -1033,6 +1042,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="modal-title"><span>🕓 Actividad Reciente</span><button class="modal-close" onclick="cerrarActividadReciente()">✕</button></div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Las últimas acciones registradas (movimientos, consumos, transferencias, deudas, etc.). "Eliminar" también deshace el efecto que tuvo (saldo, consumo...).</div>
     <div id="actividad-lista"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="seguridad-overlay" onclick="if(event.target===this)cerrarHistorialSesiones()">
+  <div class="modal" style="width:460px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title"><span>🔒 Historial de Inicios de Sesión</span><button class="modal-close" onclick="cerrarHistorialSesiones()">✕</button></div>
+    <div id="seguridad-resumen" style="font-size:12px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:12px"></div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">La "última actividad" se actualiza mientras tienes la app abierta — los navegadores no avisan cuando cierras la pestaña, así que es la forma más precisa de saber hasta cuándo estuvo activa cada sesión, sin depender de que "cierres sesión" a propósito.</div>
+    <div id="seguridad-lista"></div>
   </div>
 </div>
 
@@ -2720,8 +2738,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 08:37'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '"🎁 Aporte extra" ahora precarga la categoría habitual de la meta (la misma que ya usa "Aportar este mes") en vez de dejarla en "Sin categoría" — el monto y la cuenta de origen siguen libres para elegir cada vez, solo la categoría viene lista.';
+const APP_VERSION_DATE = '22/08/26 - 08:51'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'En "🔒 Seguridad", ahora muestra cuántas sesiones tienes ACTIVAS ahora mismo (ej. "2 sesiones activas" si la tienes abierta en la PC y en el celular a la vez). Detalle técnico importante: la app no sincroniza en tiempo real (carga los datos 1 sola vez al entrar), así que al abrir este modal se trae un vistazo fresco directo de Firestore — si no hiciera esto, nunca se enteraría de que abriste la app en otro dispositivo después. Una sesión cuenta como "activa" si tuvo actividad en los últimos 12 minutos (el heartbeat actualiza cada 5 min, con margen). Verificado con pruebas automatizadas: cuenta exactamente 2 activas cuando hay 2 sesiones recientes + 1 vieja de hace 20 minutos que correctamente NO cuenta.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6511,6 +6529,144 @@ function renderPaisConfigBtn(){
   if(status) status.textContent=activo
     ? 'Detectando ubicación en segundo plano para guardar el país de cada consumo'
     : 'Desactivado — los movimientos nuevos no guardarán país';
+}
+
+// ══════════════════════════════════════════════════════
+//  SEGURIDAD — historial de inicios de sesión. Se registra 1 entrada nueva
+//  cada vez que Firebase Auth confirma el login (onAuthStateChanged), con
+//  dispositivo/navegador (User-Agent), y ubicación aproximada por 2 vías:
+//  IP (automática, sin pedir permiso — menos precisa) y GPS (reusa el
+//  mismo caché de "País en movimientos", sin pedir el permiso de nuevo).
+//  No existe un evento confiable de "cerró la pestaña" en la web — por eso
+//  se guarda "última actividad detectada" en vez de una hora de cierre
+//  exacta, actualizándose mientras la pestaña siga abierta.
+// ══════════════════════════════════════════════════════
+let sesionActualId=null;
+function detectarDispositivoNavegador(){
+  const ua=navigator.userAgent||'';
+  let dispositivo='Desconocido';
+  if(/iPhone/.test(ua)) dispositivo='iPhone';
+  else if(/iPad/.test(ua)) dispositivo='iPad';
+  else if(/Android/.test(ua)) dispositivo='Android';
+  else if(/Windows/.test(ua)) dispositivo='Windows';
+  else if(/Macintosh/.test(ua)) dispositivo='Mac';
+  else if(/Linux/.test(ua)) dispositivo='Linux';
+  let navegador='Desconocido';
+  if(/Edg\//.test(ua)) navegador='Edge';
+  else if(/OPR\//.test(ua)) navegador='Opera';
+  else if(/Chrome\//.test(ua)&&!/Edg\//.test(ua)) navegador='Chrome';
+  else if(/Firefox\//.test(ua)) navegador='Firefox';
+  else if(/Safari\//.test(ua)&&!/Chrome/.test(ua)) navegador='Safari';
+  return {dispositivo, navegador};
+}
+// Ubicación por IP — gratis, sin API key, no pide permiso (a diferencia del
+// GPS). Menos precisa (a veces solo acierta el país, no la ciudad), pero
+// funciona siempre, sin depender de que el usuario acepte un permiso.
+async function detectarUbicacionPorIP(){
+  try{
+    const res=await fetch('https://ipwho.is/');
+    const data=await res.json();
+    if(data&&data.success!==false) return {pais:data.country, ciudad:data.city};
+  }catch(e){ /* silencioso a propósito, no debe romper el login */ }
+  return null;
+}
+async function registrarNuevaSesion(){
+  if(!state.historialSesiones) state.historialSesiones=[];
+  const {dispositivo,navegador}=detectarDispositivoNavegador();
+  const ahora=new Date().toISOString();
+  const gpsCache=getPaisCache(); // reusa el caché ya existente, sin pedir permiso de nuevo
+  const nueva={
+    id:'sesion-'+Date.now(), inicio:ahora, ultimaActividad:ahora,
+    dispositivo, navegador, gpsPais: gpsCache?gpsCache.pais:undefined,
+  };
+  state.historialSesiones.push(nueva);
+  if(state.historialSesiones.length>50) state.historialSesiones=state.historialSesiones.slice(-50);
+  sesionActualId=nueva.id;
+  saveState();
+  const ipInfo=await detectarUbicacionPorIP();
+  if(ipInfo){
+    nueva.ipPais=ipInfo.pais; nueva.ipCiudad=ipInfo.ciudad;
+    saveState();
+    if(document.getElementById('seguridad-overlay').classList.contains('open')) renderHistorialSesiones();
+  }
+}
+function actualizarUltimaActividadSesion(){
+  if(!sesionActualId||!state.historialSesiones) return;
+  const s=state.historialSesiones.find(x=>x.id===sesionActualId);
+  if(s){ s.ultimaActividad=new Date().toISOString(); saveState(); }
+}
+function tiempoRelativo(iso){
+  const diffMs=Date.now()-new Date(iso).getTime();
+  const min=Math.round(diffMs/60000);
+  if(min<1) return 'justo ahora';
+  if(min<60) return `hace ${min} min`;
+  const horas=Math.round(min/60);
+  if(horas<24) return `hace ${horas}h`;
+  const dias=Math.round(horas/24);
+  return `hace ${dias}d`;
+}
+// La app NO sincroniza en tiempo real (carga los datos 1 sola vez al
+// entrar) — así que si solo mirara lo que ya está en memoria, nunca vería
+// que abriste la app en otro dispositivo después. Por eso, justo al abrir
+// este modal, se trae un vistazo fresco directo de Firestore (sin tocar el
+// resto del state local, para no arriesgar pisar algo sin guardar).
+async function obtenerSesionesFrescas(){
+  if(!DOC_REF) return state.historialSesiones||[];
+  try{
+    const doc=await DOC_REF.get();
+    if(doc.exists){
+      const meta=JSON.parse(doc.data().meta||'{}');
+      if(Array.isArray(meta.historialSesiones)) state.historialSesiones=meta.historialSesiones;
+    }
+  }catch(e){ /* si falla, se sigue mostrando lo que ya había en local */ }
+  return state.historialSesiones||[];
+}
+// Una sesión cuenta como "activa ahora" si tuvo actividad hace poco — el
+// heartbeat actualiza cada 5 min mientras la pestaña sigue abierta, así
+// que se usa un poco más de margen (12 min) para no marcar como cerrada
+// una sesión real solo porque justo no le tocaba actualizar todavía.
+const SESION_ACTIVA_MINUTOS=12;
+function estaActivaAhora(s){
+  return (Date.now()-new Date(s.ultimaActividad).getTime())<SESION_ACTIVA_MINUTOS*60*1000;
+}
+async function abrirHistorialSesiones(){
+  document.getElementById('seguridad-overlay').classList.add('open');
+  renderHistorialSesiones(); // muestra al instante lo que ya había en local
+  await obtenerSesionesFrescas(); // trae lo último de la nube (otros dispositivos)
+  renderHistorialSesiones(); // repinta con el dato fresco
+}
+function cerrarHistorialSesiones(){
+  document.getElementById('seguridad-overlay').classList.remove('open');
+}
+function renderHistorialSesiones(){
+  const sesiones=(state.historialSesiones||[]).slice().reverse(); // más reciente primero
+  const resumenEl=document.getElementById('seguridad-resumen');
+  const listaEl=document.getElementById('seguridad-lista');
+  if(!sesiones.length){
+    resumenEl.textContent='Sin accesos registrados todavía.';
+    listaEl.innerHTML='';
+    return;
+  }
+  const activas=sesiones.filter(estaActivaAhora);
+  const ultima=sesiones[0];
+  const ubicUltima=ultima.ipCiudad?`${ultima.ipCiudad}, ${ultima.ipPais}`:(ultima.ipPais||ultima.gpsPais||'ubicación no disponible');
+  resumenEl.innerHTML=`
+    <div style="font-weight:700;font-size:13px;color:${activas.length>1?'var(--amber)':'var(--green)'};margin-bottom:4px">🟢 ${activas.length} ${activas.length===1?'sesión activa':'sesiones activas'} ahora mismo</div>
+    <div>📍 Último acceso: <b>${tiempoRelativo(ultima.inicio)}</b>, desde ${escapeHtml(ubicUltima)}, en ${ultima.dispositivo} (${ultima.navegador})</div>
+  `;
+  listaEl.innerHTML=sesiones.map(s=>{
+    const fechaIn=new Date(s.inicio);
+    const fechaLabel=fechaIn.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+    const horaLabel=fechaIn.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+    const ubic=s.ipCiudad?`${s.ipCiudad}, ${s.ipPais}`:(s.ipPais||s.gpsPais||'—');
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:600">${fechaLabel} — ${horaLabel}</span>
+        <span style="font-size:10px;color:${estaActivaAhora(s)?'var(--green)':'var(--text3)'}">${estaActivaAhora(s)?'🟢 Activa ahora':'Última actividad: '+tiempoRelativo(s.ultimaActividad)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">💻 ${s.dispositivo} · ${s.navegador} — 📍 ${escapeHtml(ubic)}</div>
+    </div>`;
+  }).join('');
 }
 
 function saveMovimiento(){
@@ -15789,6 +15945,13 @@ function seedDemo(){
 
 // ── INIT ─────────────────────────────────────────────
 loadTheme();loadCompact();renderRelojesMundiales();
+// "Última actividad" del historial de sesiones — cada 5 min mientras la
+// pestaña esté abierta, y también justo antes de que se oculte/cierre (el
+// mejor esfuerzo posible, ya que no existe un evento 100% confiable de
+// "el usuario se fue" en la web).
+setInterval(actualizarUltimaActividadSesion, 5*60*1000);
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) actualizarUltimaActividadSesion(); });
+window.addEventListener('beforeunload', actualizarUltimaActividadSesion);
 (function(){
   const el = document.getElementById('app-version-label');
   if(el) el.textContent = 'Versión '+APP_VERSION_DATE;
@@ -15844,6 +16007,7 @@ function initFirebase(){
         updateBrowserNotifsBtn();
         checkBrowserNotifications();
         detectarPaisEnSegundoPlano(); // dispara la detección de país al entrar, así ya está lista cuando registres algo
+        registrarNuevaSesion(); // historial de accesos, ver sección Seguridad
         // Mientras la pestaña siga abierta, se vuelve a revisar cada hora —
         // por si cruza medianoche, o cambia algo (ej. una tarjeta a punto de
         // cerrar durante el día). Se limpia cualquier intervalo anterior
