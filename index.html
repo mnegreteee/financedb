@@ -1045,6 +1045,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 </div>
 
+<div class="modal-overlay" id="pin-seguridad-overlay" onclick="if(event.target===this)cerrarPinSeguridad()">
+  <div class="modal" style="width:320px">
+    <div class="modal-title"><span>🔒 Verificación</span><button class="modal-close" onclick="cerrarPinSeguridad()">✕</button></div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Ingresa la clave para ver el historial de accesos.</div>
+    <input id="pin-seguridad-input" type="password" inputmode="numeric" placeholder="Clave" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:16px;letter-spacing:2px;text-align:center" onkeydown="if(event.key==='Enter')confirmarPinSeguridad()">
+    <div id="pin-seguridad-error" style="display:none;color:var(--red);font-size:11px;margin-top:8px">❌ Clave incorrecta.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="cerrarPinSeguridad()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarPinSeguridad()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="seguridad-overlay" onclick="if(event.target===this)cerrarHistorialSesiones()">
   <div class="modal" style="width:460px;max-height:80vh;overflow-y:auto">
     <div class="modal-title"><span>🔒 Historial de Inicios de Sesión</span><button class="modal-close" onclick="cerrarHistorialSesiones()">✕</button></div>
@@ -2738,8 +2751,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 08:51'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'En "🔒 Seguridad", ahora muestra cuántas sesiones tienes ACTIVAS ahora mismo (ej. "2 sesiones activas" si la tienes abierta en la PC y en el celular a la vez). Detalle técnico importante: la app no sincroniza en tiempo real (carga los datos 1 sola vez al entrar), así que al abrir este modal se trae un vistazo fresco directo de Firestore — si no hiciera esto, nunca se enteraría de que abriste la app en otro dispositivo después. Una sesión cuenta como "activa" si tuvo actividad en los últimos 12 minutos (el heartbeat actualiza cada 5 min, con margen). Verificado con pruebas automatizadas: cuenta exactamente 2 activas cuando hay 2 sesiones recientes + 1 vieja de hace 20 minutos que correctamente NO cuenta.';
+const APP_VERSION_DATE = '22/08/26 - 09:08'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '"🔒 Historial de Inicios de Sesión" ahora pide una clave (18023) antes de mostrar nada — con clave incorrecta o vacía, no se ve ningún dato de accesos. No es "seguridad real" (es una sola clave fija, del lado del navegador), pero cumple el propósito de que no cualquiera que tome el celular desbloqueado vea de un vistazo desde dónde y cuándo entraste. Verificado con pruebas automatizadas: sin clave no abre nada, clave incorrecta bloquea y muestra error, y solo con la clave correcta se abre el historial real.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6566,7 +6579,7 @@ async function detectarUbicacionPorIP(){
   try{
     const res=await fetch('https://ipwho.is/');
     const data=await res.json();
-    if(data&&data.success!==false) return {pais:data.country, ciudad:data.city};
+    if(data&&data.success!==false) return {pais:data.country, ciudad:data.city, ip:data.ip};
   }catch(e){ /* silencioso a propósito, no debe romper el login */ }
   return null;
 }
@@ -6585,7 +6598,7 @@ async function registrarNuevaSesion(){
   saveState();
   const ipInfo=await detectarUbicacionPorIP();
   if(ipInfo){
-    nueva.ipPais=ipInfo.pais; nueva.ipCiudad=ipInfo.ciudad;
+    nueva.ipPais=ipInfo.pais; nueva.ipCiudad=ipInfo.ciudad; nueva.ip=ipInfo.ip;
     saveState();
     if(document.getElementById('seguridad-overlay').classList.contains('open')) renderHistorialSesiones();
   }
@@ -6629,7 +6642,32 @@ const SESION_ACTIVA_MINUTOS=12;
 function estaActivaAhora(s){
   return (Date.now()-new Date(s.ultimaActividad).getTime())<SESION_ACTIVA_MINUTOS*60*1000;
 }
-async function abrirHistorialSesiones(){
+// La clave protege el historial de accesos — no es "seguridad real" (es
+// una sola clave fija, del lado del cliente), pero cumple el propósito de
+// que no cualquiera que tome el celular desbloqueado vea de un vistazo
+// desde dónde y cuándo entraste, sin al menos un paso extra.
+const CLAVE_SEGURIDAD='18023';
+function abrirHistorialSesiones(){
+  document.getElementById('pin-seguridad-input').value='';
+  document.getElementById('pin-seguridad-error').style.display='none';
+  document.getElementById('pin-seguridad-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('pin-seguridad-input').focus(),100);
+}
+function cerrarPinSeguridad(){
+  document.getElementById('pin-seguridad-overlay').classList.remove('open');
+}
+async function confirmarPinSeguridad(){
+  const val=document.getElementById('pin-seguridad-input').value;
+  if(val===CLAVE_SEGURIDAD){
+    cerrarPinSeguridad();
+    await abrirHistorialSesionesReal();
+  } else {
+    document.getElementById('pin-seguridad-error').style.display='block';
+    document.getElementById('pin-seguridad-input').value='';
+    document.getElementById('pin-seguridad-input').focus();
+  }
+}
+async function abrirHistorialSesionesReal(){
   document.getElementById('seguridad-overlay').classList.add('open');
   renderHistorialSesiones(); // muestra al instante lo que ya había en local
   await obtenerSesionesFrescas(); // trae lo último de la nube (otros dispositivos)
@@ -6664,7 +6702,7 @@ function renderHistorialSesiones(){
         <span style="font-size:12px;font-weight:600">${fechaLabel} — ${horaLabel}</span>
         <span style="font-size:10px;color:${estaActivaAhora(s)?'var(--green)':'var(--text3)'}">${estaActivaAhora(s)?'🟢 Activa ahora':'Última actividad: '+tiempoRelativo(s.ultimaActividad)}</span>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">💻 ${s.dispositivo} · ${s.navegador} — 📍 ${escapeHtml(ubic)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">💻 ${s.dispositivo} · ${s.navegador} — 📍 ${escapeHtml(ubic)}${s.ip?` — 🌐 ${escapeHtml(s.ip)}`:''}</div>
     </div>`;
   }).join('');
 }
