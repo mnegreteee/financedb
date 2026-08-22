@@ -2751,8 +2751,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 09:08'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '"🔒 Historial de Inicios de Sesión" ahora pide una clave (18023) antes de mostrar nada — con clave incorrecta o vacía, no se ve ningún dato de accesos. No es "seguridad real" (es una sola clave fija, del lado del navegador), pero cumple el propósito de que no cualquiera que tome el celular desbloqueado vea de un vistazo desde dónde y cuándo entraste. Verificado con pruebas automatizadas: sin clave no abre nada, clave incorrecta bloquea y muestra error, y solo con la clave correcta se abre el historial real.';
+const APP_VERSION_DATE = '22/08/26 - 09:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🚨 CORRECCIÓN CRÍTICA — causó una pérdida real de datos en la copia de Nathy. El registro de sesiones ("Historial de Inicios de Sesión") usaba saveState(), que reescribe TODO el documento con lo que haya en memoria en ese momento — si el resto de los datos reales no había terminado de cargar bien cuando esto se disparaba (ej. un parpadeo de red), se sobreescribían/borraban movimientos y demás datos reales. Ahora el registro de sesiones usa una escritura acotada que lee la nube real y modifica SOLO el campo de sesiones, sin tocar nada más, pase lo que pase con el estado local. También se blindó seedDemo() con una segunda condición (_remoteDocExisted===true bloquea el sembrado) para que jamás pueda reactivarse sobre una cuenta que ya tiene datos reales, aunque la lista de movimientos aparezca vacía por cualquier motivo transitorio. Verificado reproduciendo el escenario exacto que causó el problema (estado local vacío + subcolección de movimientos vacía) — con el arreglo, los datos reales de Firestore quedan intactos en ambos casos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6583,6 +6583,24 @@ async function detectarUbicacionPorIP(){
   }catch(e){ /* silencioso a propósito, no debe romper el login */ }
   return null;
 }
+// 🚨 CRÍTICO: esta función escribe a Firestore de forma ACOTADA — lee el
+// documento REAL de la nube (no lo que haya en memoria local), modifica
+// SOLO el campo historialSesiones ahí, y lo guarda de vuelta. Nunca usa
+// saveState() (que reescribe TODO el documento con lo que haya en memoria
+// en ese momento) — si el resto de tus datos reales todavía no había
+// terminado de cargar en el navegador cuando esto se dispara, un
+// saveState() normal sobreescribiría (borraría) todo lo demás sin querer.
+// Esto es justo lo que causó una pérdida de datos real (en la copia de
+// Nathy) — no debe repetirse.
+async function guardarSesionesEnLaNubeSinRiesgo(){
+  if(!DOC_REF) return;
+  try{
+    const doc=await DOC_REF.get();
+    const remoteMeta=doc.exists?JSON.parse(doc.data().meta||'{}'):{};
+    remoteMeta.historialSesiones=state.historialSesiones||[];
+    await DOC_REF.set({meta:JSON.stringify(remoteMeta), savedAt:firebase.firestore.FieldValue.serverTimestamp()}, {merge:true});
+  }catch(e){ /* silencioso a propósito — si falla, la sesión igual queda visible localmente */ }
+}
 async function registrarNuevaSesion(){
   if(!state.historialSesiones) state.historialSesiones=[];
   const {dispositivo,navegador}=detectarDispositivoNavegador();
@@ -6595,18 +6613,18 @@ async function registrarNuevaSesion(){
   state.historialSesiones.push(nueva);
   if(state.historialSesiones.length>50) state.historialSesiones=state.historialSesiones.slice(-50);
   sesionActualId=nueva.id;
-  saveState();
+  await guardarSesionesEnLaNubeSinRiesgo();
   const ipInfo=await detectarUbicacionPorIP();
   if(ipInfo){
     nueva.ipPais=ipInfo.pais; nueva.ipCiudad=ipInfo.ciudad; nueva.ip=ipInfo.ip;
-    saveState();
+    await guardarSesionesEnLaNubeSinRiesgo();
     if(document.getElementById('seguridad-overlay').classList.contains('open')) renderHistorialSesiones();
   }
 }
 function actualizarUltimaActividadSesion(){
   if(!sesionActualId||!state.historialSesiones) return;
   const s=state.historialSesiones.find(x=>x.id===sesionActualId);
-  if(s){ s.ultimaActividad=new Date().toISOString(); saveState(); }
+  if(s){ s.ultimaActividad=new Date().toISOString(); guardarSesionesEnLaNubeSinRiesgo(); }
 }
 function tiempoRelativo(iso){
   const diffMs=Date.now()-new Date(iso).getTime();
@@ -15918,7 +15936,18 @@ function seedDemo(){
     localStorage.removeItem('miguel_mf_cleared');
     return;
   }
-  if(state.movimientos.length>0)return;
+  // 🚨 GUARDA CRÍTICA (agregada tras un incidente real de pérdida de datos):
+  // antes esto solo miraba "state.movimientos.length>0" — si por lo que
+  // sea la subcolección de movimientos se leía vacía en un momento dado
+  // (ej. un parpadeo de red, aunque el resto de la cuenta sí tenga datos
+  // reales), esto volvía a sembrar el histórico de ejemplo ENCIMA de una
+  // cuenta real, y un guardado posterior podía terminar subiendo esos
+  // datos viejos a la nube. Ahora también exige que _remoteDocExisted NO
+  // sea true — es decir, que de verdad no exista un documento en Firestore
+  // todavía (cuenta genuinamente nueva), no solo que la lista local esté
+  // vacía por cualquier otro motivo.
+  if(state.movimientos.length>0) return;
+  if(_remoteDocExisted===true) return;
   state.movimientos=[
     {id:'m01',type:'expense',desc:'Café',amount:2.20,account:'BBVA',date:'2026-05-10',currency:'PEN',cat:'🍔 Comida'},
     {id:'m02',type:'expense',desc:'Recarga',amount:5.00,account:'BBVA',date:'2026-05-10',currency:'PEN',cat:'📱 Servicios'},
