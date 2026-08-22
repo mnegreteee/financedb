@@ -2720,8 +2720,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 08:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Meta Grande: 3 mejoras nuevas. (1) Campo "Fecha límite de transferencia" (opcional, igual que el día de pago de los Pagos Frecuentes) — la tarjeta te avisa en rojo/amarillo/naranja según se acerque o venza, y se apaga solo apenas registres cualquier aporte ese mes. (2) Botón "📅 Historial" — reusa el mismo modal que ya usan los Pagos Frecuentes, mostrando los últimos 12 meses y cuánto aportaste en cada uno (o "Sin transferencia" si no aportaste nada ese mes). (3) El bot de Telegram ahora también avisa en el recordatorio diario si te falta transferir a una Meta Grande, con el mismo criterio de urgencia (🔴 vencido / 🟡 hoy / 📅 en pocos días) que ya usa para los pagos frecuentes. Verificado con pruebas automatizadas en la app (guardado, aviso que aparece y desaparece, historial con el monto correcto) y en el bot (3 escenarios: vencido, ya transferido, y por vencer).';
+const APP_VERSION_DATE = '22/08/26 - 08:37'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '"🎁 Aporte extra" ahora precarga la categoría habitual de la meta (la misma que ya usa "Aportar este mes") en vez de dejarla en "Sin categoría" — el monto y la cuenta de origen siguen libres para elegir cada vez, solo la categoría viene lista.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3197,6 +3197,25 @@ function onTransferAccountChange(){
   document.getElementById('tr-currency-warn').style.display=(!mismaMoneda && distintasCuentas)?'block':'none';
   document.getElementById('tr-submit-btn').disabled = !mismaMoneda || !distintasCuentas;
 }
+// Lógica central de una transferencia — extraída para poder usarse tanto
+// desde el modal (saveTransfer, lee los campos del formulario) como
+// directo, sin modal (aportarEsteMes, cuando ya está todo configurado).
+// Devuelve true si se registró bien, false si algo no era válido.
+function ejecutarTransferencia({origen, destino, monto, fecha, hora, cat, nota}){
+  if(origen===destino){alert('Elige dos cuentas distintas.');return false;}
+  if(getAccountCurrency(origen)!==getAccountCurrency(destino)){alert('Estas cuentas están en monedas distintas — usa el Historial de Operaciones de TC para eso.');return false;}
+  if(!(monto>0)||!fecha){alert('Completa el monto y la fecha.');return false;}
+  const currency=getAccountCurrency(origen);
+  const desc=nota ? `Transferencia: ${nota}` : `Transferencia ${origen} → ${destino}`;
+  const idBase='transfer'+Date.now();
+  pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, hora, cat, currency, linkId:idBase});
+  pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, hora, cat, currency, linkId:idBase});
+  state.cuentas[origen]=(state.cuentas[origen]||0)-monto;
+  state.cuentas[destino]=(state.cuentas[destino]||0)+monto;
+  const symTr=currency==='USD'?'$':'S/';
+  logActividad('transferencia', `${origen} → ${destino} — ${symTr} ${monto.toFixed(2)}`, {movIdA:idBase+'a', movIdB:idBase+'b'});
+  return true;
+}
 function saveTransfer(){
   const origen=document.getElementById('tr-origen').value;
   const destino=document.getElementById('tr-destino').value;
@@ -3205,21 +3224,8 @@ function saveTransfer(){
   const hora=document.getElementById('tr-hora').value||horaLimaActual();
   const cat=document.getElementById('tr-cat').value||undefined;
   const nota=(document.getElementById('tr-nota').value||'').trim();
-  if(origen===destino){alert('Elige dos cuentas distintas.');return;}
-  if(getAccountCurrency(origen)!==getAccountCurrency(destino)){alert('Estas cuentas están en monedas distintas — usa el Historial de Operaciones de TC para eso.');return;}
-  if(monto<=0||!fecha){alert('Completa el monto y la fecha.');return;}
-  const currency=getAccountCurrency(origen);
-  const desc=nota ? `Transferencia: ${nota}` : `Transferencia ${origen} → ${destino}`;
-  const idBase='transfer'+Date.now();
-  pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, hora, cat, currency, linkId:idBase});
-  pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, hora, cat, currency, linkId:idBase});
-  // Se respetan las cuentas elegidas tal cual — antes esto forzaba cualquier
-  // transferencia en dólares a la cuenta fija 'Ahorro Dólares', sin importar
-  // cuál hubieras elegido (mismo bug ya corregido en movimientos normales).
-  state.cuentas[origen]=(state.cuentas[origen]||0)-monto;
-  state.cuentas[destino]=(state.cuentas[destino]||0)+monto;
-  const symTr=currency==='USD'?'$':'S/';
-  logActividad('transferencia', `${origen} → ${destino} — ${symTr} ${monto.toFixed(2)}`, {movIdA:idBase+'a', movIdB:idBase+'b'});
+  const ok=ejecutarTransferencia({origen,destino,monto,fecha,hora,cat,nota});
+  if(!ok) return;
   saveState(); closeTransferModal(); render(); toast('Transferencia registrada');
 }
 function saveState(immediate){
@@ -6991,6 +6997,32 @@ function calcularProyeccionMetaGrande(m){
   }
   return {completada:false, montoMensual:0, mesesRestantes:null};
 }
+// "Aportar este mes" — si ya configuraste de dónde sale la plata (cuenta
+// origen habitual), registra la transferencia DIRECTO, sin ningún modal ni
+// confirmación de por medio (mismo espíritu que "Consumos Frecuentes": 1
+// toque y ya). Si no la configuraste, abre el modal para elegir, como
+// siempre — ahí sí hace falta preguntar, porque el origen es un dato real
+// que falta.
+function aportarEsteMes(id){
+  const m=(state.metasAhorro||[]).find(x=>x.id===id);
+  if(!m||!m.cuentaVinculada) return;
+  const montoActual=state.cuentas[m.cuentaVinculada]||0;
+  const proy=calcularProyeccionMetaGrande({...m,montoActual});
+  if(proy.completada) return;
+  if(m.cuentaOrigenHabitual){
+    const sym=m.currency==='USD'?'$':'S/';
+    const ok=ejecutarTransferencia({
+      origen:m.cuentaOrigenHabitual, destino:m.cuentaVinculada, monto:proy.montoMensual,
+      fecha:todayLocalISO(), hora:horaLimaActual(), cat:m.categoriaHabitual,
+      nota:'Aporte a meta: '+m.nombre,
+    });
+    if(!ok) return;
+    saveState(); render();
+    toast(`💸 Aporte de ${sym} ${proy.montoMensual.toFixed(2)} registrado en ${m.cuentaVinculada}`);
+  } else {
+    openTransferModal(m.cuentaVinculada, proy.montoMensual, null, m.categoriaHabitual);
+  }
+}
 // Registra rápido un "aporte extra" — un movimiento de ahorro normal hacia
 // la cuenta vinculada, para cuando el mes te alcanza para más de lo
 // planeado (no hace falta cambiar el plan, solo se registra y el progreso
@@ -7002,7 +7034,7 @@ function calcularProyeccionMetaGrande(m){
 function aportarExtraMeta(id){
   const m=(state.metasAhorro||[]).find(x=>x.id===id);
   if(!m||!m.cuentaVinculada) return;
-  openTransferModal(m.cuentaVinculada);
+  openTransferModal(m.cuentaVinculada, null, null, m.categoriaHabitual);
 }
 function renderMetasAhorro(){
   const el=document.getElementById('metas-ahorro-list');
@@ -7065,7 +7097,7 @@ function buildMetaCardHtml(m){
       ${vencimientoHtml}
     </div>
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-      ${proy.completada?'':`<button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openTransferModal('${m.cuentaVinculada}', ${proy.montoMensual}, ${m.cuentaOrigenHabitual?`'${m.cuentaOrigenHabitual}'`:'null'}, ${m.categoriaHabitual?`'${m.categoriaHabitual}'`:'null'})">💸 Aportar este mes</button>`}
+      ${proy.completada?'':`<button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();aportarEsteMes('${m.id}')">💸 Aportar este mes</button>`}
       <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();aportarExtraMeta('${m.id}')">🎁 Aporte extra</button>
       <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openMetaHistorial('${m.id}')">📅 Historial</button>
     </div>`;
