@@ -2720,8 +2720,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 03:57'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🔍 Auditoría completa: barrido de toda la app buscando bugs, código sucio, y errores de cálculo. Resultado: eliminada 1 función muerta (colLetra, quedó sin usar de cuando se armaron las plantillas Excel) — de resto, 0 funciones duplicadas, 0 IDs rotos, 0 onclick apuntando a funciones inexistentes, 0 claves de localStorage sin prefijo, y todos los gráficos destruyen su instancia anterior correctamente. Probado a fondo con casos límite: la proyección de Meta Grande no rompe con meta ya lograda, sobrepasada, división por cero (monto mensual o meses en 0), o disponible negativo (deuda) — todos devuelven valores seguros sin NaN/Infinity. Se confirmó que la Proyección de cierre, la separación de monedas, la exclusión de cuentas de ahorro, y las plantillas Excel con desplegables siguen funcionando correctamente tras todos los cambios recientes (sin regresiones). Las 15 páginas de la app cargan sin errores en una prueba de humo completa.';
+const APP_VERSION_DATE = '22/08/26 - 08:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Meta Grande: 3 mejoras nuevas. (1) Campo "Fecha límite de transferencia" (opcional, igual que el día de pago de los Pagos Frecuentes) — la tarjeta te avisa en rojo/amarillo/naranja según se acerque o venza, y se apaga solo apenas registres cualquier aporte ese mes. (2) Botón "📅 Historial" — reusa el mismo modal que ya usan los Pagos Frecuentes, mostrando los últimos 12 meses y cuánto aportaste en cada uno (o "Sin transferencia" si no aportaste nada ese mes). (3) El bot de Telegram ahora también avisa en el recordatorio diario si te falta transferir a una Meta Grande, con el mismo criterio de urgencia (🔴 vencido / 🟡 hoy / 📅 en pocos días) que ya usa para los pagos frecuentes. Verificado con pruebas automatizadas en la app (guardado, aviso que aparece y desaparece, historial con el monto correcto) y en el bot (3 escenarios: vencido, ya transferido, y por vencer).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3161,17 +3161,20 @@ function getAllAccountKeys(){
   if(!existing.size){['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares'].forEach(k=>existing.add(k));}
   return [...existing];
 }
-function openTransferModal(destinoSugerido, montoSugerido){
+function openTransferModal(destinoSugerido, montoSugerido, origenSugerido, catSugerida){
   const keys=getAllAccountKeys();
   const selO=document.getElementById('tr-origen'), selD=document.getElementById('tr-destino');
   selO.innerHTML=keys.map(k=>`<option value="${k}">${escapeHtml(k)}</option>`).join('');
   selD.innerHTML=keys.map(k=>`<option value="${k}">${escapeHtml(k)}</option>`).join('');
   // Si viene un destino sugerido (ej. desde "Aportar a mi meta"), se deja
-  // fijo ahí y se elige cualquier OTRA cuenta como origen por defecto —
-  // así la persona solo tiene que confirmar de dónde sale la plata.
+  // fijo ahí; el origen usa el que la meta tenga configurado como "habitual"
+  // si existe, si no cualquier OTRA cuenta por defecto — así la persona
+  // solo tiene que confirmar, sin elegir nada cada vez.
   if(destinoSugerido && keys.includes(destinoSugerido)){
     selD.value=destinoSugerido;
-    selO.value=keys.find(k=>k!==destinoSugerido)||keys[0]||'';
+    selO.value=(origenSugerido && keys.includes(origenSugerido) && origenSugerido!==destinoSugerido)
+      ? origenSugerido
+      : keys.find(k=>k!==destinoSugerido)||keys[0]||'';
   } else {
     selO.value=keys[0]||'';
     selD.value=keys.find(k=>k!==selO.value)||keys[0]||'';
@@ -3180,7 +3183,7 @@ function openTransferModal(destinoSugerido, montoSugerido){
   document.getElementById('tr-fecha').value=todayLocalISO();
   document.getElementById('tr-hora').value=horaLimaActual();
   updateCategorySelects();
-  document.getElementById('tr-cat').value='';
+  document.getElementById('tr-cat').value=catSugerida||'';
   document.getElementById('tr-nota').value='';
   onTransferAccountChange();
   document.getElementById('transfer-modal-overlay').classList.add('open');
@@ -6760,6 +6763,13 @@ function renderPresupuesto(){
 // ══════════════════════════════════════════════════════
 let editingMetaId=null;
 // ── META GRANDE (compra de auto/casa) — helpers de UI ────────────────
+function toggleMetaDiaLimiteUltimo(){
+  const chk=document.getElementById('meta-dia-limite-ultimo').checked;
+  const inp=document.getElementById('meta-dia-limite');
+  inp.disabled=chk;
+  inp.style.opacity=chk?'0.4':'1';
+  if(chk) inp.value='';
+}
 function toggleMetaGrandeUI(){
   const on=document.getElementById('meta-es-grande').checked;
   document.getElementById('meta-grande-fields').style.display=on?'block':'none';
@@ -6813,6 +6823,24 @@ function renderMetaGrandeCuentasSelect(){
   sel.innerHTML=cuentas.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
     + `<option value="__nueva__">+ Crear cuenta nueva para esta meta</option>`;
   if(cuentas.includes(actual)) sel.value=actual;
+  renderMetaOrigenYCategoriaSelects();
+}
+// Cuenta de origen "habitual" (de dónde sale la plata todos los meses) y
+// categoría habitual — ambas opcionales. Con esto configurado, "Aportar
+// este mes" no necesita preguntar nada, solo confirmar.
+function renderMetaOrigenYCategoriaSelects(){
+  const selOrigen=document.getElementById('meta-cuenta-origen');
+  const actualOrigen=selOrigen.value;
+  const cuentaVinculada=document.getElementById('meta-cuenta-vinculada').value;
+  const keys=getAllAccountKeys().filter(k=>k!==cuentaVinculada);
+  selOrigen.innerHTML='<option value="">Elegir cada vez</option>'+keys.map(k=>`<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join('');
+  if(keys.includes(actualOrigen)) selOrigen.value=actualOrigen;
+
+  const cats=Object.keys(getAllCategorias());
+  const selCat=document.getElementById('meta-categoria-habitual');
+  const actualCat=selCat.value;
+  selCat.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if(cats.includes(actualCat)) selCat.value=actualCat;
 }
 
 function openMetaModal(id){
@@ -6824,6 +6852,9 @@ function openMetaModal(id){
   document.getElementById('meta-meses-objetivo').value='';
   document.getElementById('meta-monto-mensual-fijo').value='';
   document.getElementById('meta-pct-disponible').value='';
+  document.getElementById('meta-dia-limite').value='';
+  document.getElementById('meta-dia-limite-ultimo').checked=false;
+  toggleMetaDiaLimiteUltimo();
   document.getElementById('meta-modo-plan').value='tiempo';
   toggleMetaModoPlan();
   if(id){
@@ -6846,6 +6877,12 @@ function openMetaModal(id){
       toggleMetaModoPlan();
       toggleMetaGrandeUI();
       document.getElementById('meta-cuenta-vinculada').value=m.cuentaVinculada||'';
+      renderMetaOrigenYCategoriaSelects();
+      document.getElementById('meta-cuenta-origen').value=m.cuentaOrigenHabitual||'';
+      document.getElementById('meta-categoria-habitual').value=m.categoriaHabitual||'';
+      document.getElementById('meta-dia-limite').value=(m.diaLimite&&m.diaLimite!=='ultimo')?m.diaLimite:'';
+      document.getElementById('meta-dia-limite-ultimo').checked=(m.diaLimite==='ultimo');
+      toggleMetaDiaLimiteUltimo();
     }
   } else {
     document.getElementById('meta-modal-title').textContent='Nueva Meta';
@@ -6890,6 +6927,10 @@ function saveMeta(){
     }
     if(!cuentaVinculada){ alert('Elige o crea una cuenta de ahorro para vincular a esta meta.'); return; }
     datos.cuentaVinculada=cuentaVinculada;
+    datos.cuentaOrigenHabitual=document.getElementById('meta-cuenta-origen').value||undefined;
+    datos.categoriaHabitual=document.getElementById('meta-categoria-habitual').value||undefined;
+    const diaLimiteRaw=document.getElementById('meta-dia-limite').value;
+    datos.diaLimite=document.getElementById('meta-dia-limite-ultimo').checked ? 'ultimo' : (diaLimiteRaw ? Math.max(1,Math.min(31,parseInt(diaLimiteRaw,10))) : undefined);
     datos.precioTotal=precioTotal;
     datos.porcentajeInicial=porcentajeInicial;
     datos.modoPlan=document.getElementById('meta-modo-plan').value;
@@ -6977,6 +7018,12 @@ function renderMetasAhorro(){
 // Proyección → Ahorro a largo plazo (todas las metas), y Deudas → junto a
 // Pagos y Ingresos Frecuentes (solo las metas grandes con plan activo, para
 // tener todo lo "recurrente" consolidado en un mismo lugar).
+function totalAportadoEnMes(cuentaVinculada, y, mo){
+  const mesStr=y+'-'+String(mo+1).padStart(2,'0');
+  return (state.movimientos||[])
+    .filter(mv=>mv.account===cuentaVinculada && (mv.type==='income'||mv.type==='ahorro') && mv.date && mv.date.startsWith(mesStr))
+    .reduce((s,mv)=>s+(mv.amount||0),0);
+}
 function buildMetaCardHtml(m){
   const sym=m.currency==='USD'?'$':'S/';
   // Meta grande: el progreso SIEMPRE se lee en vivo de la cuenta
@@ -6988,16 +7035,39 @@ function buildMetaCardHtml(m){
   if(m.esMetaGrande){
     const proy=calcularProyeccionMetaGrande({...m,montoActual});
     const modoLabel={tiempo:'Plan por tiempo',monto_fijo:'Monto fijo mensual',monto_pct:'% de tu disponible'}[m.modoPlan]||'';
+    // Aviso de fecha límite — mismo criterio de colores que "Pagos
+    // Frecuentes": rojo si venció sin transferir, amarillo si es hoy,
+    // naranja si faltan ≤3 días. Si ya transferiste ALGO este mes (a esta
+    // cuenta), se considera "hecho" y no avisa, sin importar el monto exacto.
+    let vencimientoHtml='';
+    if(m.diaLimite && !proy.completada){
+      const hoyD=new Date(); hoyD.setHours(0,0,0,0);
+      const diasEnMesD=new Date(hoyD.getFullYear(),hoyD.getMonth()+1,0).getDate();
+      const diaLimiteNum=pfDiaLimite(m.diaLimite,diasEnMesD);
+      const labelD=pfDiaLabel(m.diaLimite,diasEnMesD);
+      const yaAporto=totalAportadoEnMes(m.cuentaVinculada,hoyD.getFullYear(),hoyD.getMonth())>0;
+      if(yaAporto){
+        vencimientoHtml=`<span style="color:var(--green)">✅ Ya transferiste este mes</span>`;
+      } else {
+        const diffD=diaLimiteNum-hoyD.getDate();
+        if(diffD<0) vencimientoHtml=`<span style="color:var(--red)">🔴 Venció ${labelD}</span>`;
+        else if(diffD===0) vencimientoHtml=`<span style="color:var(--amber)">🟡 Vence hoy</span>`;
+        else if(diffD<=3) vencimientoHtml=`<span style="color:var(--amber)">🟠 Vence en ${diffD} día${diffD===1?'':'s'}</span>`;
+        else vencimientoHtml=`<span>Antes de ${labelD}</span>`;
+      }
+    }
     extraHtml=`<div style="font-size:11px;color:var(--text3);margin-top:6px;display:flex;flex-wrap:wrap;gap:10px">
       <span>🏦 ${escapeHtml(m.cuentaVinculada||'—')}</span>
       <span>📋 ${modoLabel}</span>
       ${proy.completada?'<span style="color:var(--green);font-weight:600">🎉 ¡Meta lograda!</span>':
         `<span>💰 ${sym} ${proy.montoMensual.toFixed(2)}/mes${proy.esEstimado?' (estimado)':''}</span>
          <span>⏳ ${proy.mesesRestantes!=null?proy.mesesRestantes+' meses restantes':'—'}</span>`}
+      ${vencimientoHtml}
     </div>
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-      ${proy.completada?'':`<button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openTransferModal('${m.cuentaVinculada}', ${proy.montoMensual})">💸 Aportar este mes</button>`}
+      ${proy.completada?'':`<button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openTransferModal('${m.cuentaVinculada}', ${proy.montoMensual}, ${m.cuentaOrigenHabitual?`'${m.cuentaOrigenHabitual}'`:'null'}, ${m.categoriaHabitual?`'${m.categoriaHabitual}'`:'null'})">💸 Aportar este mes</button>`}
       <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();aportarExtraMeta('${m.id}')">🎁 Aporte extra</button>
+      <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openMetaHistorial('${m.id}')">📅 Historial</button>
     </div>`;
   }
   return `
@@ -11666,6 +11736,44 @@ function openPFHistorial(id){
 }
 function closePFHistorial(){
   document.getElementById('pf-historial-overlay').classList.remove('open');
+}
+// Historial de aportes de una Meta Grande — reusa EXACTO el mismo modal de
+// "Pagos Frecuentes" (título/resumen/lista), sin necesidad de un modal
+// nuevo. A diferencia de un pago frecuente, acá no hay un solo "registro
+// del mes" — se suma cualquier movimiento que haya entrado a la cuenta
+// vinculada ese mes (transferencia normal, "Aportar este mes", o "Aporte
+// extra" — todos cuentan igual).
+function openMetaHistorial(id){
+  const m=(state.metasAhorro||[]).find(x=>x.id===id);
+  if(!m||!m.esMetaGrande) return;
+  document.getElementById('pf-historial-title').textContent='🏠 '+m.nombre;
+  const sym=m.currency==='USD'?'$':'S/';
+  const hoy=new Date();
+  const meses=[];
+  for(let i=0;i<12;i++){
+    let y=hoy.getFullYear(), mo=hoy.getMonth()-i;
+    while(mo<0){mo+=12;y--;}
+    meses.push({y,mo});
+  }
+  let pagadosCount=0;
+  const rows=meses.map(({y,mo})=>{
+    const label=MONTHS[mo]+' '+y;
+    const total=totalAportadoEnMes(m.cuentaVinculada,y,mo);
+    if(total>0){
+      pagadosCount++;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px">${label}</span>
+        <span style="font-size:12px;color:var(--green)">✅ ${sym} ${total.toFixed(2)}</span>
+      </div>`;
+    }
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--text3)">${label}</span>
+      <span style="font-size:12px;color:var(--red)">❌ Sin transferencia</span>
+    </div>`;
+  }).join('');
+  document.getElementById('pf-historial-summary').textContent=`${pagadosCount} de 12 meses con aporte (últimos 12 meses)`;
+  document.getElementById('pf-historial-list').innerHTML=rows;
+  document.getElementById('pf-historial-overlay').classList.add('open');
 }
 
 
@@ -16355,6 +16463,24 @@ if(state.projGoals){
       <div class="field">
         <label>Cuenta de ahorro para esta meta <span style="font-size:10px;color:var(--text3)">(el progreso se lee de ahí, en automático)</span></label>
         <select id="meta-cuenta-vinculada"></select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>De dónde sale la plata <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+          <select id="meta-cuenta-origen"><option value="">Elegir cada vez</option></select>
+        </div>
+        <div class="field"><label>Categoría habitual <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+          <select id="meta-categoria-habitual"><option value="">Sin categoría</option></select>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin:-8px 0 10px">💡 Con esto configurado, "💸 Aportar este mes" ya no te pregunta nada — solo confirmas. "🎁 Aporte extra" sigue preguntando siempre, por si ese aporte viene de otro lado.</div>
+
+      <div class="field">
+        <label>Fecha límite de transferencia <span style="font-size:10px;color:var(--text3)">(opcional — para que te avise antes)</span></label>
+        <input id="meta-dia-limite" type="number" min="1" max="31" placeholder="Ej. 10 (deja vacío si no tiene fecha fija)">
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer">
+          <input id="meta-dia-limite-ultimo" type="checkbox" style="width:auto;margin:0" onchange="toggleMetaDiaLimiteUltimo()">
+          📅 Último día de cada mes (se ajusta solo: 28, 29, 30 o 31 según corresponda)
+        </label>
       </div>
 
       <div class="field"><label>¿Cómo quieres planificarlo?</label>
