@@ -17,6 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
@@ -928,7 +929,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           </div>
           <div class="config-row">
             <div class="config-row-label">Histórico Excel<small>Cargar .xlsx de movimientos</small></div>
-            <button class="config-action-btn neutral" onclick="openHistoricoModal();closeConfig()">🗂 Cargar</button>
+            <div style="display:flex;gap:6px">
+              <button class="config-action-btn neutral" style="font-size:10px" onclick="descargarPlantillaHistoricoExcel()" title="Descargar plantilla en blanco">📥 Plantilla</button>
+              <button class="config-action-btn neutral" onclick="openHistoricoModal();closeConfig()">🗂 Cargar</button>
+            </div>
           </div>
         </div>
 
@@ -941,7 +945,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           </div>
           <div class="config-row">
             <div class="config-row-label">Cargar histórico TC<small>Importar movimientos desde Excel</small></div>
-            <button class="config-action-btn neutral" onclick="openTCHistoricoModal();closeConfig()">📂 Cargar Excel</button>
+            <div style="display:flex;gap:6px">
+              <button class="config-action-btn neutral" style="font-size:10px" onclick="descargarPlantillaHistoricoTC()" title="Descargar plantilla en blanco">📥 Plantilla</button>
+              <button class="config-action-btn neutral" onclick="openTCHistoricoModal();closeConfig()">📂 Cargar Excel</button>
+            </div>
           </div>
         </div>
 
@@ -2704,8 +2711,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '21/08/26 - 13:32'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'La tarjeta "📅 Proyección de cierre" del dashboard ahora tiene en cuenta qué mes estás viendo: en el mes actual real muestra la proyección de verdad (con ingresos/gastos pendientes, como siempre); si navegas a un mes ya pasado con las flechas ‹›, en vez de seguir mostrando la proyección de hoy (que no tenía sentido para un mes ya cerrado), ahora muestra el mismo valor que "Disponible actual" de ese mes — porque un mes que ya terminó no se proyecta, ya se sabe con certeza cómo cerró. El subtítulo de la tarjeta también cambia ("Ver detalle →" vs "Mes cerrado — es el disponible real") para dejarlo claro. Verificado navegando entre el mes actual y uno pasado, y volviendo — todo recalcula correctamente en cada caso.';
+const APP_VERSION_DATE = '21/08/26 - 21:47'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo en Configuración: botón "📥 Plantilla" junto a "Histórico Excel" y "Cargar histórico TC" — descarga una plantilla de Excel lista para llenar, con desplegables REALES (no solo texto de ejemplo): Moneda, Banco y Categoría se eligen de una lista, armada con tus propias cuentas/tarjetas/categorías ya creadas en la app (no una lista genérica). Detalle técnico: la librería que ya usa la app para leer/escribir Excel no puede escribir desplegables, así que se arma el archivo normal y se le inyecta el desplegable directamente en el XML interno (agregado JSZip vía CDN solo para esto). Las opciones se guardan en una hoja oculta y se referencian por rango de celdas (no como texto en la fórmula) para no toparse con el límite de 255 caracteres de Excel si hay muchas categorías personalizadas. De paso se corrigió que "Cargar histórico TC" no leía la columna CATEGORIA aunque el importador normal sí — ahora ambos la soportan igual. Si no tienes ninguna tarjeta creada, el botón de plantilla TC te avisa en vez de generar un archivo inútil. Verificado con pruebas automatizadas: contenido dinámico correcto (incluye cuentas/categorías/tarjetas personalizadas), hoja de opciones oculta, desplegables reconocidos por una librería distinta a la que los generó, y el archivo se abre sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7100,6 +7107,149 @@ function exportJSON(){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');
   a.href=url;a.download='misfinanzas_'+todayLocalISO()+'.json';a.click();URL.revokeObjectURL(url);
 }
+// ══════════════════════════════════════════════════════
+//  PLANTILLAS DESCARGABLES CON DESPLEGABLES (Histórico Excel / Histórico TC)
+//  SheetJS (la librería que ya usa la app) NO puede escribir validación de
+//  datos (desplegables) — solo leerla. La forma de lograrlo sin agregar una
+//  librería pesada nueva es: armar el archivo normal con SheetJS (como
+//  siempre), y después inyectar manualmente el bloque <dataValidations> en
+//  el XML de la hoja usando JSZip (el .xlsx por dentro es solo un ZIP de
+//  XMLs). Las opciones de cada desplegable se escriben en una hoja
+//  "Listas" oculta y se referencia por RANGO de celdas (no como texto en
+//  línea) — así no se topa con el límite de 255 caracteres que tiene Excel
+//  para listas escritas directo en la fórmula, algo que sí podría pasar
+//  fácilmente con varias categorías personalizadas.
+// ══════════════════════════════════════════════════════
+async function inyectarDesplegablesYDescargar(wb, sheetIndexData, validaciones, nombreArchivo){
+  const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+  const zip=await JSZip.loadAsync(buf);
+  const sheetPath=`xl/worksheets/sheet${sheetIndexData}.xml`;
+  let xml=await zip.file(sheetPath).async('string');
+  const bloques=validaciones.map(v=>
+    `<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="${v.sqref}"><formula1>${v.rango}</formula1></dataValidation>`
+  ).join('');
+  xml=xml.replace('</worksheet>', `<dataValidations count="${validaciones.length}">${bloques}</dataValidations></worksheet>`);
+  zip.file(sheetPath, xml);
+  const outBuf=await zip.generateAsync({type:'arraybuffer'});
+  const blob=new Blob([outBuf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=nombreArchivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+// Arma la hoja "Listas" (oculta) con las opciones de cada desplegable, en
+// columnas separadas por claridad — devuelve también en qué fila termina
+// cada lista, para poder armar el rango exacto de la validación.
+function hojaListasOculta(listas){
+  // listas: [{titulo, opciones}], cada una en su propia COLUMNA (A, B, C...)
+  const maxFilas=Math.max(...listas.map(l=>l.opciones.length))+1;
+  const aoa=Array.from({length:maxFilas},()=>[]);
+  listas.forEach((l,colIdx)=>{
+    aoa[0][colIdx]=l.titulo;
+    l.opciones.forEach((op,i)=>{ aoa[i+1][colIdx]=op; });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  return ws;
+}
+function colLetra(idx){ return String.fromCharCode(65+idx); } // 0->A, 1->B, 2->C...
+
+async function descargarPlantillaHistoricoExcel(){
+  const wb=XLSX.utils.book_new();
+  const headers=['DESCRIPCION','FECHA','MONTO','MONEDA','BANCO','CATEGORIA'];
+  const ejemplos=[
+    ['Sueldo Agosto','2026-08-05',3500,'SOLES','BBVA',''],
+    ['Bembos almuerzo','2026-08-10',-24.8,'SOLES','BBVA','🍔 Comida'],
+    ['Deposito ahorro','2026-08-15',200,'SOLES','AHORRO',''],
+    ['Saldo inicial','2026-08-01',1200,'SOLES','BBVA',''],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet([headers,...ejemplos]);
+  ws['!cols']=[{wch:28},{wch:14},{wch:12},{wch:12},{wch:16},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws,'Movimientos');
+
+  const wsInstr=XLSX.utils.aoa_to_sheet([
+    ['Columna','Qué va ahí'],
+    ['DESCRIPCION','Nombre del movimiento. Obligatorio.'],
+    ['FECHA','Formato AAAA-MM-DD (ej. 2026-08-15). Obligatorio.'],
+    ['MONTO','POSITIVO = ingreso, NEGATIVO = gasto. Para AHORRO: positivo = depósito, negativo = retiro. Obligatorio.'],
+    ['MONEDA','SOLES o DOLARES (elige del desplegable).'],
+    ['BANCO','Elige del desplegable — tus cuentas reales. Si escribes un nombre nuevo, se crea automático.'],
+    ['CATEGORIA','Opcional — elige del desplegable con tus categorías reales.'],
+    ['',''],
+    ['Fila especial: SALDO INICIAL','Escribe "SALDO INICIAL" en DESCRIPCION para fijar el saldo de esa cuenta en esa fecha, en vez de cargarlo como movimiento.'],
+  ]);
+  wsInstr['!cols']=[{wch:26},{wch:90}];
+  XLSX.utils.book_append_sheet(wb,wsInstr,'Instrucciones');
+
+  // Bancos: las cuentas fijas + las que el usuario ya haya creado
+  const bancosDefault=['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares'];
+  const bancosCustom=Object.keys(state.customCuentas||{});
+  const bancos=[...new Set([...bancosDefault,...bancosCustom])];
+  const categorias=Object.keys(getAllCategorias());
+
+  const wsListas=hojaListasOculta([
+    {titulo:'Moneda',opciones:['SOLES','DOLARES']},
+    {titulo:'Banco',opciones:bancos},
+    {titulo:'Categoria',opciones:categorias},
+  ]);
+  XLSX.utils.book_append_sheet(wb,wsListas,'Listas');
+  wb.Workbook={Sheets:[{Hidden:0},{Hidden:0},{Hidden:1}]}; // oculta solo "Listas"
+
+  const validaciones=[
+    {sqref:'D2:D1000', rango:`Listas!$A$2:$A$${1+2}`},                    // Moneda: 2 opciones
+    {sqref:'E2:E1000', rango:`Listas!$B$2:$B$${1+bancos.length}`},        // Banco
+    {sqref:'F2:F1000', rango:`Listas!$C$2:$C$${1+categorias.length}`},    // Categoria
+  ];
+  await inyectarDesplegablesYDescargar(wb, 1, validaciones, 'Plantilla_Historico_Excel.xlsx');
+}
+
+async function descargarPlantillaHistoricoTC(){
+  const tarjetas=state.tarjetas||[];
+  if(!tarjetas.length){
+    alert('Primero crea al menos una tarjeta en la sección Tarjetas — el histórico se relaciona con tarjetas ya existentes, así que la plantilla necesita saber cuáles tienes.');
+    return;
+  }
+  const wb=XLSX.utils.book_new();
+  const headers=['DESCRIPCION','FECHA','MONTO','ESTADO','BANCO','CATEGORIA'];
+  const bancoEjemplo=tarjetas[0].banco;
+  const ejemplos=[
+    ['Netflix','2026-08-05',35.9,'Pagado',bancoEjemplo,'📱 Servicios'],
+    ['Bembos','2026-08-10',24.8,'Pendiente',bancoEjemplo,'🍔 Comida'],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet([headers,...ejemplos]);
+  ws['!cols']=[{wch:24},{wch:14},{wch:12},{wch:14},{wch:16},{wch:20}];
+  XLSX.utils.book_append_sheet(wb,ws,'Consumos Tarjeta');
+
+  const wsInstr=XLSX.utils.aoa_to_sheet([
+    ['Columna','Qué va ahí'],
+    ['DESCRIPCION','Nombre del consumo. Obligatorio.'],
+    ['FECHA','Formato AAAA-MM-DD (ej. 2026-08-15). Obligatorio.'],
+    ['MONTO','Número positivo, sin signo. Obligatorio.'],
+    ['ESTADO','Pagado o Pendiente (elige del desplegable).'],
+    ['BANCO','MUY IMPORTANTE: elige del desplegable — son EXACTAMENTE las tarjetas que ya tienes creadas en la app. Si no ves la que buscas, créala primero en Tarjetas.'],
+    ['CATEGORIA','Opcional — elige del desplegable con tus categorías reales.'],
+  ]);
+  wsInstr['!cols']=[{wch:26},{wch:90}];
+  XLSX.utils.book_append_sheet(wb,wsInstr,'Instrucciones');
+
+  const bancos=[...new Set(tarjetas.map(t=>t.banco))];
+  const categorias=Object.keys(getAllCategorias());
+  const wsListas=hojaListasOculta([
+    {titulo:'Estado',opciones:['Pagado','Pendiente']},
+    {titulo:'Banco',opciones:bancos},
+    {titulo:'Categoria',opciones:categorias},
+  ]);
+  XLSX.utils.book_append_sheet(wb,wsListas,'Listas');
+  wb.Workbook={Sheets:[{Hidden:0},{Hidden:0},{Hidden:1}]};
+
+  const validaciones=[
+    {sqref:'D2:D1000', rango:`Listas!$A$2:$A$3`},
+    {sqref:'E2:E1000', rango:`Listas!$B$2:$B$${1+bancos.length}`},
+    {sqref:'F2:F1000', rango:`Listas!$C$2:$C$${1+categorias.length}`},
+  ];
+  await inyectarDesplegablesYDescargar(wb, 1, validaciones, 'Plantilla_Historico_TC.xlsx');
+}
+
 function exportXLSX(){
   const wb=XLSX.utils.book_new();
   // Sheet 1: movimientos
@@ -9985,6 +10135,7 @@ function parseTCExcel(wb){
     const monto  = parseFloat(montoS)||0;
     const estado = (row['ESTADO']||row['Estado']||row['estado']||'Pendiente').toString().trim();
     const banco  = (row['Banco'] ||row['BANCO']  ||row['banco']  ||'').toString().trim();
+    const categoria=(row['CATEGORIA']||row['Categoria']||row['categoria']||row['CATEGORÍA']||row['Categoría']||'').toString().trim();
 
     if(!desc || !banco || isNaN(monto) || monto === 0) return;
     const fecha = parseExcelDate(rawDate, rawDateR);
@@ -10009,7 +10160,8 @@ function parseTCExcel(wb){
       desc: titleCaseTC(desc),
       fecha,
       monto: Math.abs(monto),
-      pagado: !/pendient|no\s*pagad|sin\s*pagar/i.test(estado) && /pagad|paid|^si$/i.test(estado)
+      pagado: !/pendient|no\s*pagad|sin\s*pagar/i.test(estado) && /pagad|paid|^si$/i.test(estado),
+      ...(categoria ? { cat: categoria } : {}),
     });
   });
 
