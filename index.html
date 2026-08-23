@@ -471,6 +471,16 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-kpi-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 
 .dash-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+.dash-widgets-container{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:22px;align-items:stretch;}
+.dash-widget-wrap{display:flex;transition:opacity .15s;}
+.dash-widget-wrap.dw-small{flex:1 1 170px;min-width:150px;}
+.dash-widget-wrap.dw-medium{flex:1 1 380px;min-width:300px;}
+.dash-widget-wrap.dw-large{flex:1 1 100%;}
+.dash-widget-wrap>*{width:100%;}
+.editor-widget-row{transition:opacity .15s;}
+.ew-arrow-btn{background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:9px;padding:2px 5px;cursor:pointer;line-height:1.3;display:block;width:22px;}
+.ew-arrow-btn:disabled{opacity:0.3;cursor:default;}
+.ew-arrow-btn:not(:disabled):hover{border-color:var(--accent);color:var(--accent);}
 .dash-split-auto{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:22px;}
 .dash-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);margin-bottom:12px;}
 .dash-mov-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
@@ -1046,6 +1056,18 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 </div>
 
+<div class="modal-overlay" id="editor-widgets-overlay" onclick="if(event.target===this)cerrarEditorWidgets()">
+  <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title"><span>✏️ Personalizar Resumen</span><button class="modal-close" onclick="cerrarEditorWidgets()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, y arrastra (⠿) o usa las flechas para ordenar.</div>
+    <div id="editor-widgets-list"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="cerrarEditorWidgets()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditorWidgets()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="pin-seguridad-overlay" onclick="if(event.target===this)cerrarPinSeguridad()">
   <div class="modal" style="width:320px">
     <div class="modal-title"><span>🔒 Verificación</span><button class="modal-close" onclick="cerrarPinSeguridad()">✕</button></div>
@@ -1125,74 +1147,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
   </div>
 
-  <div class="dash-kpi-grid">
-    <div class="dash-kpi kpi-blue" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
-      <div class="dash-kpi-icon">💼</div>
-      <div class="dash-kpi-label">Disponible actual</div>
-      <div class="dash-kpi-val money" id="kpi-disponible">—</div>
-      <div class="dash-kpi-sub" id="kpi-disponible-sub">cuentas operativas</div>
-    </div>
-    <div class="dash-kpi kpi-purple" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
-      <div class="dash-kpi-icon">🏦</div>
-      <div class="dash-kpi-label">Ahorro total</div>
-      <div class="dash-kpi-val money" id="kpi-ahorro">—</div>
-      <div class="dash-kpi-sub" id="kpi-ahorro-sub">—</div>
-    </div>
-    <div class="dash-kpi kpi-red" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
-      <div class="dash-kpi-icon">💳</div>
-      <div class="dash-kpi-label">Deuda tarjetas</div>
-      <div class="dash-kpi-val money" id="kpi-deuda-tc">—</div>
-      <div class="dash-kpi-sub" id="kpi-deuda-tc-sub">pendiente de pago</div>
-      <div class="dash-kpi-sub" id="kpi-deuda-tc-atrasado" style="display:none;color:var(--red);font-weight:600"></div>
-    </div>
-    <div class="dash-kpi kpi-amber" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
-      <div class="dash-kpi-icon">📅</div>
-      <div class="dash-kpi-label" id="kpi-pagar-mes-label">A pagar próximo mes</div>
-      <div class="dash-kpi-val money" id="kpi-pagar-mes">—</div>
-      <div class="dash-kpi-sub" id="kpi-pagar-mes-sub">período actual tarjetas</div>
-    </div>
-    <div class="dash-kpi kpi-teal" style="cursor:pointer" onclick="showPage('inversiones')" title="Ver Inversiones">
-      <div class="dash-kpi-icon">📈</div>
-      <div class="dash-kpi-label">Inversiones</div>
-      <div class="dash-kpi-val money" id="kpi-inversiones">—</div>
-      <div class="dash-kpi-sub" id="kpi-inversiones-sub">sin valorizar</div>
-    </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div class="dash-section-title" style="margin:0">Mi Resumen</div>
+    <button class="btn" style="font-size:11px" onclick="abrirEditorWidgets()">✏️ Editar</button>
   </div>
-
-  <div class="dash-split">
-    <div class="card" style="padding:18px">
-      <div class="dash-section-title">Últimos movimientos</div>
-      <div id="dash-movs-list"><div class="dash-empty">Cargando...</div></div>
-      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('finanzas')">Ver todos →</button></div>
-    </div>
-    <div class="card" style="padding:18px">
-      <div class="dash-section-title">Estado tarjetas de crédito</div>
-      <div id="dash-tc-list"><div class="dash-empty">Cargando...</div></div>
-      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('tarjetas')">Ver detalle →</button></div>
-    </div>
-  </div>
-
-  <!-- Deudas: solo visible si hay deudas mayores activas o préstamos por cobrar pendientes -->
-  <div class="dash-split-auto" id="dash-debts-split" style="display:none">
-    <div class="card" style="padding:18px;display:none" id="dash-dm-card">
-      <div class="dash-section-title">🏛️ Deudas Mayores</div>
-      <div id="dash-dm-list"></div>
-      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
-    </div>
-    <div class="card" style="padding:18px;display:none" id="dash-dp-card">
-      <div class="dash-section-title">🤝 Préstamos por Cobrar</div>
-      <div id="dash-dp-list"></div>
-      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
-    </div>
-  </div>
-
-  <div class="card" style="padding:18px;margin-bottom:22px;display:none" id="fecha-imp-card-wrap">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div class="dash-section-title" style="margin:0">📅 Fechas Importantes</div>
-      <button class="btn btn-primary" style="font-size:11px" onclick="openCalEventModal(null, todayISO())">+ Agregar</button>
-    </div>
-    <div class="fecha-imp-grid" id="fecha-imp-grid"></div>
-  </div>
+  <div class="dash-widgets-container" id="dash-widgets-container"></div>
 
   <div class="dash-section-title">Accesos rápidos</div>
   <div class="dash-shortcut-grid">
@@ -2752,8 +2711,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 09:34'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Las 5 tarjetas KPI del Resumen (Disponible actual, Ahorro total, Deuda tarjetas, A pagar próximo mes, Inversiones) ahora son clickeables — te llevan directo a su sección correspondiente. "Disponible actual" y "Ahorro total" te llevan a Finanzas y saltan al mes actual de una (aunque estuvieras viendo otro mes ahí); "Deuda tarjetas" y "A pagar próximo mes" van a Tarjetas; "Inversiones" va a Inversiones. Con un pequeño efecto visual al pasar el mouse para que se note que son clickeables. Verificado con pruebas automatizadas que cada una navega al destino correcto.';
+const APP_VERSION_DATE = '22/08/26 - 13:47'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🎨 Resumen configurable — cada persona elige qué widgets ver y en qué orden. Nuevo botón "✏️ Editar" arriba del Resumen abre una lista con los 20 widgets disponibles (los 10 que ya existían + 10 nuevos: Mis Metas de Ahorro, Presupuesto del mes, Proyección de cierre, Servicios Compartidos, Mejor Tipo de Cambio, Combustible/Mantenimiento, Análisis de Sueldos, Comparativo mensual, Resumen del Año, Minijuegos) — cada uno con checkbox para mostrar/ocultar y se reordenan arrastrando (⠿) o con flechas ▲▼ (mismo patrón que ya usan tus tarjetas de crédito). La configuración por defecto es idéntica a como se veía antes, así que a nadie se le mueve nada hasta que entre a personalizar. Verificado con pruebas de punta a punta: configuración por defecto, activar/desactivar widgets, arrastrar y soltar, guardado persistente, y los 10 widgets nuevos mostrando datos reales de sus respectivas secciones.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11032,7 +10991,256 @@ function eliminarReloj(id){
   poblarSelectorCiudades();
 }
 
+// ══════════════════════════════════════════════════════
+//  RESUMEN CONFIGURABLE — cada persona elige qué widgets ver y en qué
+//  orden, en vez de un dashboard fijo igual para todos. Los widgets
+//  "existentes" (kpi-disponible, movimientos, etc.) reusan EXACTAMENTE la
+//  misma lógica de cálculo y los mismos IDs internos que ya tenían — solo
+//  cambia dónde se colocan en el HTML (ahora dinámico), no cómo se llenan.
+// ══════════════════════════════════════════════════════
+const DASHBOARD_WIDGET_DEFS = {
+  'kpi-disponible': {label:'💼 Disponible actual', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-blue" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
+      <div class="dash-kpi-icon">💼</div>
+      <div class="dash-kpi-label">Disponible actual</div>
+      <div class="dash-kpi-val money" id="kpi-disponible">—</div>
+      <div class="dash-kpi-sub" id="kpi-disponible-sub">cuentas operativas</div>
+    </div>`},
+  'kpi-ahorro': {label:'🏦 Ahorro total', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-purple" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
+      <div class="dash-kpi-icon">🏦</div>
+      <div class="dash-kpi-label">Ahorro total</div>
+      <div class="dash-kpi-val money" id="kpi-ahorro">—</div>
+      <div class="dash-kpi-sub" id="kpi-ahorro-sub">—</div>
+    </div>`},
+  'kpi-deuda-tc': {label:'💳 Deuda tarjetas', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-red" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
+      <div class="dash-kpi-icon">💳</div>
+      <div class="dash-kpi-label">Deuda tarjetas</div>
+      <div class="dash-kpi-val money" id="kpi-deuda-tc">—</div>
+      <div class="dash-kpi-sub" id="kpi-deuda-tc-sub">pendiente de pago</div>
+      <div class="dash-kpi-sub" id="kpi-deuda-tc-atrasado" style="display:none;color:var(--red);font-weight:600"></div>
+    </div>`},
+  'kpi-pagar-mes': {label:'📅 A pagar próximo mes', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-amber" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
+      <div class="dash-kpi-icon">📅</div>
+      <div class="dash-kpi-label" id="kpi-pagar-mes-label">A pagar próximo mes</div>
+      <div class="dash-kpi-val money" id="kpi-pagar-mes">—</div>
+      <div class="dash-kpi-sub" id="kpi-pagar-mes-sub">período actual tarjetas</div>
+    </div>`},
+  'kpi-inversiones': {label:'📈 Inversiones', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-teal" style="cursor:pointer" onclick="showPage('inversiones')" title="Ver Inversiones">
+      <div class="dash-kpi-icon">📈</div>
+      <div class="dash-kpi-label">Inversiones</div>
+      <div class="dash-kpi-val money" id="kpi-inversiones">—</div>
+      <div class="dash-kpi-sub" id="kpi-inversiones-sub">sin valorizar</div>
+    </div>`},
+  'movimientos': {label:'💵 Últimos movimientos', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px">
+      <div class="dash-section-title">Últimos movimientos</div>
+      <div id="dash-movs-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('finanzas')">Ver todos →</button></div>
+    </div>`},
+  'tarjetas-estado': {label:'💳 Estado de tarjetas', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px">
+      <div class="dash-section-title">Estado tarjetas de crédito</div>
+      <div id="dash-tc-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('tarjetas')">Ver detalle →</button></div>
+    </div>`},
+  'deudas-mayores': {label:'🏛️ Deudas Mayores', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-dm-card">
+      <div class="dash-section-title">🏛️ Deudas Mayores</div>
+      <div id="dash-dm-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
+    </div>`},
+  'prestamos-cobrar': {label:'🤝 Préstamos por Cobrar', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-dp-card">
+      <div class="dash-section-title">🤝 Préstamos por Cobrar</div>
+      <div id="dash-dp-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
+    </div>`},
+  'fechas': {label:'📅 Fechas Importantes', size:'large', shell:()=>`
+    <div class="card" style="padding:18px" id="fecha-imp-card-wrap">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="dash-section-title" style="margin:0">📅 Fechas Importantes</div>
+        <button class="btn btn-primary" style="font-size:11px" onclick="event.stopPropagation();openCalEventModal(null, todayISO())">+ Agregar</button>
+      </div>
+      <div class="fecha-imp-grid" id="fecha-imp-grid"></div>
+    </div>`},
+  // ── NUEVOS — cubren el resto de secciones de la app ──
+  'metas-ahorro': {label:'🎯 Mis Metas de Ahorro', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px">
+      <div class="dash-section-title">🎯 Mis Metas de Ahorro</div>
+      <div id="dash-metas-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('proyeccion')">Ver todas →</button></div>
+    </div>`},
+  'presupuesto': {label:'🎯 Presupuesto del mes', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px">
+      <div class="dash-section-title">🎯 Presupuesto del mes</div>
+      <div id="dash-presupuesto-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('presupuesto')">Ver detalle →</button></div>
+    </div>`},
+  'proyeccion-cierre': {label:'📅 Proyección de cierre', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-blue" style="cursor:pointer" onclick="showPage('proyeccion')" title="Ver Proyección">
+      <div class="dash-kpi-icon">📅</div>
+      <div class="dash-kpi-label">Proyección de cierre</div>
+      <div class="dash-kpi-val money" id="kpi-proyeccion-cierre">—</div>
+      <div class="dash-kpi-sub" id="kpi-proyeccion-cierre-sub">este mes</div>
+    </div>`},
+  'servicios-pendientes': {label:'🔗 Servicios Compartidos', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px">
+      <div class="dash-section-title">🔗 Servicios Compartidos</div>
+      <div id="dash-servicios-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('servicios')">Ver detalle →</button></div>
+    </div>`},
+  'tc-comparador': {label:'💱 Mejor Tipo de Cambio', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-teal" style="cursor:pointer" onclick="showPage('tc-tracker')" title="Ver Comparador de TC">
+      <div class="dash-kpi-icon">💱</div>
+      <div class="dash-kpi-label">Mejor Tipo de Cambio</div>
+      <div class="dash-kpi-val money" id="kpi-tc-comparador">—</div>
+      <div class="dash-kpi-sub" id="kpi-tc-comparador-sub">—</div>
+    </div>`},
+  'combustible': {label:'⛽ Combustible / Mantenimiento', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px">
+      <div class="dash-section-title">⛽ Combustible / Mantenimiento</div>
+      <div id="dash-combustible-list"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('combustible')">Ver detalle →</button></div>
+    </div>`},
+  'sueldos': {label:'💼 Análisis de Sueldos', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-purple" style="cursor:pointer" onclick="showPage('sueldos')" title="Ver Análisis de Sueldos">
+      <div class="dash-kpi-icon">💼</div>
+      <div class="dash-kpi-label">Última boleta</div>
+      <div class="dash-kpi-val money" id="kpi-sueldos">—</div>
+      <div class="dash-kpi-sub" id="kpi-sueldos-sub">—</div>
+    </div>`},
+  'comparativo': {label:'⚖️ Comparativo mensual', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-amber" style="cursor:pointer" onclick="showPage('comparativo')" title="Ver Comparativo">
+      <div class="dash-kpi-icon">⚖️</div>
+      <div class="dash-kpi-label">Gasto vs. mes pasado</div>
+      <div class="dash-kpi-val money" id="kpi-comparativo">—</div>
+      <div class="dash-kpi-sub" id="kpi-comparativo-sub">—</div>
+    </div>`},
+  'anio-completo': {label:'🗓️ Resumen del Año', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-blue" style="cursor:pointer" onclick="showPage('anio')" title="Ver Año Completo">
+      <div class="dash-kpi-icon">🗓️</div>
+      <div class="dash-kpi-label">Ahorrado en el año</div>
+      <div class="dash-kpi-val money" id="kpi-anio">—</div>
+      <div class="dash-kpi-sub" id="kpi-anio-sub">—</div>
+    </div>`},
+  'minijuegos': {label:'🎮 Minijuegos', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-teal" style="cursor:pointer" onclick="showPage('minijuegos')" title="Ver Minijuegos">
+      <div class="dash-kpi-icon">🎮</div>
+      <div class="dash-kpi-label">Minijuegos</div>
+      <div class="dash-kpi-val" id="kpi-minijuegos">—</div>
+      <div class="dash-kpi-sub" id="kpi-minijuegos-sub">jugados</div>
+    </div>`},
+};
+// Orden y visibilidad por defecto — igual a como se veía la app antes de
+// que existiera esta opción, para que a nadie se le mueva nada hasta que
+// entre a personalizar. Los widgets nuevos empiezan OCULTOS por defecto.
+const DASHBOARD_WIDGETS_DEFAULT = [
+  {id:'kpi-disponible', visible:true}, {id:'kpi-ahorro', visible:true},
+  {id:'kpi-deuda-tc', visible:true}, {id:'kpi-pagar-mes', visible:true},
+  {id:'kpi-inversiones', visible:true}, {id:'movimientos', visible:true},
+  {id:'tarjetas-estado', visible:true}, {id:'deudas-mayores', visible:true},
+  {id:'prestamos-cobrar', visible:true}, {id:'fechas', visible:true},
+  {id:'metas-ahorro', visible:false}, {id:'presupuesto', visible:false},
+  {id:'proyeccion-cierre', visible:false}, {id:'servicios-pendientes', visible:false},
+  {id:'tc-comparador', visible:false}, {id:'combustible', visible:false},
+  {id:'sueldos', visible:false}, {id:'comparativo', visible:false},
+  {id:'anio-completo', visible:false}, {id:'minijuegos', visible:false},
+];
+function ensureDashboardWidgetsDefault(){
+  if(!Array.isArray(state.dashboardWidgets)){
+    state.dashboardWidgets=DASHBOARD_WIDGETS_DEFAULT.map(w=>({...w}));
+    return;
+  }
+  const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
+  DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
+    if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
+  });
+  state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
+}
+function renderDashboardWidgets(){
+  ensureDashboardWidgetsDefault();
+  const cont=document.getElementById('dash-widgets-container');
+  if(!cont) return;
+  const visibles=state.dashboardWidgets.filter(w=>w.visible);
+  cont.innerHTML=visibles.map(w=>{
+    const def=DASHBOARD_WIDGET_DEFS[w.id];
+    return def ? `<div class="dash-widget-wrap dw-${def.size}" data-wid="${w.id}">${def.shell()}</div>` : '';
+  }).join('');
+}
+// ── Editor de widgets (checkbox + arrastrar + flechas) ──
+let editorWidgetsTemp=null;
+function abrirEditorWidgets(){
+  ensureDashboardWidgetsDefault();
+  editorWidgetsTemp=state.dashboardWidgets.map(w=>({...w}));
+  renderEditorWidgetsList();
+  document.getElementById('editor-widgets-overlay').classList.add('open');
+}
+function cerrarEditorWidgets(){
+  document.getElementById('editor-widgets-overlay').classList.remove('open');
+  editorWidgetsTemp=null;
+}
+function renderEditorWidgetsList(){
+  const el=document.getElementById('editor-widgets-list');
+  el.innerHTML=editorWidgetsTemp.map((w,idx)=>{
+    const def=DASHBOARD_WIDGET_DEFS[w.id];
+    if(!def) return '';
+    return `<div class="editor-widget-row" draggable="true" data-wid="${w.id}"
+      ondragstart="ewDragStart(event)" ondragover="ewDragOver(event)" ondrop="ewDrop(event)" ondragend="ewDragEnd(event)"
+      style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--border)">
+      <span style="cursor:grab;color:var(--text3);font-size:14px">⠿</span>
+      <label style="flex:1;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin:0">
+        <input type="checkbox" ${w.visible?'checked':''} onchange="ewToggle('${w.id}',this.checked)" style="width:auto;margin:0">
+        ${def.label}
+      </label>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <button class="ew-arrow-btn" onclick="ewMover(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
+        <button class="ew-arrow-btn" onclick="ewMover(${idx},1)" ${idx===editorWidgetsTemp.length-1?'disabled':''}>▼</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function ewToggle(id, checked){
+  const w=editorWidgetsTemp.find(x=>x.id===id);
+  if(w) w.visible=checked;
+}
+function ewMover(idx, dir){
+  const swapIdx=idx+dir;
+  if(swapIdx<0||swapIdx>=editorWidgetsTemp.length) return;
+  [editorWidgetsTemp[idx], editorWidgetsTemp[swapIdx]]=[editorWidgetsTemp[swapIdx], editorWidgetsTemp[idx]];
+  renderEditorWidgetsList();
+}
+let ewDragId=null;
+function ewDragStart(ev){
+  ewDragId=ev.currentTarget.dataset.wid;
+  ev.dataTransfer.effectAllowed='move';
+  ev.currentTarget.style.opacity='0.4';
+}
+function ewDragOver(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; }
+function ewDrop(ev){
+  ev.preventDefault();
+  const targetId=ev.currentTarget.dataset.wid;
+  if(!ewDragId||ewDragId===targetId) return;
+  const fromIdx=editorWidgetsTemp.findIndex(w=>w.id===ewDragId);
+  const toIdx=editorWidgetsTemp.findIndex(w=>w.id===targetId);
+  if(fromIdx===-1||toIdx===-1) return;
+  const [moved]=editorWidgetsTemp.splice(fromIdx,1);
+  editorWidgetsTemp.splice(toIdx,0,moved);
+  renderEditorWidgetsList();
+}
+function ewDragEnd(ev){ ev.currentTarget.style.opacity='1'; ewDragId=null; }
+function guardarEditorWidgets(){
+  state.dashboardWidgets=editorWidgetsTemp;
+  saveState();
+  cerrarEditorWidgets();
+  renderDashboard();
+}
+
 function renderDashboard(){
+  renderDashboardWidgets(); // arma los "cascarones" antes de llenarlos con datos
   const now   = new Date();
   const curY  = now.getFullYear();
   const curM  = now.getMonth();
@@ -11239,19 +11447,16 @@ function renderDashboard(){
 // ── DASHBOARD: Deudas Mayores + Préstamos por Cobrar ──
 // Solo se muestran si hay información relevante (deudas activas / préstamos pendientes)
 function renderDashDebts(){
-  const wrap = document.getElementById('dash-debts-split');
-  if(!wrap) return;
-
   // ── Deudas Mayores (préstamos bancarios con saldo pendiente > 0) ──
   const dmActivas = (state.deudasMayores||[])
     .map(d=>({d, r:getDMResumen(d)}))
     .filter(x=>x.r.saldoPendiente>0.01);
 
-  const dmCard = document.getElementById('dash-dm-card');
   const dmList = document.getElementById('dash-dm-list');
-  if(dmActivas.length){
-    dmCard.style.display='block';
-    dmList.innerHTML = dmActivas.map(({d,r})=>{
+  // Los widgets ahora los prende/apaga la persona, no la presencia de
+  // datos — si el widget está oculto, su contenedor ni existe en el DOM.
+  if(dmList){
+    dmList.innerHTML = !dmActivas.length ? '<div class="dash-empty">Sin deudas mayores activas.</div>' : dmActivas.map(({d,r})=>{
       const pct = r.total>0 ? (r.pagadas/r.total)*100 : 0;
       const proxLabel = r.proximaFecha
         ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})
@@ -11269,41 +11474,200 @@ function renderDashDebts(){
         </div>
       </div>`;
     }).join('');
-  } else {
-    dmCard.style.display='none';
   }
 
   // ── Préstamos por cobrar (deudas personales aún pendientes) ──
   const dpPend = (state.deudas||[]).filter(d=>d.status==='pendiente');
-  const dpCard = document.getElementById('dash-dp-card');
   const dpList = document.getElementById('dash-dp-list');
-  if(dpPend.length){
-    dpCard.style.display='block';
-    const sorted = [...dpPend].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
-    dpList.innerHTML = sorted.slice(0,5).map(d=>{
-      const sym = d.currency==='USD'?'$':'S/';
-      const dias = Math.floor((new Date()-new Date(d.fecha+'T12:00:00'))/(1000*60*60*24));
-      const diasLabel = dias<=0 ? 'hoy' : dias===1 ? 'hace 1 día' : 'hace '+dias+' días';
-      return `<div class="dash-mov-row" onclick="showPage('deudas')" style="cursor:pointer">
-        <div style="display:flex;align-items:center;gap:8px;min-width:0">
-          <div class="dash-mov-dot" style="background:var(--amber)"></div>
-          <div style="min-width:0">
-            <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escapeHtml(d.nombre)}</div>
-            <div style="font-size:10px;color:${dias>30?'var(--red)':'var(--text3)'}">${diasLabel}</div>
+  if(dpList){
+    dpList.innerHTML = !dpPend.length ? '<div class="dash-empty">Sin préstamos pendientes de cobro.</div>' : (() => {
+      const sorted = [...dpPend].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+      return sorted.slice(0,5).map(d=>{
+        const sym = d.currency==='USD'?'$':'S/';
+        const dias = Math.floor((new Date()-new Date(d.fecha+'T12:00:00'))/(1000*60*60*24));
+        const diasLabel = dias<=0 ? 'hoy' : dias===1 ? 'hace 1 día' : 'hace '+dias+' días';
+        return `<div class="dash-mov-row" onclick="showPage('deudas')" style="cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0">
+            <div class="dash-mov-dot" style="background:var(--amber)"></div>
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escapeHtml(d.nombre)}</div>
+              <div style="font-size:10px;color:${dias>30?'var(--red)':'var(--text3)'}">${diasLabel}</div>
+            </div>
           </div>
-        </div>
-        <div style="font-family:var(--mono);font-size:12px;color:var(--amber);flex-shrink:0;margin-left:8px">${M(sym+' '+Math.abs(d.monto).toFixed(2))}</div>
-      </div>`;
-    }).join('') + (dpPend.length>5 ? `<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${dpPend.length-5} más</div>` : '');
-  } else {
-    dpCard.style.display='none';
+          <div style="font-family:var(--mono);font-size:12px;color:var(--amber);flex-shrink:0;margin-left:8px">${M(sym+' '+Math.abs(d.monto).toFixed(2))}</div>
+        </div>`;
+      }).join('') + (dpPend.length>5 ? `<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${dpPend.length-5} más</div>` : '');
+    })();
   }
 
   // ── Fechas Importantes (todas, no solo las del mes actual) ──
   renderFechasImportantes();
 
-  // Ocultar todo el bloque si NINGUNA de las dos secciones tiene datos
-  wrap.style.display = (dmActivas.length || dpPend.length) ? 'grid' : 'none';
+  renderNuevosWidgetsDashboard();
+}
+// Llena los 10 widgets NUEVOS (solo si su contenedor existe, es decir, si
+// la persona los activó) — cada uno resume su sección y lleva directo ahí.
+function renderNuevosWidgetsDashboard(){
+  // ── Mis Metas de Ahorro ──
+  const metasEl=document.getElementById('dash-metas-list');
+  if(metasEl){
+    const metas=state.metasAhorro||[];
+    metasEl.innerHTML = !metas.length ? '<div class="dash-empty">Sin metas todavía.</div>' : metas.slice(0,3).map(m=>{
+      const sym=m.currency==='USD'?'$':'S/';
+      const montoActual=m.esMetaGrande ? (state.cuentas[m.cuentaVinculada]||0) : (m.montoActual||0);
+      const pct=m.montoObjetivo>0 ? Math.min(100,(montoActual/m.montoObjetivo)*100) : 0;
+      return `<div style="padding:7px 0;cursor:pointer" onclick="showPage('proyeccion')">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span>${escapeHtml(m.nombre)}</span><span>${M(sym+' '+montoActual.toFixed(2))} / ${sym} ${m.montoObjetivo.toFixed(2)}</span></div>
+        <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:4px"><div style="height:4px;border-radius:2px;width:${pct}%;background:var(--purple)"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Presupuesto del mes ──
+  const presEl=document.getElementById('dash-presupuesto-list');
+  if(presEl){
+    const cats=Object.keys(state.budgets||{});
+    if(!cats.length){
+      presEl.innerHTML='<div class="dash-empty">Sin presupuestos configurados.</div>';
+    } else {
+      const hoyP=new Date();
+      const gastosPorCat={};
+      (state.movimientos||[]).forEach(mv=>{
+        if(mv.type!=='expense') return;
+        const d=new Date(mv.date+'T12:00:00');
+        if(d.getFullYear()!==hoyP.getFullYear()||d.getMonth()!==hoyP.getMonth()) return;
+        const c=mv.cat||'Sin categoría';
+        gastosPorCat[c]=(gastosPorCat[c]||0)+mv.amount;
+      });
+      presEl.innerHTML=cats.slice(0,3).map(cat=>{
+        const limite=state.budgets[cat].limit||0;
+        const gastado=gastosPorCat[cat]||0;
+        const pct=limite>0?Math.min(100,(gastado/limite)*100):0;
+        const col=pct>=100?'var(--red)':pct>=80?'var(--amber)':'var(--green)';
+        return `<div style="padding:7px 0;cursor:pointer" onclick="showPage('presupuesto')">
+          <div style="display:flex;justify-content:space-between;font-size:12px"><span>${escapeHtml(cat)}</span><span>${M(fmtS(gastado))} / ${fmtS(limite)}</span></div>
+          <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:4px"><div style="height:4px;border-radius:2px;width:${pct}%;background:${col}"></div></div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Proyección de cierre ──
+  const proyEl=document.getElementById('kpi-proyeccion-cierre');
+  if(proyEl){
+    const proy=calcularProyeccionCierre();
+    proyEl.textContent=M(fmtS(proy.proyeccionPen));
+    proyEl.style.color=proy.proyeccionPen>=0?'var(--accent)':'var(--red)';
+  }
+
+  // ── Servicios Compartidos (pagos pendientes este mes) ──
+  const svcEl=document.getElementById('dash-servicios-list');
+  if(svcEl){
+    const servicios=Object.entries(state.servicios||{});
+    if(!servicios.length){
+      svcEl.innerHTML='<div class="dash-empty">Sin servicios compartidos.</div>';
+    } else {
+      const hoyReal=new Date();
+      const pendientes=[];
+      servicios.forEach(([sid,svc])=>{
+        (svc.people||[]).forEach(p=>{
+          // Se arma la clave a mano con el mes REAL de hoy (no con
+          // paymentKey(), que usa state.currentYear/currentMonth — el mes
+          // que estés navegando en Finanzas, no necesariamente el de hoy).
+          const key=sid+'-'+p.id+'-'+hoyReal.getFullYear()+'-'+String(hoyReal.getMonth()+1).padStart(2,'0');
+          if(!(state.payments&&state.payments[key])) pendientes.push({servicio:svc.name, persona:p.name});
+        });
+      });
+      svcEl.innerHTML = !pendientes.length ? '<div class="dash-empty">✅ Todos al día este mes.</div>' : pendientes.slice(0,5).map(p=>`
+        <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;cursor:pointer" onclick="showPage('servicios')">
+          <span>${escapeHtml(p.servicio)} — ${escapeHtml(p.persona)}</span><span style="color:var(--amber)">pendiente</span>
+        </div>`).join('') + (pendientes.length>5?`<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:6px">+ ${pendientes.length-5} más</div>`:'');
+    }
+  }
+
+  // ── Mejor Tipo de Cambio (del Comparador) ──
+  const tcCompEl=document.getElementById('kpi-tc-comparador');
+  if(tcCompEl){
+    const ref=getLatestTCReference();
+    if(ref){
+      tcCompEl.textContent=M('S/ '+ref.compra.toFixed(3));
+      document.getElementById('kpi-tc-comparador-sub').textContent='mejor compra ('+(ref.compraEmpresa?ref.compraEmpresa.nombre:'—')+')';
+    } else {
+      tcCompEl.textContent='—';
+      document.getElementById('kpi-tc-comparador-sub').textContent='sin registros';
+    }
+  }
+
+  // ── Combustible / Mantenimiento ──
+  const combEl=document.getElementById('dash-combustible-list');
+  if(combEl){
+    const lineas=[];
+    [['combustibleGas','⛽ Gasolina'],['combustibleGlp','🔥 GLP']].forEach(([key,label])=>{
+      const arr=state[key]||[];
+      const ultimo=arr.length?arr[arr.length-1]:null;
+      if(ultimo) lineas.push(`<div style="font-size:12px;padding:4px 0">${label}: última recarga ${ultimo.fFinal||ultimo.fInicial||'—'}</div>`);
+    });
+    const proyMant=(state.mantenimientos||[])
+      .map(item=>({item, proy:getProyeccionMantenimientoItem(item)}))
+      .filter(x=>x.proy).sort((a,b)=>a.proy.kmFaltan-b.proy.kmFaltan)[0];
+    if(proyMant) lineas.push(`<div style="font-size:12px;padding:4px 0">${proyMant.item.icono||'🔧'} Próximo: ${proyMant.item.nombre} en ~${Math.round(proyMant.proy.kmFaltan)} km</div>`);
+    combEl.innerHTML = lineas.length ? lineas.join('') : '<div class="dash-empty">Sin registros de combustible.</div>';
+  }
+
+  // ── Análisis de Sueldos (última boleta registrada) ──
+  const sueldoEl=document.getElementById('kpi-sueldos');
+  if(sueldoEl){
+    const boletas=getBoletasSueldo();
+    if(boletas.length){
+      // Se ordena por año+mes real (no por orden de guardado) para
+      // encontrar la más reciente de verdad.
+      const ultima=[...boletas].sort((a,b)=>(b.anio*12+b.mes)-(a.anio*12+a.mes))[0];
+      sueldoEl.textContent=M(fmtS(ultima.basica||0));
+      document.getElementById('kpi-sueldos-sub').textContent=(MONTHS[ultima.mes]||'')+' '+ultima.anio+' · básica';
+    } else {
+      sueldoEl.textContent='—';
+      document.getElementById('kpi-sueldos-sub').textContent='sin boletas registradas';
+    }
+  }
+
+  // ── Comparativo (gasto este mes vs. mes pasado) ──
+  const compEl=document.getElementById('kpi-comparativo');
+  if(compEl){
+    const hoyC=new Date();
+    const prevC=prevMY(hoyC.getFullYear(),hoyC.getMonth());
+    const gastoMes=(y,m)=>(state.movimientos||[]).filter(mv=>{
+      if(mv.type!=='expense') return false;
+      const d=new Date(mv.date+'T12:00:00');
+      return d.getFullYear()===y && d.getMonth()===m;
+    }).reduce((s,mv)=>s+mv.amount,0);
+    const actual=gastoMes(hoyC.getFullYear(),hoyC.getMonth());
+    const anterior=gastoMes(prevC.year,prevC.month);
+    const diff=anterior>0?((actual-anterior)/anterior*100):0;
+    compEl.textContent=M(fmtS(actual));
+    compEl.style.color=diff>0?'var(--red)':'var(--green)';
+    document.getElementById('kpi-comparativo-sub').textContent = anterior>0 ? `${diff>=0?'↑':'↓'} ${Math.abs(diff).toFixed(0)}% vs. mes pasado` : 'sin datos del mes pasado';
+  }
+
+  // ── Resumen del Año (total ahorrado en soles, año actual) ──
+  const anioEl=document.getElementById('kpi-anio');
+  if(anioEl){
+    const anioActual=new Date().getFullYear();
+    const totalAhorroAnio=(state.movimientos||[]).filter(mv=>{
+      if(mv.type!=='ahorro'||mv.currency!=='PEN') return false;
+      return new Date(mv.date+'T12:00:00').getFullYear()===anioActual;
+    }).reduce((s,mv)=>s+mv.amount,0);
+    anioEl.textContent=M(fmtS(totalAhorroAnio));
+    document.getElementById('kpi-anio-sub').textContent=anioActual;
+  }
+
+  // ── Minijuegos (cuántos tienen puntaje) ──
+  const mjEl=document.getElementById('kpi-minijuegos');
+  if(mjEl){
+    const scores=state.minijuegosHighScores||{};
+    const jugados=Object.keys(scores).length;
+    mjEl.textContent=jugados;
+    document.getElementById('kpi-minijuegos-sub').textContent=jugados===1?'juego con puntaje':'juegos con puntaje';
+  }
 }
 
 
@@ -13867,14 +14231,12 @@ function getEventCountdowns(){
 }
 
 function renderFechasImportantes(){
-  const wrap = document.getElementById('fecha-imp-card-wrap');
   const grid = document.getElementById('fecha-imp-grid');
-  if(!wrap||!grid) return;
+  if(!grid) return; // el widget está oculto — ni existe en el DOM
   // Solo mostrar próximos/hoy — los que ya pasaron se ocultan, salvo que estén
   // marcados como "fijado" (el usuario quiere conservarlos siempre visibles).
   const items = getEventCountdowns().filter(it=>!it.isPast || it.event.fijado);
-  if(!items.length){ wrap.style.display='none'; return; }
-  wrap.style.display='block';
+  if(!items.length){ grid.innerHTML='<div class="dash-empty">Sin fechas próximas.</div>'; return; }
   grid.innerHTML = items.map(it=>{
     const t = CAL_TIPOS[it.event.tipo] || CAL_TIPOS.otro;
     const dateLabel = it.fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'short'});
