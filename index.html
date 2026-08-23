@@ -471,8 +471,9 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-kpi-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 
 .dash-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
-.dash-widgets-container{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
-.dash-widget-wrap{transition:opacity .15s;}
+.dash-widgets-container{display:flex;flex-direction:column;gap:14px;margin-bottom:22px;}
+.dash-widgets-row{display:flex;gap:14px;align-items:stretch;}
+.dash-widget-wrap{transition:opacity .15s;min-width:0;}
 .dash-widget-wrap>*{width:100%;height:100%;box-sizing:border-box;}
 .editor-widget-row{transition:opacity .15s;}
 .ew-arrow-btn{background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:9px;padding:2px 5px;cursor:pointer;line-height:1.3;display:block;width:22px;}
@@ -2713,8 +2714,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '23/08/26 - 11:53'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧱 Resumen: ahora eliges cuántas columnas por fila quieres en escritorio (2 a 8, desde \'✏️ Editar\') y cuánto ancho ocupa cada widget individualmente (1, 2, 3... columnas, o \'Full\' para ancho completo) — antes el ancho era fijo según el tipo de widget y se acomodaban con el espacio que sobraba, lo que a veces estiraba o desordenaba las filas de forma impredecible (ej. \'Últimos movimientos\' se colaba junto a los 5 KPIs y los estiraba de alto). En celular se sigue reduciendo solo a 2 o 1 columna, sin que tengas que configurar nada aparte. La configuración que ya tenías guardada se respeta tal cual — se migra automáticamente el ancho que cada widget ya tenía por su tamaño original la primera vez que abras la app.';
+const APP_VERSION_DATE = '23/08/26 - 12:41'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧱 Resumen: arreglada la franja vacía que quedaba cuando los anchos de una fila no sumaban exacto el total de columnas (ej. 2 col + 2 col en una fila de 5). Ahora cada fila se reparte con proporciones (flexbox) en vez de columnas fijas de grilla, así que SIEMPRE llena el 100% del ancho disponible sin importar la combinación de anchos que elijas — la agrupación en filas sigue el mismo criterio de columnas configuradas de antes, solo cambió cómo se reparte el espacio dentro de cada fila.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11186,13 +11187,29 @@ function renderDashboardWidgets(){
   const cont=document.getElementById('dash-widgets-container');
   if(!cont) return;
   const cols=getEffectiveDashboardCols();
-  cont.style.gridTemplateColumns=`repeat(${cols},1fr)`;
   const visibles=state.dashboardWidgets.filter(w=>w.visible);
-  cont.innerHTML=visibles.map(w=>{
+  // Agrupa en "filas" con el mismo criterio de ancho que antes (columnas
+  // configuradas), pero en vez de reservar columnas fijas (que podían
+  // dejar una franja vacía si los anchos no sumaban exacto el total),
+  // cada fila se arma con flexbox: el ancho de cada widget se usa como
+  // PROPORCIÓN dentro de su fila, así que siempre se reparte el 100% del
+  // espacio disponible, sin franjas vacías.
+  const filas=[];
+  let filaActual=[], usado=0;
+  visibles.forEach(w=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
-    if(!def) return '';
+    if(!def) return;
     const span=Math.min(w.span||defaultSpanForSize(def.size), cols);
-    return `<div class="dash-widget-wrap" data-wid="${w.id}" style="grid-column:span ${span}">${def.shell()}</div>`;
+    if(usado>0 && usado+span>cols){ filas.push(filaActual); filaActual=[]; usado=0; }
+    filaActual.push({w,def,span});
+    usado+=span;
+  });
+  if(filaActual.length) filas.push(filaActual);
+  cont.innerHTML=filas.map(fila=>{
+    const items=fila.map(({w,def,span})=>
+      `<div class="dash-widget-wrap" data-wid="${w.id}" style="flex:${span} 1 0">${def.shell()}</div>`
+    ).join('');
+    return `<div class="dash-widgets-row">${items}</div>`;
   }).join('');
 }
 let _dashResponsiveSetup=false;
