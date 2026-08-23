@@ -471,12 +471,9 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-kpi-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 
 .dash-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
-.dash-widgets-container{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:22px;align-items:stretch;}
-.dash-widget-wrap{display:flex;transition:opacity .15s;}
-.dash-widget-wrap.dw-small{flex:1 1 170px;min-width:150px;}
-.dash-widget-wrap.dw-medium{flex:1 1 380px;min-width:300px;}
-.dash-widget-wrap.dw-large{flex:1 1 100%;}
-.dash-widget-wrap>*{width:100%;}
+.dash-widgets-container{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.dash-widget-wrap{transition:opacity .15s;}
+.dash-widget-wrap>*{width:100%;height:100%;box-sizing:border-box;}
 .editor-widget-row{transition:opacity .15s;}
 .ew-arrow-btn{background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:9px;padding:2px 5px;cursor:pointer;line-height:1.3;display:block;width:22px;}
 .ew-arrow-btn:disabled{opacity:0.3;cursor:default;}
@@ -1059,7 +1056,12 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="modal-overlay" id="editor-widgets-overlay" onclick="if(event.target===this)cerrarEditorWidgets()">
   <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto">
     <div class="modal-title"><span>✏️ Personalizar Resumen</span><button class="modal-close" onclick="cerrarEditorWidgets()">✕</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, y arrastra (⠿) o usa las flechas para ordenar.</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, arrastra (⠿) o usa las flechas para ordenar, y el selector de la derecha define cuántas columnas ocupa cada uno.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 6px;margin-bottom:8px;background:var(--bg3);border-radius:8px">
+      <label style="font-size:12px;color:var(--text2);margin:0">Columnas por fila (escritorio)</label>
+      <input type="number" id="editor-cols-input" min="2" max="8" value="4" oninput="ewSetCols(this.value)" style="width:56px;text-align:center;padding:4px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text)">
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">En celular se reduce solo (2 o 1 columna) sin importar este número.</div>
     <div id="editor-widgets-list"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn" onclick="cerrarEditorWidgets()">Cancelar</button>
@@ -2711,8 +2713,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '22/08/26 - 13:47'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🎨 Resumen configurable — cada persona elige qué widgets ver y en qué orden. Nuevo botón "✏️ Editar" arriba del Resumen abre una lista con los 20 widgets disponibles (los 10 que ya existían + 10 nuevos: Mis Metas de Ahorro, Presupuesto del mes, Proyección de cierre, Servicios Compartidos, Mejor Tipo de Cambio, Combustible/Mantenimiento, Análisis de Sueldos, Comparativo mensual, Resumen del Año, Minijuegos) — cada uno con checkbox para mostrar/ocultar y se reordenan arrastrando (⠿) o con flechas ▲▼ (mismo patrón que ya usan tus tarjetas de crédito). La configuración por defecto es idéntica a como se veía antes, así que a nadie se le mueve nada hasta que entre a personalizar. Verificado con pruebas de punta a punta: configuración por defecto, activar/desactivar widgets, arrastrar y soltar, guardado persistente, y los 10 widgets nuevos mostrando datos reales de sus respectivas secciones.';
+const APP_VERSION_DATE = '23/08/26 - 11:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧱 Resumen: ahora eliges cuántas columnas por fila quieres en escritorio (2 a 8, desde \'✏️ Editar\') y cuánto ancho ocupa cada widget individualmente (1, 2, 3... columnas, o \'Full\' para ancho completo) — antes el ancho era fijo según el tipo de widget y se acomodaban con el espacio que sobraba, lo que a veces estiraba o desordenaba las filas de forma impredecible (ej. \'Últimos movimientos\' se colaba junto a los 5 KPIs y los estiraba de alto). En celular se sigue reduciendo solo a 2 o 1 columna, sin que tengas que configurar nada aparte. La configuración que ya tenías guardada se respeta tal cual — se migra automáticamente el ancho que cada widget ya tenía por su tamaño original la primera vez que abras la app.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11138,6 +11140,11 @@ const DASHBOARD_WIDGET_DEFS = {
 // Orden y visibilidad por defecto — igual a como se veía la app antes de
 // que existiera esta opción, para que a nadie se le mueva nada hasta que
 // entre a personalizar. Los widgets nuevos empiezan OCULTOS por defecto.
+function defaultSpanForSize(size){
+  if(size==='large') return 99;
+  if(size==='medium') return 2;
+  return 1;
+}
 const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-disponible', visible:true}, {id:'kpi-ahorro', visible:true},
   {id:'kpi-deuda-tc', visible:true}, {id:'kpi-pagar-mes', visible:true},
@@ -11153,29 +11160,60 @@ const DASHBOARD_WIDGETS_DEFAULT = [
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
     state.dashboardWidgets=DASHBOARD_WIDGETS_DEFAULT.map(w=>({...w}));
-    return;
+  } else {
+    const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
+    DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
+      if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
+    });
+    state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
   }
-  const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
-  DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
-    if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
+  state.dashboardWidgets.forEach(w=>{
+    if(w.span===undefined || w.span===null){
+      const def=DASHBOARD_WIDGET_DEFS[w.id];
+      if(def) w.span=defaultSpanForSize(def.size);
+    }
   });
-  state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
+  if(!state.dashboardCols) state.dashboardCols=4;
+}
+function getEffectiveDashboardCols(){
+  const w=window.innerWidth;
+  if(w<=480) return 1;
+  if(w<=768) return 2;
+  return state.dashboardCols||4;
 }
 function renderDashboardWidgets(){
   ensureDashboardWidgetsDefault();
   const cont=document.getElementById('dash-widgets-container');
   if(!cont) return;
+  const cols=getEffectiveDashboardCols();
+  cont.style.gridTemplateColumns=`repeat(${cols},1fr)`;
   const visibles=state.dashboardWidgets.filter(w=>w.visible);
   cont.innerHTML=visibles.map(w=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
-    return def ? `<div class="dash-widget-wrap dw-${def.size}" data-wid="${w.id}">${def.shell()}</div>` : '';
+    if(!def) return '';
+    const span=Math.min(w.span||defaultSpanForSize(def.size), cols);
+    return `<div class="dash-widget-wrap" data-wid="${w.id}" style="grid-column:span ${span}">${def.shell()}</div>`;
   }).join('');
+}
+let _dashResponsiveSetup=false;
+function setupDashboardResponsive(){
+  if(_dashResponsiveSetup) return;
+  _dashResponsiveSetup=true;
+  const mqTablet=window.matchMedia('(max-width:768px)');
+  const mqMobile=window.matchMedia('(max-width:480px)');
+  const handler=()=>{ if(document.getElementById('dash-widgets-container')) renderDashboard(); };
+  mqTablet.addEventListener('change',handler);
+  mqMobile.addEventListener('change',handler);
 }
 // ── Editor de widgets (checkbox + arrastrar + flechas) ──
 let editorWidgetsTemp=null;
+let editorDashboardColsTemp=4;
 function abrirEditorWidgets(){
   ensureDashboardWidgetsDefault();
   editorWidgetsTemp=state.dashboardWidgets.map(w=>({...w}));
+  editorDashboardColsTemp=state.dashboardCols||4;
+  const colsInput=document.getElementById('editor-cols-input');
+  if(colsInput) colsInput.value=editorDashboardColsTemp;
   renderEditorWidgetsList();
   document.getElementById('editor-widgets-overlay').classList.add('open');
 }
@@ -11188,6 +11226,7 @@ function renderEditorWidgetsList(){
   el.innerHTML=editorWidgetsTemp.map((w,idx)=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
     if(!def) return '';
+    const span=w.span||defaultSpanForSize(def.size);
     return `<div class="editor-widget-row" draggable="true" data-wid="${w.id}"
       ondragstart="ewDragStart(event)" ondragover="ewDragOver(event)" ondrop="ewDrop(event)" ondragend="ewDragEnd(event)"
       style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--border)">
@@ -11196,6 +11235,10 @@ function renderEditorWidgetsList(){
         <input type="checkbox" ${w.visible?'checked':''} onchange="ewToggle('${w.id}',this.checked)" style="width:auto;margin:0">
         ${def.label}
       </label>
+      <select onchange="ewSetSpan('${w.id}',this.value)" style="font-size:11px;padding:2px 4px;border-radius:4px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)" title="Ancho en columnas">
+        ${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${span===n?'selected':''}>${n} col</option>`).join('')}
+        <option value="99" ${span>=99?'selected':''}>Full</option>
+      </select>
       <div style="display:flex;flex-direction:column;gap:2px">
         <button class="ew-arrow-btn" onclick="ewMover(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
         <button class="ew-arrow-btn" onclick="ewMover(${idx},1)" ${idx===editorWidgetsTemp.length-1?'disabled':''}>▼</button>
@@ -11206,6 +11249,13 @@ function renderEditorWidgetsList(){
 function ewToggle(id, checked){
   const w=editorWidgetsTemp.find(x=>x.id===id);
   if(w) w.visible=checked;
+}
+function ewSetSpan(id, val){
+  const w=editorWidgetsTemp.find(x=>x.id===id);
+  if(w) w.span=parseInt(val,10);
+}
+function ewSetCols(val){
+  editorDashboardColsTemp=Math.max(2, Math.min(8, parseInt(val,10)||4));
 }
 function ewMover(idx, dir){
   const swapIdx=idx+dir;
@@ -11234,12 +11284,14 @@ function ewDrop(ev){
 function ewDragEnd(ev){ ev.currentTarget.style.opacity='1'; ewDragId=null; }
 function guardarEditorWidgets(){
   state.dashboardWidgets=editorWidgetsTemp;
+  state.dashboardCols=editorDashboardColsTemp;
   saveState();
   cerrarEditorWidgets();
   renderDashboard();
 }
 
 function renderDashboard(){
+  setupDashboardResponsive();
   renderDashboardWidgets(); // arma los "cascarones" antes de llenarlos con datos
   const now   = new Date();
   const curY  = now.getFullYear();
