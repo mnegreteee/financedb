@@ -2714,8 +2714,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '23/08/26 - 12:41'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧱 Resumen: arreglada la franja vacía que quedaba cuando los anchos de una fila no sumaban exacto el total de columnas (ej. 2 col + 2 col en una fila de 5). Ahora cada fila se reparte con proporciones (flexbox) en vez de columnas fijas de grilla, así que SIEMPRE llena el 100% del ancho disponible sin importar la combinación de anchos que elijas — la agrupación en filas sigue el mismo criterio de columnas configuradas de antes, solo cambió cómo se reparte el espacio dentro de cada fila.';
+const APP_VERSION_DATE = '23/08/26 - 12:37'; // hora de Lima, Peru (UTC-5)
+const APP_VERSION_NOTE = '🧱 Resumen: cambiado el sistema de anchos de widgets del dashboard. Antes cada widget declaraba un ancho fijo (1 a 6 columnas o Full) y un algoritmo trataba de adivinar como agruparlos en filas. Ahora se define directamente el NUMERO DE FILA de cada widget en el editor (los que comparten numero se reparten esa fila en partes iguales: columnas / cantidad de widgets en esa fila), sin adivinar combinaciones. En pantallas chicas se respeta el mismo agrupamiento pero se parte en sub-filas segun caben por ancho de pantalla. La configuracion existente se migra automaticamente para no mover nada visualmente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11175,6 +11175,36 @@ function ensureDashboardWidgetsDefault(){
     }
   });
   if(!state.dashboardCols) state.dashboardCols=4;
+  // Migracion a "fila" explicita: antes cada widget declaraba un ancho
+  // (span) y un algoritmo adivinaba como agrupar filas. Ahora se decide
+  // directamente que widgets van juntos asignandoles el mismo numero de
+  // fila, y el ancho de cada uno es SIEMPRE columnas / cantidad de widgets
+  // en esa fila (reparto parejo, sin adivinar combinaciones). Este bloque
+  // solo corre una vez por widget nuevo: si ya tiene "row" asignado no lo
+  // toca; si es la primera vez, arma las filas iniciales reusando el
+  // agrupamiento que ya tenia por "span", para que no se mueva nada visual
+  // al actualizar.
+  const faltaRow=state.dashboardWidgets.some(w=>w.visible && (w.row===undefined || w.row===null));
+  if(faltaRow){
+    const colsM=state.dashboardCols||4;
+    let usado=0, filaN=1;
+    state.dashboardWidgets.filter(w=>w.visible).forEach(w=>{
+      if(w.row!==undefined && w.row!==null) return;
+      const def=DASHBOARD_WIDGET_DEFS[w.id];
+      const span=def?Math.min(w.span||defaultSpanForSize(def.size), colsM):1;
+      const esFull=span>=colsM;
+      if(esFull){
+        if(usado>0){ filaN++; usado=0; }
+        w.row=filaN; filaN++; usado=0;
+        return;
+      }
+      if(usado>0 && usado+span>colsM){ filaN++; usado=0; }
+      w.row=filaN;
+      usado+=span;
+      if(usado>=colsM){ filaN++; usado=0; }
+    });
+    state.dashboardWidgets.forEach(w=>{ if(w.row===undefined||w.row===null) w.row=filaN++; });
+  }
 }
 function getEffectiveDashboardCols(){
   const w=window.innerWidth;
@@ -11188,28 +11218,35 @@ function renderDashboardWidgets(){
   if(!cont) return;
   const cols=getEffectiveDashboardCols();
   const visibles=state.dashboardWidgets.filter(w=>w.visible);
-  // Agrupa en "filas" con el mismo criterio de ancho que antes (columnas
-  // configuradas), pero en vez de reservar columnas fijas (que podían
-  // dejar una franja vacía si los anchos no sumaban exacto el total),
-  // cada fila se arma con flexbox: el ancho de cada widget se usa como
-  // PROPORCIÓN dentro de su fila, así que siempre se reparte el 100% del
-  // espacio disponible, sin franjas vacías.
-  const filas=[];
-  let filaActual=[], usado=0;
-  visibles.forEach(w=>{
+  // Agrupa por numero de "fila" (lo que se define en el editor). Las filas
+  // se ordenan de menor a mayor numero; dentro de una misma fila, el orden
+  // es el de la lista (el que se define arrastrando). El ancho de cada
+  // widget dentro de su fila es SIEMPRE columnas / cantidad de widgets en
+  // esa fila -- reparto parejo, sin adivinar combinaciones ni dejar franjas
+  // vacias. En pantallas chicas "cols" baja a 2 o 1 y actua como tope: si
+  // se definieron mas widgets en una fila de los que caben en esa pantalla,
+  // se reparten en sub-filas de a lo sumo "cols", manteniendo el orden.
+  const gruposPorFila=new Map();
+  visibles.forEach((w,idx)=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
     if(!def) return;
-    const span=Math.min(w.span||defaultSpanForSize(def.size), cols);
-    if(usado>0 && usado+span>cols){ filas.push(filaActual); filaActual=[]; usado=0; }
-    filaActual.push({w,def,span});
-    usado+=span;
+    const filaNum=(w.row===undefined||w.row===null)?(idx+1):w.row;
+    if(!gruposPorFila.has(filaNum)) gruposPorFila.set(filaNum, []);
+    gruposPorFila.get(filaNum).push({w,def});
   });
-  if(filaActual.length) filas.push(filaActual);
-  cont.innerHTML=filas.map(fila=>{
-    const items=fila.map(({w,def,span})=>
-      `<div class="dash-widget-wrap" data-wid="${w.id}" style="flex:${span} 1 0">${def.shell()}</div>`
+  const filasOrdenadas=Array.from(gruposPorFila.keys()).sort((a,b)=>a-b);
+  const filasFinal=[];
+  filasOrdenadas.forEach(filaNum=>{
+    const items=gruposPorFila.get(filaNum);
+    for(let i=0;i<items.length;i+=cols){
+      filasFinal.push(items.slice(i,i+cols));
+    }
+  });
+  cont.innerHTML=filasFinal.map(items=>{
+    const html=items.map(({w,def})=>
+      `<div class="dash-widget-wrap" data-wid="${w.id}" style="flex:1 1 0">${def.shell()}</div>`
     ).join('');
-    return `<div class="dash-widgets-row">${items}</div>`;
+    return `<div class="dash-widgets-row">${html}</div>`;
   }).join('');
 }
 let _dashResponsiveSetup=false;
@@ -11240,10 +11277,20 @@ function cerrarEditorWidgets(){
 }
 function renderEditorWidgetsList(){
   const el=document.getElementById('editor-widgets-list');
+  const conteoFila={};
+  editorWidgetsTemp.forEach(w=>{
+    if(!w.visible) return;
+    const def=DASHBOARD_WIDGET_DEFS[w.id];
+    if(!def) return;
+    const r=w.row||1;
+    conteoFila[r]=(conteoFila[r]||0)+1;
+  });
   el.innerHTML=editorWidgetsTemp.map((w,idx)=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
     if(!def) return '';
-    const span=w.span||defaultSpanForSize(def.size);
+    const fila=w.row||1;
+    const n=conteoFila[fila]||1;
+    const anchoHint=w.visible ? `${(editorDashboardColsTemp/n).toFixed(2)} de ${editorDashboardColsTemp}` : '—';
     return `<div class="editor-widget-row" draggable="true" data-wid="${w.id}"
       ondragstart="ewDragStart(event)" ondragover="ewDragOver(event)" ondrop="ewDrop(event)" ondragend="ewDragEnd(event)"
       style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--border)">
@@ -11252,10 +11299,10 @@ function renderEditorWidgetsList(){
         <input type="checkbox" ${w.visible?'checked':''} onchange="ewToggle('${w.id}',this.checked)" style="width:auto;margin:0">
         ${def.label}
       </label>
-      <select onchange="ewSetSpan('${w.id}',this.value)" style="font-size:11px;padding:2px 4px;border-radius:4px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)" title="Ancho en columnas">
-        ${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${span===n?'selected':''}>${n} col</option>`).join('')}
-        <option value="99" ${span>=99?'selected':''}>Full</option>
-      </select>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+        <input type="number" min="1" step="1" value="${fila}" oninput="ewSetRow('${w.id}',this.value)" style="width:44px;text-align:center;padding:2px 4px;border-radius:4px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)" title="Numero de fila: los widgets con el mismo numero comparten fila en partes iguales">
+        <span style="font-size:9px;color:var(--text3);white-space:nowrap">fila · ${anchoHint}</span>
+      </div>
       <div style="display:flex;flex-direction:column;gap:2px">
         <button class="ew-arrow-btn" onclick="ewMover(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
         <button class="ew-arrow-btn" onclick="ewMover(${idx},1)" ${idx===editorWidgetsTemp.length-1?'disabled':''}>▼</button>
@@ -11266,13 +11313,17 @@ function renderEditorWidgetsList(){
 function ewToggle(id, checked){
   const w=editorWidgetsTemp.find(x=>x.id===id);
   if(w) w.visible=checked;
+  renderEditorWidgetsList();
 }
-function ewSetSpan(id, val){
+function ewSetRow(id, val){
   const w=editorWidgetsTemp.find(x=>x.id===id);
-  if(w) w.span=parseInt(val,10);
+  if(!w) return;
+  w.row=Math.max(1, parseInt(val,10)||1);
+  renderEditorWidgetsList();
 }
 function ewSetCols(val){
   editorDashboardColsTemp=Math.max(2, Math.min(8, parseInt(val,10)||4));
+  renderEditorWidgetsList();
 }
 function ewMover(idx, dir){
   const swapIdx=idx+dir;
