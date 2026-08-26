@@ -2400,6 +2400,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="tc-view-btn" data-view="tarjetas" onclick="setTCConsumosView('tarjetas')" title="Vista de tarjetas">▤ Tarjetas</button>
             <button class="tc-view-btn" data-view="agrupado" onclick="setTCConsumosView('agrupado')" title="Vista agrupada por estado">⊟ Agrupado</button>
           </div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <select id="tc-sort-col-select" class="btn" style="font-size:11px;padding:5px 6px" onchange="onTCSortColChange(this.value)" title="Ordenar por">
+              <option value="fecha">Fecha</option>
+              <option value="desc">Descripción</option>
+              <option value="cat">Categoría</option>
+              <option value="monto">Monto</option>
+            </select>
+            <button class="btn" id="tc-sort-dir-btn" style="font-size:11px;padding:5px 8px" onclick="onTCSortDirToggle()" title="Cambiar dirección del orden">▼</button>
+          </div>
           <button class="btn" style="font-size:11px" onclick="markSelectedPaid()">✓ Marcar selec. como pagado</button>
           <button class="btn" style="font-size:11px" onclick="selectAllTCMov()">Selec. todos</button>
         </div>
@@ -2736,8 +2745,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '25/08/26 - 20:39'; // hora de Lima, Peru (UTC-5)
-const APP_VERSION_NOTE = '🎛️ Resumen: agregado un selector de vista dentro de Consumos (en Tarjetas): Tabla (la de siempre), Tarjetas (una card por consumo, mas facil de tocar) y Agrupado (separa Pendientes de Pagados con su subtotal cada uno). Se elige con 3 botones arriba de la lista y queda guardado para la proxima vez. Las 3 vistas comparten la misma seleccion y el mismo boton de pagar, asi que puedes cambiar de vista sin perder lo que ya tenias marcado.';
+const APP_VERSION_DATE = '25/08/26 - 20:58'; // hora de Lima, Peru (UTC-5)
+const APP_VERSION_NOTE = 'Arreglo: en Consumos, las vistas Tarjetas y Agrupado no dejaban ordenar por Descripcion, Fecha, Categoria o Monto porque ese control solo existia como encabezados clickeables de la vista Tabla. Ahora hay un selector de Ordenar por + un boton de direccion junto al selector de vista, visible en las 3 vistas por igual, asi que el orden funciona sin importar cual estes usando.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9881,6 +9890,28 @@ function buildTCMovGroupedHtml(movs, cardCur){
     ${tcGroupBlockHtml('Pagados', pagados, cardCur, false)}`;
 }
 
+// ── Control de orden universal (funciona en las 3 vistas de Consumos,
+// no solo tocando encabezados de la tabla) ──
+function onTCSortColChange(col){
+  if(tcSortState.col!==col){
+    tcSortState.col=col;
+    // Mismo criterio que al tocar un encabezado: Fecha y Monto arrancan
+    // descendente; Descripción y Categoría arrancan ascendente.
+    tcSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc';
+    renderTCDetail();
+  }
+}
+function onTCSortDirToggle(){
+  tcSortState.dir=tcSortState.dir==='asc'?'desc':'asc';
+  renderTCDetail();
+}
+function updateTCSortControls(){
+  const sel=document.getElementById('tc-sort-col-select');
+  if(sel) sel.value=tcSortState.col;
+  const dirBtn=document.getElementById('tc-sort-dir-btn');
+  if(dirBtn) dirBtn.textContent=tcSortState.dir==='asc'?'▲':'▼';
+}
+
 function renderTCDetail(){
   if(!currentTCId||!currentTCMonth) return;
   const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth));
@@ -9912,6 +9943,7 @@ function renderTCDetail(){
   document.querySelectorAll('.tc-view-btn').forEach(b=>{
     b.classList.toggle('active', b.dataset.view===viewMode);
   });
+  updateTCSortControls();
 
   const cont=document.getElementById('tc-mov-view-container');
   if(!movs.length){
