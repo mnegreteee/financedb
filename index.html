@@ -2745,8 +2745,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '25/08/26 - 20:58'; // hora de Lima, Peru (UTC-5)
-const APP_VERSION_NOTE = 'Arreglo: en Consumos, las vistas Tarjetas y Agrupado no dejaban ordenar por Descripcion, Fecha, Categoria o Monto porque ese control solo existia como encabezados clickeables de la vista Tabla. Ahora hay un selector de Ordenar por + un boton de direccion junto al selector de vista, visible en las 3 vistas por igual, asi que el orden funciona sin importar cual estes usando.';
+const APP_VERSION_DATE = '25/08/26 - 21:26'; // hora de Lima, Peru (UTC-5)
+const APP_VERSION_NOTE = 'Arreglo: en Deudas tipo Voy sumando gastos, cada gasto individual solo se podia borrar y volver a registrar si te equivocabas en el monto. Ahora hay un icono de lapiz junto a la X para editar descripcion, monto y fecha de un gasto ya guardado, sin perder el resto de la lista.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12787,7 +12787,8 @@ function renderDeudas(){
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2)">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(it.desc)} <span style="color:var(--text3)">· ${new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})}</span></span>
             <span style="font-family:var(--mono);margin-left:8px">${fmtAmt(it.monto)}</span>
-            ${!isPaid?`<span onclick="deleteDeudaItem('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px">✕</span>`:''}
+            ${!isPaid?`<span onclick="openDeudaItemModal('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Editar gasto">✏</span>`:''}
+            ${!isPaid?`<span onclick="deleteDeudaItem('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Quitar gasto">✕</span>`:''}
           </div>`).join('')}
       </div>` : '';
 
@@ -12915,17 +12916,26 @@ function deleteDeuda(){
 
 // ── ITEMS de deuda acumulativa ("voy sumando gastos") ─
 let addingItemToDeudaId=null;
+let editingDeudaItemId=null;
 function recalcDeudaMonto(d){ d.monto = (d.items||[]).reduce((s,it)=>s+it.monto,0); }
-function openDeudaItemModal(deudaId){
+function openDeudaItemModal(deudaId, itemId){
   addingItemToDeudaId=deudaId;
+  editingDeudaItemId=itemId||null;
   const d=(state.deudas||[]).find(x=>x.id===deudaId); if(!d) return;
-  document.getElementById('di-modal-title').textContent='Agregar gasto — '+d.nombre;
-  document.getElementById('di-desc').value='';
-  document.getElementById('di-monto').value='';
-  document.getElementById('di-fecha').value=todayLocalISO();
+  const item=itemId ? (d.items||[]).find(it=>it.id===itemId) : null;
+  document.getElementById('di-modal-title').textContent=(item?'Editar gasto — ':'Agregar gasto — ')+d.nombre;
+  document.getElementById('di-desc').value=item?item.desc:'';
+  document.getElementById('di-monto').value=item?item.monto:'';
+  document.getElementById('di-fecha').value=item?item.fecha:todayLocalISO();
+  const saveBtn=document.getElementById('di-save-btn');
+  if(saveBtn) saveBtn.textContent=item?'Guardar':'Agregar';
   document.getElementById('deuda-item-modal-overlay').classList.add('open');
 }
-function closeDeudaItemModal(){ document.getElementById('deuda-item-modal-overlay').classList.remove('open'); addingItemToDeudaId=null; }
+function closeDeudaItemModal(){
+  document.getElementById('deuda-item-modal-overlay').classList.remove('open');
+  addingItemToDeudaId=null;
+  editingDeudaItemId=null;
+}
 function saveDeudaItem(){
   const d=(state.deudas||[]).find(x=>x.id===addingItemToDeudaId); if(!d) return;
   const desc=(document.getElementById('di-desc').value||'').trim();
@@ -12933,12 +12943,21 @@ function saveDeudaItem(){
   const fecha=document.getElementById('di-fecha').value;
   if(!desc||monto<=0||!fecha){alert('Completa descripción, monto y fecha.');return;}
   if(!Array.isArray(d.items)) d.items=[];
-  const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
-  d.items.push(nuevoItem);
-  recalcDeudaMonto(d);
   const symDi=d.currency==='USD'?'$':'S/';
-  logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
-  saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
+  if(editingDeudaItemId){
+    const it=d.items.find(x=>x.id===editingDeudaItemId);
+    if(!it){ closeDeudaItemModal(); return; }
+    it.desc=desc; it.monto=monto; it.fecha=fecha;
+    recalcDeudaMonto(d);
+    logActividad('deuda_item', `Editado: ${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:it.id});
+    saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto actualizado');
+  } else {
+    const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
+    d.items.push(nuevoItem);
+    recalcDeudaMonto(d);
+    logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
+    saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
+  }
 }
 function deleteDeudaItem(deudaId, itemId){
   const d=(state.deudas||[]).find(x=>x.id===deudaId); if(!d) return;
@@ -17231,7 +17250,7 @@ if(state.projGoals){
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeDeudaItemModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveDeudaItem()">Agregar</button>
+      <button class="btn btn-primary" id="di-save-btn" onclick="saveDeudaItem()">Agregar</button>
     </div>
   </div>
 </div>
