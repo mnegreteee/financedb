@@ -46,6 +46,12 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;transition:background .2s,color .2s;}
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background-image:var(--bg-pattern-image,none);
+  background-size:var(--bg-pattern-size,auto);
+  opacity:var(--bg-pattern-opacity,0);
+  transition:opacity .25s;
+}
 
 /* ── NAV ── */
 nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:200;}
@@ -129,6 +135,19 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 /* ── CARDS ── */
 .main-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px;}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden;box-shadow:var(--card-shadow);}
+/* Efecto de elevación en CUALQUIER elemento clickeable (ya tiene onclick) —
+   mismo criterio que ya usaban las tarjetas KPI del Resumen, extendido a
+   toda la app: tarjetas de crédito, filas de movimientos, deudas, metas,
+   etc. No se aplica a tarjetas sin onclick (ej. formularios), para no
+   sugerir que algo es clickeable cuando no lo es. */
+.card[onclick]:hover, .dash-mov-row[onclick]:hover, .dash-tc-row[onclick]:hover, .tc-card-item[onclick]:hover{
+  transform:translateY(-2px);
+  box-shadow:0 6px 16px rgba(0,0,0,.18);
+  transition:transform .15s,box-shadow .15s;
+}
+.card[onclick], .dash-mov-row[onclick], .dash-tc-row[onclick], .tc-card-item[onclick]{
+  transition:transform .15s,box-shadow .15s;
+}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .card.c-green::before{background:var(--green);}
 .card.c-red::before{background:var(--red);}
@@ -429,37 +448,6 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .tc-color-opt:hover{transform:scale(1.15);}
 .tc-color-opt.selected{border-color:#fff;transform:scale(1.2);}
 .tc-selection-total{position:sticky;bottom:16px;background:var(--bg2);border:1px solid var(--accent);border-radius:10px;padding:10px 16px;display:none;justify-content:space-between;align-items:center;margin-top:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);}
-/* ── Selector de vista de Consumos (tabla / tarjetas / agrupado) ── */
-.tc-view-switch{display:flex;gap:2px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:3px;}
-.tc-view-btn{background:none;border:none;color:var(--text2);font-size:11px;font-weight:500;padding:5px 9px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .15s;white-space:nowrap;}
-.tc-view-btn:hover{color:var(--text);}
-.tc-view-btn.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
-.tc-mov-table tr.selected-row td{background:rgba(91,141,239,.08);}
-/* Vista tarjetas */
-.tc-cards-wrap{display:flex;flex-direction:column;gap:8px;}
-.tc-mov-card{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--catcolor,var(--accent));border-radius:10px;padding:10px 12px;}
-.tc-mov-card.paid-row{opacity:.55;}
-.tc-mov-card.selected-row{background:rgba(91,141,239,.1);border-color:var(--accent);}
-.tc-mov-card-body{flex:1;min-width:0;cursor:pointer;}
-.tc-mov-card-desc{font-size:13px;font-weight:600;margin-bottom:3px;}
-.tc-mov-card-meta{font-size:11px;color:var(--text3);display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-.tc-mov-pill{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);white-space:nowrap;}
-.tc-mov-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
-.tc-mov-card-amount{font-family:var(--mono);font-size:13px;font-weight:600;white-space:nowrap;}
-.tc-mov-card-actions{display:flex;gap:6px;align-items:center;}
-/* Vista agrupada */
-.tc-grouped-stats{display:flex;gap:10px;margin-bottom:14px;}
-.tc-grouped-stat{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
-.tc-grouped-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
-.tc-grouped-stat-val{font-family:var(--mono);font-size:15px;font-weight:700;}
-.tc-group-block{margin-bottom:14px;}
-.tc-group-head{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--border);margin-bottom:4px;}
-.tc-group-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
-.tc-group-total{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text2);}
-.tc-group-item{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--border);}
-.tc-group-item:last-child{border-bottom:none;}
-.tc-group-item.selected-row{background:rgba(91,141,239,.08);}
-.tc-group-paid-dot{width:16px;height:16px;border-radius:50%;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
 
 /* Resumen global */
 .tc-global-table{width:100%;border-collapse:collapse;}
@@ -489,6 +477,8 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px;}
 .dash-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;transition:transform .12s,border-color .12s;}
 .dash-kpi:hover{transform:translateY(-2px);border-color:var(--border2);}
+.kpi-toggle-num{cursor:pointer;border-bottom:1px dotted transparent;transition:border-color .15s;}
+.kpi-toggle-num:hover{border-bottom-color:currentColor;}
 .dash-kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
 .dash-kpi.kpi-green::before{background:var(--green);}
 .dash-kpi.kpi-red::before{background:var(--red);}
@@ -502,10 +492,12 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-kpi-sub{font-size:11px;color:var(--text3);margin-top:3px;}
 
 .dash-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
-.dash-widgets-container{display:flex;flex-direction:column;gap:14px;margin-bottom:22px;}
-.dash-widgets-row{display:flex;gap:14px;align-items:stretch;}
-.dash-widget-wrap{transition:opacity .15s;min-width:0;}
-.dash-widget-wrap>*{width:100%;height:100%;box-sizing:border-box;}
+.dash-widgets-container{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:22px;align-items:stretch;}
+.dash-widget-wrap{display:flex;transition:opacity .15s;}
+.dash-widget-wrap.dw-small{flex:1 1 170px;min-width:150px;}
+.dash-widget-wrap.dw-medium{flex:1 1 380px;min-width:300px;}
+.dash-widget-wrap.dw-large{flex:1 1 100%;}
+.dash-widget-wrap>*{width:100%;}
 .editor-widget-row{transition:opacity .15s;}
 .ew-arrow-btn{background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:9px;padding:2px 5px;cursor:pointer;line-height:1.3;display:block;width:22px;}
 .ew-arrow-btn:disabled{opacity:0.3;cursor:default;}
@@ -524,7 +516,8 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .dash-shortcut-icon{font-size:20px;}
 .dash-shortcut-label{font-size:13px;font-weight:600;}
 .dash-shortcut-sub{font-size:11px;color:var(--text2);}
-.dash-empty{text-align:center;color:var(--text3);font-size:12px;padding:16px 0;}
+.dash-empty{text-align:center;color:var(--text3);font-size:12px;padding:26px 12px;}
+.dash-empty-icon{font-size:30px;margin-bottom:8px;opacity:.45;line-height:1;}
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar{width:5px;}
@@ -918,8 +911,36 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" onclick="toggleTheme()">🌙 / ☀️ Cambiar tema</button>
           </div>
           <div class="config-row">
+            <div class="config-row-label">Color de acento<small>Botones, enlaces y resaltados — elige el que quieras</small></div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="color" id="cfg-accent-picker" value="#5b8def" style="width:34px;height:30px;padding:2px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer" onchange="setAccentColor(this.value)" title="Elegir color de acento">
+              <button class="config-action-btn neutral" onclick="resetAccentColor()">↺ Restablecer</button>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">Números en tarjetas<small>Toca cualquier número para ver el otro formato al instante</small></div>
+            <button class="config-action-btn neutral" id="cfg-numeros-compactos-btn" onclick="toggleNumerosCompactosDefault()">🔢 Mostrando compactos (15.4K)</button>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Ocultar cifras<small>Enmascara todos los montos</small></div>
             <button class="config-action-btn neutral" onclick="toggleHide()">👁 Ocultar / Mostrar</button>
+          </div>
+          <div class="config-row" style="flex-direction:column;align-items:stretch;gap:8px">
+            <div class="config-row-label">Fondo personalizado<small>Elige un patrón sutil de fondo para toda la app</small></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="cfg-fondo-patron" onchange="setFondoPatron(this.value)" style="flex:1;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)">
+                <option value="ninguno">Ninguno</option>
+                <option value="puntos">⚬ Puntos</option>
+                <option value="cuadricula">▦ Cuadrícula</option>
+                <option value="diagonales">⟋ Líneas diagonales</option>
+                <option value="ondas">〜 Ondas</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text3)">
+              <span>Intensidad</span>
+              <input type="range" id="cfg-fondo-opacidad" min="2" max="25" value="8" oninput="setFondoOpacidad(this.value)" style="flex:1">
+              <span id="cfg-fondo-opacidad-label" style="min-width:30px">8%</span>
+            </div>
           </div>
           <div class="config-row">
             <div class="config-row-label">Notificaciones del navegador<small>Solo mientras esta pestaña esté abierta — para avisos aunque esté cerrada, usa el bot de Telegram</small></div>
@@ -1088,12 +1109,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="modal-overlay" id="editor-widgets-overlay" onclick="if(event.target===this)cerrarEditorWidgets()">
   <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto">
     <div class="modal-title"><span>✏️ Personalizar Resumen</span><button class="modal-close" onclick="cerrarEditorWidgets()">✕</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, arrastra (⠿) o usa las flechas para ordenar, y el selector de la derecha define cuántas columnas ocupa cada uno.</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 6px;margin-bottom:8px;background:var(--bg3);border-radius:8px">
-      <label style="font-size:12px;color:var(--text2);margin:0">Columnas por fila (escritorio)</label>
-      <input type="number" id="editor-cols-input" min="2" max="8" value="4" oninput="ewSetCols(this.value)" style="width:56px;text-align:center;padding:4px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text)">
-    </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">En celular se reduce solo (2 o 1 columna) sin importar este número.</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, y arrastra (⠿) o usa las flechas para ordenar.</div>
     <div id="editor-widgets-list"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn" onclick="cerrarEditorWidgets()">Cancelar</button>
@@ -2392,28 +2408,28 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
     <!-- Movimientos table -->
     <div class="card" style="padding:18px;margin-bottom:16px">
-      <div class="section-header" style="flex-wrap:wrap;gap:8px">
+      <div class="section-header">
         <div class="section-title" id="tc-mov-title">Consumos</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto">
-          <div class="tc-view-switch" id="tc-view-switch">
-            <button class="tc-view-btn" data-view="tabla" onclick="setTCConsumosView('tabla')" title="Vista de tabla">☰ Tabla</button>
-            <button class="tc-view-btn" data-view="tarjetas" onclick="setTCConsumosView('tarjetas')" title="Vista de tarjetas">▤ Tarjetas</button>
-            <button class="tc-view-btn" data-view="agrupado" onclick="setTCConsumosView('agrupado')" title="Vista agrupada por estado">⊟ Agrupado</button>
-          </div>
-          <div style="display:flex;gap:4px;align-items:center">
-            <select id="tc-sort-col-select" class="btn" style="font-size:11px;padding:5px 6px" onchange="onTCSortColChange(this.value)" title="Ordenar por">
-              <option value="fecha">Fecha</option>
-              <option value="desc">Descripción</option>
-              <option value="cat">Categoría</option>
-              <option value="monto">Monto</option>
-            </select>
-            <button class="btn" id="tc-sort-dir-btn" style="font-size:11px;padding:5px 8px" onclick="onTCSortDirToggle()" title="Cambiar dirección del orden">▼</button>
-          </div>
+        <div style="display:flex;gap:8px;align-items:center">
           <button class="btn" style="font-size:11px" onclick="markSelectedPaid()">✓ Marcar selec. como pagado</button>
           <button class="btn" style="font-size:11px" onclick="selectAllTCMov()">Selec. todos</button>
         </div>
       </div>
-      <div id="tc-mov-view-container"></div>
+      <div style="overflow-x:auto">
+        <table class="tc-mov-table">
+          <thead><tr>
+            <th style="width:30px"><input type="checkbox" class="tc-check" id="tc-check-all" onchange="toggleAllTCMov(this.checked)"></th>
+            <th onclick="setTCSort('desc')" style="cursor:pointer;user-select:none">Descripción <span id="tcsort-desc"></span></th>
+            <th onclick="setTCSort('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="tcsort-fecha"></span></th>
+            <th onclick="setTCSort('cat')" style="cursor:pointer;user-select:none">Categoría <span id="tcsort-cat"></span></th>
+            <th style="width:30px">Pagado</th>
+            <th onclick="setTCSort('monto')" style="text-align:right;cursor:pointer;user-select:none">Monto <span id="tcsort-monto"></span></th>
+            <th style="width:40px"></th>
+          </tr></thead>
+          <tbody id="tc-mov-tbody"></tbody>
+        </table>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Toca el encabezado de una columna para ordenar</div>
 
       <!-- Selection total sticky bar -->
       <div class="tc-selection-total" id="tc-sel-total">
@@ -2745,8 +2761,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '25/08/26 - 21:26'; // hora de Lima, Peru (UTC-5)
-const APP_VERSION_NOTE = 'Arreglo: en Deudas tipo Voy sumando gastos, cada gasto individual solo se podia borrar y volver a registrar si te equivocabas en el monto. Ahora hay un icono de lapiz junto a la X para editar descripcion, monto y fecha de un gasto ya guardado, sin perder el resto de la lista.';
+const APP_VERSION_DATE = '26/08/26 - 21:59'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🎨 7 mejoras de visualización y diseño: (1) Números en las tarjetas alternan entre compacto (S/ 15.4K) y completo (S/ 15,648.97) al tocarlos, sin navegar a la sección — con preferencia configurable en Configuración; respeta "Ocultar cifras". (2) Color de acento personalizable (Botones, enlaces y resaltados). (3) Efecto de elevación al pasar el mouse/tocar en CUALQUIER tarjeta clickeable de la app (antes solo estaba en el Resumen). (4) Animación de conteo suave (0 → valor final) en el Patrimonio Neto Total, solo cuando el valor realmente cambia. (5) 11 estados vacíos con ícono contextual en vez de solo texto plano. (6) Fondo personalizable con 4 patrones (puntos, cuadrícula, diagonales, ondas) + control de intensidad, que se recolorea solo si cambias tu color de acento. Verificado con más de 20 pruebas automatizadas — toggle de números, animación, fondo, y prueba de humo completa de las 15 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3615,6 +3631,101 @@ function loadTheme(){
   document.documentElement.setAttribute('data-theme',t);
 }
 
+// ── COLOR DE ACENTO PERSONALIZABLE ──────────────────────
+// Se pinta como variables CSS (--accent, --accent2) por encima de lo que
+// ya defina el tema oscuro/claro — el resto de la app sigue funcionando
+// con esto, "pintando" del color que la persona elija, sin tocar nada de
+// la lógica de light/dark (que sigue controlando fondos y textos).
+function hexToRgb(hex){
+  const h=hex.replace('#','');
+  return {r:parseInt(h.substring(0,2),16), g:parseInt(h.substring(2,4),16), b:parseInt(h.substring(4,6),16)};
+}
+function shadeColor(hex, percent){ // percent negativo = oscurecer, positivo = aclarar
+  const {r,g,b}=hexToRgb(hex);
+  const adj=(c)=>Math.max(0,Math.min(255,Math.round(c+(percent<0?c:255-c)*percent/100)));
+  const toHex=(c)=>c.toString(16).padStart(2,'0');
+  return '#'+toHex(adj(r))+toHex(adj(g))+toHex(adj(b));
+}
+function setAccentColor(hex){
+  if(!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  document.documentElement.style.setProperty('--accent', hex);
+  document.documentElement.style.setProperty('--accent2', shadeColor(hex,-18)); // versión más oscura, para hover/gradientes
+  localStorage.setItem('miguel_mf_accent', hex);
+  if(mainChart) renderChart();
+  if(projChart) renderProyeccion();
+  // El patrón de fondo usa el color de acento — se recolorea solo al cambiarlo.
+  const patronActivo=localStorage.getItem('miguel_mf_fondo_patron');
+  if(patronActivo) aplicarFondoPersonalizado(patronActivo, parseInt(localStorage.getItem('miguel_mf_fondo_opacidad')||'8',10));
+}
+function resetAccentColor(){
+  document.documentElement.style.removeProperty('--accent');
+  document.documentElement.style.removeProperty('--accent2');
+  localStorage.removeItem('miguel_mf_accent');
+  const picker=document.getElementById('cfg-accent-picker');
+  if(picker) picker.value='#5b8def';
+  if(mainChart) renderChart();
+  if(projChart) renderProyeccion();
+  const patronActivo=localStorage.getItem('miguel_mf_fondo_patron');
+  if(patronActivo) aplicarFondoPersonalizado(patronActivo, parseInt(localStorage.getItem('miguel_mf_fondo_opacidad')||'8',10));
+}
+function loadAccentColor(){
+  const saved=localStorage.getItem('miguel_mf_accent');
+  const picker=document.getElementById('cfg-accent-picker');
+  if(saved){
+    document.documentElement.style.setProperty('--accent', saved);
+    document.documentElement.style.setProperty('--accent2', shadeColor(saved,-18));
+    if(picker) picker.value=saved;
+  }
+}
+
+// ── FONDO PERSONALIZABLE ─────────────────────────────────
+// 4 patrones armados con CSS puro (gradientes) salvo "ondas", que usa un
+// SVG chiquito embebido — todos toman el color de acento actual, así el
+// fondo combina automáticamente con lo que elijas en "Color de acento".
+const BG_PATTERNS={
+  ninguno:()=>'none',
+  puntos:(c)=>`radial-gradient(circle, ${c} 1.5px, transparent 1.5px)`,
+  cuadricula:(c)=>`linear-gradient(${c} 1px, transparent 1px), linear-gradient(90deg, ${c} 1px, transparent 1px)`,
+  diagonales:(c)=>`repeating-linear-gradient(45deg, ${c}, ${c} 1px, transparent 1px, transparent 14px)`,
+  ondas:(c)=>{
+    const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='40' height='20'><path d='M0 10 Q10 0 20 10 T40 10' stroke='${c}' stroke-width='1.5' fill='none'/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  },
+};
+const BG_PATTERN_SIZE={ninguno:'auto', puntos:'20px 20px', cuadricula:'24px 24px', diagonales:'auto', ondas:'40px 20px'};
+function aplicarFondoPersonalizado(patron, opacidad){
+  const accentHex=(getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#5b8def').trim();
+  const rgb=hexToRgb(/^#[0-9a-fA-F]{6}$/.test(accentHex)?accentHex:'#5b8def');
+  const color=`rgb(${rgb.r},${rgb.g},${rgb.b})`;
+  const fn=BG_PATTERNS[patron]||BG_PATTERNS.ninguno;
+  document.documentElement.style.setProperty('--bg-pattern-image', fn(color));
+  document.documentElement.style.setProperty('--bg-pattern-size', BG_PATTERN_SIZE[patron]||'auto');
+  document.documentElement.style.setProperty('--bg-pattern-opacity', patron==='ninguno' ? '0' : (opacidad/100));
+}
+function setFondoPatron(patron){
+  const opacidad=parseInt(document.getElementById('cfg-fondo-opacidad')?.value||'8',10);
+  localStorage.setItem('miguel_mf_fondo_patron', patron);
+  aplicarFondoPersonalizado(patron, opacidad);
+}
+function setFondoOpacidad(valor){
+  const patron=localStorage.getItem('miguel_mf_fondo_patron')||'ninguno';
+  localStorage.setItem('miguel_mf_fondo_opacidad', valor);
+  aplicarFondoPersonalizado(patron, valor);
+  const label=document.getElementById('cfg-fondo-opacidad-label');
+  if(label) label.textContent=valor+'%';
+}
+function loadFondoPersonalizado(){
+  const patron=localStorage.getItem('miguel_mf_fondo_patron')||'ninguno';
+  const opacidad=parseInt(localStorage.getItem('miguel_mf_fondo_opacidad')||'8',10);
+  aplicarFondoPersonalizado(patron, opacidad);
+  const sel=document.getElementById('cfg-fondo-patron');
+  if(sel) sel.value=patron;
+  const range=document.getElementById('cfg-fondo-opacidad');
+  if(range) range.value=opacidad;
+  const label=document.getElementById('cfg-fondo-opacidad-label');
+  if(label) label.textContent=opacidad+'%';
+}
+
 // ── HIDE CIFRAS ───────────────────────────────────────
 function toggleHide(){
   hiddenMode=!hiddenMode;
@@ -3762,6 +3873,63 @@ function showPage(name){
 // ── HELPERS ───────────────────────────────────────────
 function fmtS(n){return 'S/ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 function fmtD(n){return '$ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+// Toma un string YA formateado (ej. "S/ 15,648.97" o "S/ 4,964.05 + $ 2,765.09")
+// y compacta cada número grande que encuentre dentro (15,648.97 -> 15.6K),
+// sin tocar símbolos de moneda ni el "+" que separa montos mixtos. Números
+// bajo 10 mil se dejan tal cual — no vale la pena compactar algo tan chico.
+function compactarStringFormateado(str){
+  return str.replace(/\d{1,3}(?:,\d{3})*\.\d{2}/g, (numStr) => {
+    const n = parseFloat(numStr.replace(/,/g, ''));
+    if (Math.abs(n) < 10000) return numStr;
+    if (Math.abs(n) < 1000000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  });
+}
+function toggleNumeroKPI(el){
+  const mostrandoCompacto = el.textContent === el.dataset.compact;
+  el.textContent = mostrandoCompacto ? el.dataset.full : el.dataset.compact;
+}
+// Igual que setKpi() pero para asignaciones sueltas de un solo elemento —
+// se usa en los widgets del Resumen que no pasan por setKpi().
+function setValorToggleable(el, valStr){
+  if(!el) return;
+  if(hiddenMode){ el.textContent=M(valStr); return; }
+  const compacto=compactarStringFormateado(valStr);
+  if(compacto!==valStr){
+    const mostrarCompacto=state.numerosCompactosPorDefecto!==false;
+    el.innerHTML=`<span class="kpi-toggle-num" data-full="${valStr}" data-compact="${compacto}" onclick="event.stopPropagation();toggleNumeroKPI(this)" title="Toca para ver el número completo">${mostrarCompacto?compacto:valStr}</span>`;
+  } else {
+    el.textContent=valStr;
+  }
+}
+function toggleNumerosCompactosDefault(){
+  state.numerosCompactosPorDefecto = state.numerosCompactosPorDefecto===false ? true : false;
+  saveState();
+  renderNumerosCompactosBtn();
+  render();
+}
+function renderNumerosCompactosBtn(){
+  const btn=document.getElementById('cfg-numeros-compactos-btn');
+  if(btn) btn.textContent = state.numerosCompactosPorDefecto===false ? '🔢 Mostrando completos' : '🔢 Mostrando compactos (15.4K)';
+}
+// Animación de conteo (0 -> valor final) para el número "hero" del
+// Resumen — se usa solo ahí (no en las 20 tarjetas KPI, para no pelear con
+// el toggle compacto/completo). Solo anima cuando el valor REALMENTE
+// cambió desde la última vez mostrado, no en cada re-render sin cambios.
+let _patrimonioUltimoValorAnimado=null;
+function animarConteo(el, valorFinal, prefijo, duracionMs){
+  duracionMs=duracionMs||700;
+  const inicio=performance.now();
+  function paso(ahora){
+    const progreso=Math.min(1,(ahora-inicio)/duracionMs);
+    const easeOut=1-Math.pow(1-progreso,3); // desaceleración suave al final, no lineal
+    const actual=valorFinal*easeOut;
+    el.textContent=prefijo+Math.abs(actual).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+    if(progreso<1) requestAnimationFrame(paso);
+    else el.textContent=prefijo+Math.abs(valorFinal).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  }
+  requestAnimationFrame(paso);
+}
 function fmtFechaCorta(f){return new Date(f+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});}
 // DD/MM/AAAA a partir de una fecha guardada en formato "AAAA-MM-DD" — se
 // arma con el propio string (no con Date) para evitar cualquier corrimiento
@@ -6862,7 +7030,7 @@ function openCategoryDetailModal(cat){
 
   const listEl=document.getElementById('catdetail-list');
   if(!items.length){
-    listEl.innerHTML='<div class="dash-empty">Sin movimientos en esta categoría este mes.</div>';
+    listEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">📭</div>Sin movimientos en esta categoría este mes.</div>';
   } else {
     listEl.innerHTML=items.map(it=>{
       const sym=it.currency==='USD'?'$':'S/';
@@ -6919,7 +7087,7 @@ function renderPresupuesto(){
   });
   const allCatsSorted=Object.keys(allTotals).sort((a,b)=>allTotals[b]-allTotals[a]);
   if(!allCatsSorted.length){
-    spendListEl.innerHTML='<div class="dash-empty">Sin gastos categorizados este mes.</div>';
+    spendListEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">🏷️</div>Sin gastos categorizados este mes.</div>';
   } else {
     const granTotal=allCatsSorted.reduce((s,c)=>s+allTotals[c],0);
     spendListEl.innerHTML=`<div class="card" style="padding:14px 18px">`+allCatsSorted.map(cat=>{
@@ -8520,6 +8688,7 @@ function toggleConfig(e){
   // Actualizar TC en el panel
   document.getElementById('cfg-tc-compra').textContent = 'S/ ' + state.tc.compra.toFixed(4);
   document.getElementById('cfg-tc-venta').textContent  = 'S/ ' + state.tc.venta.toFixed(4);
+  renderNumerosCompactosBtn();
 }
 function closeConfig(){
   document.getElementById('config-dropdown').classList.remove('open');
@@ -9765,153 +9934,6 @@ function updateTCSortIndicators(){
   });
 }
 
-// ── Selector de vista de Consumos (tabla / tarjetas / agrupado) ──
-function setTCConsumosView(v){
-  state.tcConsumosView=v;
-  saveState();
-  renderTCDetail();
-}
-// Color determinístico por categoría (mismo texto = mismo color siempre),
-// tomado de la paleta que ya usa el resto de la app.
-function tcCatColor(cat){
-  const paleta=['var(--accent)','var(--green)','var(--amber)','var(--purple)','var(--teal)','var(--red)'];
-  if(!cat) return 'var(--text3)';
-  let h=0;
-  for(let i=0;i<cat.length;i++) h=(h*31+cat.charCodeAt(i))>>>0;
-  return paleta[h%paleta.length];
-}
-function tcMovAmountFmt(m, cardCur){
-  const mCur=m.currency||cardCur;
-  const mSym=mCur==='USD'?'$':'S/';
-  return mSym+' '+Math.abs(m.monto).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-}
-
-// ── Vista TABLA (la de siempre) ──
-function tcMovTableHead(){
-  return `<tr>
-    <th style="width:30px"><input type="checkbox" class="tc-check" id="tc-check-all" onchange="toggleAllTCMov(this.checked)"></th>
-    <th onclick="setTCSort('desc')" style="cursor:pointer;user-select:none">Descripción <span id="tcsort-desc"></span></th>
-    <th onclick="setTCSort('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="tcsort-fecha"></span></th>
-    <th onclick="setTCSort('cat')" style="cursor:pointer;user-select:none">Categoría <span id="tcsort-cat"></span></th>
-    <th style="width:30px">Pagado</th>
-    <th onclick="setTCSort('monto')" style="text-align:right;cursor:pointer;user-select:none">Monto <span id="tcsort-monto"></span></th>
-    <th style="width:40px"></th>
-  </tr>`;
-}
-function tcMovTableRow(m, cardCur){
-  const mCur=m.currency||cardCur;
-  const mFmt=tcMovAmountFmt(m,cardCur);
-  return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
-    <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
-    <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
-    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
-    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
-    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
-    <td>
-      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
-    </td>
-  </tr>`;
-}
-function buildTCMovTableHtml(movs, cardCur){
-  const rows=movs.map(m=>tcMovTableRow(m,cardCur)).join('');
-  return `<div style="overflow-x:auto"><table class="tc-mov-table"><thead>${tcMovTableHead()}</thead><tbody id="tc-mov-tbody">${rows}</tbody></table></div>
-    <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Toca el encabezado de una columna para ordenar</div>`;
-}
-
-// ── Vista TARJETAS ──
-function tcMovCardHtml(m, cardCur){
-  const mFmt=tcMovAmountFmt(m,cardCur);
-  const catColor=tcCatColor(m.cat);
-  return `<div class="tc-mov-card ${m.pagado?'paid-row':''}" id="tc-row-${m.id}" style="--catcolor:${catColor}">
-    <input type="checkbox" class="tc-check tc-sel-cb" id="tc-cb-${m.id}" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">
-    <div class="tc-mov-card-body" onclick="document.getElementById('tc-cb-${m.id}').click()">
-      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
-      <div class="tc-mov-card-meta">
-        <span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span>
-        <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>
-        ${m.pagado?'<span class="tc-mov-pill" style="color:var(--green);border-color:var(--green)">✓ Pagado</span>':''}
-        ${m.metodoPago==='puntos'?'<span title="Pagado con puntos">🎁</span>':''}
-      </div>
-    </div>
-    <div class="tc-mov-card-right">
-      <div class="tc-mov-card-amount" style="color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</div>
-      <div class="tc-mov-card-actions">
-        <input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">
-        <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-        <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
-      </div>
-    </div>
-  </div>`;
-}
-function buildTCMovCardsHtml(movs, cardCur){
-  return `<div class="tc-cards-wrap">${movs.map(m=>tcMovCardHtml(m,cardCur)).join('')}</div>`;
-}
-
-// ── Vista AGRUPADA (Pendientes / Pagados, con subtotal cada una) ──
-function tcGroupItemHtml(m, cardCur, showCheckbox){
-  const mFmt=tcMovAmountFmt(m,cardCur);
-  return `<div class="tc-group-item" id="tc-row-${m.id}">
-    ${showCheckbox?`<input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">`:`<span class="tc-group-paid-dot" title="Pagado">✓</span>`}
-    <div class="tc-mov-card-body" style="cursor:default">
-      <div class="tc-mov-card-desc" style="font-size:13px">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
-      <div class="tc-mov-card-meta"><span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span><span class="tc-mov-pill">${m.cat||'Sin categoría'}</span></div>
-    </div>
-    <div class="tc-mov-card-amount" style="color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</div>
-    <div class="tc-mov-card-actions">
-      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
-    </div>
-  </div>`;
-}
-function tcGroupBlockHtml(label, movs, cardCur, showCheckbox){
-  if(!movs.length) return '';
-  const sum=sumTCByCurrency(movs,cardCur);
-  const items=movs.map(m=>tcGroupItemHtml(m,cardCur,showCheckbox)).join('');
-  return `<div class="tc-group-block">
-    <div class="tc-group-head">
-      <span class="tc-group-title">${label} (${movs.length})</span>
-      <span class="tc-group-total">${M(fmtTCMixed(sum.pen,sum.usd))}</span>
-    </div>
-    ${items}
-  </div>`;
-}
-function buildTCMovGroupedHtml(movs, cardCur){
-  const pendientes=movs.filter(m=>!m.pagado);
-  const pagados=movs.filter(m=>m.pagado);
-  const sumP=sumTCByCurrency(pendientes,cardCur);
-  const sumG=sumTCByCurrency(pagados,cardCur);
-  return `<div class="tc-grouped-stats">
-      <div class="tc-grouped-stat"><div class="tc-grouped-stat-label">Pendiente este mes</div><div class="tc-grouped-stat-val" style="color:var(--amber)">${M(fmtTCMixed(sumP.pen,sumP.usd))}</div></div>
-      <div class="tc-grouped-stat"><div class="tc-grouped-stat-label">Ya pagado</div><div class="tc-grouped-stat-val" style="color:var(--green)">${M(fmtTCMixed(sumG.pen,sumG.usd))}</div></div>
-    </div>
-    ${tcGroupBlockHtml('Pendientes', pendientes, cardCur, true)}
-    ${tcGroupBlockHtml('Pagados', pagados, cardCur, false)}`;
-}
-
-// ── Control de orden universal (funciona en las 3 vistas de Consumos,
-// no solo tocando encabezados de la tabla) ──
-function onTCSortColChange(col){
-  if(tcSortState.col!==col){
-    tcSortState.col=col;
-    // Mismo criterio que al tocar un encabezado: Fecha y Monto arrancan
-    // descendente; Descripción y Categoría arrancan ascendente.
-    tcSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc';
-    renderTCDetail();
-  }
-}
-function onTCSortDirToggle(){
-  tcSortState.dir=tcSortState.dir==='asc'?'desc':'asc';
-  renderTCDetail();
-}
-function updateTCSortControls(){
-  const sel=document.getElementById('tc-sort-col-select');
-  if(sel) sel.value=tcSortState.col;
-  const dirBtn=document.getElementById('tc-sort-dir-btn');
-  if(dirBtn) dirBtn.textContent=tcSortState.dir==='asc'?'▲':'▼';
-}
-
 function renderTCDetail(){
   if(!currentTCId||!currentTCMonth) return;
   const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth));
@@ -9935,53 +9957,43 @@ function renderTCDetail(){
   const parts=currentTCMonth.split('-');
   document.getElementById('tc-mov-title').textContent='Consumos — '+tcMesesLong()[parseInt(parts[1])-1]+' '+parts[0];
 
-  // ── Selector de vista: tabla (clasica) / tarjetas / agrupado por estado.
-  // Se guarda en state.tcConsumosView para que quede igual la proxima vez
-  // que entres. "tabla" es el default, asi que a nadie le cambia la vista
-  // sin que la elija.
-  const viewMode=state.tcConsumosView||'tabla';
-  document.querySelectorAll('.tc-view-btn').forEach(b=>{
-    b.classList.toggle('active', b.dataset.view===viewMode);
-  });
-  updateTCSortControls();
-
-  const cont=document.getElementById('tc-mov-view-container');
+  const tbody=document.getElementById('tc-mov-tbody');
+  updateTCSortIndicators();
   if(!movs.length){
-    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin consumos este mes. Agrega uno con el botón de arriba.</div>';
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin consumos este mes. Agrega uno con el botón de arriba.</td></tr>';
     updateTCSelectionTotal();
     return;
   }
-  if(viewMode==='tarjetas'){
-    cont.innerHTML=buildTCMovCardsHtml(movs,cardCur);
-  } else if(viewMode==='agrupado'){
-    cont.innerHTML=buildTCMovGroupedHtml(movs,cardCur);
-  } else {
-    cont.innerHTML=buildTCMovTableHtml(movs,cardCur);
-    updateTCSortIndicators();
-  }
-  const allCb=document.getElementById('tc-check-all');
-  if(allCb) allCb.checked=false;
+  tbody.innerHTML=movs.map(m=>{
+    const mCur=m.currency||cardCur;
+    const mSym=mCur==='USD'?'$':'S/';
+    const mFmt=mSym+' '+Math.abs(m.monto).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+    return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
+    <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
+    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
+    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
+    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
+    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
+    <td>
+      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
+      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
+    </td>
+  </tr>`;
+  }).join('');
+  document.getElementById('tc-check-all').checked=false;
   updateTCSelectionTotal();
 }
 
 function onTCSelChange(){
   const cbs=document.querySelectorAll('.tc-sel-cb');
-  cbs.forEach(c=>{
-    const row=document.getElementById('tc-row-'+c.dataset.id);
-    if(row) row.classList.toggle('selected-row', c.checked);
-  });
   const checked=[...cbs].filter(c=>c.checked);
-  const allCb=document.getElementById('tc-check-all');
-  if(allCb) allCb.checked=checked.length===cbs.length&&cbs.length>0;
+  document.getElementById('tc-check-all').checked=checked.length===cbs.length&&cbs.length>0;
   updateTCSelectionTotal();
 }
 
 function toggleAllTCMov(checked){
-  document.querySelectorAll('.tc-sel-cb').forEach(c=>{
-    c.checked=checked;
-    const row=document.getElementById('tc-row-'+c.dataset.id);
-    if(row) row.classList.toggle('selected-row', checked);
-  });
+  document.querySelectorAll('.tc-sel-cb').forEach(c=>c.checked=checked);
   updateTCSelectionTotal();
 }
 
@@ -11329,11 +11341,6 @@ const DASHBOARD_WIDGET_DEFS = {
 // Orden y visibilidad por defecto — igual a como se veía la app antes de
 // que existiera esta opción, para que a nadie se le mueva nada hasta que
 // entre a personalizar. Los widgets nuevos empiezan OCULTOS por defecto.
-function defaultSpanForSize(size){
-  if(size==='large') return 99;
-  if(size==='medium') return 2;
-  return 1;
-}
 const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-disponible', visible:true}, {id:'kpi-ahorro', visible:true},
   {id:'kpi-deuda-tc', visible:true}, {id:'kpi-pagar-mes', visible:true},
@@ -11349,113 +11356,29 @@ const DASHBOARD_WIDGETS_DEFAULT = [
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
     state.dashboardWidgets=DASHBOARD_WIDGETS_DEFAULT.map(w=>({...w}));
-  } else {
-    const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
-    DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
-      if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
-    });
-    state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
+    return;
   }
-  state.dashboardWidgets.forEach(w=>{
-    if(w.span===undefined || w.span===null){
-      const def=DASHBOARD_WIDGET_DEFS[w.id];
-      if(def) w.span=defaultSpanForSize(def.size);
-    }
+  const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
+  DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
+    if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
   });
-  if(!state.dashboardCols) state.dashboardCols=4;
-  // Migracion a "fila" explicita: antes cada widget declaraba un ancho
-  // (span) y un algoritmo adivinaba como agrupar filas. Ahora se decide
-  // directamente que widgets van juntos asignandoles el mismo numero de
-  // fila, y el ancho de cada uno es SIEMPRE columnas / cantidad de widgets
-  // en esa fila (reparto parejo, sin adivinar combinaciones). Este bloque
-  // solo corre una vez por widget nuevo: si ya tiene "row" asignado no lo
-  // toca; si es la primera vez, arma las filas iniciales reusando el
-  // agrupamiento que ya tenia por "span", para que no se mueva nada visual
-  // al actualizar.
-  const faltaRow=state.dashboardWidgets.some(w=>w.visible && (w.row===undefined || w.row===null));
-  if(faltaRow){
-    const colsM=state.dashboardCols||4;
-    let usado=0, filaN=1;
-    state.dashboardWidgets.filter(w=>w.visible).forEach(w=>{
-      if(w.row!==undefined && w.row!==null) return;
-      const def=DASHBOARD_WIDGET_DEFS[w.id];
-      const span=def?Math.min(w.span||defaultSpanForSize(def.size), colsM):1;
-      const esFull=span>=colsM;
-      if(esFull){
-        if(usado>0){ filaN++; usado=0; }
-        w.row=filaN; filaN++; usado=0;
-        return;
-      }
-      if(usado>0 && usado+span>colsM){ filaN++; usado=0; }
-      w.row=filaN;
-      usado+=span;
-      if(usado>=colsM){ filaN++; usado=0; }
-    });
-    state.dashboardWidgets.forEach(w=>{ if(w.row===undefined||w.row===null) w.row=filaN++; });
-  }
-}
-function getEffectiveDashboardCols(){
-  const w=window.innerWidth;
-  if(w<=480) return 1;
-  if(w<=768) return 2;
-  return state.dashboardCols||4;
+  state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
 }
 function renderDashboardWidgets(){
   ensureDashboardWidgetsDefault();
   const cont=document.getElementById('dash-widgets-container');
   if(!cont) return;
-  const cols=getEffectiveDashboardCols();
   const visibles=state.dashboardWidgets.filter(w=>w.visible);
-  // Agrupa por numero de "fila" (lo que se define en el editor). Las filas
-  // se ordenan de menor a mayor numero; dentro de una misma fila, el orden
-  // es el de la lista (el que se define arrastrando). El ancho de cada
-  // widget dentro de su fila es SIEMPRE columnas / cantidad de widgets en
-  // esa fila -- reparto parejo, sin adivinar combinaciones ni dejar franjas
-  // vacias. En pantallas chicas "cols" baja a 2 o 1 y actua como tope: si
-  // se definieron mas widgets en una fila de los que caben en esa pantalla,
-  // se reparten en sub-filas de a lo sumo "cols", manteniendo el orden.
-  const gruposPorFila=new Map();
-  visibles.forEach((w,idx)=>{
+  cont.innerHTML=visibles.map(w=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
-    if(!def) return;
-    const filaNum=(w.row===undefined||w.row===null)?(idx+1):w.row;
-    if(!gruposPorFila.has(filaNum)) gruposPorFila.set(filaNum, []);
-    gruposPorFila.get(filaNum).push({w,def});
-  });
-  const filasOrdenadas=Array.from(gruposPorFila.keys()).sort((a,b)=>a-b);
-  const filasFinal=[];
-  filasOrdenadas.forEach(filaNum=>{
-    const items=gruposPorFila.get(filaNum);
-    for(let i=0;i<items.length;i+=cols){
-      filasFinal.push(items.slice(i,i+cols));
-    }
-  });
-  cont.innerHTML=filasFinal.map(items=>{
-    const html=items.map(({w,def})=>
-      `<div class="dash-widget-wrap" data-wid="${w.id}" style="flex:1 1 0">${def.shell()}</div>`
-    ).join('');
-    return `<div class="dash-widgets-row">${html}</div>`;
+    return def ? `<div class="dash-widget-wrap dw-${def.size}" data-wid="${w.id}">${def.shell()}</div>` : '';
   }).join('');
-}
-let _dashResponsiveSetup=false;
-function setupDashboardResponsive(){
-  if(_dashResponsiveSetup) return;
-  _dashResponsiveSetup=true;
-  const mqTablet=window.matchMedia('(max-width:768px)');
-  const mqMobile=window.matchMedia('(max-width:480px)');
-  const handler=()=>{ if(document.getElementById('dash-widgets-container')) renderDashboard(); };
-  mqTablet.addEventListener('change',handler);
-  mqMobile.addEventListener('change',handler);
 }
 // ── Editor de widgets (checkbox + arrastrar + flechas) ──
 let editorWidgetsTemp=null;
-let editorDashboardColsTemp=4;
 function abrirEditorWidgets(){
   ensureDashboardWidgetsDefault();
   editorWidgetsTemp=state.dashboardWidgets.map(w=>({...w}));
-  editorDashboardColsTemp=state.dashboardCols||4;
-  const colsInput=document.getElementById('editor-cols-input');
-  if(colsInput) colsInput.value=editorDashboardColsTemp;
   renderEditorWidgetsList();
   document.getElementById('editor-widgets-overlay').classList.add('open');
 }
@@ -11465,20 +11388,9 @@ function cerrarEditorWidgets(){
 }
 function renderEditorWidgetsList(){
   const el=document.getElementById('editor-widgets-list');
-  const conteoFila={};
-  editorWidgetsTemp.forEach(w=>{
-    if(!w.visible) return;
-    const def=DASHBOARD_WIDGET_DEFS[w.id];
-    if(!def) return;
-    const r=w.row||1;
-    conteoFila[r]=(conteoFila[r]||0)+1;
-  });
   el.innerHTML=editorWidgetsTemp.map((w,idx)=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
     if(!def) return '';
-    const fila=w.row||1;
-    const n=conteoFila[fila]||1;
-    const anchoHint=w.visible ? `${(editorDashboardColsTemp/n).toFixed(2)} de ${editorDashboardColsTemp}` : '—';
     return `<div class="editor-widget-row" draggable="true" data-wid="${w.id}"
       ondragstart="ewDragStart(event)" ondragover="ewDragOver(event)" ondrop="ewDrop(event)" ondragend="ewDragEnd(event)"
       style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--border)">
@@ -11487,10 +11399,6 @@ function renderEditorWidgetsList(){
         <input type="checkbox" ${w.visible?'checked':''} onchange="ewToggle('${w.id}',this.checked)" style="width:auto;margin:0">
         ${def.label}
       </label>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-        <input type="number" min="1" step="1" value="${fila}" oninput="ewSetRow('${w.id}',this.value)" style="width:44px;text-align:center;padding:2px 4px;border-radius:4px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)" title="Numero de fila: los widgets con el mismo numero comparten fila en partes iguales">
-        <span style="font-size:9px;color:var(--text3);white-space:nowrap">fila · ${anchoHint}</span>
-      </div>
       <div style="display:flex;flex-direction:column;gap:2px">
         <button class="ew-arrow-btn" onclick="ewMover(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
         <button class="ew-arrow-btn" onclick="ewMover(${idx},1)" ${idx===editorWidgetsTemp.length-1?'disabled':''}>▼</button>
@@ -11501,17 +11409,6 @@ function renderEditorWidgetsList(){
 function ewToggle(id, checked){
   const w=editorWidgetsTemp.find(x=>x.id===id);
   if(w) w.visible=checked;
-  renderEditorWidgetsList();
-}
-function ewSetRow(id, val){
-  const w=editorWidgetsTemp.find(x=>x.id===id);
-  if(!w) return;
-  w.row=Math.max(1, parseInt(val,10)||1);
-  renderEditorWidgetsList();
-}
-function ewSetCols(val){
-  editorDashboardColsTemp=Math.max(2, Math.min(8, parseInt(val,10)||4));
-  renderEditorWidgetsList();
 }
 function ewMover(idx, dir){
   const swapIdx=idx+dir;
@@ -11540,14 +11437,12 @@ function ewDrop(ev){
 function ewDragEnd(ev){ ev.currentTarget.style.opacity='1'; ewDragId=null; }
 function guardarEditorWidgets(){
   state.dashboardWidgets=editorWidgetsTemp;
-  state.dashboardCols=editorDashboardColsTemp;
   saveState();
   cerrarEditorWidgets();
   renderDashboard();
 }
 
 function renderDashboard(){
-  setupDashboardResponsive();
   renderDashboardWidgets(); // arma los "cascarones" antes de llenarlos con datos
   const now   = new Date();
   const curY  = now.getFullYear();
@@ -11636,7 +11531,13 @@ function renderDashboard(){
   // ── Render patrimonio ─────────────────────────────
   const pEl = document.getElementById('dash-patrimonio');
   if(pEl){
-    pEl.textContent = M(fmtS(patrimonioCur));
+    if(hiddenMode){
+      pEl.textContent = M(fmtS(patrimonioCur));
+      _patrimonioUltimoValorAnimado = null; // para que anime de nuevo cuando se desoculte
+    } else if(_patrimonioUltimoValorAnimado !== patrimonioCur){
+      animarConteo(pEl, patrimonioCur, patrimonioCur>=0?'S/ ':'-S/ ');
+      _patrimonioUltimoValorAnimado = patrimonioCur;
+    }
     pEl.style.color = patrimonioCur >= 0 ? 'var(--green)' : 'var(--red)';
   }
   const pPenEl = document.getElementById('dash-patrimonio-pen');
@@ -11663,7 +11564,22 @@ function renderDashboard(){
   // ── KPIs ──────────────────────────────────────────
   function setKpi(id, val, sub, color){
     const e=document.getElementById(id);
-    if(e){if(val!==undefined)e.textContent=M(val);if(color)e.style.color=color;}
+    if(e){
+      if(val!==undefined){
+        if(hiddenMode){
+          e.textContent=M(val);
+        } else {
+          const compacto=compactarStringFormateado(val);
+          if(compacto!==val){
+            const mostrarCompacto=state.numerosCompactosPorDefecto!==false;
+            e.innerHTML=`<span class="kpi-toggle-num" data-full="${val}" data-compact="${compacto}" onclick="event.stopPropagation();toggleNumeroKPI(this)" title="Toca para ver el número completo">${mostrarCompacto?compacto:val}</span>`;
+          } else {
+            e.textContent=val;
+          }
+        }
+      }
+      if(color)e.style.color=color;
+    }
     const es=document.getElementById(id+'-sub');
     if(es&&sub!==undefined)es.textContent=sub;
   }
@@ -11692,7 +11608,7 @@ function renderDashboard(){
       .sort((a,b)=>new Date(b.date)-new Date(a.date))
       .slice(0,6);
     if(!last.length){
-      movsList.innerHTML='<div class="dash-empty">Sin movimientos registrados.</div>';
+      movsList.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">📭</div>Sin movimientos registrados.</div>';
     } else {
       movsList.innerHTML=last.map(m=>{
         const isInc=m.type==='income';
@@ -11719,7 +11635,7 @@ function renderDashboard(){
   const tcList = document.getElementById('dash-tc-list');
   if(tcList){
     if(!tarjetas.length){
-      tcList.innerHTML='<div class="dash-empty">Sin tarjetas registradas.</div>';
+      tcList.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">💳</div>Sin tarjetas registradas.</div>';
     } else {
       tcList.innerHTML=tarjetas.map(t=>{
         const toS2=m=>(m.currency||t.currency)==='USD'?m.monto*rate:m.monto;
@@ -11764,7 +11680,7 @@ function renderDashDebts(){
   // Los widgets ahora los prende/apaga la persona, no la presencia de
   // datos — si el widget está oculto, su contenedor ni existe en el DOM.
   if(dmList){
-    dmList.innerHTML = !dmActivas.length ? '<div class="dash-empty">Sin deudas mayores activas.</div>' : dmActivas.map(({d,r})=>{
+    dmList.innerHTML = !dmActivas.length ? '<div class="dash-empty"><div class="dash-empty-icon">🏛️</div>Sin deudas mayores activas.</div>' : dmActivas.map(({d,r})=>{
       const pct = r.total>0 ? (r.pagadas/r.total)*100 : 0;
       const proxLabel = r.proximaFecha
         ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})
@@ -11788,7 +11704,7 @@ function renderDashDebts(){
   const dpPend = (state.deudas||[]).filter(d=>d.status==='pendiente');
   const dpList = document.getElementById('dash-dp-list');
   if(dpList){
-    dpList.innerHTML = !dpPend.length ? '<div class="dash-empty">Sin préstamos pendientes de cobro.</div>' : (() => {
+    dpList.innerHTML = !dpPend.length ? '<div class="dash-empty"><div class="dash-empty-icon">🤝</div>Sin préstamos pendientes de cobro.</div>' : (() => {
       const sorted = [...dpPend].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
       return sorted.slice(0,5).map(d=>{
         const sym = d.currency==='USD'?'$':'S/';
@@ -11820,7 +11736,7 @@ function renderNuevosWidgetsDashboard(){
   const metasEl=document.getElementById('dash-metas-list');
   if(metasEl){
     const metas=state.metasAhorro||[];
-    metasEl.innerHTML = !metas.length ? '<div class="dash-empty">Sin metas todavía.</div>' : metas.slice(0,3).map(m=>{
+    metasEl.innerHTML = !metas.length ? '<div class="dash-empty"><div class="dash-empty-icon">🎯</div>Sin metas todavía.</div>' : metas.slice(0,3).map(m=>{
       const sym=m.currency==='USD'?'$':'S/';
       const montoActual=m.esMetaGrande ? (state.cuentas[m.cuentaVinculada]||0) : (m.montoActual||0);
       const pct=m.montoObjetivo>0 ? Math.min(100,(montoActual/m.montoObjetivo)*100) : 0;
@@ -11836,7 +11752,7 @@ function renderNuevosWidgetsDashboard(){
   if(presEl){
     const cats=Object.keys(state.budgets||{});
     if(!cats.length){
-      presEl.innerHTML='<div class="dash-empty">Sin presupuestos configurados.</div>';
+      presEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">🎯</div>Sin presupuestos configurados.</div>';
     } else {
       const hoyP=new Date();
       const gastosPorCat={};
@@ -11864,7 +11780,7 @@ function renderNuevosWidgetsDashboard(){
   const proyEl=document.getElementById('kpi-proyeccion-cierre');
   if(proyEl){
     const proy=calcularProyeccionCierre();
-    proyEl.textContent=M(fmtS(proy.proyeccionPen));
+    setValorToggleable(proyEl, fmtS(proy.proyeccionPen));
     proyEl.style.color=proy.proyeccionPen>=0?'var(--accent)':'var(--red)';
   }
 
@@ -11873,7 +11789,7 @@ function renderNuevosWidgetsDashboard(){
   if(svcEl){
     const servicios=Object.entries(state.servicios||{});
     if(!servicios.length){
-      svcEl.innerHTML='<div class="dash-empty">Sin servicios compartidos.</div>';
+      svcEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">🔗</div>Sin servicios compartidos.</div>';
     } else {
       const hoyReal=new Date();
       const pendientes=[];
@@ -11898,7 +11814,7 @@ function renderNuevosWidgetsDashboard(){
   if(tcCompEl){
     const ref=getLatestTCReference();
     if(ref){
-      tcCompEl.textContent=M('S/ '+ref.compra.toFixed(3));
+      setValorToggleable(tcCompEl, 'S/ '+ref.compra.toFixed(3));
       document.getElementById('kpi-tc-comparador-sub').textContent='mejor compra ('+(ref.compraEmpresa?ref.compraEmpresa.nombre:'—')+')';
     } else {
       tcCompEl.textContent='—';
@@ -11919,7 +11835,7 @@ function renderNuevosWidgetsDashboard(){
       .map(item=>({item, proy:getProyeccionMantenimientoItem(item)}))
       .filter(x=>x.proy).sort((a,b)=>a.proy.kmFaltan-b.proy.kmFaltan)[0];
     if(proyMant) lineas.push(`<div style="font-size:12px;padding:4px 0">${proyMant.item.icono||'🔧'} Próximo: ${proyMant.item.nombre} en ~${Math.round(proyMant.proy.kmFaltan)} km</div>`);
-    combEl.innerHTML = lineas.length ? lineas.join('') : '<div class="dash-empty">Sin registros de combustible.</div>';
+    combEl.innerHTML = lineas.length ? lineas.join('') : '<div class="dash-empty"><div class="dash-empty-icon">⛽</div>Sin registros de combustible.</div>';
   }
 
   // ── Análisis de Sueldos (última boleta registrada) ──
@@ -11930,7 +11846,7 @@ function renderNuevosWidgetsDashboard(){
       // Se ordena por año+mes real (no por orden de guardado) para
       // encontrar la más reciente de verdad.
       const ultima=[...boletas].sort((a,b)=>(b.anio*12+b.mes)-(a.anio*12+a.mes))[0];
-      sueldoEl.textContent=M(fmtS(ultima.basica||0));
+      setValorToggleable(sueldoEl, fmtS(ultima.basica||0));
       document.getElementById('kpi-sueldos-sub').textContent=(MONTHS[ultima.mes]||'')+' '+ultima.anio+' · básica';
     } else {
       sueldoEl.textContent='—';
@@ -11951,7 +11867,7 @@ function renderNuevosWidgetsDashboard(){
     const actual=gastoMes(hoyC.getFullYear(),hoyC.getMonth());
     const anterior=gastoMes(prevC.year,prevC.month);
     const diff=anterior>0?((actual-anterior)/anterior*100):0;
-    compEl.textContent=M(fmtS(actual));
+    setValorToggleable(compEl, fmtS(actual));
     compEl.style.color=diff>0?'var(--red)':'var(--green)';
     document.getElementById('kpi-comparativo-sub').textContent = anterior>0 ? `${diff>=0?'↑':'↓'} ${Math.abs(diff).toFixed(0)}% vs. mes pasado` : 'sin datos del mes pasado';
   }
@@ -11964,7 +11880,7 @@ function renderNuevosWidgetsDashboard(){
       if(mv.type!=='ahorro'||mv.currency!=='PEN') return false;
       return new Date(mv.date+'T12:00:00').getFullYear()===anioActual;
     }).reduce((s,mv)=>s+mv.amount,0);
-    anioEl.textContent=M(fmtS(totalAhorroAnio));
+    setValorToggleable(anioEl, fmtS(totalAhorroAnio));
     document.getElementById('kpi-anio-sub').textContent=anioActual;
   }
 
@@ -12787,8 +12703,7 @@ function renderDeudas(){
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2)">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(it.desc)} <span style="color:var(--text3)">· ${new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})}</span></span>
             <span style="font-family:var(--mono);margin-left:8px">${fmtAmt(it.monto)}</span>
-            ${!isPaid?`<span onclick="openDeudaItemModal('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Editar gasto">✏</span>`:''}
-            ${!isPaid?`<span onclick="deleteDeudaItem('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Quitar gasto">✕</span>`:''}
+            ${!isPaid?`<span onclick="deleteDeudaItem('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px">✕</span>`:''}
           </div>`).join('')}
       </div>` : '';
 
@@ -12916,26 +12831,17 @@ function deleteDeuda(){
 
 // ── ITEMS de deuda acumulativa ("voy sumando gastos") ─
 let addingItemToDeudaId=null;
-let editingDeudaItemId=null;
 function recalcDeudaMonto(d){ d.monto = (d.items||[]).reduce((s,it)=>s+it.monto,0); }
-function openDeudaItemModal(deudaId, itemId){
+function openDeudaItemModal(deudaId){
   addingItemToDeudaId=deudaId;
-  editingDeudaItemId=itemId||null;
   const d=(state.deudas||[]).find(x=>x.id===deudaId); if(!d) return;
-  const item=itemId ? (d.items||[]).find(it=>it.id===itemId) : null;
-  document.getElementById('di-modal-title').textContent=(item?'Editar gasto — ':'Agregar gasto — ')+d.nombre;
-  document.getElementById('di-desc').value=item?item.desc:'';
-  document.getElementById('di-monto').value=item?item.monto:'';
-  document.getElementById('di-fecha').value=item?item.fecha:todayLocalISO();
-  const saveBtn=document.getElementById('di-save-btn');
-  if(saveBtn) saveBtn.textContent=item?'Guardar':'Agregar';
+  document.getElementById('di-modal-title').textContent='Agregar gasto — '+d.nombre;
+  document.getElementById('di-desc').value='';
+  document.getElementById('di-monto').value='';
+  document.getElementById('di-fecha').value=todayLocalISO();
   document.getElementById('deuda-item-modal-overlay').classList.add('open');
 }
-function closeDeudaItemModal(){
-  document.getElementById('deuda-item-modal-overlay').classList.remove('open');
-  addingItemToDeudaId=null;
-  editingDeudaItemId=null;
-}
+function closeDeudaItemModal(){ document.getElementById('deuda-item-modal-overlay').classList.remove('open'); addingItemToDeudaId=null; }
 function saveDeudaItem(){
   const d=(state.deudas||[]).find(x=>x.id===addingItemToDeudaId); if(!d) return;
   const desc=(document.getElementById('di-desc').value||'').trim();
@@ -12943,21 +12849,12 @@ function saveDeudaItem(){
   const fecha=document.getElementById('di-fecha').value;
   if(!desc||monto<=0||!fecha){alert('Completa descripción, monto y fecha.');return;}
   if(!Array.isArray(d.items)) d.items=[];
+  const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
+  d.items.push(nuevoItem);
+  recalcDeudaMonto(d);
   const symDi=d.currency==='USD'?'$':'S/';
-  if(editingDeudaItemId){
-    const it=d.items.find(x=>x.id===editingDeudaItemId);
-    if(!it){ closeDeudaItemModal(); return; }
-    it.desc=desc; it.monto=monto; it.fecha=fecha;
-    recalcDeudaMonto(d);
-    logActividad('deuda_item', `Editado: ${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:it.id});
-    saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto actualizado');
-  } else {
-    const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
-    d.items.push(nuevoItem);
-    recalcDeudaMonto(d);
-    logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
-    saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
-  }
+  logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
+  saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
 }
 function deleteDeudaItem(deudaId, itemId){
   const d=(state.deudas||[]).find(x=>x.id===deudaId); if(!d) return;
@@ -14563,7 +14460,7 @@ function renderFechasImportantes(){
   // Solo mostrar próximos/hoy — los que ya pasaron se ocultan, salvo que estén
   // marcados como "fijado" (el usuario quiere conservarlos siempre visibles).
   const items = getEventCountdowns().filter(it=>!it.isPast || it.event.fijado);
-  if(!items.length){ grid.innerHTML='<div class="dash-empty">Sin fechas próximas.</div>'; return; }
+  if(!items.length){ grid.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">📅</div>Sin fechas próximas.</div>'; return; }
   grid.innerHTML = items.map(it=>{
     const t = CAL_TIPOS[it.event.tipo] || CAL_TIPOS.otro;
     const dateLabel = it.fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'short'});
@@ -16714,7 +16611,7 @@ function seedDemo(){
 })();
 
 // ── INIT ─────────────────────────────────────────────
-loadTheme();loadCompact();renderRelojesMundiales();
+loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();renderRelojesMundiales();
 // "Última actividad" del historial de sesiones — cada 5 min mientras la
 // pestaña esté abierta, y también justo antes de que se oculte/cierre (el
 // mejor esfuerzo posible, ya que no existe un evento 100% confiable de
@@ -17250,7 +17147,7 @@ if(state.projGoals){
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeDeudaItemModal()">Cancelar</button>
-      <button class="btn btn-primary" id="di-save-btn" onclick="saveDeudaItem()">Agregar</button>
+      <button class="btn btn-primary" onclick="saveDeudaItem()">Agregar</button>
     </div>
   </div>
 </div>
