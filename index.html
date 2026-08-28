@@ -1086,7 +1086,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
       </div>
     </div>
-    <button class="btn btn-primary" onclick="openModal()">+ Agregar</button>
+    <button class="btn btn-primary" onclick="toggleFabMenu(event)">+ Agregar</button>
   </div>
 </nav>
 
@@ -2769,8 +2769,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '27/08/26 - 22:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Arreglado el diseño en mobile de 3 tablas anchas (Resumen anual 2026, Resumen Global — Todas las Tarjetas, Boletas registradas de 5ta categoría) agregando scroll horizontal en vez de que el texto se cortara o se aplastara — sin cambiar cómo se ven en computadora. También se corrigió el grid de 4 gráficos donut de Créditos > Gráficos, que tenía un estilo en línea forzando siempre 4 columnas e ignoraba las reglas responsivas ya existentes para mobile (ahora sí colapsa a 2 columnas y luego a 1 en pantallas chicas).';
+const APP_VERSION_DATE = '28/08/26 - 14:56'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva frecuencia "Semestral" en Pagos y Ingresos Frecuentes (Deudas), para casos como gratificación o CTS que se pagan 2 veces al año en meses específicos. Al crearlo eliges libremente en qué meses aplica (checkboxes de Ene a Dic). Se integró en: la lista de Pagos Frecuentes (muestra "Próximo: mes año" o "Corresponde este mes"), el modal de Registrar (usa el próximo período correcto en vez del mes actual — se probó que ANTES de este fix el modal ofrecía por defecto un mes que no correspondía), Proyección de cierre del dashboard, los avisos de "pendiente de registrar", el reporte PDF mensual, y el historial (últimos 6 ciclos en vez de últimos 6 meses calendario). Verificado con pruebas automatizadas (Node + Playwright): cálculo del próximo período en 6 escenarios distintos, flujo completo de creación/registro, y que la Proyección de cierre solo incluye el pago en su mes correspondiente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4054,10 +4054,16 @@ function calcularProyeccionCierre(){
   // el mismo problema que ya detectamos con el bot de Telegram).
   const disponibleActual=getDisponible(y,m) ?? sumaDisponibleDe(state.cuentas);
 
-  // Pagos frecuentes pendientes de este mes (mensuales, no registrados aún)
-  const pendientes=(state.pagosFrecuentes||[]).filter(p=>
-    (p.frecuencia||'mensual')==='mensual' && !(p.pagosRegistrados&&p.pagosRegistrados[mk])
-  );
+  // Pagos frecuentes pendientes de este mes: mensuales sin registrar, más
+  // semestrales (gratificación, CTS...) SOLO cuando el mes actual es uno de
+  // los meses configurados para ese pago.
+  const mesActualNum=m+1;
+  const pendientes=(state.pagosFrecuentes||[]).filter(p=>{
+    const freq=p.frecuencia||'mensual';
+    if(freq==='mensual') return !(p.pagosRegistrados&&p.pagosRegistrados[mk]);
+    if(freq==='semestral') return (p.meses||[]).includes(mesActualNum) && !(p.pagosRegistrados&&p.pagosRegistrados[mk]);
+    return false;
+  });
   const detalle=[];
   let ingPen=0, ingUsd=0, gastoPen=0, gastoUsd=0;
   pendientes.forEach(pf=>{
@@ -4290,18 +4296,26 @@ function checkBrowserNotifications(forzar){
     if(diffPago>=0 && diffPago<=3) mensajes.push(`💳 ${t.banco}: pago ${diffPago===0?'hoy':'en '+diffPago+' días'}`);
   });
 
-  // 4. Pagos Frecuentes MENSUALES sin registrar este mes (desde el día 5)
+  // 4. Pagos Frecuentes MENSUALES (y SEMESTRALES cuyo mes es este) sin
+  // registrar este mes (desde el día 5)
   if(diaHoy>=5){
     const mk=mesActualKey();
-    const pend=(state.pagosFrecuentes||[]).filter(p=>(p.frecuencia||'mensual')==='mensual' && !(p.pagosRegistrados&&p.pagosRegistrados[mk]));
+    const mesNum=hoy.getMonth()+1;
+    const pend=(state.pagosFrecuentes||[]).filter(p=>{
+      const freq=p.frecuencia||'mensual';
+      if(freq==='mensual') return !(p.pagosRegistrados&&p.pagosRegistrados[mk]);
+      if(freq==='semestral') return (p.meses||[]).includes(mesNum) && !(p.pagosRegistrados&&p.pagosRegistrados[mk]);
+      return false;
+    });
     if(pend.length) mensajes.push(`💡 Pagos frecuentes sin registrar: ${pend.map(p=>p.nombre).join(', ')}`);
   }
 
-  // 4b. Día límite de pago próximo (opcional, no-anual) — independiente del
-  // aviso genérico de arriba, para que el usuario sepa CUÁNDO exactamente
-  // debe pagar, no solo que "está pendiente". Se avisa desde 3 días antes.
+  // 4b. Día límite de pago próximo (opcional, no-anual ni semestral) —
+  // independiente del aviso genérico de arriba, para que el usuario sepa
+  // CUÁNDO exactamente debe pagar, no solo que "está pendiente". Se avisa
+  // desde 3 días antes.
   const mkDp=mesActualKey();
-  (state.pagosFrecuentes||[]).filter(p=>p.diaPago && p.frecuencia!=='anual' && !(p.pagosRegistrados&&p.pagosRegistrados[mkDp])).forEach(p=>{
+  (state.pagosFrecuentes||[]).filter(p=>p.diaPago && p.frecuencia!=='anual' && p.frecuencia!=='semestral' && !(p.pagosRegistrados&&p.pagosRegistrados[mkDp])).forEach(p=>{
     const diasEnMes=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
     const diaLimite=pfDiaLimite(p.diaPago,diasEnMes);
     const diffDp=diaLimite-diaHoy;
@@ -4323,6 +4337,20 @@ function checkBrowserNotifications(forzar){
       else if(diffDias===0) mensajes.push(`🟡 ${p.nombre} vence HOY (${fechaLabel})`);
       else mensajes.push(`📅 ${p.nombre} vence en ${diffDias} días (${fechaLabel})`);
     }
+  });
+
+  // 5b. Pagos Frecuentes SEMESTRALES próximos a vencer (dentro de 15 días) o
+  // ya vencidos — mismo criterio que los anuales, usando el próximo período
+  // configurado sin registrar.
+  (state.pagosFrecuentes||[]).filter(p=>p.frecuencia==='semestral').forEach(p=>{
+    const prox=getPFProximoPeriodoSemestral(p);
+    if(!prox) return;
+    const fechaMes=new Date(prox.y, prox.m-1, 1);
+    const diffDias=Math.round((fechaMes-new Date(hoy.getFullYear(),hoy.getMonth(),1))/(1000*60*60*24));
+    const mesLabel=MONTHS[prox.m-1]+' '+prox.y;
+    if(diffDias<0) mensajes.push(`🔴 ${p.nombre} corresponde a ${mesLabel} y no lo has registrado`);
+    else if(diffDias===0) mensajes.push(`🟡 ${p.nombre} corresponde a este mes (${mesLabel})`);
+    else if(diffDias<=15) mensajes.push(`📅 ${p.nombre} corresponde a ${mesLabel} (en ${diffDias} días)`);
   });
 
   // 6. Mantenimiento del auto próximo — se revisa CADA tipo por separado
@@ -8195,7 +8223,8 @@ function generarReporteMensualPDF(y,m){
   // ── Pagos e Ingresos Frecuentes registrados este mes ──
   const mk=y+'-'+String(m+1).padStart(2,'0');
   const pfDelMes=(state.pagosFrecuentes||[]).filter(pf=>{
-    if((pf.frecuencia||'mensual')==='mensual') return pf.pagosRegistrados&&pf.pagosRegistrados[mk];
+    const freq=pf.frecuencia||'mensual';
+    if(freq==='mensual'||freq==='semestral') return pf.pagosRegistrados&&pf.pagosRegistrados[mk];
     const reg=pf.pagosRegistrados||{};
     return Object.keys(reg).some(k=>{
       if(!/^\d{4}$/.test(k)) return false;
@@ -11973,6 +12002,8 @@ function openPagoFrecuenteModal(id){
     document.getElementById('pf-frecuencia').value=pf.frecuencia||'mensual';
     document.getElementById('pf-mes-inicio').value=pf.mesInicio||'';
     document.getElementById('pf-fecha-anual').value=pf.fechaAnual||'';
+    const mesesSel=new Set(pf.meses||[]);
+    document.querySelectorAll('.pf-mes-check').forEach(chk=>{ chk.checked=mesesSel.has(parseInt(chk.value,10)); });
     document.getElementById('pf-tipo-monto').value=pf.tipoMonto;
     document.getElementById('pf-monto').value=pf.montoFijo||'';
     document.getElementById('pf-currency').value=pf.currency||'PEN';
@@ -11994,6 +12025,7 @@ function openPagoFrecuenteModal(id){
     const hoy=new Date();
     document.getElementById('pf-mes-inicio').value=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
     document.getElementById('pf-fecha-anual').value=todayLocalISO();
+    document.querySelectorAll('.pf-mes-check').forEach(chk=>{ chk.checked=false; });
     document.getElementById('pf-tipo-monto').value='fijo';
     document.getElementById('pf-monto').value='';
     document.getElementById('pf-currency').value='PEN';
@@ -12030,9 +12062,34 @@ function onPFTipoMontoChange(){
   document.getElementById('pf-monto-label').textContent=tipo==='base_descuentos'?'Monto base':'Monto fijo';
 }
 function onPFFrecuenciaChange(){
-  const esAnual=document.getElementById('pf-frecuencia').value==='anual';
-  document.getElementById('pf-mes-inicio-wrap').style.display=esAnual?'none':'block';
+  const val=document.getElementById('pf-frecuencia').value;
+  const esAnual=val==='anual';
+  const esSemestral=val==='semestral';
+  document.getElementById('pf-mes-inicio-wrap').style.display=(esAnual||esSemestral)?'none':'block';
   document.getElementById('pf-fecha-anual-wrap').style.display=esAnual?'block':'none';
+  document.getElementById('pf-meses-wrap').style.display=esSemestral?'block':'none';
+}
+// Dado un pago frecuente 'semestral' (meses específicos configurados libremente
+// por el usuario, ej. gratificación jul/dic o CTS may/nov), calcula el próximo
+// período (mes-año) que corresponde registrar: si el mes actual está dentro de
+// los meses configurados y AÚN no se registró, el "próximo" es este mismo mes.
+// Si ya se registró, o el mes actual no aplica, avanza mes a mes (hasta 24
+// meses) hasta encontrar el siguiente mes configurado sin registrar.
+function getPFProximoPeriodoSemestral(pf){
+  const meses=(pf.meses||[]).slice().sort((a,b)=>a-b);
+  if(!meses.length) return null;
+  const hoy=new Date();
+  const y0=hoy.getFullYear(), m0=hoy.getMonth()+1;
+  for(let offset=0; offset<24; offset++){
+    const totalM=(m0-1)+offset;
+    const y=y0+Math.floor(totalM/12);
+    const m=(totalM%12)+1;
+    if(!meses.includes(m)) continue;
+    const mk=y+'-'+String(m).padStart(2,'0');
+    const registrado=pf.pagosRegistrados && pf.pagosRegistrados[mk];
+    if(!registrado) return {mk,y,m};
+  }
+  return null;
 }
 // Calcula la próxima fecha de vencimiento de un pago frecuente ANUAL (ej.
 // SOAT) — si ya venció este año y todavía no se registró el pago de este
@@ -12077,6 +12134,7 @@ function savePagoFrecuente(){
   const frecuencia=document.getElementById('pf-frecuencia').value;
   const mesInicio=document.getElementById('pf-mes-inicio').value||'';
   const fechaAnual=document.getElementById('pf-fecha-anual').value||'';
+  const meses=Array.from(document.querySelectorAll('.pf-mes-check:checked')).map(chk=>parseInt(chk.value,10)).sort((a,b)=>a-b);
   const tipoMonto=document.getElementById('pf-tipo-monto').value;
   const montoFijo=parseFloat(document.getElementById('pf-monto').value)||0;
   const currency=document.getElementById('pf-currency').value;
@@ -12087,15 +12145,16 @@ function savePagoFrecuente(){
   const diaPago=document.getElementById('pf-dia-pago-ultimo').checked ? 'ultimo' : (diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null);
   if(!nombre){alert('Ingresa un nombre.');return;}
   if(frecuencia==='anual' && !fechaAnual){alert('Ingresa la fecha exacta de vencimiento.');return;}
+  if(frecuencia==='semestral' && !meses.length){alert('Selecciona al menos un mes en el que aplica.');return;}
   if((tipoMonto==='fijo'||tipoMonto==='base_descuentos') && montoFijo<=0){alert('Ingresa el monto '+(tipoMonto==='base_descuentos'?'base':'fijo')+'.');return;}
   if(!destino){alert('Selecciona una cuenta'+(tipo==='gasto'?' o tarjeta':'')+'.');return;}
 
   if(!state.pagosFrecuentes) state.pagosFrecuentes=[];
   if(editingPFId){
     const pf=state.pagosFrecuentes.find(p=>p.id===editingPFId);
-    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,fechaAnual,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago}); }
+    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,fechaAnual,meses,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago}); }
   } else {
-    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, fechaAnual, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]});
+    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]});
   }
   saveState();
   closePagoFrecuenteModal();
@@ -12141,14 +12200,19 @@ function renderPagosFrecuentes(){
   el.innerHTML=pagos.map(pf=>{
     const esIngreso=pf.tipo==='ingreso';
     const esAnual=pf.frecuencia==='anual';
+    const esSemestral=pf.frecuencia==='semestral';
     const esBaseDesc=pf.tipoMonto==='base_descuentos';
     // El "período" que se revisa depende de la frecuencia: mensual usa el
     // mes actual (YYYY-MM), anual usa el año de la próxima fecha de
-    // vencimiento (ver getPFProximaFechaAnual).
-    let periodoKey, proximaFecha=null;
+    // vencimiento (ver getPFProximaFechaAnual), semestral usa el próximo
+    // mes-año configurado sin registrar (ver getPFProximoPeriodoSemestral).
+    let periodoKey, proximaFecha=null, proximoSemestral=null;
     if(esAnual){
       proximaFecha=getPFProximaFechaAnual(pf);
       periodoKey=proximaFecha?String(proximaFecha.getFullYear()):null;
+    } else if(esSemestral){
+      proximoSemestral=getPFProximoPeriodoSemestral(pf);
+      periodoKey=proximoSemestral?proximoSemestral.mk:null;
     } else {
       periodoKey=mk;
     }
@@ -12176,13 +12240,26 @@ function renderPagosFrecuentes(){
       else if(!yaPagado && diffDias===0) inicioLabel=' · 🟡 Vence hoy';
       else if(!yaPagado) inicioLabel=' · Vence '+fechaLabel+' (en '+diffDias+' días)';
       else inicioLabel=' · Próximo: '+fechaLabel;
+    } else if(esSemestral){
+      const mesesLabel=(pf.meses||[]).map(m=>MONTHS[m-1].slice(0,3)).join('/');
+      const mesActualNum=parseInt(mk.split('-')[1],10);
+      if(proximoSemestral){
+        const nombreMes=MONTHS[proximoSemestral.m-1]+' '+proximoSemestral.y;
+        inicioLabel = proximoSemestral.m===mesActualNum
+          ? ' · Corresponde este mes ('+mesesLabel+')'
+          : ' · Próximo: '+nombreMes+' ('+mesesLabel+')';
+      } else {
+        inicioLabel=' · Meses: '+mesesLabel;
+      }
     } else if(pf.mesInicio){
       const [iy,im]=pf.mesInicio.split('-').map(Number);
       inicioLabel=' · desde '+MONTHS[im-1]+' '+iy;
     }
-    // Día límite de pago (opcional, no-anual) — mismo criterio de colores que
-    // la fecha anual: rojo si venció sin pagar, ámbar si es hoy, gris si falta.
-    if(!esAnual && pf.diaPago && !yaPagado){
+    // Día límite de pago (opcional, no-anual ni semestral — este último ya
+    // muestra su propia etiqueta de "corresponde este mes/próximo") — mismo
+    // criterio de colores que la fecha anual: rojo si venció sin pagar, ámbar
+    // si es hoy, gris si falta.
+    if(!esAnual && !esSemestral && pf.diaPago && !yaPagado){
       const hoyDp=new Date(); hoyDp.setHours(0,0,0,0);
       const diasEnMes=new Date(hoyDp.getFullYear(),hoyDp.getMonth()+1,0).getDate();
       const diaLimite=pfDiaLimite(pf.diaPago,diasEnMes);
@@ -12193,7 +12270,7 @@ function renderPagosFrecuentes(){
       else if(diffDp===0) inicioLabel+=' · 🟡 Vence hoy ('+label+')';
       else if(diffDp<=3) inicioLabel+=' · 🟠 Vence en '+diffDp+' día'+(diffDp===1?'':'s')+' ('+label+')';
       else inicioLabel+=' · Antes de '+label;
-    } else if(!esAnual && pf.diaPago && yaPagado){
+    } else if(!esAnual && !esSemestral && pf.diaPago && yaPagado){
       const hoyYp=new Date();
       const diasEnMesYp=new Date(hoyYp.getFullYear(),hoyYp.getMonth()+1,0).getDate();
       inicioLabel+=' · Vence '+pfDiaLabel(pf.diaPago,diasEnMesYp);
@@ -12222,7 +12299,7 @@ function renderPagosFrecuentes(){
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${esIngreso?'💰':'💸'} ${escapeHtml(pf.nombre)}${esAnual?' <span style="font-size:9px;color:var(--text3);font-weight:400">(anual)</span>':''}</div>
+          <div style="font-size:13px;font-weight:600">${esIngreso?'💰':'💸'} ${escapeHtml(pf.nombre)}${esAnual?' <span style="font-size:9px;color:var(--text3);font-weight:400">(anual)</span>':''}${esSemestral?' <span style="font-size:9px;color:var(--text3);font-weight:400">(semestral)</span>':''}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">${montoLabel} · ${destinoLabel}${pf.categoria?' · '+escapeHtml(pf.categoria):''}${inicioLabel}</div>
         </div>
         ${esBaseDesc
@@ -12285,16 +12362,22 @@ function removePFDescuentoPendiente(id, idx){
 }
 
 let pfRegistrarAnualTargetYear=null; // año objetivo cuando se registra un pago frecuente ANUAL
+let pfRegistrarSemestralTarget=null; // {mk,y,m} objetivo cuando se registra un pago frecuente SEMESTRAL
 
 function registrarPagoFrecuente(id){
   const pf=(state.pagosFrecuentes||[]).find(p=>p.id===id);
   if(!pf) return;
   const esIngreso=pf.tipo==='ingreso';
   const esAnual=pf.frecuencia==='anual';
+  const esSemestral=pf.frecuencia==='semestral';
   const esBaseDesc=pf.tipoMonto==='base_descuentos';
   editingPFId=id;
   document.getElementById('pf-registrar-title').textContent=(esIngreso?'Registrar ingreso: ':'Registrar: ')+pf.nombre;
-  document.getElementById('pf-registrar-mes-sel-wrap').style.display=esAnual?'none':'block';
+  // El selector genérico "Este mes / Próximo mes / +2" asume que CUALQUIER
+  // mes calendario es válido — para semestral eso es falso (solo aplican
+  // los meses configurados), así que se oculta igual que en "anual" y se usa
+  // directamente el próximo período calculado.
+  document.getElementById('pf-registrar-mes-sel-wrap').style.display=(esAnual||esSemestral)?'none':'block';
   document.getElementById('pf-registrar-mes-sel').value='0';
   document.getElementById('pf-registrar-base-wrap').style.display=esBaseDesc?'block':'none';
   document.getElementById('pf-registrar-monto-wrap').style.display=esBaseDesc?'none':'block';
@@ -12320,6 +12403,21 @@ function registrarPagoFrecuente(id){
     document.getElementById('pf-registrar-fecha').value = proximaFecha
       ? proximaFecha.getFullYear()+'-'+String(proximaFecha.getMonth()+1).padStart(2,'0')+'-'+String(proximaFecha.getDate()).padStart(2,'0')
       : todayLocalISO();
+  } else if(esSemestral){
+    const hoySem=new Date();
+    const prox=getPFProximoPeriodoSemestral(pf) || {mk:mesActualKey(), y:hoySem.getFullYear(), m:hoySem.getMonth()+1};
+    pfRegistrarSemestralTarget=prox;
+    document.getElementById('pf-registrar-mes').textContent=MONTHS[prox.m-1]+' '+prox.y;
+    // pf-registrar-warn no aplica acá: getPFProximoPeriodoSemestral ya
+    // devuelve solo períodos SIN registrar, así que nunca corresponde avisar
+    // "ya registrado" para el período que se está por confirmar.
+    document.getElementById('pf-registrar-warn').style.display='none';
+    // Fecha sugerida: si el período objetivo es el mes actual, hoy mismo;
+    // si es un mes futuro, el día 1 de ese mes (editable a mano igual).
+    const esMesActual=prox.y===hoySem.getFullYear() && prox.m===hoySem.getMonth()+1;
+    document.getElementById('pf-registrar-fecha').value = esMesActual
+      ? todayLocalISO()
+      : prox.y+'-'+String(prox.m).padStart(2,'0')+'-01';
   } else {
     onPFRegistrarMesChange();
   }
@@ -12404,10 +12502,16 @@ function confirmarPFRegistrar(){
   const pf=(state.pagosFrecuentes||[]).find(p=>p.id===editingPFId);
   if(!pf) return;
   const esAnual=pf.frecuencia==='anual';
+  const esSemestral=pf.frecuencia==='semestral';
   let y, m;
   if(esAnual){
     y=pfRegistrarAnualTargetYear;
     m=undefined; // no aplica para anual — ejecutarPagoFrecuente arma la clave solo con el año
+  } else if(esSemestral){
+    // ejecutarPagoFrecuente espera el mes en formato JS (0-indexado), y
+    // pfRegistrarSemestralTarget.m está en 1-12 (como pf.meses) — se convierte acá.
+    const target=pfRegistrarSemestralTarget || {y:new Date().getFullYear(), m:new Date().getMonth()+1};
+    y=target.y; m=target.m-1;
   } else {
     const offset=parseInt(document.getElementById('pf-registrar-mes-sel').value)||0;
     const hoy=new Date();
@@ -12526,6 +12630,43 @@ function openPFHistorial(id){
     }).join('');
     document.getElementById('pf-historial-summary').textContent=`${pagadosCount} de ${aplicablesCount} ciclos registrados (desde ${anioOrigen}, últimos 6 años)`;
     document.getElementById('pf-historial-list').innerHTML=rows;
+    document.getElementById('pf-historial-overlay').classList.add('open');
+    return;
+  }
+
+  if(pf.frecuencia==='semestral'){
+    // Para semestral se muestran los últimos 6 CICLOS (ocurrencias de los
+    // meses configurados, ej. jul/dic) yendo hacia atrás desde hoy — no los
+    // últimos 6 meses calendario, porque la mayoría de esos meses ni
+    // siquiera aplican.
+    const mesesConfig=(pf.meses||[]).slice().sort((a,b)=>a-b);
+    const hoyS=new Date();
+    const ciclos=[];
+    let cursorY=hoyS.getFullYear(), cursorM=hoyS.getMonth()+1;
+    for(let safety=0; safety<240 && ciclos.length<6; safety++){
+      if(mesesConfig.includes(cursorM)) ciclos.push({y:cursorY,m:cursorM});
+      cursorM--; if(cursorM<1){cursorM=12;cursorY--;}
+    }
+    let pagadosCount=0, aplicablesCount=0;
+    const rows=ciclos.map(({y,m})=>{
+      const key=y+'-'+String(m).padStart(2,'0');
+      const reg=registrados[key];
+      const label=MONTHS[m-1]+' '+y;
+      aplicablesCount++;
+      if(reg){
+        pagadosCount++;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px">${label}</span>
+          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${reg.monto.toFixed(2)}${reg.fecha?' ('+reg.fecha+')':''}</span>
+        </div>`;
+      }
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text3)">${label}</span>
+          <span style="font-size:12px;color:var(--red)">❌ Sin registrar</span>
+        </div>`;
+    }).join('');
+    document.getElementById('pf-historial-summary').textContent=`${pagadosCount} de ${aplicablesCount} ciclos registrados (últimos ${ciclos.length})`;
+    document.getElementById('pf-historial-list').innerHTML=rows||'<div style="font-size:11px;color:var(--text3)">Configura al menos un mes para ver el historial.</div>';
     document.getElementById('pf-historial-overlay').classList.add('open');
     return;
   }
@@ -17180,6 +17321,7 @@ if(state.projGoals){
       <select id="pf-frecuencia" onchange="onPFFrecuenciaChange()">
         <option value="mensual">Mensual (luz, teléfono, sueldo...)</option>
         <option value="anual">Anual (SOAT, seguro vehicular, revisión técnica...)</option>
+        <option value="semestral">Semestral — meses específicos (gratificación, CTS...)</option>
       </select>
     </div>
     <div class="field" id="pf-mes-inicio-wrap"><label>Mes de inicio <span style="font-size:10px;color:var(--text3)">(desde cuándo contar — para saber qué meses faltan)</span></label>
@@ -17188,6 +17330,23 @@ if(state.projGoals){
     <div class="field" id="pf-fecha-anual-wrap" style="display:none">
       <label>Fecha exacta <span style="font-size:10px;color:var(--text3)">(el día que vence/se renueva cada año — el recordatorio se basa en esta fecha)</span></label>
       <input id="pf-fecha-anual" type="date">
+    </div>
+    <div class="field" id="pf-meses-wrap" style="display:none">
+      <label>¿En qué meses aplica? <span style="font-size:10px;color:var(--text3)">(ej. gratificación: julio y diciembre — elige los que correspondan)</span></label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="1" style="width:auto;margin:0">Ene</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="2" style="width:auto;margin:0">Feb</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="3" style="width:auto;margin:0">Mar</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="4" style="width:auto;margin:0">Abr</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="5" style="width:auto;margin:0">May</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="6" style="width:auto;margin:0">Jun</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="7" style="width:auto;margin:0">Jul</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="8" style="width:auto;margin:0">Ago</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="9" style="width:auto;margin:0">Set</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="10" style="width:auto;margin:0">Oct</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="11" style="width:auto;margin:0">Nov</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:11px;color:var(--text2);cursor:pointer"><input type="checkbox" class="pf-mes-check" value="12" style="width:auto;margin:0">Dic</label>
+      </div>
     </div>
     <div class="field"><label>Tipo de monto</label>
       <select id="pf-tipo-monto" onchange="onPFTipoMontoChange()">
