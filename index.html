@@ -497,11 +497,15 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 .dash-split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
 .dash-widgets-container{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:22px;align-items:stretch;}
-.dash-widget-wrap{display:flex;transition:opacity .15s;}
-.dash-widget-wrap.dw-small{flex:1 1 170px;min-width:150px;}
-.dash-widget-wrap.dw-medium{flex:1 1 380px;min-width:300px;}
-.dash-widget-wrap.dw-large{flex:1 1 100%;}
+.dash-widget-wrap{display:flex;min-width:0;transition:opacity .15s;}
 .dash-widget-wrap>*{width:100%;}
+/* En mobile se ignora la configuración de columnas de escritorio — los
+   widgets 'small' ocupan media fila (2 por fila) y el resto la fila
+   completa, sin importar cuántas columnas/span tengan en desktop. */
+@media(max-width:700px){
+  .dash-widget-wrap{flex:1 1 100%!important;}
+  .dash-widget-wrap.dw-small{flex:1 1 calc(50% - 7px)!important;}
+}
 .editor-widget-row{transition:opacity .15s;}
 .ew-arrow-btn{background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:9px;padding:2px 5px;cursor:pointer;line-height:1.3;display:block;width:22px;}
 .ew-arrow-btn:disabled{opacity:0.3;cursor:default;}
@@ -1113,7 +1117,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="modal-overlay" id="editor-widgets-overlay" onclick="if(event.target===this)cerrarEditorWidgets()">
   <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto">
     <div class="modal-title"><span>✏️ Personalizar Resumen</span><button class="modal-close" onclick="cerrarEditorWidgets()">✕</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, y arrastra (⠿) o usa las flechas para ordenar.</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Marca lo que quieras ver, arrastra (⠿) o usa las flechas para ordenar, y el selector de la derecha define cuántas columnas ocupa cada uno.</div>
+    <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:600;margin:0">
+        Columnas por fila (escritorio)
+        <input id="ew-cols-input" type="number" min="1" max="12" value="4" style="width:60px;text-align:center;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--bg2);color:var(--text)" onchange="ewColsChange(this.value)">
+      </label>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">En celular se reduce solo a 2 o 1 columna, sin importar este número.</div>
+    </div>
     <div id="editor-widgets-list"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
       <button class="btn" onclick="cerrarEditorWidgets()">Cancelar</button>
@@ -2769,8 +2780,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 14:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva frecuencia "Semestral" en Pagos y Ingresos Frecuentes (Deudas), para casos como gratificación o CTS que se pagan 2 veces al año en meses específicos. Al crearlo eliges libremente en qué meses aplica (checkboxes de Ene a Dic). Se integró en: la lista de Pagos Frecuentes (muestra "Próximo: mes año" o "Corresponde este mes"), el modal de Registrar (usa el próximo período correcto en vez del mes actual — se probó que ANTES de este fix el modal ofrecía por defecto un mes que no correspondía), Proyección de cierre del dashboard, los avisos de "pendiente de registrar", el reporte PDF mensual, y el historial (últimos 6 ciclos en vez de últimos 6 meses calendario). Verificado con pruebas automatizadas (Node + Playwright): cálculo del próximo período en 6 escenarios distintos, flujo completo de creación/registro, y que la Proyección de cierre solo incluye el pago en su mes correspondiente.';
+const APP_VERSION_DATE = '28/08/26 - 15:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Ajuste al selector de "Columnas por fila": si una fila queda con menos widgets de los que caben en las columnas configuradas (ej. pediste 5 por fila pero al final solo entraron 2), esos widgets ahora se ESTIRAN para llenar todo el ancho disponible en proporción a su tamaño, en vez de quedarse angostos con espacio vacío al lado. De paso se corrigió un bug de precisión: el cálculo de ancho no restaba correctamente el espacio entre widgets (gap), lo que hacía que a veces saltara de fila un widget antes de completar las columnas configuradas. Verificado con Playwright: 5 widgets de 1 columna llenan una fila exacta (266px c/u en pantalla de 1440px), y si a la fila siguiente le tocan solo 2, se estiran a 685px c/u (llenando el 100% del ancho) en vez de quedarse en 266px con hueco vacío. En mobile se sigue ignorando esta configuración (2 columnas fijas para widgets pequeños, 1 para el resto).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11390,32 +11401,81 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'sueldos', visible:false}, {id:'comparativo', visible:false},
   {id:'anio-completo', visible:false}, {id:'minijuegos', visible:false},
 ];
+// Cuántas columnas ocupa un widget por defecto, según su tamaño de diseño
+// original (antes de que el usuario lo ajuste a mano con el selector) —
+// small = 1 columna, medium = 2, large = toda la fila (se recalcula según
+// el número de columnas configurado, no un valor fijo guardado).
+function dashDefaultSpanForSize(size, cols){
+  if(size==='small') return 1;
+  if(size==='medium') return 2;
+  return cols||4; // 'large'
+}
 function ensureDashboardWidgetsDefault(){
+  if(!state.dashResumenCols) state.dashResumenCols=4;
   if(!Array.isArray(state.dashboardWidgets)){
     state.dashboardWidgets=DASHBOARD_WIDGETS_DEFAULT.map(w=>({...w}));
-    return;
   }
   const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
   DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
     if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
   });
   state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
+  // Migración: los pagos frecuentes guardados antes de este selector no
+  // tenían colSpan — se les asigna uno razonable según su tamaño original.
+  state.dashboardWidgets.forEach(w=>{
+    if(!w.colSpan){
+      const def=DASHBOARD_WIDGET_DEFS[w.id];
+      w.colSpan=def?dashDefaultSpanForSize(def.size, state.dashResumenCols):1;
+    }
+  });
+}
+// Agrupa los widgets VISIBLES (en el orden dado) en filas de máximo "cols"
+// columnas de ancho — misma lógica que usa tanto el render real del
+// dashboard como la vista previa del editor, para que nunca queden
+// desincronizados entre sí.
+function agruparWidgetsEnFilas(list, cols){
+  const filas=[];
+  let filaActual=[], usoFila=0;
+  list.filter(w=>w.visible).forEach(w=>{
+    const span=Math.max(1, Math.min(w.colSpan||1, cols));
+    if(usoFila+span>cols && filaActual.length){ filas.push(filaActual); filaActual=[]; usoFila=0; }
+    filaActual.push({...w, span});
+    usoFila+=span;
+  });
+  if(filaActual.length) filas.push(filaActual);
+  return filas;
 }
 function renderDashboardWidgets(){
   ensureDashboardWidgetsDefault();
   const cont=document.getElementById('dash-widgets-container');
   if(!cont) return;
+  const cols=state.dashResumenCols||4;
+  const gap=14; // debe coincidir con el "gap" de .dash-widgets-container en el CSS
   const visibles=state.dashboardWidgets.filter(w=>w.visible);
+  // flex-basis calculado con calc() para DESCONTAR el gap entre columnas —
+  // si se usa un simple porcentaje (span/cols*100%) sin restar el gap, la
+  // suma de N widgets + sus (N-1) gaps se pasa del ancho del contenedor y
+  // el navegador salta de fila antes de completar las columnas configuradas.
+  // flex-grow=span: si una fila queda sub-ocupada (ej. 2 de 5 columnas), los
+  // widgets de esa fila se estiran para llenar TODO el ancho disponible.
   cont.innerHTML=visibles.map(w=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
-    return def ? `<div class="dash-widget-wrap dw-${def.size}" data-wid="${w.id}">${def.shell()}</div>` : '';
+    if(!def) return '';
+    const span=Math.max(1, Math.min(w.colSpan||dashDefaultSpanForSize(def.size,cols), cols));
+    const unit=`((100% - ${(cols-1)*gap}px) / ${cols})`;
+    const basis=`calc(${span} * ${unit} + ${(span-1)*gap}px)`;
+    return `<div class="dash-widget-wrap dw-${def.size}" data-wid="${w.id}" style="flex-grow:${span};flex-shrink:${span};flex-basis:${basis}">${def.shell()}</div>`;
   }).join('');
 }
 // ── Editor de widgets (checkbox + arrastrar + flechas) ──
 let editorWidgetsTemp=null;
+let editorDashColsTemp=4;
 function abrirEditorWidgets(){
   ensureDashboardWidgetsDefault();
   editorWidgetsTemp=state.dashboardWidgets.map(w=>({...w}));
+  editorDashColsTemp=state.dashResumenCols||4;
+  const colsInput=document.getElementById('ew-cols-input');
+  if(colsInput) colsInput.value=editorDashColsTemp;
   renderEditorWidgetsList();
   document.getElementById('editor-widgets-overlay').classList.add('open');
 }
@@ -11423,11 +11483,27 @@ function cerrarEditorWidgets(){
   document.getElementById('editor-widgets-overlay').classList.remove('open');
   editorWidgetsTemp=null;
 }
+// Vista previa del editor: usa el MISMO agrupador que el render real
+// (agruparWidgetsEnFilas), así el número que ve el usuario mientras ajusta
+// los selectores siempre coincide con lo que terminará viendo en el Resumen.
+function calcularFilasPreviewWidgets(list, cols){
+  const filas=agruparWidgetsEnFilas(list, cols);
+  const info={};
+  filas.forEach((fila,idx)=>{
+    const usoFila=fila.reduce((s,w)=>s+w.span,0);
+    fila.forEach(w=>{ info[w.id]={fila:idx+1, usoFila, cols}; });
+  });
+  return list.map(w=>w.visible?(info[w.id]||null):null);
+}
 function renderEditorWidgetsList(){
   const el=document.getElementById('editor-widgets-list');
+  const filas=calcularFilasPreviewWidgets(editorWidgetsTemp, editorDashColsTemp);
   el.innerHTML=editorWidgetsTemp.map((w,idx)=>{
     const def=DASHBOARD_WIDGET_DEFS[w.id];
     if(!def) return '';
+    const span=w.colSpan||dashDefaultSpanForSize(def.size, editorDashColsTemp);
+    const info=filas[idx];
+    const filaLabel=info?`Fila ${info.fila} · ${info.usoFila}/${info.cols} col.`:'—';
     return `<div class="editor-widget-row" draggable="true" data-wid="${w.id}"
       ondragstart="ewDragStart(event)" ondragover="ewDragOver(event)" ondrop="ewDrop(event)" ondragend="ewDragEnd(event)"
       style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--border)">
@@ -11436,12 +11512,28 @@ function renderEditorWidgetsList(){
         <input type="checkbox" ${w.visible?'checked':''} onchange="ewToggle('${w.id}',this.checked)" style="width:auto;margin:0">
         ${def.label}
       </label>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:56px">
+        <input type="number" min="1" max="${editorDashColsTemp}" value="${span}" style="width:44px;text-align:center;padding:3px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:12px" onchange="ewSpanChange('${w.id}',this.value)">
+        <span style="font-size:9px;color:var(--text3);white-space:nowrap">${w.visible?filaLabel:'fila —'}</span>
+      </div>
       <div style="display:flex;flex-direction:column;gap:2px">
         <button class="ew-arrow-btn" onclick="ewMover(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
         <button class="ew-arrow-btn" onclick="ewMover(${idx},1)" ${idx===editorWidgetsTemp.length-1?'disabled':''}>▼</button>
       </div>
     </div>`;
   }).join('');
+}
+function ewColsChange(value){
+  const n=Math.max(1,Math.min(12,parseInt(value,10)||4));
+  editorDashColsTemp=n;
+  document.getElementById('ew-cols-input').value=n;
+  renderEditorWidgetsList();
+}
+function ewSpanChange(id, value){
+  const w=editorWidgetsTemp.find(x=>x.id===id);
+  if(!w) return;
+  w.colSpan=Math.max(1,Math.min(editorDashColsTemp,parseInt(value,10)||1));
+  renderEditorWidgetsList();
 }
 function ewToggle(id, checked){
   const w=editorWidgetsTemp.find(x=>x.id===id);
@@ -11474,6 +11566,7 @@ function ewDrop(ev){
 function ewDragEnd(ev){ ev.currentTarget.style.opacity='1'; ewDragId=null; }
 function guardarEditorWidgets(){
   state.dashboardWidgets=editorWidgetsTemp;
+  state.dashResumenCols=editorDashColsTemp;
   saveState();
   cerrarEditorWidgets();
   renderDashboard();
