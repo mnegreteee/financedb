@@ -1924,8 +1924,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div class="card" style="padding:16px 20px;margin-bottom:16px">
-    <div class="section-title" style="font-size:13px;margin-bottom:10px">Aportes registrados <span style="font-weight:400;color:var(--text3)">(mes a mes)</span></div>
-    <div class="table-scroll">
+    <div class="section-title" style="font-size:13px;margin-bottom:10px">Aportes registrados <span style="font-weight:400;color:var(--text3)">(mes a mes, agrupados por año)</span></div>
+    <div class="table-scroll" style="max-height:420px;overflow-y:auto">
     <table class="account-table" style="width:100%;min-width:320px">
       <thead><tr><th>Mes</th><th style="text-align:right">Aporte</th><th></th></tr></thead>
       <tbody id="afp-aportes-tbody"></tbody>
@@ -1935,8 +1935,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div class="card" style="padding:16px 20px">
-    <div class="section-title" style="font-size:13px;margin-bottom:10px">Saldos registrados <span style="font-weight:400;color:var(--text3)">(cuando revisas tu AFP — no tiene que ser mensual)</span></div>
-    <div class="table-scroll">
+    <div class="section-title" style="font-size:13px;margin-bottom:10px">Saldos registrados <span style="font-weight:400;color:var(--text3)">(cuando revisas tu AFP — no tiene que ser mensual — agrupados por año)</span></div>
+    <div class="table-scroll" style="max-height:420px;overflow-y:auto">
     <table class="account-table" style="width:100%;min-width:560px">
       <thead><tr><th>Fecha</th><th style="text-align:right">Saldo total</th><th style="text-align:right">Rentabilidad</th><th style="text-align:right">%</th><th></th></tr></thead>
       <tbody id="afp-saldos-tbody"></tbody>
@@ -2994,8 +2994,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 21:36'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo botón "📅 Varios meses" en AFP, para cuando el sueldo es fijo y el descuento de AFP es el mismo mes a mes — pides desde qué mes/año hasta qué mes/año, un solo monto, y se registra en todos esos meses de una vez (probado con 12 meses de un jalón). Si alguno de esos meses ya tenía un aporte distinto guardado, avisa antes de reemplazarlo (probado: al intentar sobrescribir 3 meses con un monto distinto, pidió confirmación, mostró cuáles eran, y dejó el resto de meses intactos). El modal nuevo también se probó para que no se cierre solo al interactuar con sus campos.';
+const APP_VERSION_DATE = '28/08/26 - 21:57'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mejoras visuales en las tablas de AFP (Aportes y Saldos), a pedido de Miguel: (1) ahora se agrupan por año con un encabezado plegable (▶/▼) que muestra el total anual (suma de aportes, o el último saldo del año) sin tener que expandirlo — el año más reciente empieza expandido, el resto colapsado; (2) las tablas ya no crecen sin límite: quedan con una altura máxima (~10 filas visibles) y scroll vertical propio para ver el resto sin que ocupen toda la pantalla. Verificado con Playwright: 3 años de datos con totales anuales exactos (ej. 12 meses × S/450 = S/5,400.00 mostrado en el encabezado colapsado), expansión/colapso funcionando, y el scroll activándose cuando el contenido excede los 420px de alto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -15650,13 +15650,14 @@ function calcularSimuladorNeto(){
 // ══════════════════════════════════════════════════════
 //  AFP — seguimiento del fondo de pensiones, en DOS listas independientes:
 //  (1) "Aportes" — el monto mensual que se descuenta/deposita, mes a mes.
-//  (2) "Saldos" — el saldo TOTAL del fondo, actualizado en fechas libres
-//      cada vez que el usuario revisa su AFP (no tiene que ser mensual).
-//  La rentabilidad se calcula SOLO entre saldos consecutivos, descontando
-//  los aportes registrados en ese rango de meses:
-//    rentabilidad = saldo_actual − saldo_anterior − aportes_del_período
-//  El primer saldo histórico no tiene "saldo anterior" con el que comparar,
-//  así que su rentabilidad queda en null (se muestra como "—").
+//  (2) "Saldos" — el saldo TOTAL del fondo (aportes + ganancias), actualizado
+//      en fechas libres cada vez que el usuario revisa su AFP (no tiene que
+//      ser mensual).
+//  La rentabilidad de CADA saldo se calcula comparándolo contra la suma
+//  acumulada de todos los aportes registrados hasta esa fecha — no contra
+//  el saldo anterior. Esto significa que con UN SOLO saldo registrado ya se
+//  puede ver rentabilidad, siempre que haya aportes cargados:
+//    rentabilidad = saldo_total − aportes_acumulados_hasta_esa_fecha
 // ══════════════════════════════════════════════════════
 function afpMonthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
 // Migra datos del modelo viejo (state.afp.registros, un solo objeto con
@@ -15681,27 +15682,24 @@ function migrarAFPSiNecesario(){
   if(!state.afp.saldos) state.afp.saldos=[];
 }
 // Serie de SALDOS ordenada cronológicamente, cada uno con su rentabilidad ya
-// calculada (o null si es el primero de la serie). Esta es la función que
-// usan tanto el widget del Resumen como el Patrimonio Neto para saber el
-// "saldo actual" (el saldo más reciente de esta lista).
+// calculada — comparando ese saldo contra la suma acumulada de TODOS los
+// aportes registrados hasta esa fecha (no contra el saldo anterior). Con
+// esto, un solo saldo ya alcanza para ver rentabilidad; no hace falta
+// esperar a tener 2 saldos registrados.
+//   rentabilidad = saldo_total − aportes_acumulados_hasta_esa_fecha
+// Esta es la función que usan tanto el widget del Resumen como el
+// Patrimonio Neto para saber el "saldo actual" (el saldo más reciente).
 function calcularSerieAFP(){
   migrarAFPSiNecesario();
   const saldos=(state.afp.saldos||[]).slice().sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
   const aportesObj=state.afp.aportes||{};
-  let prevSaldo=null, prevKey=null;
+  const aportesKeys=Object.keys(aportesObj).sort();
   return saldos.map(s=>{
     const key=s.fecha.slice(0,7); // 'YYYY-MM'
-    let rentabilidad=null, pct=null;
-    if(prevSaldo!==null){
-      // Aportes que caen DESPUÉS del mes del saldo anterior y HASTA el mes
-      // de este saldo (inclusive) — se asume que el aporte del mismo mes
-      // del saldo anterior ya estaba reflejado en esa lectura.
-      const sumAportes=Object.keys(aportesObj).filter(k=>k>prevKey && k<=key).reduce((sum,k)=>sum+aportesObj[k],0);
-      rentabilidad = s.saldoTotal - prevSaldo - sumAportes;
-      pct = prevSaldo>0 ? (rentabilidad/prevSaldo*100) : null;
-    }
-    prevSaldo=s.saldoTotal; prevKey=key;
-    return {...s, rentabilidad, pct};
+    const aportesAcumulados=aportesKeys.filter(k=>k<=key).reduce((sum,k)=>sum+aportesObj[k],0);
+    const rentabilidad = s.saldoTotal - aportesAcumulados;
+    const pct = aportesAcumulados>0 ? (rentabilidad/aportesAcumulados*100) : null;
+    return {...s, aportesAcumulados, rentabilidad, pct};
   });
 }
 // Lista de APORTES ordenada cronológicamente (independiente de los saldos).
@@ -15829,10 +15827,13 @@ function abrirAFPSaldoModal(id){
     document.getElementById('afp-saldo-monto').value='';
   }
   const serie=calcularSerieAFP();
+  const totalAportadoHint=calcularListaAportes().reduce((s,a)=>s+a.monto,0);
   const hint=document.getElementById('afp-saldo-modal-hint');
   hint.textContent = serie.length
     ? `Último saldo registrado: S/ ${serie[serie.length-1].saldoTotal.toFixed(2)} (${serie[serie.length-1].fecha})`
-    : 'Este será tu primer registro — su rentabilidad no se puede calcular todavía (no hay saldo anterior con el que comparar).';
+    : (totalAportadoHint>0
+        ? `Este será tu primer registro. Ya llevas S/ ${totalAportadoHint.toFixed(2)} aportado — la rentabilidad saldrá de comparar el saldo que ingreses contra eso.`
+        : 'Este será tu primer registro. Registra también tus aportes para poder ver la rentabilidad (saldo − aportado).');
   document.getElementById('afp-saldo-modal-overlay').classList.add('open');
 }
 function cerrarAFPSaldoModal(){
@@ -15884,6 +15885,20 @@ function renderAFPPatrimonioToggleBtn(){
   const activo=!!state.incluirAFPEnPatrimonio;
   btn.textContent=activo?'🟢 Activado':'⚪ Desactivado';
 }
+// Qué años están expandidos en cada tabla (Aportes / Saldos), por separado.
+// Empiezan en null — la primera vez que se renderiza, renderAFP() decide
+// abrir el año más reciente y deja el resto colapsado; después de eso, se
+// respeta lo que el usuario haya tocado a mano mientras dure la sesión.
+let afpAportesYearsOpen=null;
+let afpSaldosYearsOpen=null;
+function toggleAFPAportesYear(anio){
+  if(afpAportesYearsOpen.has(anio)) afpAportesYearsOpen.delete(anio); else afpAportesYearsOpen.add(anio);
+  renderAFP();
+}
+function toggleAFPSaldosYear(anio){
+  if(afpSaldosYearsOpen.has(anio)) afpSaldosYearsOpen.delete(anio); else afpSaldosYearsOpen.add(anio);
+  renderAFP();
+}
 function renderAFP(){
   renderAFPPatrimonioToggleBtn();
   const serie=calcularSerieAFP();     // saldos con rentabilidad calculada
@@ -15891,42 +15906,78 @@ function renderAFP(){
   const sym='S/ ';
   const saldoActual = serie.length ? serie[serie.length-1].saldoTotal : 0;
   const totalAportado = aportes.reduce((s,a)=>s+a.monto,0);
-  const rentabilidadTotal = serie.reduce((s,r)=>s+(r.rentabilidad||0),0);
   const ultima = serie.length ? serie[serie.length-1] : null;
-  const rentActual = ultima ? ultima.rentabilidad : null;
+  // Con el nuevo modelo, un solo saldo ya alcanza para calcular rentabilidad
+  // (saldo actual − aportes acumulados a esa fecha) — no hace falta esperar
+  // a tener un segundo saldo con el que comparar.
+  const rentabilidadTotal = ultima ? ultima.rentabilidad : null;
+  const pctActual = ultima ? ultima.pct : null;
   document.getElementById('afp-summary').innerHTML=`
     <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${saldoActual.toFixed(2)}</div><div class="dash-kpi-sub">${serie.length} saldo${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
     <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${totalAportado.toFixed(2)}</div><div class="dash-kpi-sub">${aportes.length} aporte${aportes.length===1?'':'s'} registrado${aportes.length===1?'':'s'}</div></div>
-    <div class="dash-kpi ${rentabilidadTotal>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal>=0?'+':''}${sym}${rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">desde tu 1er saldo</div></div>
-    <div class="dash-kpi ${(rentActual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD ACTUAL</div><div class="dash-kpi-val">${rentActual===null?'—':(rentActual>=0?'+':'')+sym+rentActual.toFixed(2)}</div><div class="dash-kpi-sub">${ultima?'desde '+ultima.fecha:'sin datos'}</div></div>
+    <div class="dash-kpi ${(rentabilidadTotal||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal===null?'—':(rentabilidadTotal>=0?'+':'')+sym+rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">saldo − aportado</div></div>
+    <div class="dash-kpi ${(pctActual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD %</div><div class="dash-kpi-val">${pctActual===null?'—':(pctActual>=0?'+':'')+pctActual.toFixed(2)+'%'}</div><div class="dash-kpi-sub">${ultima?'al '+ultima.fecha:'sin datos'}</div></div>
   `;
 
-  // ── Tabla de APORTES (mes a mes) ──
+  // ── Tabla de APORTES, agrupada por año (encabezado plegable + total anual) ──
   const aportesTbody=document.getElementById('afp-aportes-tbody');
   document.getElementById('afp-aportes-empty').style.display = aportes.length ? 'none' : 'block';
-  aportesTbody.innerHTML=aportes.slice().reverse().map(a=>{
-    const [y,m]=a.key.split('-');
-    return `<tr>
-      <td>${MONTHS[parseInt(m,10)-1]} ${y}</td>
-      <td style="text-align:right">${sym}${a.monto.toFixed(2)}</td>
-      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPAporteModal('${a.key}')" title="Editar">✏</span></td>
+  const aportesPorAnio={};
+  aportes.forEach(a=>{ const anio=a.key.slice(0,4); (aportesPorAnio[anio]=aportesPorAnio[anio]||[]).push(a); });
+  const aniosAportes=Object.keys(aportesPorAnio).sort((a,b)=>b-a); // año más reciente primero
+  // El año más reciente empieza expandido, el resto colapsado — solo la
+  // PRIMERA vez que se renderiza (afpAportesYearsOpen sigue null); después,
+  // se respeta lo que el usuario haya abierto/cerrado a mano.
+  if(afpAportesYearsOpen===null) afpAportesYearsOpen=new Set(aniosAportes.length?[aniosAportes[0]]:[]);
+  aportesTbody.innerHTML=aniosAportes.map(anio=>{
+    const meses=aportesPorAnio[anio].slice().reverse(); // más reciente primero dentro del año
+    const totalAnio=meses.reduce((s,a)=>s+a.monto,0);
+    const abierto=afpAportesYearsOpen.has(anio);
+    const filaHeader=`<tr style="cursor:pointer;background:var(--bg3)" onclick="toggleAFPAportesYear('${anio}')">
+      <td style="font-weight:600">${abierto?'▼':'▶'} ${anio} <span style="font-weight:400;color:var(--text3);font-size:11px">(${meses.length} mes${meses.length===1?'':'es'})</span></td>
+      <td style="text-align:right;font-weight:600">${sym}${totalAnio.toFixed(2)}</td>
+      <td></td>
     </tr>`;
+    const filasMeses = abierto ? meses.map(a=>{
+      const [y,m]=a.key.split('-');
+      return `<tr>
+        <td style="padding-left:24px">${MONTHS[parseInt(m,10)-1]} ${y}</td>
+        <td style="text-align:right">${sym}${a.monto.toFixed(2)}</td>
+        <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPAporteModal('${a.key}')" title="Editar">✏</span></td>
+      </tr>`;
+    }).join('') : '';
+    return filaHeader + filasMeses;
   }).join('');
 
-  // ── Tabla de SALDOS (fechas libres) ──
+  // ── Tabla de SALDOS, agrupada por año (encabezado plegable) ──
   const saldosTbody=document.getElementById('afp-saldos-tbody');
   document.getElementById('afp-saldos-empty').style.display = serie.length ? 'none' : 'block';
-  saldosTbody.innerHTML=serie.slice().reverse().map(r=>{
-    const rentColor = r.rentabilidad===null ? 'var(--text3)' : (r.rentabilidad>=0?'var(--green)':'var(--red)');
-    const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'')+sym+r.rentabilidad.toFixed(2);
-    const pctTxt = r.pct===null ? '—' : (r.pct>=0?'+':'')+r.pct.toFixed(2)+'%';
-    return `<tr>
-      <td>${r.fecha}</td>
-      <td style="text-align:right;font-weight:600">${sym}${r.saldoTotal.toFixed(2)}</td>
-      <td style="text-align:right;color:${rentColor}">${rentTxt}</td>
-      <td style="text-align:right;color:${rentColor}">${pctTxt}</td>
-      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPSaldoModal('${r.id}')" title="Editar">✏</span></td>
+  const saldosPorAnio={};
+  serie.forEach(r=>{ const anio=r.fecha.slice(0,4); (saldosPorAnio[anio]=saldosPorAnio[anio]||[]).push(r); });
+  const aniosSaldos=Object.keys(saldosPorAnio).sort((a,b)=>b-a);
+  if(afpSaldosYearsOpen===null) afpSaldosYearsOpen=new Set(aniosSaldos.length?[aniosSaldos[0]]:[]);
+  saldosTbody.innerHTML=aniosSaldos.map(anio=>{
+    const items=saldosPorAnio[anio].slice().reverse(); // más reciente primero dentro del año
+    const abierto=afpSaldosYearsOpen.has(anio);
+    const ultimoDelAnio=items[0]; // ya en orden descendente
+    const filaHeader=`<tr style="cursor:pointer;background:var(--bg3)" onclick="toggleAFPSaldosYear('${anio}')">
+      <td style="font-weight:600">${abierto?'▼':'▶'} ${anio} <span style="font-weight:400;color:var(--text3);font-size:11px">(${items.length})</span></td>
+      <td style="text-align:right;font-weight:600">${sym}${ultimoDelAnio.saldoTotal.toFixed(2)}</td>
+      <td colspan="3"></td>
     </tr>`;
+    const filasDetalle = abierto ? items.map(r=>{
+      const rentColor = r.rentabilidad===null ? 'var(--text3)' : (r.rentabilidad>=0?'var(--green)':'var(--red)');
+      const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'')+sym+r.rentabilidad.toFixed(2);
+      const pctTxt = r.pct===null ? '—' : (r.pct>=0?'+':'')+r.pct.toFixed(2)+'%';
+      return `<tr>
+        <td style="padding-left:24px">${r.fecha}</td>
+        <td style="text-align:right;font-weight:600">${sym}${r.saldoTotal.toFixed(2)}</td>
+        <td style="text-align:right;color:${rentColor}">${rentTxt}</td>
+        <td style="text-align:right;color:${rentColor}">${pctTxt}</td>
+        <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPSaldoModal('${r.id}')" title="Editar">✏</span></td>
+      </tr>`;
+    }).join('') : '';
+    return filaHeader + filasDetalle;
   }).join('');
 
   // ── Gráfico: saldo total (línea) + rentabilidad por período (barras) ──
