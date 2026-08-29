@@ -3026,8 +3026,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '29/08/26 - 00:13'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Comparación completa función por función e ID por ID entre tu archivo y el de Nathy, a tu pedido. Encontré y corregí un bug real: el fix de "editar gastos individuales en deudas Voy sumando gastos" (ícono ✏ junto a la X) que tu memoria documentaba como aplicado a Nathy el 25/08/26 nunca se había portado a tu archivo — solo podías borrar y recrear un gasto mal ingresado. Ya está recuperado: abrí el modal en modo edición, cambié un monto de S/25 a S/30, y el total de la deuda se recalculó correctamente. También identifiqué (sin tocar, pendiente de confirmación) 2 features que existen en tu app pero no en la de Nathy: "Fondo personalizado" y "Números compactos" (el toggle 15.4K) — parecen ser configuraciones visuales específicas para ti, así que no las repliqué sin preguntar.';
+const APP_VERSION_DATE = '29/08/26 - 00:26'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Bug corregido: los montos de AFP y Lista de Compras (las 2 secciones nuevas de esta sesión) usaban toFixed(2) sin separador de miles — por eso "S/ 20128.79" se veía cortado en pantallas angostas en vez de "S/ 20,128.79". Se agregó numFmt() (mismo criterio que fmtS/fmtD del resto de la app) y se corrigieron los 19 puntos afectados: resumen de AFP, tablas de Aportes/Saldos agrupadas por año, textos de los modales, resumen de Compras, e historial de precio. Verificado con Playwright reproduciendo tus números reales: S/20,128.79, S/16,705.42, S/1,500.50 — todos con coma ahora. No se tocaron los otros ~137 usos de toFixed(2) en el resto del archivo (partes ya establecidas de la app, como la que se ve correcta en la imagen 1, o valores no-monetarios como porcentajes/tipo de cambio) para no arriesgar una modificación masiva sin poder verificar cada caso puntualmente — avísame si encuentras algún otro monto sin comas y lo reviso puntual.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4140,6 +4140,11 @@ function showPage(name){
 // ── HELPERS ───────────────────────────────────────────
 function fmtS(n){return 'S/ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 function fmtD(n){return '$ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+// Igual que fmtS/fmtD pero sin el símbolo de moneda — para armar montos con
+// el símbolo ya puesto aparte (ej. AFP y Lista de Compras, donde a veces es
+// S/ y a veces $ según el ítem). Siempre en valor absoluto: el signo +/- se
+// agrega aparte donde haga falta.
+function numFmt(n){return Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 // Toma un string YA formateado (ej. "S/ 15,648.97" o "S/ 4,964.05 + $ 2,765.09")
 // y compacta cada número grande que encuentre dentro (15,648.97 -> 15.6K),
 // sin tocar símbolos de moneda ni el "+" que separa montos mixtos. Números
@@ -16014,13 +16019,13 @@ function guardarAFPAporteMasivo(){
   const existentesDistintos=keys.filter(k=>state.afp.aportes[k]!==undefined && state.afp.aportes[k]!==monto);
   if(existentesDistintos.length){
     const nombres=existentesDistintos.map(k=>{ const [yy,mm]=k.split('-'); return MONTHS[parseInt(mm,10)-1].slice(0,3)+' '+yy; }).join(', ');
-    if(!confirm(`${existentesDistintos.length} de esos meses ya tenían un aporte distinto guardado (${nombres}). ¿Reemplazarlos con S/ ${monto.toFixed(2)}?`)) return;
+    if(!confirm(`${existentesDistintos.length} de esos meses ya tenían un aporte distinto guardado (${nombres}). ¿Reemplazarlos con S/ ${numFmt(monto)}?`)) return;
   }
   keys.forEach(k=>{ state.afp.aportes[k]=monto; });
   saveState();
   cerrarAFPAporteMasivoModal();
   renderAFP();
-  alert(`Listo — se registró S/ ${monto.toFixed(2)} en ${keys.length} mes${keys.length===1?'':'es'}.`);
+  alert(`Listo — se registró S/ ${numFmt(monto)} en ${keys.length} mes${keys.length===1?'':'es'}.`);
 }
 
 // ── Modal: Registrar/editar SALDO actual ────────────────
@@ -16044,9 +16049,9 @@ function abrirAFPSaldoModal(id){
   const totalAportadoHint=calcularListaAportes().reduce((s,a)=>s+a.monto,0);
   const hint=document.getElementById('afp-saldo-modal-hint');
   hint.textContent = serie.length
-    ? `Último saldo registrado: S/ ${serie[serie.length-1].saldoTotal.toFixed(2)} (${serie[serie.length-1].fecha})`
+    ? `Último saldo registrado: S/ ${numFmt(serie[serie.length-1].saldoTotal)} (${serie[serie.length-1].fecha})`
     : (totalAportadoHint>0
-        ? `Este será tu primer registro. Ya llevas S/ ${totalAportadoHint.toFixed(2)} aportado — la rentabilidad saldrá de comparar el saldo que ingreses contra eso.`
+        ? `Este será tu primer registro. Ya llevas S/ ${numFmt(totalAportadoHint)} aportado — la rentabilidad saldrá de comparar el saldo que ingreses contra eso.`
         : 'Este será tu primer registro. Registra también tus aportes para poder ver la rentabilidad (saldo − aportado).');
   document.getElementById('afp-saldo-modal-overlay').classList.add('open');
 }
@@ -16134,11 +16139,11 @@ function renderAFP(){
   const rentMensual = (rentabilidadTotal!==null && mesesTranscurridos) ? rentabilidadTotal/mesesTranscurridos : null;
   const pctMensual = (pctActual!==null && mesesTranscurridos) ? pctActual/mesesTranscurridos : null;
   document.getElementById('afp-summary').innerHTML=`
-    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${saldoActual.toFixed(2)}</div><div class="dash-kpi-sub">${serie.length} saldo${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
-    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${totalAportado.toFixed(2)}</div><div class="dash-kpi-sub">${aportes.length} aporte${aportes.length===1?'':'s'} registrado${aportes.length===1?'':'s'}</div></div>
-    <div class="dash-kpi ${(rentabilidadTotal||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal===null?'—':(rentabilidadTotal>=0?'+':'')+sym+rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">saldo − aportado</div></div>
+    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${numFmt(saldoActual)}</div><div class="dash-kpi-sub">${serie.length} saldo${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
+    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${numFmt(totalAportado)}</div><div class="dash-kpi-sub">${aportes.length} aporte${aportes.length===1?'':'s'} registrado${aportes.length===1?'':'s'}</div></div>
+    <div class="dash-kpi ${(rentabilidadTotal||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal===null?'—':(rentabilidadTotal>=0?'+':'-')+sym+numFmt(rentabilidadTotal)}</div><div class="dash-kpi-sub">saldo − aportado</div></div>
     <div class="dash-kpi ${(pctActual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD %</div><div class="dash-kpi-val">${pctActual===null?'—':(pctActual>=0?'+':'')+pctActual.toFixed(2)+'%'}</div><div class="dash-kpi-sub">${ultima?'al '+ultima.fecha:'sin datos'}</div></div>
-    <div class="dash-kpi ${(rentMensual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTAB. MENSUAL PROM.</div><div class="dash-kpi-val">${rentMensual===null?'—':(rentMensual>=0?'+':'')+sym+rentMensual.toFixed(2)}</div><div class="dash-kpi-sub">${mesesTranscurridos?(pctMensual!==null?(pctMensual>=0?'+':'')+pctMensual.toFixed(2)+'% · ':'')+'en '+mesesTranscurridos+' mes'+(mesesTranscurridos===1?'':'es'):'sin datos'}</div></div>
+    <div class="dash-kpi ${(rentMensual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTAB. MENSUAL PROM.</div><div class="dash-kpi-val">${rentMensual===null?'—':(rentMensual>=0?'+':'-')+sym+numFmt(rentMensual)}</div><div class="dash-kpi-sub">${mesesTranscurridos?(pctMensual!==null?(pctMensual>=0?'+':'')+pctMensual.toFixed(2)+'% · ':'')+'en '+mesesTranscurridos+' mes'+(mesesTranscurridos===1?'':'es'):'sin datos'}</div></div>
   `;
 
   // ── Tabla de APORTES, agrupada por año (encabezado plegable + total anual) ──
@@ -16157,14 +16162,14 @@ function renderAFP(){
     const abierto=afpAportesYearsOpen.has(anio);
     const filaHeader=`<tr style="cursor:pointer;background:var(--bg3)" onclick="toggleAFPAportesYear('${anio}')">
       <td style="font-weight:600">${abierto?'▼':'▶'} ${anio} <span style="font-weight:400;color:var(--text3);font-size:11px">(${meses.length} mes${meses.length===1?'':'es'})</span></td>
-      <td style="text-align:right;font-weight:600">${sym}${totalAnio.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:600">${sym}${numFmt(totalAnio)}</td>
       <td></td>
     </tr>`;
     const filasMeses = abierto ? meses.map(a=>{
       const [y,m]=a.key.split('-');
       return `<tr>
         <td style="padding-left:24px">${MONTHS[parseInt(m,10)-1]} ${y}</td>
-        <td style="text-align:right">${sym}${a.monto.toFixed(2)}</td>
+        <td style="text-align:right">${sym}${numFmt(a.monto)}</td>
         <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPAporteModal('${a.key}')" title="Editar">✏</span></td>
       </tr>`;
     }).join('') : '';
@@ -16184,16 +16189,16 @@ function renderAFP(){
     const ultimoDelAnio=items[0]; // ya en orden descendente
     const filaHeader=`<tr style="cursor:pointer;background:var(--bg3)" onclick="toggleAFPSaldosYear('${anio}')">
       <td style="font-weight:600">${abierto?'▼':'▶'} ${anio} <span style="font-weight:400;color:var(--text3);font-size:11px">(${items.length})</span></td>
-      <td style="text-align:right;font-weight:600">${sym}${ultimoDelAnio.saldoTotal.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:600">${sym}${numFmt(ultimoDelAnio.saldoTotal)}</td>
       <td colspan="3"></td>
     </tr>`;
     const filasDetalle = abierto ? items.map(r=>{
       const rentColor = r.rentabilidad===null ? 'var(--text3)' : (r.rentabilidad>=0?'var(--green)':'var(--red)');
-      const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'')+sym+r.rentabilidad.toFixed(2);
+      const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'-')+sym+numFmt(r.rentabilidad);
       const pctTxt = r.pct===null ? '—' : (r.pct>=0?'+':'')+r.pct.toFixed(2)+'%';
       return `<tr>
         <td style="padding-left:24px">${r.fecha}</td>
-        <td style="text-align:right;font-weight:600">${sym}${r.saldoTotal.toFixed(2)}</td>
+        <td style="text-align:right;font-weight:600">${sym}${numFmt(r.saldoTotal)}</td>
         <td style="text-align:right;color:${rentColor}">${rentTxt}</td>
         <td style="text-align:right;color:${rentColor}">${pctTxt}</td>
         <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPSaldoModal('${r.id}')" title="Editar">✏</span></td>
@@ -16348,11 +16353,11 @@ function abrirHistorialPrecioCompra(id){
     let cambio='';
     if(anterior){
       const diff=h.precio-anterior.precio;
-      if(diff!==0) cambio=`<span style="color:${diff>0?'var(--red)':'var(--green)'};font-size:10px;margin-left:6px">${diff>0?'▲':'▼'} ${sym}${Math.abs(diff).toFixed(2)}</span>`;
+      if(diff!==0) cambio=`<span style="color:${diff>0?'var(--red)':'var(--green)'};font-size:10px;margin-left:6px">${diff>0?'▲':'▼'} ${sym}${numFmt(diff)}</span>`;
     }
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:12px;color:var(--text3)">${h.fecha}</span>
-      <span style="font-size:13px;font-weight:600">${sym}${h.precio.toFixed(2)}${cambio}</span>
+      <span style="font-size:13px;font-weight:600">${sym}${numFmt(h.precio)}${cambio}</span>
     </div>`;
   }).join('') : '<div style="font-size:11px;color:var(--text3)">Sin historial.</div>';
   document.getElementById('cp-historial-overlay').classList.add('open');
@@ -16442,8 +16447,8 @@ function renderListaCompras(){
   const totalDeseado=deseados.reduce((s,x)=>s+getUltimoPrecio(x)*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
   const totalComprado=comprados.reduce((s,x)=>s+(x.montoComprado||getUltimoPrecio(x))*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
   document.getElementById('compras-summary').innerHTML=`
-    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">DESEADOS</div><div class="dash-kpi-val">${deseados.length}</div><div class="dash-kpi-sub">≈ S/ ${totalDeseado.toFixed(2)}</div></div>
-    <div class="dash-kpi kpi-green"><div class="dash-kpi-label">COMPRADOS</div><div class="dash-kpi-val">${comprados.length}</div><div class="dash-kpi-sub">≈ S/ ${totalComprado.toFixed(2)}</div></div>
+    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">DESEADOS</div><div class="dash-kpi-val">${deseados.length}</div><div class="dash-kpi-sub">≈ S/ ${numFmt(totalDeseado)}</div></div>
+    <div class="dash-kpi kpi-green"><div class="dash-kpi-label">COMPRADOS</div><div class="dash-kpi-val">${comprados.length}</div><div class="dash-kpi-sub">≈ S/ ${numFmt(totalComprado)}</div></div>
     <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">TOTAL EN LA LISTA</div><div class="dash-kpi-val">${items.length}</div><div class="dash-kpi-sub">artículos</div></div>
   `;
   ['all','deseado','comprado'].forEach(f=>{
@@ -16462,14 +16467,14 @@ function renderListaCompras(){
     const esComprado=item.estado==='comprado';
     const hist=item.historialPrecio||[];
     const cambio = hist.length>1 ? (hist[hist.length-1].precio - hist[hist.length-2].precio) : 0;
-    const cambioTxt = cambio!==0 ? `<span style="font-size:10px;color:${cambio>0?'var(--red)':'var(--green)'}">${cambio>0?'▲':'▼'} ${sym}${Math.abs(cambio).toFixed(2)} vs. anterior</span>` : '';
+    const cambioTxt = cambio!==0 ? `<span style="font-size:10px;color:${cambio>0?'var(--red)':'var(--green)'}">${cambio>0?'▲':'▼'} ${sym}${numFmt(cambio)} vs. anterior</span>` : '';
     return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px${esComprado?';opacity:.75':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div style="font-size:13px;font-weight:600">${escapeHtml(item.nombre)}</div>
         <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${esComprado?'var(--green)':'var(--bg3)'};color:${esComprado?'#fff':'var(--text3)'};white-space:nowrap">${esComprado?'✅ Comprado':'🎯 Deseado'}</span>
       </div>
       ${item.link?`<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent);word-break:break-all">${escapeHtml(item.link)}</a>`:''}
-      <div style="font-size:20px;font-weight:700">${sym} ${precio.toFixed(2)}</div>
+      <div style="font-size:20px;font-weight:700">${sym} ${numFmt(precio)}</div>
       ${cambioTxt}
       ${item.notas?`<div style="font-size:11px;color:var(--text3)">${escapeHtml(item.notas)}</div>`:''}
       ${esComprado?`<div style="font-size:10px;color:var(--text3)">Comprado el ${item.fechaComprado}</div>`:''}
