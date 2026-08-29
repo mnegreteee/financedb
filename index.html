@@ -882,6 +882,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-combustible" onclick="showPage('combustible')">⛽ Combustible</button>
         <button class="nav-dropdown-item" id="nav-calendario" onclick="showPage('calendario')">📅 Calendario</button>
         <button class="nav-dropdown-item" id="nav-sueldos" onclick="showPage('sueldos')">💼 Análisis de Sueldos</button>
+        <button class="nav-dropdown-item" id="nav-afp" onclick="showPage('afp')">🪙 AFP</button>
+        <button class="nav-dropdown-item" id="nav-compras" onclick="showPage('compras')">🛒 Lista de Compras</button>
         <button class="nav-dropdown-item" id="nav-minijuegos" onclick="showPage('minijuegos')">🎮 Minijuegos</button>
       </div>
     </div>
@@ -1188,7 +1190,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div class="dash-patrimonio-val money" id="dash-patrimonio" style="color:var(--green)">S/ 0.00</div>
         <div class="dash-patrimonio-sub">
           <span class="dash-var-badge dash-var-nt" id="dash-var-badge">— vs mes anterior</span>
-          <span style="color:var(--text3);font-size:11px">Disponible + Ahorros + Inversiones − Deuda tarjetas</span>
+          <span style="color:var(--text3);font-size:11px" id="dash-patrimonio-formula">Disponible + Ahorros + Inversiones − Deuda tarjetas</span>
         </div>
         <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap" id="dash-patrimonio-breakdown">
           <div><span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-right:6px">Soles</span><span class="money" id="dash-patrimonio-pen" style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text)">S/ 0.00</span></div>
@@ -1894,6 +1896,161 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
 </div>
 </div>
+
+<!-- ══════════ PÁGINA: AFP ══════════ -->
+<div class="page" id="page-afp">
+<div class="container">
+
+  <div class="section-header" style="margin-bottom:16px">
+    <div class="section-title">🪙 AFP — Fondo de Pensiones</div>
+    <button class="btn btn-primary" style="font-size:11px" onclick="abrirAFPModal()">+ Registrar aporte del mes</button>
+  </div>
+
+  <div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div style="font-size:12px;color:var(--text2)">Incluir el saldo de AFP en el <b>Patrimonio Neto</b> del Resumen <span style="color:var(--text3);font-size:10px">(apagado por defecto)</span></div>
+    <button class="config-action-btn" id="afp-patrimonio-toggle-btn" onclick="toggleAFPEnPatrimonio()" style="font-size:11px"></button>
+  </div>
+
+  <div class="dash-split" id="afp-summary" style="grid-template-columns:repeat(4,1fr)"></div>
+
+  <div class="card" style="padding:16px 20px;margin-bottom:16px;margin-top:16px">
+    <div class="section-title" style="font-size:13px;margin-bottom:10px">Evolución del fondo</div>
+    <div style="position:relative;height:220px"><canvas id="afp-chart"></canvas></div>
+    <div id="afp-chart-legend" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--text3)"></div>
+  </div>
+
+  <div class="card" style="padding:16px 20px">
+    <div class="section-title" style="font-size:13px;margin-bottom:10px">Aportes registrados</div>
+    <div class="table-scroll">
+    <table class="account-table" style="width:100%;min-width:560px">
+      <thead><tr><th>Mes</th><th style="text-align:right">Aporte</th><th style="text-align:right">Saldo total</th><th style="text-align:right">Rentabilidad</th><th style="text-align:right">%</th><th></th></tr></thead>
+      <tbody id="afp-tbody"></tbody>
+    </table>
+    </div>
+    <div id="afp-empty" class="dash-empty" style="display:none">Sin aportes registrados todavía. Agrega el primero con el botón de arriba.</div>
+  </div>
+
+</div>
+</div>
+
+<div class="modal-overlay" id="afp-modal-overlay" onclick="confirmAndClose(this,'cerrarAFPModal')">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span id="afp-modal-title">Registrar aporte</span><button class="modal-close" onclick="cerrarAFPModal()">✕</button></div>
+    <div class="field-row">
+      <div class="field"><label>Mes</label>
+        <select id="afp-mes">
+          <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+          <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+          <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+          <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+        </select>
+      </div>
+      <div class="field"><label>Año</label><input id="afp-anio" type="number" style="width:100%"></div>
+    </div>
+    <div class="field"><label>Aporte de este mes <small>(lo que te descontaron/depositaste)</small></label><input id="afp-aporte" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Saldo TOTAL del fondo <small>(el que te muestra tu AFP a esta fecha — no el aporte, el acumulado completo)</small></label><input id="afp-saldo" type="number" step="0.01" placeholder="0.00"></div>
+    <div id="afp-modal-hint" style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
+      <button class="config-action-btn danger" id="afp-delete-btn" style="display:none" onclick="eliminarAFPRegistro()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarAFPModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarAFP()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PÁGINA: LISTA DE COMPRAS ══════════ -->
+<div class="page" id="page-compras">
+<div class="container">
+
+  <div class="section-header" style="margin-bottom:16px">
+    <div class="section-title">🛒 Lista de Compras</div>
+    <button class="btn btn-primary" style="font-size:11px" onclick="abrirCompraModal()">+ Nuevo</button>
+  </div>
+
+  <div class="dash-split" id="compras-summary" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px"></div>
+
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px">Todos</button>
+    <button class="config-action-btn neutral" id="cp-filter-deseado" onclick="setComprasFilter('deseado')" style="font-size:11px">🎯 Deseados</button>
+    <button class="config-action-btn neutral" id="cp-filter-comprado" onclick="setComprasFilter('comprado')" style="font-size:11px">✅ Comprados</button>
+  </div>
+
+  <div id="compras-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+  <div id="compras-empty" class="dash-empty" style="display:none">Sin artículos en tu lista todavía. Agrega el primero con "+ Nuevo".</div>
+
+</div>
+</div>
+
+<div class="modal-overlay" id="compra-modal-overlay" onclick="confirmAndClose(this,'cerrarCompraModal')">
+  <div class="modal" style="width:400px">
+    <div class="modal-title"><span id="compra-modal-title">Nuevo artículo</span><button class="modal-close" onclick="cerrarCompraModal()">✕</button></div>
+    <div class="field"><label>Nombre</label><input id="cp-nombre" type="text" placeholder="Ej. Meinl HC812VSB"></div>
+    <div class="field"><label>Link <small>(opcional)</small></label><input id="cp-link" type="text" placeholder="https://..."></div>
+    <div class="field-row">
+      <div class="field"><label>Precio actual</label><input id="cp-precio" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="cp-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Notas <small>(opcional)</small></label><input id="cp-notas" type="text" placeholder="Ej. Talla, color, para qué es..."></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
+      <button class="config-action-btn danger" id="cp-delete-btn" style="display:none" onclick="eliminarCompra()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarCompraModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarCompra()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cp-precio-modal-overlay" onclick="if(event.target===this)cerrarActualizarPrecioModal()">
+  <div class="modal" style="width:340px">
+    <div class="modal-title"><span>💲 Actualizar precio</span><button class="modal-close" onclick="cerrarActualizarPrecioModal()">✕</button></div>
+    <div class="field"><label>Nuevo precio</label><input id="cpp-precio" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Fecha</label><input id="cpp-fecha" type="date"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarActualizarPrecioModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarActualizarPrecio()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cp-historial-overlay" onclick="if(event.target===this)cerrarHistorialPrecioCompra()">
+  <div class="modal" style="width:340px;max-height:70vh;overflow-y:auto">
+    <div class="modal-title"><span id="cp-historial-title">📈 Historial de precio</span><button class="modal-close" onclick="cerrarHistorialPrecioCompra()">✕</button></div>
+    <div id="cp-historial-list"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cp-comprado-overlay" onclick="if(event.target===this)cerrarMarcarCompradoModal()">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span id="cp-comprado-title">✅ Marcar como comprado</span><button class="modal-close" onclick="cerrarMarcarCompradoModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Esto va a crear un gasto real en tu cuenta o tarjeta, además de marcarlo como comprado en la lista.</div>
+    <div class="field"><label>Método de pago</label>
+      <select id="cpc-metodo" onchange="onCompradoMetodoChange()">
+        <option value="cuenta">Cuenta (débito / efectivo)</option>
+        <option value="tarjeta">Tarjeta de crédito</option>
+      </select>
+    </div>
+    <div class="field" id="cpc-cuenta-wrap"><label>Cuenta</label><select id="cpc-cuenta"></select></div>
+    <div class="field" id="cpc-tarjeta-wrap" style="display:none"><label>Tarjeta</label><select id="cpc-tarjeta"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Monto final</label><input id="cpc-monto" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="cpc-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Fecha</label><input id="cpc-fecha" type="date"></div>
+    <div class="field"><label>Categoría <small>(opcional — para que reste del presupuesto)</small></label><select id="cpc-cat"></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarMarcarCompradoModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarMarcarComprado()">✅ Confirmar compra</button>
+    </div>
+  </div>
+</div>
+
 
 <div class="modal-overlay" id="sueldo-config-overlay" onclick="if(event.target===this)cerrarConfigSueldo()">
   <div class="modal" style="width:400px;max-height:85vh;overflow-y:auto">
@@ -2772,8 +2929,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 15:57'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corrección importante sobre el selector de "Columnas por fila": se descubrió que tu función original NO se había perdido — seguía intacta en el archivo de Nathy (nunca se tocó ahí). Se reemplazó mi reconstrucción aproximada por ese código real: cada widget ahora tiene un número de "fila" explícito (no un span adivinado), y todos los widgets que comparten la misma fila se reparten el ancho EN PARTES IGUALES (columnas ÷ cantidad en esa fila) — así que si configuras 5 columnas pero una fila termina con solo 2 widgets, esos 2 se estiran a la mitad cada uno, llenando el 100% del espacio, exactamente como pediste. La vista previa del editor también es la original: "fila · X.XX de N". En mobile ya no depende de CSS con !important: hay una función getEffectiveDashboardCols() que baja a 2 columnas (≤768px) o 1 (≤480px), y si una fila tiene más widgets de los que caben en esa pantalla, se reparten en sub-filas automáticamente. Verificado con Playwright que el comportamiento es idéntico, número por número, al que ya estaba funcionando en la app de Nathy.';
+const APP_VERSION_DATE = '28/08/26 - 19:31'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Dos mejoras a AFP: (1) nuevo widget "🪙 AFP" disponible en Personalizar Resumen (Resumen → Editar) para mostrar el saldo actual acumulado — empieza oculto como todos los widgets nuevos, actívalo desde ahí. (2) Toggle "Incluir en Patrimonio Neto" en la propia página de AFP — apagado por defecto para no cambiarte el número sin que lo decidas; al activarlo, el saldo total de AFP se suma al Patrimonio Neto del Resumen (y a la fórmula mostrada, que pasa a decir "...+ AFP"), y se resta automáticamente al desactivarlo. Verificado con Playwright esperando a que termine la animación de conteo: con el toggle apagado el patrimonio no cambia, al activarlo sube exactamente el monto del saldo de AFP, y al desactivarlo vuelve al valor original.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3878,6 +4035,8 @@ function showPage(name){
   if(name==='inversiones') renderInversiones();
   if(name==='calendario')  renderCalendario();
   if(name==='sueldos')     renderSueldos();
+  if(name==='afp')         renderAFP();
+  if(name==='compras')     renderListaCompras();
   if(name==='minijuegos')  initMinijuegos();
 }
 
@@ -6840,7 +6999,13 @@ function actualizarUltimaActividadSesion(){
   const s=state.historialSesiones.find(x=>x.id===sesionActualId);
   if(s){ s.ultimaActividad=new Date().toISOString(); guardarSesionesEnLaNubeSinRiesgo(); }
 }
-function tiempoRelativo(iso){
+// Variante específica para el historial de sesiones (línea abajo) — antes
+// tenía el MISMO nombre que tiempoRelativo() de arriba, y al ser la
+// declaración que aparece más abajo en el archivo, JS la usaba para TODO
+// (incluida la actividad reciente), haciendo que esa perdiera silenciosamente
+// su formato de fecha calendario para entradas de más de una semana. Se
+// renombra para que ambas convivan sin pisarse.
+function tiempoRelativoSesion(iso){
   const diffMs=Date.now()-new Date(iso).getTime();
   const min=Math.round(diffMs/60000);
   if(min<1) return 'justo ahora';
@@ -6922,7 +7087,7 @@ function renderHistorialSesiones(){
   const ubicUltima=ultima.ipCiudad?`${ultima.ipCiudad}, ${ultima.ipPais}`:(ultima.ipPais||ultima.gpsPais||'ubicación no disponible');
   resumenEl.innerHTML=`
     <div style="font-weight:700;font-size:13px;color:${activas.length>1?'var(--amber)':'var(--green)'};margin-bottom:4px">🟢 ${activas.length} ${activas.length===1?'sesión activa':'sesiones activas'} ahora mismo</div>
-    <div>📍 Último acceso: <b>${tiempoRelativo(ultima.inicio)}</b>, desde ${escapeHtml(ubicUltima)}, en ${ultima.dispositivo} (${ultima.navegador})</div>
+    <div>📍 Último acceso: <b>${tiempoRelativoSesion(ultima.inicio)}</b>, desde ${escapeHtml(ubicUltima)}, en ${ultima.dispositivo} (${ultima.navegador})</div>
   `;
   listaEl.innerHTML=sesiones.map(s=>{
     const fechaIn=new Date(s.inicio);
@@ -6932,7 +7097,7 @@ function renderHistorialSesiones(){
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:12px;font-weight:600">${fechaLabel} — ${horaLabel}</span>
-        <span style="font-size:10px;color:${estaActivaAhora(s)?'var(--green)':'var(--text3)'}">${estaActivaAhora(s)?'🟢 Activa ahora':'Última actividad: '+tiempoRelativo(s.ultimaActividad)}</span>
+        <span style="font-size:10px;color:${estaActivaAhora(s)?'var(--green)':'var(--text3)'}">${estaActivaAhora(s)?'🟢 Activa ahora':'Última actividad: '+tiempoRelativoSesion(s.ultimaActividad)}</span>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:3px">💻 ${s.dispositivo} · ${s.navegador} — 📍 ${escapeHtml(ubic)}${s.ip?` — 🌐 ${escapeHtml(s.ip)}`:''}</div>
     </div>`;
@@ -9473,7 +9638,7 @@ function getAllCategorias(){
 function updateCategorySelects(){
   const cats = Object.keys(getAllCategorias());
   // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
-  ['f-cat','tc-m-cat','cf-cat','tr-cat'].forEach(id=>{
+  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -11278,6 +11443,13 @@ const DASHBOARD_WIDGET_DEFS = {
       <div class="dash-kpi-val money" id="kpi-inversiones">—</div>
       <div class="dash-kpi-sub" id="kpi-inversiones-sub">sin valorizar</div>
     </div>`},
+  'kpi-afp': {label:'🪙 AFP', size:'small', shell:()=>`
+    <div class="dash-kpi kpi-purple" style="cursor:pointer" onclick="showPage('afp')" title="Ver AFP">
+      <div class="dash-kpi-icon">🪙</div>
+      <div class="dash-kpi-label">AFP</div>
+      <div class="dash-kpi-val money" id="kpi-afp">—</div>
+      <div class="dash-kpi-sub" id="kpi-afp-sub">sin registros</div>
+    </div>`},
   'movimientos': {label:'💵 Últimos movimientos', size:'medium', shell:()=>`
     <div class="card" style="padding:18px">
       <div class="dash-section-title">Últimos movimientos</div>
@@ -11400,6 +11572,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'tc-comparador', visible:false}, {id:'combustible', visible:false},
   {id:'sueldos', visible:false}, {id:'comparativo', visible:false},
   {id:'anio-completo', visible:false}, {id:'minijuegos', visible:false},
+  {id:'kpi-afp', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -11676,17 +11849,26 @@ function renderDashboard(){
   const invValorActualUSD = invValorUSDNativo + invToUSD(invValorPEN,'PEN');
   const invValorActual = invValorActualUSD * (state.tc?.venta||3.45);
 
+  // ── AFP (opcional en Patrimonio Neto — toggle configurable en la página
+  //    de AFP, apagado por defecto para no alterarle el número a nadie sin
+  //    que lo decida explícitamente) ───────────────────
+  const afpSerieDash = calcularSerieAFP();
+  const afpSaldoDash = afpSerieDash.length ? afpSerieDash[afpSerieDash.length-1].saldoTotal : 0;
+  const afpEnPatrimonio = !!state.incluirAFPEnPatrimonio;
+  const afpAporte = afpEnPatrimonio ? afpSaldoDash : 0;
+
   // ── Patrimonio neto ───────────────────────────────
-  const patrimonioCur  = dispCur  + ahorroTotalCur  + invValorActual - deudaTCTotal;
+  const patrimonioCur  = dispCur  + ahorroTotalCur  + invValorActual - deudaTCTotal + afpAporte;
   // For prev: use same TC debt (we don't have historic TC data) so variation reflects disponible+ahorro changes only
-  const patrimonioPrev = dispPrev + ahorroTotalPrev + invValorActual - deudaTCTotal;
+  const patrimonioPrev = dispPrev + ahorroTotalPrev + invValorActual - deudaTCTotal + afpAporte;
   const patrimonioVar  = patrimonioCur - patrimonioPrev;
   const patrimonioVarPct = patrimonioPrev!==0 ? (patrimonioVar/Math.abs(patrimonioPrev)*100) : 0;
 
   // Desglose por moneda (sin convertir) — cuánto tienes exactamente en soles y
   // en dólares, netos de su propia deuda de tarjeta. dispCur (BCP/BBVA/Efectivo)
-  // siempre es en soles, por eso no aparece en el lado de dólares.
-  const patrimonioPEN = dispCur + aS + invValorPEN - deudaTCPen;
+  // siempre es en soles, por eso no aparece en el lado de dólares. AFP en Perú
+  // siempre es en soles, así que si está activado se suma al lado PEN.
+  const patrimonioPEN = dispCur + aS + invValorPEN - deudaTCPen + afpAporte;
   const patrimonioUSD = aD + invValorUSDNativo - deudaTCUsd;
 
   // ── Render patrimonio ─────────────────────────────
@@ -11701,6 +11883,8 @@ function renderDashboard(){
     }
     pEl.style.color = patrimonioCur >= 0 ? 'var(--green)' : 'var(--red)';
   }
+  const pFormulaEl = document.getElementById('dash-patrimonio-formula');
+  if(pFormulaEl) pFormulaEl.textContent = 'Disponible + Ahorros + Inversiones − Deuda tarjetas' + (afpEnPatrimonio?' + AFP':'');
   const pPenEl = document.getElementById('dash-patrimonio-pen');
   if(pPenEl){ pPenEl.textContent = M((patrimonioPEN<0?'-':'')+fmtS(patrimonioPEN)); pPenEl.style.color = patrimonioPEN>=0?'var(--text)':'var(--red)'; }
   const pUsdEl = document.getElementById('dash-patrimonio-usd');
@@ -11761,6 +11945,7 @@ function renderDashboard(){
   if(labelEl) labelEl.textContent='A pagar próximo mes ('+siguienteMes.label+')';
   setKpi('kpi-pagar-mes', pagarEsteMes>0?fmtTCMixed(pagarPen,pagarUsd):'S/ 0.00', pagarEsteMes>0?'pendiente de pago':'al día 🎉', pagarEsteMes>0?'var(--amber)':'var(--green)');
   setKpi('kpi-inversiones', (invValorPEN>0||invValorUSDNativo>0)?fmtTCMixed(invValorPEN,invValorUSDNativo):'$ 0.00', invResumenFull.ultimaFecha?('al '+fmtFechaCorta(invResumenFull.ultimaFecha)):'sin valorizar', (invValorPEN>0||invValorUSDNativo>0)?'var(--teal)':'var(--text3)');
+  setKpi('kpi-afp', afpSerieDash.length?fmtS(afpSaldoDash):'S/ 0.00', afpSerieDash.length?(afpSerieDash.length+' aporte'+(afpSerieDash.length===1?'':'s')+' registrado'+(afpSerieDash.length===1?'':'s')):'sin registros', afpSerieDash.length?'var(--purple)':'var(--text3)');
 
   // ── Últimos movimientos ────────────────────────────
   const movsList = document.getElementById('dash-movs-list');
@@ -15395,6 +15580,420 @@ function calcularSimuladorNeto(){
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:8px">⚠️ Simplificado: asume el mismo sueldo todo el año, sin bono variable ni CTS. Para tu sueldo real usa el registro de boletas de arriba, que sí calcula con precisión mes a mes.</div>
   `;
+}
+
+// ══════════════════════════════════════════════════════
+//  AFP — seguimiento mensual de aportes y rentabilidad del fondo de
+//  pensiones. El usuario registra, cada mes, (1) cuánto aportó y (2) el
+//  saldo TOTAL que le muestra su AFP a esa fecha — la rentabilidad NO se
+//  pide a mano, se calcula sola comparando contra el mes anterior:
+//    rentabilidad = saldoTotal_actual − saldoTotal_anterior − aporte_actual
+//  El primer registro histórico no tiene "mes anterior" con el que comparar,
+//  así que su rentabilidad queda en null (se muestra como "—", nunca se
+//  inventa un valor).
+// ══════════════════════════════════════════════════════
+let editingAFPKey=null;
+function afpMonthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
+// Devuelve los registros ordenados cronológicamente, cada uno con su
+// rentabilidad YA calculada (o null si es el primero de la serie).
+function calcularSerieAFP(){
+  const regs=(state.afp&&state.afp.registros)||{};
+  const keys=Object.keys(regs).sort(); // 'YYYY-MM' ordena bien como texto
+  let prevSaldo=null;
+  return keys.map(k=>{
+    const r=regs[k];
+    const rentabilidad = prevSaldo===null ? null : (r.saldoTotal - prevSaldo - r.aporte);
+    const pct = (prevSaldo && prevSaldo>0 && rentabilidad!==null) ? (rentabilidad/prevSaldo*100) : null;
+    prevSaldo=r.saldoTotal;
+    return {key:k, ...r, rentabilidad, pct};
+  });
+}
+function abrirAFPModal(key){
+  editingAFPKey=key||null;
+  const hoy=new Date();
+  document.getElementById('afp-modal-title').textContent = key ? 'Editar aporte' : 'Registrar aporte';
+  document.getElementById('afp-delete-btn').style.display = key ? 'inline-block' : 'none';
+  if(key && state.afp && state.afp.registros && state.afp.registros[key]){
+    const r=state.afp.registros[key];
+    const [y,m]=key.split('-').map(Number);
+    document.getElementById('afp-anio').value=y;
+    document.getElementById('afp-mes').value=m-1;
+    document.getElementById('afp-aporte').value=r.aporte;
+    document.getElementById('afp-saldo').value=r.saldoTotal;
+  } else {
+    document.getElementById('afp-anio').value=hoy.getFullYear();
+    document.getElementById('afp-mes').value=hoy.getMonth();
+    document.getElementById('afp-aporte').value='';
+    document.getElementById('afp-saldo').value='';
+  }
+  const serie=calcularSerieAFP();
+  const hint=document.getElementById('afp-modal-hint');
+  hint.textContent = serie.length
+    ? `Último saldo registrado: S/ ${serie[serie.length-1].saldoTotal.toFixed(2)} (${MONTHS[parseInt(serie[serie.length-1].key.split('-')[1],10)-1]} ${serie[serie.length-1].key.split('-')[0]})`
+    : 'Este será tu primer registro — su rentabilidad no se puede calcular todavía (no hay mes anterior con el que comparar).';
+  document.getElementById('afp-modal-overlay').classList.add('open');
+}
+function cerrarAFPModal(){
+  document.getElementById('afp-modal-overlay').classList.remove('open');
+  editingAFPKey=null;
+}
+function guardarAFP(){
+  const y=parseInt(document.getElementById('afp-anio').value,10);
+  const m=parseInt(document.getElementById('afp-mes').value,10);
+  const aporte=parseFloat(document.getElementById('afp-aporte').value);
+  const saldoTotal=parseFloat(document.getElementById('afp-saldo').value);
+  if(!y||isNaN(m)){ alert('Revisa el mes y el año.'); return; }
+  if(isNaN(aporte)||aporte<0){ alert('Ingresa el aporte de este mes.'); return; }
+  if(isNaN(saldoTotal)||saldoTotal<0){ alert('Ingresa el saldo TOTAL actual del fondo.'); return; }
+  const key=afpMonthKey(y,m);
+  if(!state.afp) state.afp={registros:{}};
+  if(!state.afp.registros) state.afp.registros={};
+  // Si se está EDITANDO un mes con una key distinta a la que ahora se
+  // ingresó (cambiaron el mes/año), se borra el registro viejo para no
+  // dejar un duplicado huérfano.
+  if(editingAFPKey && editingAFPKey!==key) delete state.afp.registros[editingAFPKey];
+  state.afp.registros[key]={aporte, saldoTotal, fecha:todayLocalISO()};
+  saveState();
+  cerrarAFPModal();
+  renderAFP();
+}
+function eliminarAFPRegistro(key){
+  const k=key||editingAFPKey;
+  if(!k) return;
+  if(!confirm('¿Eliminar este registro de AFP? Esto también recalcula la rentabilidad del mes siguiente (si existe).')) return;
+  if(state.afp&&state.afp.registros) delete state.afp.registros[k];
+  saveState();
+  cerrarAFPModal();
+  renderAFP();
+}
+let afpChartInstance=null;
+// Toggle para sumar (o no) el saldo de AFP al Patrimonio Neto del Resumen.
+// Apagado por defecto — es un cambio a un número importante que ya existía,
+// así que nadie lo ve modificado sin decidirlo explícitamente.
+function toggleAFPEnPatrimonio(){
+  state.incluirAFPEnPatrimonio = !state.incluirAFPEnPatrimonio;
+  saveState();
+  renderAFPPatrimonioToggleBtn();
+  // Si el Resumen ya está renderizado (o se abre después), que refleje el
+  // cambio de inmediato sin tener que navegar de ida y vuelta.
+  if(document.getElementById('page-dashboard')) renderDashboard();
+}
+function renderAFPPatrimonioToggleBtn(){
+  const btn=document.getElementById('afp-patrimonio-toggle-btn');
+  if(!btn) return;
+  const activo=!!state.incluirAFPEnPatrimonio;
+  btn.textContent=activo?'🟢 Activado':'⚪ Desactivado';
+}
+function renderAFP(){
+  renderAFPPatrimonioToggleBtn();
+  const serie=calcularSerieAFP();
+  const sym='S/ ';
+  const saldoActual = serie.length ? serie[serie.length-1].saldoTotal : 0;
+  const totalAportado = serie.reduce((s,r)=>s+r.aporte,0);
+  const rentabilidadTotal = serie.reduce((s,r)=>s+(r.rentabilidad||0),0);
+  const ultima = serie.length ? serie[serie.length-1] : null;
+  const rentEsteMes = ultima ? ultima.rentabilidad : null;
+  document.getElementById('afp-summary').innerHTML=`
+    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${saldoActual.toFixed(2)}</div><div class="dash-kpi-sub">${serie.length} aporte${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
+    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${totalAportado.toFixed(2)}</div><div class="dash-kpi-sub">histórico registrado</div></div>
+    <div class="dash-kpi ${rentabilidadTotal>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal>=0?'+':''}${sym}${rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">desde tu 1er registro</div></div>
+    <div class="dash-kpi ${(rentEsteMes||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD ESTE MES</div><div class="dash-kpi-val">${rentEsteMes===null?'—':(rentEsteMes>=0?'+':'')+sym+rentEsteMes.toFixed(2)}</div><div class="dash-kpi-sub">${ultima?MONTHS[parseInt(ultima.key.split('-')[1],10)-1]+' '+ultima.key.split('-')[0]:'sin datos'}</div></div>
+  `;
+  const tbody=document.getElementById('afp-tbody');
+  document.getElementById('afp-empty').style.display = serie.length ? 'none' : 'block';
+  tbody.innerHTML=serie.slice().reverse().map(r=>{
+    const [y,m]=r.key.split('-');
+    const rentColor = r.rentabilidad===null ? 'var(--text3)' : (r.rentabilidad>=0?'var(--green)':'var(--red)');
+    const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'')+sym+r.rentabilidad.toFixed(2);
+    const pctTxt = r.pct===null ? '—' : (r.pct>=0?'+':'')+r.pct.toFixed(2)+'%';
+    return `<tr>
+      <td>${MONTHS[parseInt(m,10)-1]} ${y}</td>
+      <td style="text-align:right">${sym}${r.aporte.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:600">${sym}${r.saldoTotal.toFixed(2)}</td>
+      <td style="text-align:right;color:${rentColor}">${rentTxt}</td>
+      <td style="text-align:right;color:${rentColor}">${pctTxt}</td>
+      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPModal('${r.key}')" title="Editar">✏</span></td>
+    </tr>`;
+  }).join('');
+  // Gráfico: saldo total (línea) + rentabilidad mensual (barras)
+  const ctx=document.getElementById('afp-chart');
+  if(afpChartInstance){ afpChartInstance.destroy(); afpChartInstance=null; }
+  if(ctx && serie.length && typeof Chart!=='undefined'){
+    const labels=serie.map(r=>{ const [y,m]=r.key.split('-'); return MONTHS[parseInt(m,10)-1].slice(0,3)+' '+y.slice(2); });
+    afpChartInstance=new Chart(ctx,{
+      type:'bar',
+      data:{ labels, datasets:[
+        {type:'line', label:'Saldo total', data:serie.map(r=>r.saldoTotal), borderColor:'#a78bfa', backgroundColor:'transparent', yAxisID:'y1', tension:.25, pointRadius:3},
+        {type:'bar', label:'Rentabilidad', data:serie.map(r=>r.rentabilidad), backgroundColor:serie.map(r=>(r.rentabilidad||0)>=0?'#22c55e':'#ef4444'), yAxisID:'y2'},
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{
+          y1:{position:'left', ticks:{color:'#a78bfa'}},
+          y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#94a3b8'}},
+        },
+        plugins:{legend:{display:false}}
+      }
+    });
+    document.getElementById('afp-chart-legend').innerHTML=`<span style="color:#a78bfa">● Saldo total</span><span style="color:#94a3b8">▮ Rentabilidad mensual</span>`;
+  } else if(ctx){
+    document.getElementById('afp-chart-legend').innerHTML='';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  LISTA DE COMPRAS — artículos que se quieren comprar, con historial de
+//  precio (se puede actualizar cada vez que se revisa la tienda) y, al
+//  marcarlos como comprados, se registra un gasto REAL en una cuenta o
+//  tarjeta (mismo mecanismo que Pagos Frecuentes: pushMovimiento para
+//  cuenta, o un consumo dentro de t.movs[monthKey] para tarjeta).
+// ══════════════════════════════════════════════════════
+let comprasFilter='all';
+let editingCompraId=null;
+function getUltimoPrecio(item){
+  const h=item.historialPrecio||[];
+  return h.length ? h[h.length-1].precio : 0;
+}
+function setComprasFilter(f){
+  comprasFilter=f;
+  renderListaCompras();
+}
+function abrirCompraModal(id){
+  editingCompraId=id||null;
+  document.getElementById('compra-modal-title').textContent = id ? 'Editar artículo' : 'Nuevo artículo';
+  document.getElementById('cp-delete-btn').style.display = id ? 'inline-block' : 'none';
+  if(id){
+    const item=(state.listaCompras||[]).find(x=>x.id===id);
+    if(!item) return;
+    document.getElementById('cp-nombre').value=item.nombre;
+    document.getElementById('cp-link').value=item.link||'';
+    document.getElementById('cp-precio').value=getUltimoPrecio(item);
+    document.getElementById('cp-currency').value=item.moneda||'PEN';
+    document.getElementById('cp-notas').value=item.notas||'';
+  } else {
+    document.getElementById('cp-nombre').value='';
+    document.getElementById('cp-link').value='';
+    document.getElementById('cp-precio').value='';
+    document.getElementById('cp-currency').value='PEN';
+    document.getElementById('cp-notas').value='';
+  }
+  document.getElementById('compra-modal-overlay').classList.add('open');
+}
+function cerrarCompraModal(){
+  document.getElementById('compra-modal-overlay').classList.remove('open');
+  editingCompraId=null;
+}
+function guardarCompra(){
+  const nombre=document.getElementById('cp-nombre').value.trim();
+  const link=document.getElementById('cp-link').value.trim();
+  const precio=parseFloat(document.getElementById('cp-precio').value);
+  const moneda=document.getElementById('cp-currency').value;
+  const notas=document.getElementById('cp-notas').value.trim();
+  if(!nombre){ alert('Ingresa un nombre.'); return; }
+  if(isNaN(precio)||precio<0){ alert('Ingresa el precio actual.'); return; }
+  if(!state.listaCompras) state.listaCompras=[];
+  if(editingCompraId){
+    const item=state.listaCompras.find(x=>x.id===editingCompraId);
+    if(item){
+      item.nombre=nombre; item.link=link; item.moneda=moneda; item.notas=notas;
+      const ultimo=getUltimoPrecio(item);
+      // Solo se agrega una entrada nueva al historial si el precio
+      // realmente cambió — si no, editar el nombre no ensucia el historial
+      // con precios repetidos.
+      if(ultimo!==precio){
+        if(!item.historialPrecio) item.historialPrecio=[];
+        item.historialPrecio.push({precio, fecha:todayLocalISO()});
+      }
+    }
+  } else {
+    state.listaCompras.push({
+      id:'cp-'+Date.now(), nombre, link, notas, moneda, estado:'deseado',
+      historialPrecio:[{precio, fecha:todayLocalISO()}],
+    });
+  }
+  saveState();
+  cerrarCompraModal();
+  renderListaCompras();
+}
+function eliminarCompra(id){
+  const cid=id||editingCompraId;
+  if(!cid) return;
+  if(!confirm('¿Eliminar este artículo de tu lista?')) return;
+  state.listaCompras=(state.listaCompras||[]).filter(x=>x.id!==cid);
+  saveState();
+  cerrarCompraModal();
+  renderListaCompras();
+}
+let precioModalItemId=null;
+function abrirActualizarPrecioModal(id){
+  precioModalItemId=id;
+  const item=(state.listaCompras||[]).find(x=>x.id===id);
+  if(!item) return;
+  document.getElementById('cpp-precio').value=getUltimoPrecio(item);
+  document.getElementById('cpp-fecha').value=todayLocalISO();
+  document.getElementById('cp-precio-modal-overlay').classList.add('open');
+}
+function cerrarActualizarPrecioModal(){
+  document.getElementById('cp-precio-modal-overlay').classList.remove('open');
+  precioModalItemId=null;
+}
+function guardarActualizarPrecio(){
+  const item=(state.listaCompras||[]).find(x=>x.id===precioModalItemId);
+  if(!item) return;
+  const precio=parseFloat(document.getElementById('cpp-precio').value);
+  const fecha=document.getElementById('cpp-fecha').value||todayLocalISO();
+  if(isNaN(precio)||precio<0){ alert('Ingresa un precio válido.'); return; }
+  if(!item.historialPrecio) item.historialPrecio=[];
+  item.historialPrecio.push({precio, fecha});
+  saveState();
+  cerrarActualizarPrecioModal();
+  renderListaCompras();
+}
+let historialModalItemId=null;
+function abrirHistorialPrecioCompra(id){
+  historialModalItemId=id;
+  const item=(state.listaCompras||[]).find(x=>x.id===id);
+  if(!item) return;
+  document.getElementById('cp-historial-title').textContent='📈 '+item.nombre;
+  const sym=item.moneda==='USD'?'$':'S/';
+  const hist=(item.historialPrecio||[]).slice().reverse();
+  document.getElementById('cp-historial-list').innerHTML = hist.length ? hist.map((h,i)=>{
+    const anterior=hist[i+1];
+    let cambio='';
+    if(anterior){
+      const diff=h.precio-anterior.precio;
+      if(diff!==0) cambio=`<span style="color:${diff>0?'var(--red)':'var(--green)'};font-size:10px;margin-left:6px">${diff>0?'▲':'▼'} ${sym}${Math.abs(diff).toFixed(2)}</span>`;
+    }
+    return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--text3)">${h.fecha}</span>
+      <span style="font-size:13px;font-weight:600">${sym}${h.precio.toFixed(2)}${cambio}</span>
+    </div>`;
+  }).join('') : '<div style="font-size:11px;color:var(--text3)">Sin historial.</div>';
+  document.getElementById('cp-historial-overlay').classList.add('open');
+}
+function cerrarHistorialPrecioCompra(){
+  document.getElementById('cp-historial-overlay').classList.remove('open');
+  historialModalItemId=null;
+}
+let compradoModalItemId=null;
+function abrirMarcarCompradoModal(id){
+  compradoModalItemId=id;
+  const item=(state.listaCompras||[]).find(x=>x.id===id);
+  if(!item) return;
+  document.getElementById('cp-comprado-title').textContent='✅ Marcar como comprado: '+item.nombre;
+  document.getElementById('cpc-metodo').value='cuenta';
+  const cuentas=getAllAccountKeys();
+  document.getElementById('cpc-cuenta').innerHTML=cuentas.map(k=>`<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join('');
+  const tarjetas=state.tarjetas||[];
+  document.getElementById('cpc-tarjeta').innerHTML=tarjetas.map(t=>`<option value="${t.id}">${escapeHtml(t.banco)}${t.cat?' '+escapeHtml(t.cat):''}</option>`).join('');
+  document.getElementById('cpc-cuenta-wrap').style.display='block';
+  document.getElementById('cpc-tarjeta-wrap').style.display='none';
+  document.getElementById('cpc-monto').value=getUltimoPrecio(item);
+  document.getElementById('cpc-currency').value=item.moneda||'PEN';
+  document.getElementById('cpc-fecha').value=todayLocalISO();
+  updateCategorySelects();
+  document.getElementById('cpc-cat').value='';
+  document.getElementById('cp-comprado-overlay').classList.add('open');
+}
+function cerrarMarcarCompradoModal(){
+  document.getElementById('cp-comprado-overlay').classList.remove('open');
+  compradoModalItemId=null;
+}
+function onCompradoMetodoChange(){
+  const esTarjeta=document.getElementById('cpc-metodo').value==='tarjeta';
+  document.getElementById('cpc-cuenta-wrap').style.display=esTarjeta?'none':'block';
+  document.getElementById('cpc-tarjeta-wrap').style.display=esTarjeta?'block':'none';
+  if(esTarjeta){
+    const t=getTarjeta(document.getElementById('cpc-tarjeta').value);
+    if(t) document.getElementById('cpc-currency').value=t.currency||'PEN';
+  }
+}
+function confirmarMarcarComprado(){
+  const item=(state.listaCompras||[]).find(x=>x.id===compradoModalItemId);
+  if(!item) return;
+  const metodo=document.getElementById('cpc-metodo').value;
+  const monto=parseFloat(document.getElementById('cpc-monto').value);
+  const currency=document.getElementById('cpc-currency').value;
+  const fecha=document.getElementById('cpc-fecha').value||todayLocalISO();
+  const cat=document.getElementById('cpc-cat').value||undefined;
+  if(isNaN(monto)||monto<=0){ alert('Ingresa el monto final de la compra.'); return; }
+  if(metodo==='cuenta'){
+    const cuenta=document.getElementById('cpc-cuenta').value;
+    if(!cuenta){ alert('Selecciona una cuenta.'); return; }
+    pushMovimiento({
+      id:'cp-mov-'+Date.now(), type:'expense', desc:item.nombre, amount:monto,
+      account:cuenta, date:fecha, currency, cat,
+    });
+    item.metodoPagoComprado='cuenta'; item.destinoComprado=cuenta;
+  } else {
+    const tarjetaId=document.getElementById('cpc-tarjeta').value;
+    const t=getTarjeta(tarjetaId);
+    if(!t){ alert('Selecciona una tarjeta.'); return; }
+    const monthKey=getBillingMonthKey(fecha, t);
+    if(!t.movs) t.movs={};
+    if(!t.movs[monthKey]) t.movs[monthKey]=[];
+    t.movs[monthKey].push({
+      id:'cp-tcm-'+Date.now(), desc:item.nombre, fecha, monto, pagado:false, cat, currency,
+    });
+    item.metodoPagoComprado='tarjeta'; item.destinoComprado=tarjetaId;
+  }
+  item.estado='comprado';
+  item.fechaComprado=fecha;
+  item.montoComprado=monto;
+  item.catComprado=cat;
+  // Se registra también como último punto del historial de precio, para
+  // que el historial refleje el precio real que terminó pagando.
+  if(!item.historialPrecio) item.historialPrecio=[];
+  if(getUltimoPrecio(item)!==monto) item.historialPrecio.push({precio:monto, fecha});
+  saveState();
+  cerrarMarcarCompradoModal();
+  renderListaCompras();
+}
+function renderListaCompras(){
+  const items=state.listaCompras||[];
+  const deseados=items.filter(x=>x.estado==='deseado');
+  const comprados=items.filter(x=>x.estado==='comprado');
+  const totalDeseado=deseados.reduce((s,x)=>s+getUltimoPrecio(x)*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
+  const totalComprado=comprados.reduce((s,x)=>s+(x.montoComprado||getUltimoPrecio(x))*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
+  document.getElementById('compras-summary').innerHTML=`
+    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">DESEADOS</div><div class="dash-kpi-val">${deseados.length}</div><div class="dash-kpi-sub">≈ S/ ${totalDeseado.toFixed(2)}</div></div>
+    <div class="dash-kpi kpi-green"><div class="dash-kpi-label">COMPRADOS</div><div class="dash-kpi-val">${comprados.length}</div><div class="dash-kpi-sub">≈ S/ ${totalComprado.toFixed(2)}</div></div>
+    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">TOTAL EN LA LISTA</div><div class="dash-kpi-val">${items.length}</div><div class="dash-kpi-sub">artículos</div></div>
+  `;
+  ['all','deseado','comprado'].forEach(f=>{
+    const btn=document.getElementById('cp-filter-'+f);
+    if(!btn) return;
+    btn.style.background = comprasFilter===f?'var(--accent)':'';
+    btn.style.color      = comprasFilter===f?'#fff':'';
+    btn.style.borderColor= comprasFilter===f?'var(--accent)':'';
+  });
+  const visibles = comprasFilter==='all' ? items : items.filter(x=>x.estado===comprasFilter);
+  const grid=document.getElementById('compras-grid');
+  document.getElementById('compras-empty').style.display = visibles.length ? 'none' : 'block';
+  grid.innerHTML=visibles.slice().reverse().map(item=>{
+    const sym=item.moneda==='USD'?'$':'S/';
+    const precio=getUltimoPrecio(item);
+    const esComprado=item.estado==='comprado';
+    const hist=item.historialPrecio||[];
+    const cambio = hist.length>1 ? (hist[hist.length-1].precio - hist[hist.length-2].precio) : 0;
+    const cambioTxt = cambio!==0 ? `<span style="font-size:10px;color:${cambio>0?'var(--red)':'var(--green)'}">${cambio>0?'▲':'▼'} ${sym}${Math.abs(cambio).toFixed(2)} vs. anterior</span>` : '';
+    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px${esComprado?';opacity:.75':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="font-size:13px;font-weight:600">${escapeHtml(item.nombre)}</div>
+        <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${esComprado?'var(--green)':'var(--bg3)'};color:${esComprado?'#fff':'var(--text3)'};white-space:nowrap">${esComprado?'✅ Comprado':'🎯 Deseado'}</span>
+      </div>
+      ${item.link?`<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent);word-break:break-all">${escapeHtml(item.link)}</a>`:''}
+      <div style="font-size:20px;font-weight:700">${sym} ${precio.toFixed(2)}</div>
+      ${cambioTxt}
+      ${item.notas?`<div style="font-size:11px;color:var(--text3)">${escapeHtml(item.notas)}</div>`:''}
+      ${esComprado?`<div style="font-size:10px;color:var(--text3)">Comprado el ${item.fechaComprado}</div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirActualizarPrecioModal('${item.id}')">💲 Actualizar precio</button>`:''}
+        <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirHistorialPrecioCompra('${item.id}')">📈 Historial (${hist.length})</button>
+        ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirMarcarCompradoModal('${item.id}')">✅ Marcar comprado</button>`:''}
+        <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirCompraModal('${item.id}')">✏ Editar</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════
