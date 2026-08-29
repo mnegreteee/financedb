@@ -1933,7 +1933,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 </div>
 
-<div class="modal-overlay" id="afp-modal-overlay" onclick="confirmAndClose(this,'cerrarAFPModal')">
+<div class="modal-overlay" id="afp-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarAFPModal')">
   <div class="modal" style="width:380px">
     <div class="modal-title"><span id="afp-modal-title">Registrar aporte</span><button class="modal-close" onclick="cerrarAFPModal()">✕</button></div>
     <div class="field-row">
@@ -1983,7 +1983,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 </div>
 
-<div class="modal-overlay" id="compra-modal-overlay" onclick="confirmAndClose(this,'cerrarCompraModal')">
+<div class="modal-overlay" id="compra-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarCompraModal')">
   <div class="modal" style="width:400px">
     <div class="modal-title"><span id="compra-modal-title">Nuevo artículo</span><button class="modal-close" onclick="cerrarCompraModal()">✕</button></div>
     <div class="field"><label>Nombre</label><input id="cp-nombre" type="text" placeholder="Ej. Meinl HC812VSB"></div>
@@ -2929,8 +2929,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 19:31'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Dos mejoras a AFP: (1) nuevo widget "🪙 AFP" disponible en Personalizar Resumen (Resumen → Editar) para mostrar el saldo actual acumulado — empieza oculto como todos los widgets nuevos, actívalo desde ahí. (2) Toggle "Incluir en Patrimonio Neto" en la propia página de AFP — apagado por defecto para no cambiarte el número sin que lo decidas; al activarlo, el saldo total de AFP se suma al Patrimonio Neto del Resumen (y a la fórmula mostrada, que pasa a decir "...+ AFP"), y se resta automáticamente al desactivarlo. Verificado con Playwright esperando a que termine la animación de conteo: con el toggle apagado el patrimonio no cambia, al activarlo sube exactamente el monto del saldo de AFP, y al desactivarlo vuelve al valor original.';
+const APP_VERSION_DATE = '28/08/26 - 21:16'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Revisión completa de la sección Lista de Compras a pedido de Miguel: los otros 3 modales (Actualizar precio, Historial de precio, Marcar comprado) YA tenían el chequeo correcto para no cerrarse solos — solo "Nuevo artículo" tenía el bug, ya corregido antes. Probado con Playwright uno por uno: los 4 modales permanecen abiertos al interactuar con sus campos (incluido cambiar método de pago a tarjeta y hacer clic en el selector), y el flujo completo de marcar como comprado con tarjeta sigue creando el consumo correctamente. Se detectó un caso extremo menor sin corregir (no reportado como bug, solo anotado): si se edita un artículo y se le cambia la moneda sin cambiar el precio numérico, el historial viejo se muestra retroactivamente con el símbolo de moneda nuevo, porque el historial no guarda la moneda de cada entrada individual.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
