@@ -1903,7 +1903,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="section-header" style="margin-bottom:16px">
     <div class="section-title">🪙 AFP — Fondo de Pensiones</div>
-    <button class="btn btn-primary" style="font-size:11px" onclick="abrirAFPModal()">+ Registrar aporte del mes</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn" style="font-size:11px" onclick="abrirAFPSaldoModal()">💰 Actualizar saldo actual</button>
+      <button class="btn btn-primary" style="font-size:11px" onclick="abrirAFPAporteModal()">+ Registrar aporte del mes</button>
+    </div>
   </div>
 
   <div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -1919,42 +1922,67 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div id="afp-chart-legend" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--text3)"></div>
   </div>
 
-  <div class="card" style="padding:16px 20px">
-    <div class="section-title" style="font-size:13px;margin-bottom:10px">Aportes registrados</div>
+  <div class="card" style="padding:16px 20px;margin-bottom:16px">
+    <div class="section-title" style="font-size:13px;margin-bottom:10px">Aportes registrados <span style="font-weight:400;color:var(--text3)">(mes a mes)</span></div>
     <div class="table-scroll">
-    <table class="account-table" style="width:100%;min-width:560px">
-      <thead><tr><th>Mes</th><th style="text-align:right">Aporte</th><th style="text-align:right">Saldo total</th><th style="text-align:right">Rentabilidad</th><th style="text-align:right">%</th><th></th></tr></thead>
-      <tbody id="afp-tbody"></tbody>
+    <table class="account-table" style="width:100%;min-width:320px">
+      <thead><tr><th>Mes</th><th style="text-align:right">Aporte</th><th></th></tr></thead>
+      <tbody id="afp-aportes-tbody"></tbody>
     </table>
     </div>
-    <div id="afp-empty" class="dash-empty" style="display:none">Sin aportes registrados todavía. Agrega el primero con el botón de arriba.</div>
+    <div id="afp-aportes-empty" class="dash-empty" style="display:none">Sin aportes registrados todavía.</div>
+  </div>
+
+  <div class="card" style="padding:16px 20px">
+    <div class="section-title" style="font-size:13px;margin-bottom:10px">Saldos registrados <span style="font-weight:400;color:var(--text3)">(cuando revisas tu AFP — no tiene que ser mensual)</span></div>
+    <div class="table-scroll">
+    <table class="account-table" style="width:100%;min-width:560px">
+      <thead><tr><th>Fecha</th><th style="text-align:right">Saldo total</th><th style="text-align:right">Rentabilidad</th><th style="text-align:right">%</th><th></th></tr></thead>
+      <tbody id="afp-saldos-tbody"></tbody>
+    </table>
+    </div>
+    <div id="afp-saldos-empty" class="dash-empty" style="display:none">Sin saldos registrados todavía. Agrega el primero con "💰 Actualizar saldo actual".</div>
   </div>
 
 </div>
 </div>
 
-<div class="modal-overlay" id="afp-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarAFPModal')">
-  <div class="modal" style="width:380px">
-    <div class="modal-title"><span id="afp-modal-title">Registrar aporte</span><button class="modal-close" onclick="cerrarAFPModal()">✕</button></div>
+<div class="modal-overlay" id="afp-aporte-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarAFPAporteModal')">
+  <div class="modal" style="width:360px">
+    <div class="modal-title"><span id="afp-aporte-modal-title">Registrar aporte</span><button class="modal-close" onclick="cerrarAFPAporteModal()">✕</button></div>
     <div class="field-row">
       <div class="field"><label>Mes</label>
-        <select id="afp-mes">
+        <select id="afp-aporte-mes">
           <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
           <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
           <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
           <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
         </select>
       </div>
-      <div class="field"><label>Año</label><input id="afp-anio" type="number" style="width:100%"></div>
+      <div class="field"><label>Año</label><input id="afp-aporte-anio" type="number" style="width:100%"></div>
     </div>
-    <div class="field"><label>Aporte de este mes <small>(lo que te descontaron/depositaste)</small></label><input id="afp-aporte" type="number" step="0.01" placeholder="0.00"></div>
-    <div class="field"><label>Saldo TOTAL del fondo <small>(el que te muestra tu AFP a esta fecha — no el aporte, el acumulado completo)</small></label><input id="afp-saldo" type="number" step="0.01" placeholder="0.00"></div>
-    <div id="afp-modal-hint" style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:10px"></div>
+    <div class="field"><label>Aporte de este mes <small>(lo que te descontaron/depositaste)</small></label><input id="afp-aporte-monto" type="number" step="0.01" placeholder="0.00"></div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
-      <button class="config-action-btn danger" id="afp-delete-btn" style="display:none" onclick="eliminarAFPRegistro()">🗑 Eliminar</button>
+      <button class="config-action-btn danger" id="afp-aporte-delete-btn" style="display:none" onclick="eliminarAFPAporte()">🗑 Eliminar</button>
       <div style="display:flex;gap:8px;margin-left:auto">
-        <button class="btn" onclick="cerrarAFPModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="guardarAFP()">Guardar</button>
+        <button class="btn" onclick="cerrarAFPAporteModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarAFPAporte()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="afp-saldo-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarAFPSaldoModal')">
+  <div class="modal" style="width:360px">
+    <div class="modal-title"><span id="afp-saldo-modal-title">Actualizar saldo actual</span><button class="modal-close" onclick="cerrarAFPSaldoModal()">✕</button></div>
+    <div class="field"><label>Fecha</label><input id="afp-saldo-fecha" type="date"></div>
+    <div class="field"><label>Saldo TOTAL del fondo <small>(el que te muestra tu AFP a esta fecha)</small></label><input id="afp-saldo-monto" type="number" step="0.01" placeholder="0.00"></div>
+    <div id="afp-saldo-modal-hint" style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
+      <button class="config-action-btn danger" id="afp-saldo-delete-btn" style="display:none" onclick="eliminarAFPSaldo()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarAFPSaldoModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarAFPSaldo()">Guardar</button>
       </div>
     </div>
   </div>
@@ -1963,6 +1991,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <!-- ══════════ PÁGINA: LISTA DE COMPRAS ══════════ -->
 <div class="page" id="page-compras">
 <div class="container">
+
 
   <div class="section-header" style="margin-bottom:16px">
     <div class="section-title">🛒 Lista de Compras</div>
@@ -2929,8 +2958,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 21:16'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Revisión completa de la sección Lista de Compras a pedido de Miguel: los otros 3 modales (Actualizar precio, Historial de precio, Marcar comprado) YA tenían el chequeo correcto para no cerrarse solos — solo "Nuevo artículo" tenía el bug, ya corregido antes. Probado con Playwright uno por uno: los 4 modales permanecen abiertos al interactuar con sus campos (incluido cambiar método de pago a tarjeta y hacer clic en el selector), y el flujo completo de marcar como comprado con tarjeta sigue creando el consumo correctamente. Se detectó un caso extremo menor sin corregir (no reportado como bug, solo anotado): si se edita un artículo y se le cambia la moneda sin cambiar el precio numérico, el historial viejo se muestra retroactivamente con el símbolo de moneda nuevo, porque el historial no guarda la moneda de cada entrada individual.';
+const APP_VERSION_DATE = '28/08/26 - 21:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Reestructurado AFP a pedido de Miguel: ahora son dos acciones y dos tablas independientes en vez de un solo formulario mensual. "+ Registrar aporte del mes" solo pide mes/año/monto (sin saldo). "💰 Actualizar saldo actual" solo pide fecha libre y el saldo total — no tiene que ser mensual, se actualiza cuando se revisa la AFP. La rentabilidad se calcula SOLO entre saldos consecutivos, descontando los aportes registrados en ese rango de meses (rentabilidad = saldo_actual − saldo_anterior − aportes_del_período). Los datos guardados con el modelo anterior se migran automáticamente sin perder nada la primera vez que se abre la página. Verificado con Playwright: migración correcta de datos viejos, cálculo exacto de rentabilidad con una actualización de saldo a mitad de mes (15-sep) descontando solo el aporte que cae en el rango correcto, y que ninguno de los 2 modales nuevos se cierra al interactuar con sus campos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11945,7 +11974,7 @@ function renderDashboard(){
   if(labelEl) labelEl.textContent='A pagar próximo mes ('+siguienteMes.label+')';
   setKpi('kpi-pagar-mes', pagarEsteMes>0?fmtTCMixed(pagarPen,pagarUsd):'S/ 0.00', pagarEsteMes>0?'pendiente de pago':'al día 🎉', pagarEsteMes>0?'var(--amber)':'var(--green)');
   setKpi('kpi-inversiones', (invValorPEN>0||invValorUSDNativo>0)?fmtTCMixed(invValorPEN,invValorUSDNativo):'$ 0.00', invResumenFull.ultimaFecha?('al '+fmtFechaCorta(invResumenFull.ultimaFecha)):'sin valorizar', (invValorPEN>0||invValorUSDNativo>0)?'var(--teal)':'var(--text3)');
-  setKpi('kpi-afp', afpSerieDash.length?fmtS(afpSaldoDash):'S/ 0.00', afpSerieDash.length?(afpSerieDash.length+' aporte'+(afpSerieDash.length===1?'':'s')+' registrado'+(afpSerieDash.length===1?'':'s')):'sin registros', afpSerieDash.length?'var(--purple)':'var(--text3)');
+  setKpi('kpi-afp', afpSerieDash.length?fmtS(afpSaldoDash):'S/ 0.00', afpSerieDash.length?('actualizado '+afpSerieDash[afpSerieDash.length-1].fecha):'sin registros', afpSerieDash.length?'var(--purple)':'var(--text3)');
 
   // ── Últimos movimientos ────────────────────────────
   const movsList = document.getElementById('dash-movs-list');
@@ -15583,89 +15612,173 @@ function calcularSimuladorNeto(){
 }
 
 // ══════════════════════════════════════════════════════
-//  AFP — seguimiento mensual de aportes y rentabilidad del fondo de
-//  pensiones. El usuario registra, cada mes, (1) cuánto aportó y (2) el
-//  saldo TOTAL que le muestra su AFP a esa fecha — la rentabilidad NO se
-//  pide a mano, se calcula sola comparando contra el mes anterior:
-//    rentabilidad = saldoTotal_actual − saldoTotal_anterior − aporte_actual
-//  El primer registro histórico no tiene "mes anterior" con el que comparar,
-//  así que su rentabilidad queda en null (se muestra como "—", nunca se
-//  inventa un valor).
+//  AFP — seguimiento del fondo de pensiones, en DOS listas independientes:
+//  (1) "Aportes" — el monto mensual que se descuenta/deposita, mes a mes.
+//  (2) "Saldos" — el saldo TOTAL del fondo, actualizado en fechas libres
+//      cada vez que el usuario revisa su AFP (no tiene que ser mensual).
+//  La rentabilidad se calcula SOLO entre saldos consecutivos, descontando
+//  los aportes registrados en ese rango de meses:
+//    rentabilidad = saldo_actual − saldo_anterior − aportes_del_período
+//  El primer saldo histórico no tiene "saldo anterior" con el que comparar,
+//  así que su rentabilidad queda en null (se muestra como "—").
 // ══════════════════════════════════════════════════════
-let editingAFPKey=null;
 function afpMonthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
-// Devuelve los registros ordenados cronológicamente, cada uno con su
-// rentabilidad YA calculada (o null si es el primero de la serie).
+// Migra datos del modelo viejo (state.afp.registros, un solo objeto con
+// aporte+saldo juntos por mes) al nuevo modelo de dos listas — se ejecuta
+// una sola vez, la primera vez que se toca AFP después de esta actualización,
+// y no se repite (state.afp._migrado). No se pierde ningún dato ya guardado.
+function migrarAFPSiNecesario(){
+  if(!state.afp){ state.afp={aportes:{}, saldos:[]}; return; }
+  if(state.afp.registros && !state.afp._migrado){
+    state.afp.aportes = state.afp.aportes || {};
+    state.afp.saldos = state.afp.saldos || [];
+    Object.keys(state.afp.registros).forEach(key=>{
+      const r=state.afp.registros[key];
+      if(state.afp.aportes[key]===undefined) state.afp.aportes[key]=r.aporte;
+      const [y,m]=key.split('-');
+      state.afp.saldos.push({id:'afp-saldo-'+key, fecha:r.fecha||(y+'-'+m+'-01'), saldoTotal:r.saldoTotal});
+    });
+    state.afp._migrado=true;
+    saveState();
+  }
+  if(!state.afp.aportes) state.afp.aportes={};
+  if(!state.afp.saldos) state.afp.saldos=[];
+}
+// Serie de SALDOS ordenada cronológicamente, cada uno con su rentabilidad ya
+// calculada (o null si es el primero de la serie). Esta es la función que
+// usan tanto el widget del Resumen como el Patrimonio Neto para saber el
+// "saldo actual" (el saldo más reciente de esta lista).
 function calcularSerieAFP(){
-  const regs=(state.afp&&state.afp.registros)||{};
-  const keys=Object.keys(regs).sort(); // 'YYYY-MM' ordena bien como texto
-  let prevSaldo=null;
-  return keys.map(k=>{
-    const r=regs[k];
-    const rentabilidad = prevSaldo===null ? null : (r.saldoTotal - prevSaldo - r.aporte);
-    const pct = (prevSaldo && prevSaldo>0 && rentabilidad!==null) ? (rentabilidad/prevSaldo*100) : null;
-    prevSaldo=r.saldoTotal;
-    return {key:k, ...r, rentabilidad, pct};
+  migrarAFPSiNecesario();
+  const saldos=(state.afp.saldos||[]).slice().sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
+  const aportesObj=state.afp.aportes||{};
+  let prevSaldo=null, prevKey=null;
+  return saldos.map(s=>{
+    const key=s.fecha.slice(0,7); // 'YYYY-MM'
+    let rentabilidad=null, pct=null;
+    if(prevSaldo!==null){
+      // Aportes que caen DESPUÉS del mes del saldo anterior y HASTA el mes
+      // de este saldo (inclusive) — se asume que el aporte del mismo mes
+      // del saldo anterior ya estaba reflejado en esa lectura.
+      const sumAportes=Object.keys(aportesObj).filter(k=>k>prevKey && k<=key).reduce((sum,k)=>sum+aportesObj[k],0);
+      rentabilidad = s.saldoTotal - prevSaldo - sumAportes;
+      pct = prevSaldo>0 ? (rentabilidad/prevSaldo*100) : null;
+    }
+    prevSaldo=s.saldoTotal; prevKey=key;
+    return {...s, rentabilidad, pct};
   });
 }
-function abrirAFPModal(key){
-  editingAFPKey=key||null;
+// Lista de APORTES ordenada cronológicamente (independiente de los saldos).
+function calcularListaAportes(){
+  migrarAFPSiNecesario();
+  const aportesObj=state.afp.aportes||{};
+  return Object.keys(aportesObj).sort().map(k=>({key:k, monto:aportesObj[k]}));
+}
+
+// ── Modal: Registrar/editar APORTE del mes ──────────────
+let editingAFPAporteKey=null;
+function abrirAFPAporteModal(key){
+  migrarAFPSiNecesario();
+  editingAFPAporteKey=key||null;
   const hoy=new Date();
-  document.getElementById('afp-modal-title').textContent = key ? 'Editar aporte' : 'Registrar aporte';
-  document.getElementById('afp-delete-btn').style.display = key ? 'inline-block' : 'none';
-  if(key && state.afp && state.afp.registros && state.afp.registros[key]){
-    const r=state.afp.registros[key];
+  document.getElementById('afp-aporte-modal-title').textContent = key ? 'Editar aporte' : 'Registrar aporte';
+  document.getElementById('afp-aporte-delete-btn').style.display = key ? 'inline-block' : 'none';
+  if(key && state.afp.aportes[key]!==undefined){
     const [y,m]=key.split('-').map(Number);
-    document.getElementById('afp-anio').value=y;
-    document.getElementById('afp-mes').value=m-1;
-    document.getElementById('afp-aporte').value=r.aporte;
-    document.getElementById('afp-saldo').value=r.saldoTotal;
+    document.getElementById('afp-aporte-anio').value=y;
+    document.getElementById('afp-aporte-mes').value=m-1;
+    document.getElementById('afp-aporte-monto').value=state.afp.aportes[key];
   } else {
-    document.getElementById('afp-anio').value=hoy.getFullYear();
-    document.getElementById('afp-mes').value=hoy.getMonth();
-    document.getElementById('afp-aporte').value='';
-    document.getElementById('afp-saldo').value='';
+    document.getElementById('afp-aporte-anio').value=hoy.getFullYear();
+    document.getElementById('afp-aporte-mes').value=hoy.getMonth();
+    document.getElementById('afp-aporte-monto').value='';
+  }
+  document.getElementById('afp-aporte-modal-overlay').classList.add('open');
+}
+function cerrarAFPAporteModal(){
+  document.getElementById('afp-aporte-modal-overlay').classList.remove('open');
+  editingAFPAporteKey=null;
+}
+function guardarAFPAporte(){
+  const y=parseInt(document.getElementById('afp-aporte-anio').value,10);
+  const m=parseInt(document.getElementById('afp-aporte-mes').value,10);
+  const monto=parseFloat(document.getElementById('afp-aporte-monto').value);
+  if(!y||isNaN(m)){ alert('Revisa el mes y el año.'); return; }
+  if(isNaN(monto)||monto<0){ alert('Ingresa el monto del aporte.'); return; }
+  migrarAFPSiNecesario();
+  const key=afpMonthKey(y,m);
+  if(editingAFPAporteKey && editingAFPAporteKey!==key) delete state.afp.aportes[editingAFPAporteKey];
+  state.afp.aportes[key]=monto;
+  saveState();
+  cerrarAFPAporteModal();
+  renderAFP();
+}
+function eliminarAFPAporte(key){
+  const k=key||editingAFPAporteKey;
+  if(!k) return;
+  if(!confirm('¿Eliminar este aporte?')) return;
+  migrarAFPSiNecesario();
+  delete state.afp.aportes[k];
+  saveState();
+  cerrarAFPAporteModal();
+  renderAFP();
+}
+
+// ── Modal: Registrar/editar SALDO actual ────────────────
+let editingAFPSaldoId=null;
+function abrirAFPSaldoModal(id){
+  migrarAFPSiNecesario();
+  editingAFPSaldoId=id||null;
+  document.getElementById('afp-saldo-modal-title').textContent = id ? 'Editar saldo' : 'Actualizar saldo actual';
+  document.getElementById('afp-saldo-delete-btn').style.display = id ? 'inline-block' : 'none';
+  if(id){
+    const s=state.afp.saldos.find(x=>x.id===id);
+    if(s){
+      document.getElementById('afp-saldo-fecha').value=s.fecha;
+      document.getElementById('afp-saldo-monto').value=s.saldoTotal;
+    }
+  } else {
+    document.getElementById('afp-saldo-fecha').value=todayLocalISO();
+    document.getElementById('afp-saldo-monto').value='';
   }
   const serie=calcularSerieAFP();
-  const hint=document.getElementById('afp-modal-hint');
+  const hint=document.getElementById('afp-saldo-modal-hint');
   hint.textContent = serie.length
-    ? `Último saldo registrado: S/ ${serie[serie.length-1].saldoTotal.toFixed(2)} (${MONTHS[parseInt(serie[serie.length-1].key.split('-')[1],10)-1]} ${serie[serie.length-1].key.split('-')[0]})`
-    : 'Este será tu primer registro — su rentabilidad no se puede calcular todavía (no hay mes anterior con el que comparar).';
-  document.getElementById('afp-modal-overlay').classList.add('open');
+    ? `Último saldo registrado: S/ ${serie[serie.length-1].saldoTotal.toFixed(2)} (${serie[serie.length-1].fecha})`
+    : 'Este será tu primer registro — su rentabilidad no se puede calcular todavía (no hay saldo anterior con el que comparar).';
+  document.getElementById('afp-saldo-modal-overlay').classList.add('open');
 }
-function cerrarAFPModal(){
-  document.getElementById('afp-modal-overlay').classList.remove('open');
-  editingAFPKey=null;
+function cerrarAFPSaldoModal(){
+  document.getElementById('afp-saldo-modal-overlay').classList.remove('open');
+  editingAFPSaldoId=null;
 }
-function guardarAFP(){
-  const y=parseInt(document.getElementById('afp-anio').value,10);
-  const m=parseInt(document.getElementById('afp-mes').value,10);
-  const aporte=parseFloat(document.getElementById('afp-aporte').value);
-  const saldoTotal=parseFloat(document.getElementById('afp-saldo').value);
-  if(!y||isNaN(m)){ alert('Revisa el mes y el año.'); return; }
-  if(isNaN(aporte)||aporte<0){ alert('Ingresa el aporte de este mes.'); return; }
+function guardarAFPSaldo(){
+  const fecha=document.getElementById('afp-saldo-fecha').value;
+  const saldoTotal=parseFloat(document.getElementById('afp-saldo-monto').value);
+  if(!fecha){ alert('Ingresa la fecha.'); return; }
   if(isNaN(saldoTotal)||saldoTotal<0){ alert('Ingresa el saldo TOTAL actual del fondo.'); return; }
-  const key=afpMonthKey(y,m);
-  if(!state.afp) state.afp={registros:{}};
-  if(!state.afp.registros) state.afp.registros={};
-  // Si se está EDITANDO un mes con una key distinta a la que ahora se
-  // ingresó (cambiaron el mes/año), se borra el registro viejo para no
-  // dejar un duplicado huérfano.
-  if(editingAFPKey && editingAFPKey!==key) delete state.afp.registros[editingAFPKey];
-  state.afp.registros[key]={aporte, saldoTotal, fecha:todayLocalISO()};
+  migrarAFPSiNecesario();
+  if(editingAFPSaldoId){
+    const s=state.afp.saldos.find(x=>x.id===editingAFPSaldoId);
+    if(s){ s.fecha=fecha; s.saldoTotal=saldoTotal; }
+  } else {
+    state.afp.saldos.push({id:'afp-saldo-'+Date.now(), fecha, saldoTotal});
+  }
   saveState();
-  cerrarAFPModal();
+  cerrarAFPSaldoModal();
   renderAFP();
 }
-function eliminarAFPRegistro(key){
-  const k=key||editingAFPKey;
-  if(!k) return;
-  if(!confirm('¿Eliminar este registro de AFP? Esto también recalcula la rentabilidad del mes siguiente (si existe).')) return;
-  if(state.afp&&state.afp.registros) delete state.afp.registros[k];
+function eliminarAFPSaldo(id){
+  const sid=id||editingAFPSaldoId;
+  if(!sid) return;
+  if(!confirm('¿Eliminar este saldo registrado? Esto también recalcula la rentabilidad de los saldos vecinos.')) return;
+  migrarAFPSiNecesario();
+  state.afp.saldos=state.afp.saldos.filter(x=>x.id!==sid);
   saveState();
-  cerrarAFPModal();
+  cerrarAFPSaldoModal();
   renderAFP();
 }
+
 let afpChartInstance=null;
 // Toggle para sumar (o no) el saldo de AFP al Patrimonio Neto del Resumen.
 // Apagado por defecto — es un cambio a un número importante que ya existía,
@@ -15686,40 +15799,54 @@ function renderAFPPatrimonioToggleBtn(){
 }
 function renderAFP(){
   renderAFPPatrimonioToggleBtn();
-  const serie=calcularSerieAFP();
+  const serie=calcularSerieAFP();     // saldos con rentabilidad calculada
+  const aportes=calcularListaAportes(); // aportes, independiente
   const sym='S/ ';
   const saldoActual = serie.length ? serie[serie.length-1].saldoTotal : 0;
-  const totalAportado = serie.reduce((s,r)=>s+r.aporte,0);
+  const totalAportado = aportes.reduce((s,a)=>s+a.monto,0);
   const rentabilidadTotal = serie.reduce((s,r)=>s+(r.rentabilidad||0),0);
   const ultima = serie.length ? serie[serie.length-1] : null;
-  const rentEsteMes = ultima ? ultima.rentabilidad : null;
+  const rentActual = ultima ? ultima.rentabilidad : null;
   document.getElementById('afp-summary').innerHTML=`
-    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${saldoActual.toFixed(2)}</div><div class="dash-kpi-sub">${serie.length} aporte${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
-    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${totalAportado.toFixed(2)}</div><div class="dash-kpi-sub">histórico registrado</div></div>
-    <div class="dash-kpi ${rentabilidadTotal>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal>=0?'+':''}${sym}${rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">desde tu 1er registro</div></div>
-    <div class="dash-kpi ${(rentEsteMes||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD ESTE MES</div><div class="dash-kpi-val">${rentEsteMes===null?'—':(rentEsteMes>=0?'+':'')+sym+rentEsteMes.toFixed(2)}</div><div class="dash-kpi-sub">${ultima?MONTHS[parseInt(ultima.key.split('-')[1],10)-1]+' '+ultima.key.split('-')[0]:'sin datos'}</div></div>
+    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${saldoActual.toFixed(2)}</div><div class="dash-kpi-sub">${serie.length} saldo${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
+    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${totalAportado.toFixed(2)}</div><div class="dash-kpi-sub">${aportes.length} aporte${aportes.length===1?'':'s'} registrado${aportes.length===1?'':'s'}</div></div>
+    <div class="dash-kpi ${rentabilidadTotal>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal>=0?'+':''}${sym}${rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">desde tu 1er saldo</div></div>
+    <div class="dash-kpi ${(rentActual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD ACTUAL</div><div class="dash-kpi-val">${rentActual===null?'—':(rentActual>=0?'+':'')+sym+rentActual.toFixed(2)}</div><div class="dash-kpi-sub">${ultima?'desde '+ultima.fecha:'sin datos'}</div></div>
   `;
-  const tbody=document.getElementById('afp-tbody');
-  document.getElementById('afp-empty').style.display = serie.length ? 'none' : 'block';
-  tbody.innerHTML=serie.slice().reverse().map(r=>{
-    const [y,m]=r.key.split('-');
+
+  // ── Tabla de APORTES (mes a mes) ──
+  const aportesTbody=document.getElementById('afp-aportes-tbody');
+  document.getElementById('afp-aportes-empty').style.display = aportes.length ? 'none' : 'block';
+  aportesTbody.innerHTML=aportes.slice().reverse().map(a=>{
+    const [y,m]=a.key.split('-');
+    return `<tr>
+      <td>${MONTHS[parseInt(m,10)-1]} ${y}</td>
+      <td style="text-align:right">${sym}${a.monto.toFixed(2)}</td>
+      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPAporteModal('${a.key}')" title="Editar">✏</span></td>
+    </tr>`;
+  }).join('');
+
+  // ── Tabla de SALDOS (fechas libres) ──
+  const saldosTbody=document.getElementById('afp-saldos-tbody');
+  document.getElementById('afp-saldos-empty').style.display = serie.length ? 'none' : 'block';
+  saldosTbody.innerHTML=serie.slice().reverse().map(r=>{
     const rentColor = r.rentabilidad===null ? 'var(--text3)' : (r.rentabilidad>=0?'var(--green)':'var(--red)');
     const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'')+sym+r.rentabilidad.toFixed(2);
     const pctTxt = r.pct===null ? '—' : (r.pct>=0?'+':'')+r.pct.toFixed(2)+'%';
     return `<tr>
-      <td>${MONTHS[parseInt(m,10)-1]} ${y}</td>
-      <td style="text-align:right">${sym}${r.aporte.toFixed(2)}</td>
+      <td>${r.fecha}</td>
       <td style="text-align:right;font-weight:600">${sym}${r.saldoTotal.toFixed(2)}</td>
       <td style="text-align:right;color:${rentColor}">${rentTxt}</td>
       <td style="text-align:right;color:${rentColor}">${pctTxt}</td>
-      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPModal('${r.key}')" title="Editar">✏</span></td>
+      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAFPSaldoModal('${r.id}')" title="Editar">✏</span></td>
     </tr>`;
   }).join('');
-  // Gráfico: saldo total (línea) + rentabilidad mensual (barras)
+
+  // ── Gráfico: saldo total (línea) + rentabilidad por período (barras) ──
   const ctx=document.getElementById('afp-chart');
   if(afpChartInstance){ afpChartInstance.destroy(); afpChartInstance=null; }
   if(ctx && serie.length && typeof Chart!=='undefined'){
-    const labels=serie.map(r=>{ const [y,m]=r.key.split('-'); return MONTHS[parseInt(m,10)-1].slice(0,3)+' '+y.slice(2); });
+    const labels=serie.map(r=>{ const [y,m,d]=r.fecha.split('-'); return d+'/'+m+'/'+y.slice(2); });
     afpChartInstance=new Chart(ctx,{
       type:'bar',
       data:{ labels, datasets:[
@@ -15734,7 +15861,7 @@ function renderAFP(){
         plugins:{legend:{display:false}}
       }
     });
-    document.getElementById('afp-chart-legend').innerHTML=`<span style="color:#a78bfa">● Saldo total</span><span style="color:#94a3b8">▮ Rentabilidad mensual</span>`;
+    document.getElementById('afp-chart-legend').innerHTML=`<span style="color:#a78bfa">● Saldo total</span><span style="color:#94a3b8">▮ Rentabilidad</span>`;
   } else if(ctx){
     document.getElementById('afp-chart-legend').innerHTML='';
   }
