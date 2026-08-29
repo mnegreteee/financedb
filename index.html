@@ -1903,8 +1903,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="section-header" style="margin-bottom:16px">
     <div class="section-title">🪙 AFP — Fondo de Pensiones</div>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" style="font-size:11px" onclick="abrirAFPSaldoModal()">💰 Actualizar saldo actual</button>
+      <button class="btn" style="font-size:11px" onclick="abrirAFPAporteMasivoModal()">📅 Varios meses</button>
       <button class="btn btn-primary" style="font-size:11px" onclick="abrirAFPAporteModal()">+ Registrar aporte del mes</button>
     </div>
   </div>
@@ -1968,6 +1969,41 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="btn" onclick="cerrarAFPAporteModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarAFPAporte()">Guardar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="afp-aporte-masivo-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarAFPAporteMasivoModal')">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span>📅 Registrar varios meses</span><button class="modal-close" onclick="cerrarAFPAporteMasivoModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Útil si tu sueldo es fijo y el descuento de AFP es el mismo mes a mes.</div>
+    <div class="field-row">
+      <div class="field"><label>Desde mes</label>
+        <select id="afp-masivo-mes-ini">
+          <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+          <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+          <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+          <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+        </select>
+      </div>
+      <div class="field"><label>Año</label><input id="afp-masivo-anio-ini" type="number" style="width:100%"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Hasta mes</label>
+        <select id="afp-masivo-mes-fin">
+          <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+          <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+          <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+          <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+        </select>
+      </div>
+      <div class="field"><label>Año</label><input id="afp-masivo-anio-fin" type="number" style="width:100%"></div>
+    </div>
+    <div class="field"><label>Monto del aporte <small>(el mismo para todos los meses del rango)</small></label><input id="afp-masivo-monto" type="number" step="0.01" placeholder="0.00"></div>
+    <div id="afp-masivo-hint" style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarAFPAporteMasivoModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarAFPAporteMasivo()">Guardar todos</button>
     </div>
   </div>
 </div>
@@ -2958,8 +2994,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 21:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Reestructurado AFP a pedido de Miguel: ahora son dos acciones y dos tablas independientes en vez de un solo formulario mensual. "+ Registrar aporte del mes" solo pide mes/año/monto (sin saldo). "💰 Actualizar saldo actual" solo pide fecha libre y el saldo total — no tiene que ser mensual, se actualiza cuando se revisa la AFP. La rentabilidad se calcula SOLO entre saldos consecutivos, descontando los aportes registrados en ese rango de meses (rentabilidad = saldo_actual − saldo_anterior − aportes_del_período). Los datos guardados con el modelo anterior se migran automáticamente sin perder nada la primera vez que se abre la página. Verificado con Playwright: migración correcta de datos viejos, cálculo exacto de rentabilidad con una actualización de saldo a mitad de mes (15-sep) descontando solo el aporte que cae en el rango correcto, y que ninguno de los 2 modales nuevos se cierra al interactuar con sus campos.';
+const APP_VERSION_DATE = '28/08/26 - 21:36'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo botón "📅 Varios meses" en AFP, para cuando el sueldo es fijo y el descuento de AFP es el mismo mes a mes — pides desde qué mes/año hasta qué mes/año, un solo monto, y se registra en todos esos meses de una vez (probado con 12 meses de un jalón). Si alguno de esos meses ya tenía un aporte distinto guardado, avisa antes de reemplazarlo (probado: al intentar sobrescribir 3 meses con un monto distinto, pidió confirmación, mostró cuáles eran, y dejó el resto de meses intactos). El modal nuevo también se probó para que no se cierre solo al interactuar con sus campos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -15722,6 +15758,57 @@ function eliminarAFPAporte(key){
   saveState();
   cerrarAFPAporteModal();
   renderAFP();
+}
+
+// ── Modal: Registrar el MISMO aporte en varios meses seguidos ──────────
+// Útil para sueldo fijo, donde el descuento de AFP es igual mes a mes —
+// evita tener que abrir el modal individual una vez por cada mes.
+function abrirAFPAporteMasivoModal(){
+  migrarAFPSiNecesario();
+  const hoy=new Date();
+  document.getElementById('afp-masivo-mes-ini').value=hoy.getMonth();
+  document.getElementById('afp-masivo-anio-ini').value=hoy.getFullYear();
+  document.getElementById('afp-masivo-mes-fin').value=hoy.getMonth();
+  document.getElementById('afp-masivo-anio-fin').value=hoy.getFullYear();
+  document.getElementById('afp-masivo-monto').value='';
+  document.getElementById('afp-masivo-hint').textContent='';
+  document.getElementById('afp-aporte-masivo-overlay').classList.add('open');
+}
+function cerrarAFPAporteMasivoModal(){
+  document.getElementById('afp-aporte-masivo-overlay').classList.remove('open');
+}
+function guardarAFPAporteMasivo(){
+  const yIni=parseInt(document.getElementById('afp-masivo-anio-ini').value,10);
+  const mIni=parseInt(document.getElementById('afp-masivo-mes-ini').value,10);
+  const yFin=parseInt(document.getElementById('afp-masivo-anio-fin').value,10);
+  const mFin=parseInt(document.getElementById('afp-masivo-mes-fin').value,10);
+  const monto=parseFloat(document.getElementById('afp-masivo-monto').value);
+  if(!yIni||isNaN(mIni)||!yFin||isNaN(mFin)){ alert('Revisa los meses y años.'); return; }
+  if(isNaN(monto)||monto<0){ alert('Ingresa el monto del aporte.'); return; }
+  const keyIni=afpMonthKey(yIni,mIni), keyFin=afpMonthKey(yFin,mFin);
+  if(keyIni>keyFin){ alert('El mes/año de inicio debe ser antes (o igual) que el de fin.'); return; }
+  migrarAFPSiNecesario();
+  // Recorre mes a mes desde el inicio hasta el fin (inclusive), acumulando
+  // las claves 'YYYY-MM' a escribir. Se avisa antes si alguna ya tenía un
+  // valor distinto, para no pisar datos sin que el usuario lo sepa.
+  const keys=[];
+  let y=yIni, m=mIni;
+  while(true){
+    keys.push(afpMonthKey(y,m));
+    if(y===yFin && m===mFin) break;
+    m++; if(m>11){ m=0; y++; }
+    if(keys.length>240) break; // salvaguarda (20 años) por si algo sale mal
+  }
+  const existentesDistintos=keys.filter(k=>state.afp.aportes[k]!==undefined && state.afp.aportes[k]!==monto);
+  if(existentesDistintos.length){
+    const nombres=existentesDistintos.map(k=>{ const [yy,mm]=k.split('-'); return MONTHS[parseInt(mm,10)-1].slice(0,3)+' '+yy; }).join(', ');
+    if(!confirm(`${existentesDistintos.length} de esos meses ya tenían un aporte distinto guardado (${nombres}). ¿Reemplazarlos con S/ ${monto.toFixed(2)}?`)) return;
+  }
+  keys.forEach(k=>{ state.afp.aportes[k]=monto; });
+  saveState();
+  cerrarAFPAporteMasivoModal();
+  renderAFP();
+  alert(`Listo — se registró S/ ${monto.toFixed(2)} en ${keys.length} mes${keys.length===1?'':'es'}.`);
 }
 
 // ── Modal: Registrar/editar SALDO actual ────────────────
