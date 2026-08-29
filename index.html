@@ -452,6 +452,38 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .tc-color-opt:hover{transform:scale(1.15);}
 .tc-color-opt.selected{border-color:#fff;transform:scale(1.2);}
 .tc-selection-total{position:sticky;bottom:16px;background:var(--bg2);border:1px solid var(--accent);border-radius:10px;padding:10px 16px;display:none;justify-content:space-between;align-items:center;margin-top:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);}
+/* ── Selector de vista de Consumos (tabla / tarjetas / agrupado) ── */
+.tc-view-switch{display:flex;gap:2px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:3px;}
+.tc-view-btn{background:none;border:none;color:var(--text2);font-size:11px;font-weight:500;padding:5px 9px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .15s;white-space:nowrap;}
+.tc-view-btn:hover{color:var(--text);}
+.tc-view-btn.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
+.tc-mov-table tr.selected-row td{background:rgba(91,141,239,.08);}
+/* Vista tarjetas */
+.tc-cards-wrap{display:flex;flex-direction:column;gap:8px;}
+.tc-mov-card{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--catcolor,var(--accent));border-radius:10px;padding:10px 12px;}
+.tc-mov-card.paid-row{opacity:.55;}
+.tc-mov-card.selected-row{background:rgba(91,141,239,.1);border-color:var(--accent);}
+.tc-mov-card-body{flex:1;min-width:0;cursor:pointer;}
+.tc-mov-card-desc{font-size:13px;font-weight:600;margin-bottom:3px;}
+.tc-mov-card-meta{font-size:11px;color:var(--text3);display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.tc-mov-pill{font-size:10px;padding:1px 7px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);white-space:nowrap;}
+.tc-mov-card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+.tc-mov-card-amount{font-family:var(--mono);font-size:13px;font-weight:600;white-space:nowrap;}
+.tc-mov-card-actions{display:flex;gap:6px;align-items:center;}
+/* Vista agrupada */
+.tc-grouped-stats{display:flex;gap:10px;margin-bottom:14px;}
+.tc-grouped-stat{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.tc-grouped-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.tc-grouped-stat-val{font-family:var(--mono);font-size:15px;font-weight:700;}
+.tc-group-block{margin-bottom:14px;}
+.tc-group-head{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--border);margin-bottom:4px;}
+.tc-group-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.tc-group-total{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text2);}
+.tc-group-item{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--border);}
+.tc-group-item:last-child{border-bottom:none;}
+.tc-group-item.selected-row{background:rgba(91,141,239,.08);}
+.tc-group-paid-dot{width:16px;height:16px;border-radius:50%;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+
 
 /* Resumen global */
 .tc-global-table{width:100%;border-collapse:collapse;min-width:600px;}
@@ -1915,7 +1947,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button class="config-action-btn" id="afp-patrimonio-toggle-btn" onclick="toggleAFPEnPatrimonio()" style="font-size:11px"></button>
   </div>
 
-  <div class="dash-split" id="afp-summary" style="grid-template-columns:repeat(4,1fr)"></div>
+  <div class="dash-split" id="afp-summary" style="grid-template-columns:repeat(5,1fr)"></div>
 
   <div class="card" style="padding:16px 20px;margin-bottom:16px;margin-top:16px">
     <div class="section-title" style="font-size:13px;margin-bottom:10px">Evolución del fondo</div>
@@ -2641,28 +2673,28 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
     <!-- Movimientos table -->
     <div class="card" style="padding:18px;margin-bottom:16px">
-      <div class="section-header">
+      <div class="section-header" style="flex-wrap:wrap;gap:8px">
         <div class="section-title" id="tc-mov-title">Consumos</div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto">
+          <div class="tc-view-switch" id="tc-view-switch">
+            <button class="tc-view-btn" data-view="tabla" onclick="setTCConsumosView('tabla')" title="Vista de tabla">☰ Tabla</button>
+            <button class="tc-view-btn" data-view="tarjetas" onclick="setTCConsumosView('tarjetas')" title="Vista de tarjetas">▤ Tarjetas</button>
+            <button class="tc-view-btn" data-view="agrupado" onclick="setTCConsumosView('agrupado')" title="Vista agrupada por estado">⊟ Agrupado</button>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <select id="tc-sort-col-select" class="btn" style="font-size:11px;padding:5px 6px" onchange="onTCSortColChange(this.value)" title="Ordenar por">
+              <option value="fecha">Fecha</option>
+              <option value="desc">Descripción</option>
+              <option value="cat">Categoría</option>
+              <option value="monto">Monto</option>
+            </select>
+            <button class="btn" id="tc-sort-dir-btn" style="font-size:11px;padding:5px 8px" onclick="onTCSortDirToggle()" title="Cambiar dirección del orden">▼</button>
+          </div>
           <button class="btn" style="font-size:11px" onclick="markSelectedPaid()">✓ Marcar selec. como pagado</button>
           <button class="btn" style="font-size:11px" onclick="selectAllTCMov()">Selec. todos</button>
         </div>
       </div>
-      <div style="overflow-x:auto">
-        <table class="tc-mov-table">
-          <thead><tr>
-            <th style="width:30px"><input type="checkbox" class="tc-check" id="tc-check-all" onchange="toggleAllTCMov(this.checked)"></th>
-            <th onclick="setTCSort('desc')" style="cursor:pointer;user-select:none">Descripción <span id="tcsort-desc"></span></th>
-            <th onclick="setTCSort('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="tcsort-fecha"></span></th>
-            <th onclick="setTCSort('cat')" style="cursor:pointer;user-select:none">Categoría <span id="tcsort-cat"></span></th>
-            <th style="width:30px">Pagado</th>
-            <th onclick="setTCSort('monto')" style="text-align:right;cursor:pointer;user-select:none">Monto <span id="tcsort-monto"></span></th>
-            <th style="width:40px"></th>
-          </tr></thead>
-          <tbody id="tc-mov-tbody"></tbody>
-        </table>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Toca el encabezado de una columna para ordenar</div>
+      <div id="tc-mov-view-container"></div>
 
       <!-- Selection total sticky bar -->
       <div class="tc-selection-total" id="tc-sel-total">
@@ -2994,8 +3026,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '28/08/26 - 21:57'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mejoras visuales en las tablas de AFP (Aportes y Saldos), a pedido de Miguel: (1) ahora se agrupan por año con un encabezado plegable (▶/▼) que muestra el total anual (suma de aportes, o el último saldo del año) sin tener que expandirlo — el año más reciente empieza expandido, el resto colapsado; (2) las tablas ya no crecen sin límite: quedan con una altura máxima (~10 filas visibles) y scroll vertical propio para ver el resto sin que ocupen toda la pantalla. Verificado con Playwright: 3 años de datos con totales anuales exactos (ej. 12 meses × S/450 = S/5,400.00 mostrado en el encabezado colapsado), expansión/colapso funcionando, y el scroll activándose cuando el contenido excede los 420px de alto.';
+const APP_VERSION_DATE = '29/08/26 - 00:08'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Recuperada una funcionalidad que se había perdido de tu app: el selector de vista "☰ Tabla / ▤ Tarjetas / ⊟ Agrupado" en Consumos de tarjeta, más el selector de orden por dropdown (Fecha/Descripción/Categoría/Monto + botón de dirección). La encontré intacta en el archivo de Nathy y la porté de vuelta — no se había tocado en ninguna sesión anterior, simplemente tu copia nunca la tuvo o la perdió en algún momento previo a esta conversación. Se guarda tu elección de vista (state.tcConsumosView) para que no cambie sola la próxima vez. Verificado con Playwright: las 3 vistas renderizan correctamente (tabla con 3 filas, tarjetas con 3 tarjetas, agrupado separando Pendientes S/130.00 y Pagados S/45.00), el orden por dropdown funciona igual que tocar un encabezado, y la selección resalta la fila y actualiza el total en las 3 vistas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10204,6 +10236,153 @@ function updateTCSortIndicators(){
   });
 }
 
+// ── Selector de vista de Consumos (tabla / tarjetas / agrupado) ──
+function setTCConsumosView(v){
+  state.tcConsumosView=v;
+  saveState();
+  renderTCDetail();
+}
+// Color determinístico por categoría (mismo texto = mismo color siempre),
+// tomado de la paleta que ya usa el resto de la app.
+function tcCatColor(cat){
+  const paleta=['var(--accent)','var(--green)','var(--amber)','var(--purple)','var(--teal)','var(--red)'];
+  if(!cat) return 'var(--text3)';
+  let h=0;
+  for(let i=0;i<cat.length;i++) h=(h*31+cat.charCodeAt(i))>>>0;
+  return paleta[h%paleta.length];
+}
+function tcMovAmountFmt(m, cardCur){
+  const mCur=m.currency||cardCur;
+  const mSym=mCur==='USD'?'$':'S/';
+  return mSym+' '+Math.abs(m.monto).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
+
+// ── Vista TABLA (la de siempre) ──
+function tcMovTableHead(){
+  return `<tr>
+    <th style="width:30px"><input type="checkbox" class="tc-check" id="tc-check-all" onchange="toggleAllTCMov(this.checked)"></th>
+    <th onclick="setTCSort('desc')" style="cursor:pointer;user-select:none">Descripción <span id="tcsort-desc"></span></th>
+    <th onclick="setTCSort('fecha')" style="cursor:pointer;user-select:none">Fecha <span id="tcsort-fecha"></span></th>
+    <th onclick="setTCSort('cat')" style="cursor:pointer;user-select:none">Categoría <span id="tcsort-cat"></span></th>
+    <th style="width:30px">Pagado</th>
+    <th onclick="setTCSort('monto')" style="text-align:right;cursor:pointer;user-select:none">Monto <span id="tcsort-monto"></span></th>
+    <th style="width:40px"></th>
+  </tr>`;
+}
+function tcMovTableRow(m, cardCur){
+  const mCur=m.currency||cardCur;
+  const mFmt=tcMovAmountFmt(m,cardCur);
+  return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
+    <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
+    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
+    <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
+    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
+    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
+    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
+    <td>
+      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
+      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
+    </td>
+  </tr>`;
+}
+function buildTCMovTableHtml(movs, cardCur){
+  const rows=movs.map(m=>tcMovTableRow(m,cardCur)).join('');
+  return `<div style="overflow-x:auto"><table class="tc-mov-table"><thead>${tcMovTableHead()}</thead><tbody id="tc-mov-tbody">${rows}</tbody></table></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Toca el encabezado de una columna para ordenar</div>`;
+}
+
+// ── Vista TARJETAS ──
+function tcMovCardHtml(m, cardCur){
+  const mFmt=tcMovAmountFmt(m,cardCur);
+  const catColor=tcCatColor(m.cat);
+  return `<div class="tc-mov-card ${m.pagado?'paid-row':''}" id="tc-row-${m.id}" style="--catcolor:${catColor}">
+    <input type="checkbox" class="tc-check tc-sel-cb" id="tc-cb-${m.id}" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">
+    <div class="tc-mov-card-body" onclick="document.getElementById('tc-cb-${m.id}').click()">
+      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
+      <div class="tc-mov-card-meta">
+        <span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span>
+        <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>
+        ${m.pagado?'<span class="tc-mov-pill" style="color:var(--green);border-color:var(--green)">✓ Pagado</span>':''}
+        ${m.metodoPago==='puntos'?'<span title="Pagado con puntos">🎁</span>':''}
+      </div>
+    </div>
+    <div class="tc-mov-card-right">
+      <div class="tc-mov-card-amount" style="color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</div>
+      <div class="tc-mov-card-actions">
+        <input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">
+        <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
+        <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+function buildTCMovCardsHtml(movs, cardCur){
+  return `<div class="tc-cards-wrap">${movs.map(m=>tcMovCardHtml(m,cardCur)).join('')}</div>`;
+}
+
+// ── Vista AGRUPADA (Pendientes / Pagados, con subtotal cada una) ──
+function tcGroupItemHtml(m, cardCur, showCheckbox){
+  const mFmt=tcMovAmountFmt(m,cardCur);
+  return `<div class="tc-group-item" id="tc-row-${m.id}">
+    ${showCheckbox?`<input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">`:`<span class="tc-group-paid-dot" title="Pagado">✓</span>`}
+    <div class="tc-mov-card-body" style="cursor:default">
+      <div class="tc-mov-card-desc" style="font-size:13px">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
+      <div class="tc-mov-card-meta"><span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span><span class="tc-mov-pill">${m.cat||'Sin categoría'}</span></div>
+    </div>
+    <div class="tc-mov-card-amount" style="color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</div>
+    <div class="tc-mov-card-actions">
+      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
+      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
+    </div>
+  </div>`;
+}
+function tcGroupBlockHtml(label, movs, cardCur, showCheckbox){
+  if(!movs.length) return '';
+  const sum=sumTCByCurrency(movs,cardCur);
+  const items=movs.map(m=>tcGroupItemHtml(m,cardCur,showCheckbox)).join('');
+  return `<div class="tc-group-block">
+    <div class="tc-group-head">
+      <span class="tc-group-title">${label} (${movs.length})</span>
+      <span class="tc-group-total">${M(fmtTCMixed(sum.pen,sum.usd))}</span>
+    </div>
+    ${items}
+  </div>`;
+}
+function buildTCMovGroupedHtml(movs, cardCur){
+  const pendientes=movs.filter(m=>!m.pagado);
+  const pagados=movs.filter(m=>m.pagado);
+  const sumP=sumTCByCurrency(pendientes,cardCur);
+  const sumG=sumTCByCurrency(pagados,cardCur);
+  return `<div class="tc-grouped-stats">
+      <div class="tc-grouped-stat"><div class="tc-grouped-stat-label">Pendiente este mes</div><div class="tc-grouped-stat-val" style="color:var(--amber)">${M(fmtTCMixed(sumP.pen,sumP.usd))}</div></div>
+      <div class="tc-grouped-stat"><div class="tc-grouped-stat-label">Ya pagado</div><div class="tc-grouped-stat-val" style="color:var(--green)">${M(fmtTCMixed(sumG.pen,sumG.usd))}</div></div>
+    </div>
+    ${tcGroupBlockHtml('Pendientes', pendientes, cardCur, true)}
+    ${tcGroupBlockHtml('Pagados', pagados, cardCur, false)}`;
+}
+
+// ── Control de orden universal (funciona en las 3 vistas de Consumos,
+// no solo tocando encabezados de la tabla) ──
+function onTCSortColChange(col){
+  if(tcSortState.col!==col){
+    tcSortState.col=col;
+    // Mismo criterio que al tocar un encabezado: Fecha y Monto arrancan
+    // descendente; Descripción y Categoría arrancan ascendente.
+    tcSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc';
+    renderTCDetail();
+  }
+}
+function onTCSortDirToggle(){
+  tcSortState.dir=tcSortState.dir==='asc'?'desc':'asc';
+  renderTCDetail();
+}
+function updateTCSortControls(){
+  const sel=document.getElementById('tc-sort-col-select');
+  if(sel) sel.value=tcSortState.col;
+  const dirBtn=document.getElementById('tc-sort-dir-btn');
+  if(dirBtn) dirBtn.textContent=tcSortState.dir==='asc'?'▲':'▼';
+}
+
 function renderTCDetail(){
   if(!currentTCId||!currentTCMonth) return;
   const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth));
@@ -10227,38 +10406,44 @@ function renderTCDetail(){
   const parts=currentTCMonth.split('-');
   document.getElementById('tc-mov-title').textContent='Consumos — '+tcMesesLong()[parseInt(parts[1])-1]+' '+parts[0];
 
-  const tbody=document.getElementById('tc-mov-tbody');
-  updateTCSortIndicators();
+  // ── Selector de vista: tabla (clasica) / tarjetas / agrupado por estado.
+  // Se guarda en state.tcConsumosView para que quede igual la proxima vez
+  // que entres. "tabla" es el default, asi que a nadie le cambia la vista
+  // sin que la elija.
+  const viewMode=state.tcConsumosView||'tabla';
+  document.querySelectorAll('.tc-view-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.view===viewMode);
+  });
+  updateTCSortControls();
+
+  const cont=document.getElementById('tc-mov-view-container');
   if(!movs.length){
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin consumos este mes. Agrega uno con el botón de arriba.</td></tr>';
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin consumos este mes. Agrega uno con el botón de arriba.</div>';
     updateTCSelectionTotal();
     return;
   }
-  tbody.innerHTML=movs.map(m=>{
-    const mCur=m.currency||cardCur;
-    const mSym=mCur==='USD'?'$':'S/';
-    const mFmt=mSym+' '+Math.abs(m.monto).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-    return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
-    <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
-    <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
-    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
-    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
-    <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
-    <td>
-      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
-    </td>
-  </tr>`;
-  }).join('');
-  document.getElementById('tc-check-all').checked=false;
+  if(viewMode==='tarjetas'){
+    cont.innerHTML=buildTCMovCardsHtml(movs,cardCur);
+  } else if(viewMode==='agrupado'){
+    cont.innerHTML=buildTCMovGroupedHtml(movs,cardCur);
+  } else {
+    cont.innerHTML=buildTCMovTableHtml(movs,cardCur);
+    updateTCSortIndicators();
+  }
+  const allCb=document.getElementById('tc-check-all');
+  if(allCb) allCb.checked=false;
   updateTCSelectionTotal();
 }
 
 function onTCSelChange(){
   const cbs=document.querySelectorAll('.tc-sel-cb');
+  cbs.forEach(c=>{
+    const row=document.getElementById('tc-row-'+c.dataset.id);
+    if(row) row.classList.toggle('selected-row', c.checked);
+  });
   const checked=[...cbs].filter(c=>c.checked);
-  document.getElementById('tc-check-all').checked=checked.length===cbs.length&&cbs.length>0;
+  const allCb=document.getElementById('tc-check-all');
+  if(allCb) allCb.checked=checked.length===cbs.length&&cbs.length>0;
   updateTCSelectionTotal();
 }
 
@@ -15681,12 +15866,20 @@ function migrarAFPSiNecesario(){
   if(!state.afp.aportes) state.afp.aportes={};
   if(!state.afp.saldos) state.afp.saldos=[];
 }
+// Cuenta cuántos meses hay entre dos claves 'YYYY-MM', ambos inclusive.
+function mesesEntreClaves(keyIni, keyFin){
+  const [y1,m1]=keyIni.split('-').map(Number);
+  const [y2,m2]=keyFin.split('-').map(Number);
+  return (y2-y1)*12 + (m2-m1) + 1;
+}
 // Serie de SALDOS ordenada cronológicamente, cada uno con su rentabilidad ya
 // calculada — comparando ese saldo contra la suma acumulada de TODOS los
 // aportes registrados hasta esa fecha (no contra el saldo anterior). Con
 // esto, un solo saldo ya alcanza para ver rentabilidad; no hace falta
 // esperar a tener 2 saldos registrados.
 //   rentabilidad = saldo_total − aportes_acumulados_hasta_esa_fecha
+// También se calcula "mesesTranscurridos" (desde tu primer aporte registrado
+// hasta el mes de este saldo) para poder promediar la rentabilidad mensual.
 // Esta es la función que usan tanto el widget del Resumen como el
 // Patrimonio Neto para saber el "saldo actual" (el saldo más reciente).
 function calcularSerieAFP(){
@@ -15694,12 +15887,14 @@ function calcularSerieAFP(){
   const saldos=(state.afp.saldos||[]).slice().sort((a,b)=>a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0);
   const aportesObj=state.afp.aportes||{};
   const aportesKeys=Object.keys(aportesObj).sort();
+  const primeraKeyAporte=aportesKeys.length?aportesKeys[0]:null;
   return saldos.map(s=>{
     const key=s.fecha.slice(0,7); // 'YYYY-MM'
     const aportesAcumulados=aportesKeys.filter(k=>k<=key).reduce((sum,k)=>sum+aportesObj[k],0);
     const rentabilidad = s.saldoTotal - aportesAcumulados;
     const pct = aportesAcumulados>0 ? (rentabilidad/aportesAcumulados*100) : null;
-    return {...s, aportesAcumulados, rentabilidad, pct};
+    const mesesTranscurridos = primeraKeyAporte ? Math.max(1, mesesEntreClaves(primeraKeyAporte, key)) : null;
+    return {...s, aportesAcumulados, rentabilidad, pct, mesesTranscurridos};
   });
 }
 // Lista de APORTES ordenada cronológicamente (independiente de los saldos).
@@ -15912,11 +16107,19 @@ function renderAFP(){
   // a tener un segundo saldo con el que comparar.
   const rentabilidadTotal = ultima ? ultima.rentabilidad : null;
   const pctActual = ultima ? ultima.pct : null;
+  // Promedio mensual: reparte la rentabilidad total entre los meses
+  // transcurridos desde tu PRIMER aporte registrado hasta la fecha del
+  // último saldo — es un promedio simple (no interés compuesto), pero da
+  // una idea rápida de "cuánto gano por mes en promedio".
+  const mesesTranscurridos = ultima ? ultima.mesesTranscurridos : null;
+  const rentMensual = (rentabilidadTotal!==null && mesesTranscurridos) ? rentabilidadTotal/mesesTranscurridos : null;
+  const pctMensual = (pctActual!==null && mesesTranscurridos) ? pctActual/mesesTranscurridos : null;
   document.getElementById('afp-summary').innerHTML=`
     <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${sym}${saldoActual.toFixed(2)}</div><div class="dash-kpi-sub">${serie.length} saldo${serie.length===1?'':'s'} registrado${serie.length===1?'':'s'}</div></div>
     <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">TOTAL APORTADO</div><div class="dash-kpi-val">${sym}${totalAportado.toFixed(2)}</div><div class="dash-kpi-sub">${aportes.length} aporte${aportes.length===1?'':'s'} registrado${aportes.length===1?'':'s'}</div></div>
     <div class="dash-kpi ${(rentabilidadTotal||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD TOTAL</div><div class="dash-kpi-val">${rentabilidadTotal===null?'—':(rentabilidadTotal>=0?'+':'')+sym+rentabilidadTotal.toFixed(2)}</div><div class="dash-kpi-sub">saldo − aportado</div></div>
     <div class="dash-kpi ${(pctActual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTABILIDAD %</div><div class="dash-kpi-val">${pctActual===null?'—':(pctActual>=0?'+':'')+pctActual.toFixed(2)+'%'}</div><div class="dash-kpi-sub">${ultima?'al '+ultima.fecha:'sin datos'}</div></div>
+    <div class="dash-kpi ${(rentMensual||0)>=0?'kpi-green':'kpi-red'}"><div class="dash-kpi-label">RENTAB. MENSUAL PROM.</div><div class="dash-kpi-val">${rentMensual===null?'—':(rentMensual>=0?'+':'')+sym+rentMensual.toFixed(2)}</div><div class="dash-kpi-sub">${mesesTranscurridos?(pctMensual!==null?(pctMensual>=0?'+':'')+pctMensual.toFixed(2)+'% · ':'')+'en '+mesesTranscurridos+' mes'+(mesesTranscurridos===1?'':'es'):'sin datos'}</div></div>
   `;
 
   // ── Tabla de APORTES, agrupada por año (encabezado plegable + total anual) ──
@@ -15989,7 +16192,7 @@ function renderAFP(){
       type:'bar',
       data:{ labels, datasets:[
         {type:'line', label:'Saldo total', data:serie.map(r=>r.saldoTotal), borderColor:'#a78bfa', backgroundColor:'transparent', yAxisID:'y1', tension:.25, pointRadius:3},
-        {type:'bar', label:'Rentabilidad', data:serie.map(r=>r.rentabilidad), backgroundColor:serie.map(r=>(r.rentabilidad||0)>=0?'#22c55e':'#ef4444'), yAxisID:'y2'},
+        {type:'bar', label:'Rentabilidad', data:serie.map(r=>r.rentabilidad), backgroundColor:serie.map(r=>(r.rentabilidad||0)>=0?'#22c55e':'#ef4444'), yAxisID:'y2', maxBarThickness:36, categoryPercentage:0.5, barPercentage:0.7},
       ]},
       options:{ responsive:true, maintainAspectRatio:false,
         scales:{
