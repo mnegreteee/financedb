@@ -13,6 +13,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f1115">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231a1b23'/%3E%3Ccircle cx='50' cy='50' r='16' fill='%23555766'/%3E%3C/svg%3E">
+<!-- Favicon de la pestaña del navegador: antes no había ninguno definido,
+     así que el navegador mostraba su ícono genérico por defecto (el
+     "planeta"/globo). Se usa el emoji 💾 renderizado como SVG, mismo truco
+     que un favicon normal pero sin necesitar un archivo .ico aparte. -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http%3A//www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%91%BD</text></svg>">
 <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Notas%22%2C%22short_name%22%3A%22Notas%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230f1115%22%2C%22theme_color%22%3A%22%230f1115%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520100%2520100%2527%253E%253Crect%2520width%253D%2527100%2527%2520height%253D%2527100%2527%2520rx%253D%252722%2527%2520fill%253D%2527%25231a1b23%2527%252F%253E%253Ccircle%2520cx%253D%252750%2527%2520cy%253D%252750%2527%2520r%253D%252716%2527%2520fill%253D%2527%2523555766%2527%252F%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -457,6 +462,12 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .tc-view-btn{background:none;border:none;color:var(--text2);font-size:11px;font-weight:500;padding:5px 9px;border-radius:6px;cursor:pointer;font-family:var(--font);transition:all .15s;white-space:nowrap;}
 .tc-view-btn:hover{color:var(--text);}
 .tc-view-btn.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);}
+/* ── Ahorros e Intereses: pestañas de cuenta + selector de método ── */
+.ahi-cuenta-tab{cursor:pointer;background:var(--bg3);border:2px solid var(--border);border-radius:10px;padding:12px 16px;flex:1;min-width:120px;text-align:center;transition:all .15s;}
+.ahi-cuenta-tab.active{background:var(--bg2);border-color:var(--accent);color:var(--accent);}
+.ahi-cuenta-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block;}
+.ahi-metodo-btn{background:none;border:none;color:var(--text2);font-size:11px;font-weight:600;padding:6px 8px;border-radius:5px;cursor:pointer;font-family:var(--font);transition:all .15s;flex:1;}
+.ahi-metodo-btn.active{background:var(--teal);color:#fff;}
 .tc-mov-table tr.selected-row td{background:rgba(91,141,239,.08);}
 /* Vista tarjetas */
 .tc-cards-wrap{display:flex;flex-direction:column;gap:8px;}
@@ -916,6 +927,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-sueldos" onclick="showPage('sueldos')">💼 Análisis de Sueldos</button>
         <button class="nav-dropdown-item" id="nav-afp" onclick="showPage('afp')">🪙 AFP</button>
         <button class="nav-dropdown-item" id="nav-compras" onclick="showPage('compras')">🛒 Lista de Compras</button>
+        <button class="nav-dropdown-item" id="nav-ahorros-intereses" onclick="showPage('ahorros-intereses')">💰 Ahorros e Intereses</button>
         <button class="nav-dropdown-item" id="nav-minijuegos" onclick="showPage('minijuegos')">🎮 Minijuegos</button>
       </div>
     </div>
@@ -1316,12 +1328,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="card-value money" id="sum-ahorro-soles">S/ 0.00</div>
       <div class="card-sub" id="sub-ahorro-soles">cuenta ahorro</div>
       <div class="card-equiv money" id="equiv-ahorro-soles"></div>
+      <div class="card-sub" id="proj-interes-soles" style="display:none;color:var(--teal)"></div>
     </div>
     <div class="card c-amber">
       <div class="card-label">Ahorro Dólares</div>
       <div class="card-value money" id="sum-ahorro-dolar">$ 0.00</div>
       <div class="card-sub" id="sub-ahorro-dolar">cuenta ahorro</div>
       <div class="card-equiv money" id="equiv-ahorro-dolar"></div>
+      <div class="card-sub" id="proj-interes-dolar" style="display:none;color:var(--teal)"></div>
     </div>
     <div class="card c-accent">
       <div class="card-label">Total Soles</div>
@@ -2145,6 +2159,92 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarMarcarCompradoModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarMarcarComprado()">✅ Confirmar compra</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PÁGINA: AHORROS E INTERESES ══════════ -->
+<div class="page" id="page-ahorros-intereses">
+<div class="container">
+
+  <div class="section-title" style="margin-bottom:14px">💰 Ahorros e Intereses</div>
+
+  <div id="ahi-cuenta-tabs" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap"></div>
+  <div style="font-size:10px;color:var(--text3);margin:0 0 16px">💡 El color de cada pestaña es el mismo que le asignaste a esa cuenta en Finanzas → Cuentas.</div>
+
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);display:flex;gap:8px;align-items:flex-start">
+    <span>⚠️</span>
+    <span>Los montos de interés que ves acá son <b>aproximados</b> — se calculan con la TREA que ingresas y el saldo actual, no reemplazan el estado de cuenta real de tu banco.</span>
+  </div>
+
+  <div id="ahi-sin-cuentas" class="dash-empty" style="display:none">No tienes cuentas de ahorro configuradas todavía. Crea una desde Finanzas → Cuentas.</div>
+
+  <div id="ahi-contenido">
+    <div class="dash-split" id="ahi-summary" style="grid-template-columns:repeat(3,1fr);align-items:stretch"></div>
+
+    <div id="ahi-detalle-dias-card" class="card" style="padding:14px 20px;margin-top:16px;margin-bottom:16px;display:none">
+      <div class="section-title" style="font-size:12px;margin-bottom:10px">Detalle día por día — método <span id="ahi-detalle-metodo-label">diario</span></div>
+      <div class="table-scroll" style="max-height:280px;overflow-y:auto">
+      <table class="account-table" style="width:100%">
+        <thead><tr><th>Fecha</th><th style="text-align:right">Saldo</th><th style="text-align:right">Interés del día</th></tr></thead>
+        <tbody id="ahi-detalle-dias-tbody"></tbody>
+      </table>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">💡 Los días consecutivos con el mismo saldo se agrupan en una sola fila para no hacer la tabla eterna.</div>
+    </div>
+
+    <div class="card" style="padding:16px 20px;margin-top:16px;margin-bottom:16px">
+      <div class="section-header">
+        <div class="section-title" style="font-size:13px">📅 TREA por mes</div>
+        <button class="btn btn-primary" style="font-size:11px" onclick="abrirAhiTreaModal()">+ Cambiar TREA</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin:-4px 0 10px">Cada cambio se aplica desde ese mes en adelante, hasta que registres uno nuevo — no hace falta repetirla si no cambió.</div>
+      <div class="table-scroll" style="max-height:260px;overflow-y:auto">
+      <table class="account-table" style="width:100%">
+        <thead><tr><th>Desde</th><th style="text-align:right">TREA anual</th><th></th></tr></thead>
+        <tbody id="ahi-trea-tbody"></tbody>
+      </table>
+      </div>
+      <div id="ahi-trea-empty" class="dash-empty" style="display:none">Aún no configuras una TREA para esta cuenta.</div>
+    </div>
+
+    <div class="card" style="padding:16px 20px">
+      <div class="section-title" style="font-size:13px;margin-bottom:10px">📋 Movimientos de esta cuenta</div>
+      <div class="table-scroll" style="max-height:400px;overflow-y:auto">
+      <table class="account-table" style="width:100%">
+        <thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th></tr></thead>
+        <tbody id="ahi-movs-tbody"></tbody>
+      </table>
+      </div>
+      <div id="ahi-movs-empty" class="dash-empty" style="display:none">Sin movimientos registrados en esta cuenta.</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div class="modal-overlay" id="ahi-trea-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'cerrarAhiTreaModal')">
+  <div class="modal" style="width:340px">
+    <div class="modal-title"><span id="ahi-trea-modal-title">📅 Cambiar TREA</span><button class="modal-close" onclick="cerrarAhiTreaModal()">✕</button></div>
+    <div class="field-row">
+      <div class="field"><label>Desde mes</label>
+        <select id="ahi-trea-mes">
+          <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+          <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+          <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+          <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+        </select>
+      </div>
+      <div class="field"><label>Año</label><input id="ahi-trea-anio" type="number" style="width:100%"></div>
+    </div>
+    <div class="field"><label>TREA anual (%) <small>(la que te da tu banco)</small></label><input id="ahi-trea-valor" type="number" step="0.01" placeholder="0.00"></div>
+    <div style="font-size:10px;color:var(--text3);margin-top:-6px;margin-bottom:10px">Se aplica desde este mes en adelante, hasta que registres otro cambio.</div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
+      <button class="config-action-btn danger" id="ahi-trea-delete-btn" style="display:none" onclick="eliminarAhiTrea()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarAhiTreaModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarAhiTrea()">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3029,8 +3129,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '30/08/26 - 10:24'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '5 mejoras visuales: (1) Bug corregido — las tarjetas de Consumos (incluida la vista Agrupado) usaban un color de categoría por hash en vez del color oficial que ya tenías asignado en Presupuesto; ahora usan el mismo color en todos lados. (2) Barra de progreso visual en "Línea usada" del detalle de tarjeta, con el mismo color de urgencia que ya usa Mantenimiento (verde/ámbar/rojo). (3) Mantenimiento del auto: confirmé que ya tenía su barra de progreso, no hizo falta agregar nada ahí. (4) AFP: con menos de 3 saldos registrados, ahora se muestra un mensaje invitando a seguir registrando en vez de forzar un gráfico casi vacío. (5) Sparklines (mini-gráfico SVG de los últimos 6 meses) en las tarjetas "Disponible actual" y "Ahorro total" del Resumen — dibujado a mano sin depender de Chart.js, así carga rápido y no se rompe si la librería externa falla. Verificado con Playwright: color de categoría coincide exacto con el oficial, barra al 90% se pone roja, mensaje de AFP aparece con 1 saldo, y el sparkline maneja bien los huecos de datos (no interpola) y el caso de un solo dato válido (queda vacío, no engaña con un gráfico falso).';
+const APP_VERSION_DATE = '30/08/26 - 18:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Favicon cambiado de 💾 a 👽 (a pedido de Miguel, tras el cambio anterior). Verificado con Playwright.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4137,6 +4237,7 @@ function showPage(name){
   if(name==='sueldos')     renderSueldos();
   if(name==='afp')         renderAFP();
   if(name==='compras')     renderListaCompras();
+  if(name==='ahorros-intereses') renderAhorrosIntereses();
   if(name==='minijuegos')  initMinijuegos();
 }
 
@@ -4341,6 +4442,335 @@ function esCuentaDeAhorro(nombreCuenta){
   if(nombreCuenta==='Ahorro Soles'||nombreCuenta==='Ahorro Dólares') return true;
   const c=(state.customCuentas||{})[nombreCuenta];
   return !!(c && c.type==='ahorro');
+}
+// ── TREA (Tasa de Rendimiento Efectivo Anual) por cuenta de ahorro ──────
+// Se guarda un % anual POR MES (state.ahorroTREA[cuenta][mesKey]) — la
+// tasa vigente en un mes cualquiera es la del cambio MÁS RECIENTE que sea
+// igual o anterior a ese mes ("efecto hacia adelante", igual que el tipo
+// de cambio: no hace falta repetirla cada mes si no cambió).
+// El interés mensual proyectado se calcula con la tasa mensual EQUIVALENTE
+// de esa TREA (no simplemente TREA/12) — la TREA ya es una tasa efectiva
+// anual que incluye capitalización, así que "desanualizarla" correctamente es:
+//   tasaMensual = (1 + TREA/100)^(1/12) − 1
+function migrarTREASiNecesario(){
+  // Versión anterior de esta función guardaba UN solo valor por cuenta
+  // (state.treaCuentas), sin historial mensual — se migra sembrando ese
+  // valor como si aplicara "desde siempre" (mes muy antiguo), así ningún
+  // dato cargado antes de este cambio se pierde.
+  if(state.treaCuentas && !state.ahorroTREA){
+    state.ahorroTREA={};
+    Object.entries(state.treaCuentas).forEach(([cuenta,valor])=>{
+      state.ahorroTREA[cuenta]={'2000-01':valor};
+    });
+    delete state.treaCuentas;
+    saveState();
+  }
+  if(!state.ahorroTREA) state.ahorroTREA={};
+}
+function getTREAEnMes(nombreCuenta, y, m){
+  migrarTREASiNecesario();
+  const hist=state.ahorroTREA[nombreCuenta]||{};
+  const keyBuscada=y+'-'+String(m+1).padStart(2,'0');
+  const keys=Object.keys(hist).sort();
+  let valor=null;
+  for(const k of keys){ if(k<=keyBuscada) valor=hist[k]; else break; }
+  return valor;
+}
+function interesMensualProyectado(saldo, treaAnualPct){
+  if(!treaAnualPct||saldo<=0) return 0;
+  const tasaMensual=Math.pow(1+treaAnualPct/100, 1/12)-1;
+  return saldo*tasaMensual;
+}
+
+// ══════════════════════════════════════════════════════
+//  AHORROS E INTERESES — página dedicada (Otros): por cada cuenta de
+//  ahorro, muestra saldo actual, sus movimientos, y el historial de TREA
+//  mensual con el interés proyectado que resulta de esa tasa. Todos los
+//  montos de interés son APROXIMADOS (se avisa en un banner en la propia
+//  página) — es una proyección con la TREA que el usuario ingresa a mano,
+//  no un dato que venga del banco.
+// ══════════════════════════════════════════════════════
+let ahiCuentaActual=null;
+// Todas las cuentas de ahorro que existen: las 2 por defecto (si tienen
+// saldo alguna vez) + cualquier cuenta personalizada marcada tipo "ahorro".
+function getTodasCuentasAhorro(){
+  const out=[];
+  ['Ahorro Soles','Ahorro Dólares'].forEach(k=>{
+    if(state.cuentas[k]!==undefined) out.push(k);
+  });
+  Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
+    if(v.type==='ahorro' && !out.includes(k)) out.push(k);
+  });
+  return out;
+}
+// Pestañas de cuenta (reemplazan el dropdown) — cada una muestra el mismo
+// punto de color que la cuenta ya tiene asignado en Finanzas → Cuentas
+// (getCuentaColor), para reconocerla de un vistazo sin leer el nombre.
+function poblarAhiCuentaTabs(){
+  const cuentas=getTodasCuentasAhorro();
+  const wrap=document.getElementById('ahi-cuenta-tabs');
+  const sinCuentas=document.getElementById('ahi-sin-cuentas');
+  const contenido=document.getElementById('ahi-contenido');
+  if(!cuentas.length){
+    wrap.innerHTML='';
+    sinCuentas.style.display='block';
+    contenido.style.display='none';
+    ahiCuentaActual=null;
+    return false;
+  }
+  sinCuentas.style.display='none';
+  contenido.style.display='block';
+  if(!ahiCuentaActual || !cuentas.includes(ahiCuentaActual)) ahiCuentaActual=cuentas[0];
+  wrap.innerHTML=cuentas.map(c=>{
+    const color=getCuentaColor(c);
+    const activo=c===ahiCuentaActual;
+    return `<div class="ahi-cuenta-tab ${activo?'active':''}" onclick="cambiarAhiCuentaTab('${c.replace(/'/g,"\\'")}')">
+      <div style="display:flex;align-items:center;justify-content:center;gap:7px">
+        <span class="ahi-cuenta-dot" style="background:${color}"></span>
+        <span style="font-size:13px;font-weight:600">${escapeHtml(c)}</span>
+      </div>
+    </div>`;
+  }).join('');
+  return true;
+}
+function cambiarAhiCuentaTab(cuenta){
+  ahiCuentaActual=cuenta;
+  document.getElementById('ahi-detalle-dias-card').style.display='none';
+  renderAhorrosIntereses();
+}
+// Moneda real de una cuenta de ahorro (las 2 por defecto ya tienen moneda
+// fija por su nombre; las personalizadas la traen en su propia config).
+function monedaDeCuentaAhorro(nombreCuenta){
+  if(nombreCuenta==='Ahorro Dólares') return 'USD';
+  if(nombreCuenta==='Ahorro Soles') return 'PEN';
+  return ((state.customCuentas||{})[nombreCuenta]||{}).currency||'PEN';
+}
+// Método de cálculo elegido para cada cuenta (queda guardado por cuenta,
+// porque cada banco puede calcular distinto) — "diario" es el default.
+function getAhiMetodo(cuenta){
+  return (state.ahorroMetodoInteres||{})[cuenta] || 'diario';
+}
+function cambiarAhiMetodo(metodo){
+  if(!ahiCuentaActual) return;
+  if(!state.ahorroMetodoInteres) state.ahorroMetodoInteres={};
+  state.ahorroMetodoInteres[ahiCuentaActual]=metodo;
+  saveState();
+  renderAhorrosIntereses();
+}
+let editingAhiTreaKey=null;
+function abrirAhiTreaModal(key){
+  if(!ahiCuentaActual) return;
+  editingAhiTreaKey=key||null;
+  const hoy=new Date();
+  document.getElementById('ahi-trea-modal-title').textContent = key ? 'Editar cambio de TREA' : '📅 Nuevo cambio de TREA';
+  document.getElementById('ahi-trea-delete-btn').style.display = key ? 'inline-block' : 'none';
+  if(key){
+    const [y,m]=key.split('-').map(Number);
+    document.getElementById('ahi-trea-anio').value=y;
+    document.getElementById('ahi-trea-mes').value=m-1;
+    document.getElementById('ahi-trea-valor').value=(state.ahorroTREA[ahiCuentaActual]||{})[key];
+  } else {
+    document.getElementById('ahi-trea-anio').value=hoy.getFullYear();
+    document.getElementById('ahi-trea-mes').value=hoy.getMonth();
+    document.getElementById('ahi-trea-valor').value='';
+  }
+  document.getElementById('ahi-trea-modal-overlay').classList.add('open');
+}
+function cerrarAhiTreaModal(){
+  document.getElementById('ahi-trea-modal-overlay').classList.remove('open');
+  editingAhiTreaKey=null;
+}
+function guardarAhiTrea(){
+  if(!ahiCuentaActual) return;
+  const y=parseInt(document.getElementById('ahi-trea-anio').value,10);
+  const m=parseInt(document.getElementById('ahi-trea-mes').value,10);
+  const valor=parseFloat(document.getElementById('ahi-trea-valor').value);
+  if(!y||isNaN(m)){ alert('Revisa el mes y el año.'); return; }
+  if(isNaN(valor)||valor<0){ alert('Ingresa la TREA anual.'); return; }
+  migrarTREASiNecesario();
+  const key=y+'-'+String(m+1).padStart(2,'0');
+  if(!state.ahorroTREA[ahiCuentaActual]) state.ahorroTREA[ahiCuentaActual]={};
+  if(editingAhiTreaKey && editingAhiTreaKey!==key) delete state.ahorroTREA[ahiCuentaActual][editingAhiTreaKey];
+  state.ahorroTREA[ahiCuentaActual][key]=valor;
+  saveState();
+  cerrarAhiTreaModal();
+  renderAhorrosIntereses();
+  renderSummaryCards();
+}
+function eliminarAhiTrea(key){
+  const k=key||editingAhiTreaKey;
+  if(!k||!ahiCuentaActual) return;
+  if(!confirm('¿Eliminar este cambio de TREA?')) return;
+  migrarTREASiNecesario();
+  if(state.ahorroTREA[ahiCuentaActual]) delete state.ahorroTREA[ahiCuentaActual][k];
+  saveState();
+  cerrarAhiTreaModal();
+  renderAhorrosIntereses();
+  renderSummaryCards();
+}
+// Signo real de un movimiento para mostrarlo en la lista de "Movimientos de
+// esta cuenta": los de tipo "ahorro" (cargados desde Excel) ya traen su
+// propio signo en signedAmount (+depósito/-retiro); income siempre suma,
+// expense siempre resta.
+function signoMontoMov(m){
+  if(m.type==='ahorro'){
+    const sm=m.signedAmount!==undefined?m.signedAmount:m.amount;
+    return {signo:sm<0?-1:1, monto:Math.abs(sm)};
+  }
+  if(m.type==='expense') return {signo:-1, monto:m.amount};
+  return {signo:1, monto:m.amount};
+}
+// Reconstruye el saldo de CIERRE de cada día del mes (y,m) para una cuenta:
+// parte del saldo de cierre del mes ANTERIOR (vía reconstructSaldoAt, el
+// mismo motor que usa toda la app) y le va aplicando los movimientos reales
+// de esa cuenta día por día, en orden.
+function calcularSaldoPorDiaCuenta(cuenta, y, m){
+  const mesAnteriorY = m===0 ? y-1 : y;
+  const mesAnteriorM = m===0 ? 11 : m-1;
+  const saldoInicial = (reconstructSaldoAt(mesAnteriorY, mesAnteriorM)||{})[cuenta]||0;
+  const movsDelMes=(state.movimientos||[]).filter(mv=>{
+    if(mv.account!==cuenta) return false;
+    const d=new Date(mv.date+'T12:00:00');
+    return d.getFullYear()===y && d.getMonth()===m;
+  });
+  const movPorFecha={};
+  movsDelMes.forEach(mv=>{
+    const {signo,monto}=signoMontoMov(mv);
+    movPorFecha[mv.date]=(movPorFecha[mv.date]||0)+signo*monto;
+  });
+  const diasEnMes=new Date(y,m+1,0).getDate();
+  const saldoPorDia=[];
+  let saldoActual=saldoInicial;
+  for(let dia=1; dia<=diasEnMes; dia++){
+    const fechaStr=y+'-'+String(m+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+    saldoActual += (movPorFecha[fechaStr]||0);
+    saldoPorDia.push({fecha:fechaStr, saldo:saldoActual});
+  }
+  return saldoPorDia;
+}
+// MÉTODO DIARIO: tasa diaria equivalente de la TREA × saldo de CADA día,
+// sumado — refleja exactamente cuánto tiempo estuvo cada monto en la cuenta.
+function calcularInteresDiarioMes(cuenta, y, m){
+  const trea=getTREAEnMes(cuenta,y,m);
+  if(!trea) return {interes:null, dias:[]};
+  const tasaDiaria=Math.pow(1+trea/100,1/365)-1;
+  const dias=calcularSaldoPorDiaCuenta(cuenta,y,m);
+  let total=0;
+  const detalle=dias.map(d=>{
+    const interesDia=d.saldo*tasaDiaria;
+    total+=interesDia;
+    return {...d, interesDia};
+  });
+  return {interes:total, dias:detalle};
+}
+// MÉTODO MENSUAL: tasa mensual equivalente de la TREA × saldo PROMEDIO del
+// mes (ponderado por días) — más simple, da casi lo mismo que el diario.
+function calcularInteresMensualPromedioMes(cuenta, y, m){
+  const trea=getTREAEnMes(cuenta,y,m);
+  if(!trea) return {interes:null, saldoPromedio:null};
+  const dias=calcularSaldoPorDiaCuenta(cuenta,y,m);
+  if(!dias.length) return {interes:null, saldoPromedio:null};
+  const saldoPromedio=dias.reduce((s,d)=>s+d.saldo,0)/dias.length;
+  const tasaMensual=Math.pow(1+trea/100,1/12)-1;
+  return {interes:saldoPromedio*tasaMensual, saldoPromedio};
+}
+function toggleAhiDetalleDias(){
+  const card=document.getElementById('ahi-detalle-dias-card');
+  const abrir=card.style.display==='none';
+  card.style.display=abrir?'block':'none';
+  if(abrir) renderAhiDetalleDias();
+}
+function renderAhiDetalleDias(){
+  if(!ahiCuentaActual) return;
+  const hoy=new Date();
+  const metodo=getAhiMetodo(ahiCuentaActual);
+  document.getElementById('ahi-detalle-metodo-label').textContent=metodo;
+  const moneda=monedaDeCuentaAhorro(ahiCuentaActual);
+  const sym=moneda==='USD'?'$':'S/';
+  const {dias}=calcularInteresDiarioMes(ahiCuentaActual, hoy.getFullYear(), hoy.getMonth());
+  const trea=getTREAEnMes(ahiCuentaActual, hoy.getFullYear(), hoy.getMonth());
+  const tasaMensual=trea?Math.pow(1+trea/100,1/12)-1:0;
+  // Agrupa días CONSECUTIVOS con el mismo saldo en una sola fila (no tiene
+  // sentido repetir 15 filas idénticas si la cuenta no tuvo movimientos).
+  const filas=[];
+  (dias||[]).forEach(d=>{
+    const ultima=filas[filas.length-1];
+    if(ultima && ultima.saldo===d.saldo){
+      ultima.fechaFin=d.fecha; ultima.cantidad++;
+    } else {
+      filas.push({fechaIni:d.fecha, fechaFin:d.fecha, saldo:d.saldo, cantidad:1});
+    }
+  });
+  document.getElementById('ahi-detalle-dias-tbody').innerHTML=filas.map(f=>{
+    const interesPorDia = metodo==='diario'
+      ? f.saldo*(Math.pow(1+(trea||0)/100,1/365)-1)
+      : f.saldo*tasaMensual/((dias||[]).length||30); // reparte la tasa mensual entre los días del mes, solo a modo ilustrativo por fila
+    const rango = f.fechaIni===f.fechaFin ? fmtFechaDDMMYYYY(f.fechaIni) : fmtFechaDDMMYYYY(f.fechaIni)+' – '+fmtFechaDDMMYYYY(f.fechaFin);
+    const etiquetaInteres = f.cantidad>1 ? M(sym+' '+numFmt(interesPorDia))+' c/día' : M(sym+' '+numFmt(interesPorDia));
+    return `<tr>
+      <td style="font-size:11px;color:var(--text2)">${rango}</td>
+      <td style="text-align:right">${M(sym+' '+numFmt(f.saldo))}</td>
+      <td style="text-align:right;color:var(--teal)">${trea?etiquetaInteres:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+function renderAhorrosIntereses(){
+  if(!poblarAhiCuentaTabs()) return;
+  const cuenta=ahiCuentaActual;
+  const moneda=monedaDeCuentaAhorro(cuenta);
+  const sym=moneda==='USD'?'$':'S/';
+
+  const hoy=new Date();
+  const saldoActualObj=reconstructSaldoAt(hoy.getFullYear(), hoy.getMonth());
+  const saldoActual=saldoActualObj[cuenta]||0;
+  const treaMes=getTREAEnMes(cuenta, hoy.getFullYear(), hoy.getMonth());
+  const metodo=getAhiMetodo(cuenta);
+  const resDiario=calcularInteresDiarioMes(cuenta, hoy.getFullYear(), hoy.getMonth());
+  const resMensual=calcularInteresMensualPromedioMes(cuenta, hoy.getFullYear(), hoy.getMonth());
+  const interesProy = metodo==='diario' ? resDiario.interes : resMensual.interes;
+
+  document.getElementById('ahi-summary').innerHTML=`
+    <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${M(sym+' '+numFmt(saldoActual))}</div><div class="dash-kpi-sub">${MONTHS[hoy.getMonth()]} ${hoy.getFullYear()}</div></div>
+    <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">TREA ${MONTHS[hoy.getMonth()].toUpperCase()}</div><div class="dash-kpi-val">${treaMes?treaMes.toFixed(2)+'%':'—'}</div><div class="dash-kpi-sub">${treaMes?'anual':'sin configurar'}</div></div>
+    <div class="dash-kpi kpi-teal" style="padding-bottom:10px">
+      <div class="dash-kpi-label">INTERÉS PROY. ESTE MES</div>
+      <div class="dash-kpi-val" style="color:var(--teal)">${interesProy!==null?M('≈ '+sym+' '+numFmt(interesProy)):'—'}</div>
+      <div class="dash-kpi-sub" style="margin-bottom:8px">aproximado</div>
+      <div style="display:flex;gap:2px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:2px;position:relative;z-index:1">
+        <button class="ahi-metodo-btn ${metodo==='diario'?'active':''}" onclick="event.stopPropagation();cambiarAhiMetodo('diario')">Diario</button>
+        <button class="ahi-metodo-btn ${metodo==='mensual'?'active':''}" onclick="event.stopPropagation();cambiarAhiMetodo('mensual')">Mensual</button>
+      </div>
+      <div onclick="event.stopPropagation();toggleAhiDetalleDias()" style="cursor:pointer;font-size:10px;color:var(--accent);margin-top:8px;text-align:center">Ver detalle día por día ▾</div>
+    </div>
+  `;
+  if(document.getElementById('ahi-detalle-dias-card').style.display!=='none') renderAhiDetalleDias();
+
+  // ── Historial de TREA (más reciente primero) ──
+  const hist=state.ahorroTREA[cuenta]||{};
+  const keys=Object.keys(hist).sort().reverse();
+  document.getElementById('ahi-trea-empty').style.display=keys.length?'none':'block';
+  document.getElementById('ahi-trea-tbody').innerHTML=keys.map(k=>{
+    const [y,m]=k.split('-');
+    const label = k==='2000-01' ? 'Desde siempre' : (MONTHS[parseInt(m,10)-1]+' '+y);
+    return `<tr>
+      <td>${label}</td>
+      <td style="text-align:right;font-weight:600">${hist[k].toFixed(2)}%</td>
+      <td style="text-align:right"><span style="cursor:pointer" onclick="abrirAhiTreaModal('${k}')" title="Editar">✏</span></td>
+    </tr>`;
+  }).join('');
+
+  // ── Movimientos de esta cuenta (todos: depósitos, retiros, transferencias) ──
+  const movs=(state.movimientos||[]).filter(m=>m.account===cuenta).slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  document.getElementById('ahi-movs-empty').style.display=movs.length?'none':'block';
+  document.getElementById('ahi-movs-tbody').innerHTML=movs.slice(0,300).map(m=>{
+    const {signo,monto}=signoMontoMov(m);
+    const mSym=m.currency==='USD'?'$':'S/';
+    return `<tr>
+      <td style="font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.date)}</td>
+      <td>${escapeHtml(m.desc||'')}</td>
+      <td style="text-align:right;color:${signo>0?'var(--green)':'var(--red)'}">${M((signo>0?'+ ':'− ')+mSym+' '+numFmt(monto))}</td>
+    </tr>`;
+  }).join('');
 }
 function calcularProyeccionCierre(){
   const hoy=new Date();
@@ -4885,6 +5315,28 @@ function renderSummaryCards(){
   )).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
   document.getElementById('sub-ahorro-dolar').innerHTML=intD>0?`<span style="color:var(--green)">${M('+'+fmtD(intD))}</span> este mes`:'cuenta ahorro';
   document.getElementById('equiv-ahorro-dolar').textContent=M('≈ '+fmtS(aD*state.tc.compra));
+
+  // Interés mensual PROYECTADO según la TREA vigente ese mes (ver "💰
+  // Ahorros e Intereses" en Otros) — suma todas las cuentas de ahorro en
+  // soles (o dólares) que tengan una tasa configurada, sobre su saldo de
+  // este mes. Distinto de "intS/intD" de arriba, que es lo que YA se
+  // registró manualmente como interés ganado.
+  const cuentasAhorroTodas={...{'Ahorro Soles':true,'Ahorro Dólares':true}, ...Object.fromEntries(Object.entries(state.customCuentas||{}).filter(([,v])=>v.type==='ahorro').map(([k])=>[k,true]))};
+  let projIntS=0, projIntD=0;
+  Object.keys(cuentasAhorroTodas).forEach(nombreCta=>{
+    const trea=getTREAEnMes(nombreCta, state.currentYear, state.currentMonth);
+    if(!trea) return;
+    const saldoCta=curSaldoCards[nombreCta]||0;
+    const esUSD=nombreCta==='Ahorro Dólares'||((state.customCuentas||{})[nombreCta]||{}).currency==='USD';
+    const proy=interesMensualProyectado(saldoCta, trea);
+    if(esUSD) projIntD+=proy; else projIntS+=proy;
+  });
+  const projSolesEl=document.getElementById('proj-interes-soles');
+  if(projIntS>0){ projSolesEl.style.display='block'; projSolesEl.innerHTML='💹 '+M('≈ '+fmtS(projIntS))+' proy./mes (TREA)'; }
+  else projSolesEl.style.display='none';
+  const projDolarEl=document.getElementById('proj-interes-dolar');
+  if(projIntD>0){ projDolarEl.style.display='block'; projDolarEl.innerHTML='💹 '+M('≈ '+fmtD(projIntD))+' proy./mes (TREA)'; }
+  else projDolarEl.style.display='none';
 
   // Total Soles = Disponible actual + Ahorro Soles
   const totalSoles = dc + aS;
@@ -16523,10 +16975,11 @@ function renderListaCompras(){
     const cambioTxt = cambio!==0 ? `<span style="font-size:10px;color:${cambio>0?'var(--red)':'var(--green)'}">${cambio>0?'▲':'▼'} ${sym}${numFmt(cambio)} vs. anterior</span>` : '';
     return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px${esComprado?';opacity:.75':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div style="font-size:13px;font-weight:600">${escapeHtml(item.nombre)}</div>
+        ${item.link
+          ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-bottom:1px dashed var(--accent)" title="Abrir enlace del producto">${escapeHtml(item.nombre)} <span style="font-size:10px;color:var(--accent)">↗</span></a>`
+          : `<div style="font-size:13px;font-weight:600">${escapeHtml(item.nombre)}</div>`}
         <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${esComprado?'var(--green)':'var(--bg3)'};color:${esComprado?'#fff':'var(--text3)'};white-space:nowrap">${esComprado?'✅ Comprado':'🎯 Deseado'}</span>
       </div>
-      ${item.link?`<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent);word-break:break-all">${escapeHtml(item.link)}</a>`:''}
       <div style="font-size:20px;font-weight:700">${sym} ${numFmt(precio)}</div>
       ${cambioTxt}
       ${item.notas?`<div style="font-size:11px;color:var(--text3)">${escapeHtml(item.notas)}</div>`:''}
