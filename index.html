@@ -1951,7 +1951,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="card" style="padding:16px 20px;margin-bottom:16px;margin-top:16px">
     <div class="section-title" style="font-size:13px;margin-bottom:10px">Evolución del fondo</div>
-    <div style="position:relative;height:220px"><canvas id="afp-chart"></canvas></div>
+    <div style="position:relative;height:220px" id="afp-chart-wrap"><canvas id="afp-chart"></canvas></div>
+    <div id="afp-chart-empty" class="dash-empty" style="display:none">Registra al menos 3 saldos para ver la evolución del fondo en un gráfico — con 1 o 2 puntos no alcanza para que se vea bien.</div>
     <div id="afp-chart-legend" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--text3)"></div>
   </div>
 
@@ -2667,7 +2668,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="tc-sum-item"><div class="tc-sum-label">Deuda del mes</div><div class="tc-sum-val" id="tc-sum-deuda" style="color:var(--red)">S/ 0.00</div></div>
       <div class="tc-sum-item"><div class="tc-sum-label">Ya pagado</div><div class="tc-sum-val" id="tc-sum-pagado" style="color:var(--green)">S/ 0.00</div></div>
       <div class="tc-sum-item"><div class="tc-sum-label">Pendiente</div><div class="tc-sum-val" id="tc-sum-pendiente" style="color:var(--amber)">S/ 0.00</div></div>
-      <div class="tc-sum-item"><div class="tc-sum-label">Línea usada</div><div class="tc-sum-val" id="tc-sum-linea" style="color:var(--accent)">0%</div></div>
+      <div class="tc-sum-item"><div class="tc-sum-label">Línea usada</div><div class="tc-sum-val" id="tc-sum-linea" style="color:var(--accent)">0%</div>
+        <div class="progress-bar-wrap" style="margin-top:6px;width:90px"><div class="progress-bar" id="tc-sum-linea-bar" style="width:0%;background:var(--accent)"></div></div>
+      </div>
       <button class="btn btn-primary" style="margin-left:auto;font-size:12px" onclick="openAddMovTC()">+ Agregar consumo</button>
     </div>
 
@@ -3026,8 +3029,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '30/08/26 - 09:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Vista "Agrupado" de Consumos de tarjeta: ahora cada consumo se ve exactamente igual que en la vista "Tarjetas" (tarjeta con borde de color según categoría, pill de categoría, pill "✓ Pagado"), en vez de una lista plana — pero manteniendo la separación en secciones Pendientes/Pagados con su subtotal cada una. Técnicamente se logró reusando la misma función de tarjeta (tcMovCardHtml) dentro de cada sección, así que cualquier mejora futura a las tarjetas se refleja automáticamente en las 2 vistas sin duplicar código. Verificado con Playwright: 3 consumos con su color de categoría asignado, la sección "Pagados" sigue apareciendo debajo de "Pendientes", y la selección múltiple (resaltado + total) sigue funcionando igual en esta vista.';
+const APP_VERSION_DATE = '30/08/26 - 10:24'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '5 mejoras visuales: (1) Bug corregido — las tarjetas de Consumos (incluida la vista Agrupado) usaban un color de categoría por hash en vez del color oficial que ya tenías asignado en Presupuesto; ahora usan el mismo color en todos lados. (2) Barra de progreso visual en "Línea usada" del detalle de tarjeta, con el mismo color de urgencia que ya usa Mantenimiento (verde/ámbar/rojo). (3) Mantenimiento del auto: confirmé que ya tenía su barra de progreso, no hizo falta agregar nada ahí. (4) AFP: con menos de 3 saldos registrados, ahora se muestra un mensaje invitando a seguir registrando en vez de forzar un gráfico casi vacío. (5) Sparklines (mini-gráfico SVG de los últimos 6 meses) en las tarjetas "Disponible actual" y "Ahorro total" del Resumen — dibujado a mano sin depender de Chart.js, así carga rápido y no se rompe si la librería externa falla. Verificado con Playwright: color de categoría coincide exacto con el oficial, barra al 90% se pone roja, mensaje de AFP aparece con 1 saldo, y el sparkline maneja bien los huecos de datos (no interpola) y el caso de un solo dato válido (queda vacío, no engaña con un gráfico falso).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4139,6 +4142,37 @@ function showPage(name){
 
 // ── HELPERS ───────────────────────────────────────────
 function fmtS(n){return 'S/ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+// Mini-gráfico de línea (sparkline) dibujado a mano con SVG — no depende de
+// Chart.js, así que sirve para vistas rápidas dentro de un widget KPI chico
+// sin pagar el costo de crear una instancia de Chart por cada uno. Los
+// valores null (mes sin datos) se saltan sin interpolar sobre el hueco.
+function renderSparkline(containerId, valores, color){
+  const el=document.getElementById(containerId);
+  if(!el) return;
+  const validos=valores.filter(v=>v!==null&&v!==undefined&&!isNaN(v));
+  if(validos.length<2){ el.innerHTML=''; return; }
+  const w=100, h=28, pad=2;
+  const min=Math.min(...validos), max=Math.max(...validos);
+  const rango=(max-min)||1;
+  const n=valores.length;
+  const puntos=valores.map((v,i)=>{
+    if(v===null||v===undefined||isNaN(v)) return null;
+    const x=pad+(i/(n-1))*(w-2*pad);
+    const y=h-pad-((v-min)/rango)*(h-2*pad);
+    return [x,y];
+  });
+  let pathD='', dibujando=false;
+  puntos.forEach(p=>{
+    if(!p){ dibujando=false; return; }
+    pathD += (dibujando?' L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1);
+    dibujando=true;
+  });
+  const ultimo=puntos.filter(Boolean).slice(-1)[0];
+  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
+    <path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+    ${ultimo?`<circle cx="${ultimo[0].toFixed(1)}" cy="${ultimo[1].toFixed(1)}" r="2.2" fill="${color}"/>`:''}
+  </svg>`;
+}
 function fmtD(n){return '$ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 // Igual que fmtS/fmtD pero sin el símbolo de moneda — para armar montos con
 // el símbolo ya puesto aparte (ej. AFP y Lista de Compras, donde a veces es
@@ -10247,14 +10281,13 @@ function setTCConsumosView(v){
   saveState();
   renderTCDetail();
 }
-// Color determinístico por categoría (mismo texto = mismo color siempre),
-// tomado de la paleta que ya usa el resto de la app.
+// Usa el MISMO color oficial que la categoría ya tiene en el resto de la
+// app (Presupuesto, selects, etc. — ver getAllCategorias/CAT_COLORS), en
+// vez de inventar uno por hash. Así "Comida" se ve del mismo color en
+// todos lados, no un color distinto solo en las tarjetas de Consumos.
 function tcCatColor(cat){
-  const paleta=['var(--accent)','var(--green)','var(--amber)','var(--purple)','var(--teal)','var(--red)'];
   if(!cat) return 'var(--text3)';
-  let h=0;
-  for(let i=0;i<cat.length;i++) h=(h*31+cat.charCodeAt(i))>>>0;
-  return paleta[h%paleta.length];
+  return getAllCategorias()[cat] || 'var(--accent)';
 }
 function tcMovAmountFmt(m, cardCur){
   const mCur=m.currency||cardCur;
@@ -10394,6 +10427,10 @@ function renderTCDetail(){
   document.getElementById('tc-sum-pagado').textContent=M(fmtTCMixed(pagadoByCur.pen,pagadoByCur.usd));
   document.getElementById('tc-sum-pendiente').textContent=M(fmtTCMixed(pendienteByCur.pen,pendienteByCur.usd));
   document.getElementById('tc-sum-linea').textContent=usadoPct.toFixed(1)+'%';
+  const colorLinea = usadoPct>=90?'var(--red)':usadoPct>=70?'var(--amber)':'var(--accent)';
+  document.getElementById('tc-sum-linea').style.color=colorLinea;
+  const barLinea=document.getElementById('tc-sum-linea-bar');
+  if(barLinea){ barLinea.style.width=usadoPct+'%'; barLinea.style.background=colorLinea; }
 
   const parts=currentTCMonth.split('-');
   document.getElementById('tc-mov-title').textContent='Consumos — '+tcMesesLong()[parseInt(parts[1])-1]+' '+parts[0];
@@ -11655,6 +11692,7 @@ const DASHBOARD_WIDGET_DEFS = {
       <div class="dash-kpi-label">Disponible actual</div>
       <div class="dash-kpi-val money" id="kpi-disponible">—</div>
       <div class="dash-kpi-sub" id="kpi-disponible-sub">cuentas operativas</div>
+      <div id="kpi-disponible-spark" style="margin-top:6px"></div>
     </div>`},
   'kpi-ahorro': {label:'🏦 Ahorro total', size:'small', shell:()=>`
     <div class="dash-kpi kpi-purple" style="cursor:pointer" onclick="showPage('finanzas');goToday();" title="Ver en Finanzas — mes actual">
@@ -11662,6 +11700,7 @@ const DASHBOARD_WIDGET_DEFS = {
       <div class="dash-kpi-label">Ahorro total</div>
       <div class="dash-kpi-val money" id="kpi-ahorro">—</div>
       <div class="dash-kpi-sub" id="kpi-ahorro-sub">—</div>
+      <div id="kpi-ahorro-spark" style="margin-top:6px"></div>
     </div>`},
   'kpi-deuda-tc': {label:'💳 Deuda tarjetas', size:'small', shell:()=>`
     <div class="dash-kpi kpi-red" style="cursor:pointer" onclick="showPage('tarjetas')" title="Ver Tarjetas">
@@ -12177,6 +12216,21 @@ function renderDashboard(){
   },0);
   setKpi('kpi-disponible', fmtS(dispCur), 'operativas · ' + MONTHS[curM], dispCur>=0?'var(--accent)':'var(--red)');
   setKpi('kpi-ahorro', fmtTCMixed(aS, aD), 'cuentas de ahorro', 'var(--purple)');
+  // Sparklines de los últimos 6 meses — mismo patrón que la Proyección de
+  // Cierre usa para su gráfico de tendencia (getDisponible por mes), pero
+  // dibujado a mano con SVG en vez de Chart.js, para que quepa dentro de
+  // una tarjeta KPI chica sin pagar el costo de una instancia de gráfico
+  // completa por cada widget.
+  const serieDisp=[], serieAhorro=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(curY, curM-i, 1);
+    serieDisp.push(getDisponible(d.getFullYear(), d.getMonth()));
+    const sAt=reconstructSaldoAt(d.getFullYear(), d.getMonth());
+    const tieneDatos=tieneDatosHasta(d.getFullYear(), d.getMonth());
+    serieAhorro.push(tieneDatos ? sumaAhorroDe(sAt,'PEN')+sumaAhorroDe(sAt,'USD')*(state.tc?.compra||3.45) : null);
+  }
+  renderSparkline('kpi-disponible-spark', serieDisp, dispCur>=0?'var(--accent)':'var(--red)');
+  renderSparkline('kpi-ahorro-spark', serieAhorro, 'var(--purple)');
   setKpi('kpi-deuda-tc', deudaTCTotal>0?fmtTCMixed(deudaTCPen,deudaTCUsd):'S/ 0.00', deudaTCTotal>0?tarjetas.length+' tarjeta(s)':'sin deuda pendiente', deudaTCTotal>0?'var(--red)':'var(--green)');
   const atrasadoEl=document.getElementById('kpi-deuda-tc-atrasado');
   if(atrasadoEl){
@@ -16195,9 +16249,21 @@ function renderAFP(){
   }).join('');
 
   // ── Gráfico: saldo total (línea) + rentabilidad por período (barras) ──
+  // Con menos de 3 puntos, un gráfico de barras/líneas se ve vacío o raro
+  // (ej. una sola barra ocupando toda la fila) — mejor mostrar un mensaje
+  // claro invitando a registrar más saldos, en vez de forzar un gráfico
+  // que no aporta nada todavía.
   const ctx=document.getElementById('afp-chart');
+  const chartWrap=document.getElementById('afp-chart-wrap');
+  const chartEmpty=document.getElementById('afp-chart-empty');
   if(afpChartInstance){ afpChartInstance.destroy(); afpChartInstance=null; }
-  if(ctx && serie.length && typeof Chart!=='undefined'){
+  if(serie.length<3){
+    if(chartWrap) chartWrap.style.display='none';
+    if(chartEmpty) chartEmpty.style.display='block';
+    document.getElementById('afp-chart-legend').innerHTML='';
+  } else if(ctx && typeof Chart!=='undefined'){
+    if(chartWrap) chartWrap.style.display='block';
+    if(chartEmpty) chartEmpty.style.display='none';
     const labels=serie.map(r=>{ const [y,m,d]=r.fecha.split('-'); return d+'/'+m+'/'+y.slice(2); });
     afpChartInstance=new Chart(ctx,{
       type:'bar',
