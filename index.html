@@ -3026,8 +3026,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '29/08/26 - 00:26'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Bug corregido: los montos de AFP y Lista de Compras (las 2 secciones nuevas de esta sesión) usaban toFixed(2) sin separador de miles — por eso "S/ 20128.79" se veía cortado en pantallas angostas en vez de "S/ 20,128.79". Se agregó numFmt() (mismo criterio que fmtS/fmtD del resto de la app) y se corrigieron los 19 puntos afectados: resumen de AFP, tablas de Aportes/Saldos agrupadas por año, textos de los modales, resumen de Compras, e historial de precio. Verificado con Playwright reproduciendo tus números reales: S/20,128.79, S/16,705.42, S/1,500.50 — todos con coma ahora. No se tocaron los otros ~137 usos de toFixed(2) en el resto del archivo (partes ya establecidas de la app, como la que se ve correcta en la imagen 1, o valores no-monetarios como porcentajes/tipo de cambio) para no arriesgar una modificación masiva sin poder verificar cada caso puntualmente — avísame si encuentras algún otro monto sin comas y lo reviso puntual.';
+const APP_VERSION_DATE = '30/08/26 - 09:56'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Vista "Agrupado" de Consumos de tarjeta: ahora cada consumo se ve exactamente igual que en la vista "Tarjetas" (tarjeta con borde de color según categoría, pill de categoría, pill "✓ Pagado"), en vez de una lista plana — pero manteniendo la separación en secciones Pendientes/Pagados con su subtotal cada una. Técnicamente se logró reusando la misma función de tarjeta (tcMovCardHtml) dentro de cada sección, así que cualquier mejora futura a las tarjetas se refleja automáticamente en las 2 vistas sin duplicar código. Verificado con Playwright: 3 consumos con su color de categoría asignado, la sección "Pagados" sigue apareciendo debajo de "Pendientes", y la selección múltiple (resaltado + total) sigue funcionando igual en esta vista.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10325,32 +10325,19 @@ function buildTCMovCardsHtml(movs, cardCur){
   return `<div class="tc-cards-wrap">${movs.map(m=>tcMovCardHtml(m,cardCur)).join('')}</div>`;
 }
 
-// ── Vista AGRUPADA (Pendientes / Pagados, con subtotal cada una) ──
-function tcGroupItemHtml(m, cardCur, showCheckbox){
-  const mFmt=tcMovAmountFmt(m,cardCur);
-  return `<div class="tc-group-item" id="tc-row-${m.id}">
-    ${showCheckbox?`<input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">`:`<span class="tc-group-paid-dot" title="Pagado">✓</span>`}
-    <div class="tc-mov-card-body" style="cursor:default">
-      <div class="tc-mov-card-desc" style="font-size:13px">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
-      <div class="tc-mov-card-meta"><span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span><span class="tc-mov-pill">${m.cat||'Sin categoría'}</span></div>
-    </div>
-    <div class="tc-mov-card-amount" style="color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</div>
-    <div class="tc-mov-card-actions">
-      <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-      <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
-    </div>
-  </div>`;
-}
-function tcGroupBlockHtml(label, movs, cardCur, showCheckbox){
+// ── Vista AGRUPADA (Pendientes / Pagados, con subtotal cada una) — usa las
+// MISMAS tarjetas que la vista "Tarjetas" (tcMovCardHtml, con su color por
+// categoría), solo que agrupadas en 2 secciones en vez de una lista plana.
+function tcGroupBlockHtml(label, movs, cardCur){
   if(!movs.length) return '';
   const sum=sumTCByCurrency(movs,cardCur);
-  const items=movs.map(m=>tcGroupItemHtml(m,cardCur,showCheckbox)).join('');
+  const items=movs.map(m=>tcMovCardHtml(m,cardCur)).join('');
   return `<div class="tc-group-block">
     <div class="tc-group-head">
       <span class="tc-group-title">${label} (${movs.length})</span>
       <span class="tc-group-total">${M(fmtTCMixed(sum.pen,sum.usd))}</span>
     </div>
-    ${items}
+    <div class="tc-cards-wrap">${items}</div>
   </div>`;
 }
 function buildTCMovGroupedHtml(movs, cardCur){
@@ -10362,8 +10349,8 @@ function buildTCMovGroupedHtml(movs, cardCur){
       <div class="tc-grouped-stat"><div class="tc-grouped-stat-label">Pendiente este mes</div><div class="tc-grouped-stat-val" style="color:var(--amber)">${M(fmtTCMixed(sumP.pen,sumP.usd))}</div></div>
       <div class="tc-grouped-stat"><div class="tc-grouped-stat-label">Ya pagado</div><div class="tc-grouped-stat-val" style="color:var(--green)">${M(fmtTCMixed(sumG.pen,sumG.usd))}</div></div>
     </div>
-    ${tcGroupBlockHtml('Pendientes', pendientes, cardCur, true)}
-    ${tcGroupBlockHtml('Pagados', pagados, cardCur, false)}`;
+    ${tcGroupBlockHtml('Pendientes', pendientes, cardCur)}
+    ${tcGroupBlockHtml('Pagados', pagados, cardCur)}`;
 }
 
 // ── Control de orden universal (funciona en las 3 vistas de Consumos,
