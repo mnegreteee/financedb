@@ -3129,8 +3129,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '30/08/26 - 18:52'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Favicon cambiado de 💾 a 👽 (a pedido de Miguel, tras el cambio anterior). Verificado con Playwright.';
+const APP_VERSION_DATE = '30/08/26 - 19:01'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '"Movimientos de esta cuenta" (Ahorros e Intereses) ahora se agrupa por mes en vez de mostrar todo en una lista plana — el mes más reciente queda arriba y expandido por defecto, y los meses anteriores se colapsan mostrando su total neto (sin tener que abrirlos), igual que las tablas de AFP agrupadas por año. Cualquier mes se puede expandir con un clic. El agrupamiento se reinicia al cambiar de pestaña de cuenta, así siempre abre el mes más reciente de la cuenta que estés viendo. Verificado con Playwright reproduciendo los movimientos reales de la captura: Agosto 2026 queda arriba y expandido, Julio-Marzo colapsados con su total neto correcto, y expandir Julio muestra sus 4 movimientos exactos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4491,6 +4491,14 @@ function interesMensualProyectado(saldo, treaAnualPct){
 //  no un dato que venga del banco.
 // ══════════════════════════════════════════════════════
 let ahiCuentaActual=null;
+// Qué meses están expandidos en "Movimientos de esta cuenta" — null hasta
+// el primer render, momento en que se abre solo el mes más reciente y el
+// resto queda colapsado (igual que las tablas de AFP agrupadas por año).
+let ahiMovsMesesOpen=null;
+function toggleAhiMovsMes(mesKey){
+  if(ahiMovsMesesOpen.has(mesKey)) ahiMovsMesesOpen.delete(mesKey); else ahiMovsMesesOpen.add(mesKey);
+  renderAhorrosIntereses();
+}
 // Todas las cuentas de ahorro que existen: las 2 por defecto (si tienen
 // saldo alguna vez) + cualquier cuenta personalizada marcada tipo "ahorro".
 function getTodasCuentasAhorro(){
@@ -4535,6 +4543,7 @@ function poblarAhiCuentaTabs(){
 }
 function cambiarAhiCuentaTab(cuenta){
   ahiCuentaActual=cuenta;
+  ahiMovsMesesOpen=null;
   document.getElementById('ahi-detalle-dias-card').style.display='none';
   renderAhorrosIntereses();
 }
@@ -4759,17 +4768,39 @@ function renderAhorrosIntereses(){
     </tr>`;
   }).join('');
 
-  // ── Movimientos de esta cuenta (todos: depósitos, retiros, transferencias) ──
+  // ── Movimientos de esta cuenta, agrupados por MES (el más reciente
+  // arriba y expandido por defecto; los anteriores colapsados, mostrando
+  // su total neto sin necesidad de abrirlos) — mismo patrón que las tablas
+  // de AFP agrupadas por año.
   const movs=(state.movimientos||[]).filter(m=>m.account===cuenta).slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
   document.getElementById('ahi-movs-empty').style.display=movs.length?'none':'block';
-  document.getElementById('ahi-movs-tbody').innerHTML=movs.slice(0,300).map(m=>{
-    const {signo,monto}=signoMontoMov(m);
-    const mSym=m.currency==='USD'?'$':'S/';
-    return `<tr>
-      <td style="font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.date)}</td>
-      <td>${escapeHtml(m.desc||'')}</td>
-      <td style="text-align:right;color:${signo>0?'var(--green)':'var(--red)'}">${M((signo>0?'+ ':'− ')+mSym+' '+numFmt(monto))}</td>
+  const movsPorMes={};
+  movs.forEach(m=>{
+    const mesKey=m.date.slice(0,7); // 'YYYY-MM'
+    (movsPorMes[mesKey]=movsPorMes[mesKey]||[]).push(m);
+  });
+  const mesesOrdenados=Object.keys(movsPorMes).sort().reverse();
+  if(ahiMovsMesesOpen===null) ahiMovsMesesOpen=new Set(mesesOrdenados.length?[mesesOrdenados[0]]:[]);
+  const mSymCuenta=moneda==='USD'?'$':'S/';
+  document.getElementById('ahi-movs-tbody').innerHTML=mesesOrdenados.map(mesKey=>{
+    const itemsDelMes=movsPorMes[mesKey];
+    const [y,mm]=mesKey.split('-');
+    const netoMes=itemsDelMes.reduce((s,m)=>{ const {signo,monto}=signoMontoMov(m); return s+signo*monto; },0);
+    const abierto=ahiMovsMesesOpen.has(mesKey);
+    const filaHeader=`<tr style="cursor:pointer;background:var(--bg3)" onclick="toggleAhiMovsMes('${mesKey}')">
+      <td colspan="2" style="font-weight:600">${abierto?'▼':'▶'} ${MONTHS[parseInt(mm,10)-1]} ${y} <span style="font-weight:400;color:var(--text3);font-size:11px">(${itemsDelMes.length})</span></td>
+      <td style="text-align:right;font-weight:600;color:${netoMes>=0?'var(--green)':'var(--red)'}">${netoMes>=0?'+':'−'} ${mSymCuenta} ${numFmt(Math.abs(netoMes))}</td>
     </tr>`;
+    const filasItems = abierto ? itemsDelMes.map(m=>{
+      const {signo,monto}=signoMontoMov(m);
+      const mSym=m.currency==='USD'?'$':'S/';
+      return `<tr>
+        <td style="font-size:11px;color:var(--text2);padding-left:22px">${fmtFechaDDMMYYYY(m.date)}</td>
+        <td>${escapeHtml(m.desc||'')}</td>
+        <td style="text-align:right;color:${signo>0?'var(--green)':'var(--red)'}">${M((signo>0?'+ ':'− ')+mSym+' '+numFmt(monto))}</td>
+      </tr>`;
+    }).join('') : '';
+    return filaHeader + filasItems;
   }).join('');
 }
 function calcularProyeccionCierre(){
