@@ -3129,8 +3129,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '30/08/26 - 19:01'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '"Movimientos de esta cuenta" (Ahorros e Intereses) ahora se agrupa por mes en vez de mostrar todo en una lista plana — el mes más reciente queda arriba y expandido por defecto, y los meses anteriores se colapsan mostrando su total neto (sin tener que abrirlos), igual que las tablas de AFP agrupadas por año. Cualquier mes se puede expandir con un clic. El agrupamiento se reinicia al cambiar de pestaña de cuenta, así siempre abre el mes más reciente de la cuenta que estés viendo. Verificado con Playwright reproduciendo los movimientos reales de la captura: Agosto 2026 queda arriba y expandido, Julio-Marzo colapsados con su total neto correcto, y expandir Julio muestra sus 4 movimientos exactos.';
+const APP_VERSION_DATE = '30/08/26 - 19:12'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Bug corregido en "Movimientos de esta cuenta" (Ahorros e Intereses): el encabezado de cada mes mostraba la SUMA de los movimientos de ese mes (podía dar un número negativo sin sentido, como "− S/510.91" con puros ingresos listados debajo). Ahora muestra el SALDO REAL acumulado a esa fecha, usando reconstructSaldoAt — el mismo motor de snapshots+historial que usa el resto de la app —, no una suma de ese período. Para el mes actual da el saldo disponible de hoy; para meses pasados, el saldo con el que cerró ese mes. Verificado con Playwright: con un saldo inicial de S/4,762.09 y 11 movimientos reales de agosto, el encabezado da exactamente S/4,267.09 — coincide con el cálculo manual y con reconstructSaldoAt directamente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4785,11 +4785,16 @@ function renderAhorrosIntereses(){
   document.getElementById('ahi-movs-tbody').innerHTML=mesesOrdenados.map(mesKey=>{
     const itemsDelMes=movsPorMes[mesKey];
     const [y,mm]=mesKey.split('-');
-    const netoMes=itemsDelMes.reduce((s,m)=>{ const {signo,monto}=signoMontoMov(m); return s+signo*monto; },0);
+    // El encabezado del mes NO suma los movimientos de ese mes — muestra el
+    // SALDO REAL que la cuenta tenía acumulado a esa fecha (mismo motor que
+    // usa el resto de la app: snapshots + historial). Para el mes actual,
+    // esto da el saldo disponible de HOY; para meses pasados, el saldo con
+    // el que cerraron ese mes.
+    const saldoAlCierre=(reconstructSaldoAt(parseInt(y,10), parseInt(mm,10)-1)||{})[cuenta]||0;
     const abierto=ahiMovsMesesOpen.has(mesKey);
     const filaHeader=`<tr style="cursor:pointer;background:var(--bg3)" onclick="toggleAhiMovsMes('${mesKey}')">
       <td colspan="2" style="font-weight:600">${abierto?'▼':'▶'} ${MONTHS[parseInt(mm,10)-1]} ${y} <span style="font-weight:400;color:var(--text3);font-size:11px">(${itemsDelMes.length})</span></td>
-      <td style="text-align:right;font-weight:600;color:${netoMes>=0?'var(--green)':'var(--red)'}">${netoMes>=0?'+':'−'} ${mSymCuenta} ${numFmt(Math.abs(netoMes))}</td>
+      <td style="text-align:right;font-weight:600;color:${saldoAlCierre>=0?'var(--teal)':'var(--red)'}">${mSymCuenta} ${numFmt(saldoAlCierre)}</td>
     </tr>`;
     const filasItems = abierto ? itemsDelMes.map(m=>{
       const {signo,monto}=signoMontoMov(m);
