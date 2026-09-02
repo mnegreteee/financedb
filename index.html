@@ -3137,8 +3137,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '01/09/26 - 18:43'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mismo comportamiento de ocultar en S/0 que ya tenía Ahorros, ahora también en la tabla de Cuentas (BCP, BBVA, Efectivo, y personalizadas tipo operativa/otras). Botón "🙈 Ocultas (N)" junto al título "Cuentas", con la misma vista de "mostrar de nuevo" (👁️ Mostrar) — reusa el mismo control central (state.cuentaForzarVisible), así que una cuenta que muestres desde aquí también reaparece en Ahorros e Intereses si aplica, y viceversa. Verificado con Playwright: BBVA en S/0 se oculta sola, aparece en la vista de Ocultas, y al mostrarla reaparece en la tabla normal con su S/0.00 visible.';
+const APP_VERSION_DATE = '01/09/26 - 19:08'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Bug corregido (encontrado por Miguel): si dentro de la vista "🙈 Ocultas" mostrabas la ÚLTIMA cuenta que quedaba ahí, el contador llegaba a 0 y el botón entero desaparecía — dejando sin ninguna forma de volver a la tabla normal (había que refrescar la página). Ahora el botón "‹ Volver" se queda visible mientras estés DENTRO de la vista de ocultas, sin importar cuántas cuentas queden ahí. Aplica a las 2 tablas (Cuentas y Ahorros). Verificado con Playwright reproduciendo el escenario exacto: mostrar la única cuenta oculta desde dentro de esa vista, confirmando que el botón "‹ Volver" sigue ahí y funciona.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5708,8 +5708,13 @@ function renderAccountsTables(){
       const col=getCuentaColor(r.k);
       const dot=`<label style="cursor:pointer;display:inline-flex;position:relative;margin-right:7px;vertical-align:middle" title="Cambiar color de ${r.l}" onclick="event.stopPropagation()"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><input type="color" value="${col}" onchange="updateCuentaColor('${r.k}', this.value)" style="position:absolute;width:0;height:0;opacity:0;border:none;padding:0"></label>`;
       const arrows=`<span onclick="event.stopPropagation();moverCuenta('${tabla}','${r.k}',-1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${idx===0?'visibility:hidden':''}" title="Subir">▲</span><span onclick="event.stopPropagation();moverCuenta('${tabla}','${r.k}',1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${idx===list.length-1?'visibility:hidden':''}" title="Bajar">▼</span>`;
+      // Si esta cuenta está en S/0 y se está mostrando solo porque se forzó
+      // a mano ("👁️ Mostrar" desde la vista de Ocultas), se ofrece el
+      // camino de vuelta: un ícono para volver a ocultarla automáticamente.
+      const forzada=cur===0 && !!(state.cuentaForzarVisible && state.cuentaForzarVisible[r.k]);
+      const ocultarIcono=forzada?`<span onclick="event.stopPropagation();ocultarCuentaForzada('${r.k}')" style="cursor:pointer;font-size:11px;margin-left:6px" title="Volver a ocultar automáticamente (está en S/0)">🙈</span>`:'';
       return `<tr class="acc-row ${sel}" draggable="true" data-key="${r.k}" data-tabla="${tabla}" ondragstart="cuentaDragStart(event)" ondragover="cuentaDragOver(event)" ondrop="cuentaDrop(event)" ondragend="cuentaDragEnd(event)" onclick="selectAccount('${r.k}')" style="${muted}">
-        <td><span style="display:inline-flex;flex-direction:column;vertical-align:middle;margin-right:4px">${arrows}</span>${dot}${escapeHtml(r.l)}${tag}</td>
+        <td><span style="display:inline-flex;flex-direction:column;vertical-align:middle;margin-right:4px">${arrows}</span>${dot}${escapeHtml(r.l)}${tag}${ocultarIcono}</td>
         <td style="text-align:right;font-size:11px;color:var(--text2)">${M(fc(prv))}</td>
         <td style="color:${cur>=0?'var(--text)':'var(--red)'}">${M(fc(cur))}</td>
       </tr>`;
@@ -5781,7 +5786,7 @@ function renderAccountsTables(){
   const allOpRowsOcultasDeduped=dedupePorNombre(allOpRowsOcultas);
   const btnOpOcultas=document.getElementById('cuentas-op-ocultas-btn');
   if(btnOpOcultas){
-    btnOpOcultas.style.display=allOpRowsOcultasDeduped.length?'inline-flex':'none';
+    btnOpOcultas.style.display=(allOpRowsOcultasDeduped.length||cuentasOpOcultasView)?'inline-flex':'none';
     btnOpOcultas.textContent=cuentasOpOcultasView?'‹ Volver':`🙈 Ocultas (${allOpRowsOcultasDeduped.length})`;
   }
   if(cuentasOpOcultasView){
@@ -5821,7 +5826,7 @@ function renderAccountsTables(){
   const ahRowsOcultasDeduped=dedupePorNombre(ahRowsOcultas);
   const btnOcultas=document.getElementById('ahorros-ocultas-btn');
   if(btnOcultas){
-    btnOcultas.style.display=ahRowsOcultasDeduped.length?'inline-flex':'none';
+    btnOcultas.style.display=(ahRowsOcultasDeduped.length||cuentasOcultasView)?'inline-flex':'none';
     btnOcultas.textContent=cuentasOcultasView?'‹ Volver':`🙈 Ocultas (${ahRowsOcultasDeduped.length})`;
   }
   if(cuentasOcultasView){
