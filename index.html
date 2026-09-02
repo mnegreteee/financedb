@@ -3137,8 +3137,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '01/09/26 - 19:08'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Bug corregido (encontrado por Miguel): si dentro de la vista "🙈 Ocultas" mostrabas la ÚLTIMA cuenta que quedaba ahí, el contador llegaba a 0 y el botón entero desaparecía — dejando sin ninguna forma de volver a la tabla normal (había que refrescar la página). Ahora el botón "‹ Volver" se queda visible mientras estés DENTRO de la vista de ocultas, sin importar cuántas cuentas queden ahí. Aplica a las 2 tablas (Cuentas y Ahorros). Verificado con Playwright reproduciendo el escenario exacto: mostrar la única cuenta oculta desde dentro de esa vista, confirmando que el botón "‹ Volver" sigue ahí y funciona.';
+const APP_VERSION_DATE = '01/09/26 - 19:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Bug corregido: Pichincha S/. se mostraba en S/0.00 (en ROJO, señal de que el número real era negativo, no cero exacto) y no se ocultaba — el problema era que cuentaAhorroVisible() comparaba con "saldo!==0" a secas, y la suma/resta de muchos movimientos con decimales puede dejar un residuo microscópico por precisión de punto flotante (ej. -0.0000000004 en vez de 0 exacto), que se ve como "S/0.00" pero nunca es matemáticamente igual a 0. Ahora se usa una tolerancia de medio centavo — cualquier cosa que se REDONDEE a S/0.00 al mostrarse se trata como cero de verdad. No se tocó el motor de cálculo de saldos (reconstructSaldoAt) por ser más riesgoso, solo el punto exacto donde se decide si ocultar o no. Verificado con Playwright: un residuo de -0.0000000004 ahora sí se oculta correctamente, mientras que un saldo real chico (S/0.01) se sigue mostrando sin problema.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10084,8 +10084,14 @@ function getCuentaColor(key){
 //  volver a mostrar en cualquier momento desde "🙈 Cuentas ocultas".
 // ══════════════════════════════════════════════════════
 function cuentaAhorroVisible(nombre, saldo){
-  if(saldo && saldo!==0) return true; // con cualquier saldo distinto de 0, siempre visible
-  return !!(state.cuentaForzarVisible && state.cuentaForzarVisible[nombre]); // en S/0, solo si se forzó a mostrar
+  // Ojo: comparar con "saldo!==0" a secas NO alcanza — sumas y restas de
+  // muchos movimientos con decimales pueden dejar un residuo microscópico
+  // por precisión de punto flotante (ej. -0.0000000003 en vez de 0 exacto),
+  // que se sigue viendo como "S/ 0.00" en pantalla pero nunca pasa esa
+  // comparación exacta. Se usa una tolerancia de medio centavo: cualquier
+  // cosa que se REDONDEE a S/0.00 al mostrarse se trata como cero de verdad.
+  if(saldo && Math.abs(saldo)>=0.005) return true; // con saldo real distinto de 0, siempre visible
+  return !!(state.cuentaForzarVisible && state.cuentaForzarVisible[nombre]); // en S/0 (real o redondeado), solo si se forzó a mostrar
 }
 function mostrarCuentaForzada(nombre){
   if(!state.cuentaForzarVisible) state.cuentaForzarVisible={};
