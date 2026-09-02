@@ -3137,8 +3137,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '02/09/26 - 05:43'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Eliminados por completo los datos demo de seedDemo() — antes contenía movimientos, montos y saldos REALES de tu cuenta original (BBVA, Katherine, Vanessa, "Ahorro Soles" con S/13,109.74, etc.) que se sembraban en cualquier cuenta nueva y vacía. Se borró todo ese contenido, dejando la función vacía (mismo patrón ya usado en la app de Nathy) en vez de quitar la llamada en el flujo de login, para no tocar esa parte del código. Verificado: sin ningún rastro de esos montos/nombres en el archivo, y seedDemo() confirmado como no-op total (no siembra nada, sin errores) al llamarlo sobre una cuenta vacía.';
+const APP_VERSION_DATE = '02/09/26 - 05:57'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Dos cambios en Cuentas/Ahorros: (1) NUEVO botón "🙈" en TODAS las filas (no solo las que estaban en S/0) para ocultar cualquier cuenta a mano, sin importar su saldo — respaldo confiable independiente del auto-ocultado en S/0, para casos donde el saldo real no sea exactamente cero (ej. una diferencia real de centavos, no un residuo de coma flotante). Usa el mismo sistema de "🙈 Ocultas"/"👁️ Mostrar" ya existente. (2) Bug de visualización corregido: los saldos negativos en esas tablas solo se distinguían por el color rojo, sin el signo "-" visible en el número — así que un saldo negativo chico podía verse igual que "S/ 0.00" real. Ahora muestra el signo explícito. Verificado con Playwright: -S/0.30 (una diferencia real, no residuo) ahora se ve correctamente como "-S/ 0.30" en vez de "S/ 0.30", y el botón manual oculta/muestra cualquier cuenta correctamente incluso con saldo negativo real.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5763,15 +5763,16 @@ function renderAccountsTables(){
       const col=getCuentaColor(r.k);
       const dot=`<label style="cursor:pointer;display:inline-flex;position:relative;margin-right:7px;vertical-align:middle" title="Cambiar color de ${r.l}" onclick="event.stopPropagation()"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><input type="color" value="${col}" onchange="updateCuentaColor('${r.k}', this.value)" style="position:absolute;width:0;height:0;opacity:0;border:none;padding:0"></label>`;
       const arrows=`<span onclick="event.stopPropagation();moverCuenta('${tabla}','${r.k}',-1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${idx===0?'visibility:hidden':''}" title="Subir">▲</span><span onclick="event.stopPropagation();moverCuenta('${tabla}','${r.k}',1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${idx===list.length-1?'visibility:hidden':''}" title="Bajar">▼</span>`;
-      // Si esta cuenta está en S/0 y se está mostrando solo porque se forzó
-      // a mano ("👁️ Mostrar" desde la vista de Ocultas), se ofrece el
-      // camino de vuelta: un ícono para volver a ocultarla automáticamente.
-      const forzada=cur===0 && !!(state.cuentaForzarVisible && state.cuentaForzarVisible[r.k]);
-      const ocultarIcono=forzada?`<span onclick="event.stopPropagation();ocultarCuentaForzada('${r.k}')" style="cursor:pointer;font-size:11px;margin-left:6px" title="Volver a ocultar automáticamente (está en S/0)">🙈</span>`:'';
+      // Botón de ocultar manual — disponible en TODAS las cuentas, sin
+      // importar su saldo, como respaldo confiable por si el auto-ocultado
+      // en S/0 no cubre algún caso puntual (ej. un residuo de coma flotante
+      // más grande de lo esperado). Ocultar cualquier cuenta la manda a la
+      // vista "🙈 Ocultas", con "👁️ Mostrar" para regresarla cuando sea.
+      const ocultarIcono=`<span onclick="event.stopPropagation();ocultarCuentaManual('${r.k}')" style="cursor:pointer;font-size:11px;margin-left:6px;opacity:.5" title="Ocultar esta cuenta de la lista">🙈</span>`;
       return `<tr class="acc-row ${sel}" draggable="true" data-key="${r.k}" data-tabla="${tabla}" ondragstart="cuentaDragStart(event)" ondragover="cuentaDragOver(event)" ondrop="cuentaDrop(event)" ondragend="cuentaDragEnd(event)" onclick="selectAccount('${r.k}')" style="${muted}">
         <td><span style="display:inline-flex;flex-direction:column;vertical-align:middle;margin-right:4px">${arrows}</span>${dot}${escapeHtml(r.l)}${tag}${ocultarIcono}</td>
         <td style="text-align:right;font-size:11px;color:var(--text2)">${M(fc(prv))}</td>
-        <td style="color:${cur>=0?'var(--text)':'var(--red)'}">${M(fc(cur))}</td>
+        <td style="color:${cur>=0?'var(--text)':'var(--red)'}">${cur<0?'-':''}${M(fc(cur))}</td>
       </tr>`;
     }).join('');
   }
@@ -8402,7 +8403,7 @@ function saveMeta(){
     datos.porcentajeDisponible=parseFloat(document.getElementById('meta-pct-disponible').value)||undefined;
     // montoActual de una meta grande siempre se LEE de la cuenta vinculada
     // (nunca se guarda a mano) — se calcula al vuelo en renderMetasAhorro.
-    datos.montoActual=state.cuentas[cuentaVinculada]||0;
+    datos.montoActual=montoActualMetaGrande(cuentaVinculada);
   }
 
   if(editingMetaId){
@@ -8422,6 +8423,20 @@ function deleteMeta(){
   saveState();
   closeMetaModal();
   renderMetasAhorro();
+}
+// El progreso de una Meta Grande SIEMPRE se lee "en vivo" de la cuenta
+// vinculada — nunca de un número guardado que puede quedar viejo. OJO: acá
+// está el punto importante — "en vivo" significa el saldo REAL reconstruido
+// (reconstructSaldoAt, snapshots + historial de movimientos), NO
+// state.cuentas[k] directo. Ese campo se actualiza en el camino normal
+// (agregar/editar/borrar un movimiento), pero puede desincronizarse con el
+// tiempo (ver el caso real de Pichincha/BBVA) — por eso Gestionar Cuentas
+// ya se corrigió para usar el mismo saldo reconstruido, y las Metas Grandes
+// deben ser consistentes con esa misma fuente de verdad.
+function montoActualMetaGrande(cuentaVinculada){
+  if(!cuentaVinculada) return 0;
+  const hoy=new Date();
+  return (reconstructSaldoAt(hoy.getFullYear(), hoy.getMonth())||{})[cuentaVinculada]||0;
 }
 // Dado el modo elegido, calcula lo complementario: si es "por tiempo",
 // sugiere el monto mensual; si es "por monto", proyecta cuántos meses
@@ -8463,7 +8478,7 @@ function calcularProyeccionMetaGrande(m){
 function aportarEsteMes(id){
   const m=(state.metasAhorro||[]).find(x=>x.id===id);
   if(!m||!m.cuentaVinculada) return;
-  const montoActual=state.cuentas[m.cuentaVinculada]||0;
+  const montoActual=montoActualMetaGrande(m.cuentaVinculada);
   const proy=calcularProyeccionMetaGrande({...m,montoActual});
   if(proy.completada) return;
   if(m.cuentaOrigenHabitual){
@@ -8517,7 +8532,7 @@ function buildMetaCardHtml(m){
   const sym=m.currency==='USD'?'$':'S/';
   // Meta grande: el progreso SIEMPRE se lee en vivo de la cuenta
   // vinculada — nunca del número guardado (que puede haber quedado viejo).
-  const montoActual=m.esMetaGrande ? (state.cuentas[m.cuentaVinculada]||0) : (m.montoActual||0);
+  const montoActual=m.esMetaGrande ? (montoActualMetaGrande(m.cuentaVinculada)) : (m.montoActual||0);
   const pct=m.montoObjetivo>0?Math.min(100,(montoActual/m.montoObjetivo)*100):0;
   const color=pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--amber)';
   let extraHtml='';
@@ -9062,15 +9077,20 @@ function exportXLSX(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(resData),'Resumen Anual');
   // Sheet 3: saldos — incluye TODAS las cuentas (default + personalizadas),
   // no solo las 5 fijas, para que la exportación no omita ahorros en otros bancos.
+  // Usa el saldo REAL reconstruido (snapshots + historial), no state.cuentas[k]
+  // directo — ese campo puede desincronizarse con el tiempo (ver el caso real
+  // de Pichincha/BBVA), y una exportación con el número viejo sería engañosa.
+  const hoyXlsx=new Date();
+  const saldosXlsxReales=reconstructSaldoAt(hoyXlsx.getFullYear(), hoyXlsx.getMonth())||{};
   const saldos=[['Cuenta','Tipo','Moneda','Saldo']];
   ['BCP','BBVA','Efectivo','Ahorro Soles','Ahorro Dólares'].forEach(k=>{
     if(state.cuentas[k]===undefined) return;
     if((state.customCuentas||{})[k]) return; // evita fila duplicada si una cuenta personalizada repite este nombre
     const esAhorro=k.startsWith('Ahorro');
-    saldos.push([k, esAhorro?'ahorro':'operativa', k==='Ahorro Dólares'?'USD':'PEN', state.cuentas[k]||0]);
+    saldos.push([k, esAhorro?'ahorro':'operativa', k==='Ahorro Dólares'?'USD':'PEN', saldosXlsxReales[k]||0]);
   });
   Object.entries(state.customCuentas||{}).forEach(([k,v])=>{
-    saldos.push([k, v.type||'operativa', v.currency||'PEN', state.cuentas[k]||0]);
+    saldos.push([k, v.type||'operativa', v.currency||'PEN', saldosXlsxReales[k]||0]);
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(saldos),'Saldos');
   XLSX.writeFile(wb,'misfinanzas_'+todayLocalISO()+'.xlsx');
@@ -10139,6 +10159,12 @@ function getCuentaColor(key){
 //  volver a mostrar en cualquier momento desde "🙈 Cuentas ocultas".
 // ══════════════════════════════════════════════════════
 function cuentaAhorroVisible(nombre, saldo){
+  // Ocultamiento MANUAL (botón 🙈 en cualquier cuenta) tiene la máxima
+  // prioridad — se queda oculta pase lo que pase con el saldo, hasta que
+  // el usuario la vuelva a mostrar a mano. Existe como respaldo confiable
+  // por si el auto-ocultado en S/0 no cubre algún caso (ej. un residuo de
+  // coma flotante más grande de lo esperado).
+  if(state.cuentaOcultaManual && state.cuentaOcultaManual[nombre]) return false;
   // Ojo: comparar con "saldo!==0" a secas NO alcanza — sumas y restas de
   // muchos movimientos con decimales pueden dejar un residuo microscópico
   // por precisión de punto flotante (ej. -0.0000000003 en vez de 0 exacto),
@@ -10148,7 +10174,18 @@ function cuentaAhorroVisible(nombre, saldo){
   if(saldo && Math.abs(saldo)>=0.005) return true; // con saldo real distinto de 0, siempre visible
   return !!(state.cuentaForzarVisible && state.cuentaForzarVisible[nombre]); // en S/0 (real o redondeado), solo si se forzó a mostrar
 }
+// Oculta CUALQUIER cuenta a mano, sin importar su saldo — el botón "🙈"
+// que ahora aparece en todas las filas de Cuentas y Ahorros.
+function ocultarCuentaManual(nombre){
+  if(!state.cuentaOcultaManual) state.cuentaOcultaManual={};
+  state.cuentaOcultaManual[nombre]=true;
+  if(state.cuentaForzarVisible) delete state.cuentaForzarVisible[nombre];
+  saveState();
+  renderAccountsTables();
+  if(typeof renderAhorrosIntereses==='function' && document.getElementById('page-ahorros-intereses')) renderAhorrosIntereses();
+}
 function mostrarCuentaForzada(nombre){
+  if(state.cuentaOcultaManual) delete state.cuentaOcultaManual[nombre];
   if(!state.cuentaForzarVisible) state.cuentaForzarVisible={};
   state.cuentaForzarVisible[nombre]=true;
   saveState();
@@ -10156,10 +10193,10 @@ function mostrarCuentaForzada(nombre){
   if(typeof renderAhorrosIntereses==='function' && document.getElementById('page-ahorros-intereses')) renderAhorrosIntereses();
 }
 function ocultarCuentaForzada(nombre){
-  if(state.cuentaForzarVisible) delete state.cuentaForzarVisible[nombre];
-  saveState();
-  renderAccountsTables();
-  if(typeof renderAhorrosIntereses==='function' && document.getElementById('page-ahorros-intereses')) renderAhorrosIntereses();
+  // Mismo destino que el botón manual — una vez oculta, no importa si fue
+  // porque estaba en S/0 o porque se ocultó a mano, el camino de vuelta es
+  // el mismo ("👁️ Mostrar" desde la vista de Ocultas).
+  ocultarCuentaManual(nombre);
 }
 let cuentasOcultasView=false;
 function toggleCuentasOcultasView(){
@@ -13284,7 +13321,7 @@ function renderNuevosWidgetsDashboard(){
     const metas=state.metasAhorro||[];
     metasEl.innerHTML = !metas.length ? '<div class="dash-empty"><div class="dash-empty-icon">🎯</div>Sin metas todavía.</div>' : metas.slice(0,3).map(m=>{
       const sym=m.currency==='USD'?'$':'S/';
-      const montoActual=m.esMetaGrande ? (state.cuentas[m.cuentaVinculada]||0) : (m.montoActual||0);
+      const montoActual=m.esMetaGrande ? (montoActualMetaGrande(m.cuentaVinculada)) : (m.montoActual||0);
       const pct=m.montoObjetivo>0 ? Math.min(100,(montoActual/m.montoObjetivo)*100) : 0;
       return `<div style="padding:7px 0;cursor:pointer" onclick="showPage('proyeccion')">
         <div style="display:flex;justify-content:space-between;font-size:12px"><span>${escapeHtml(m.nombre)}</span><span>${M(sym+' '+montoActual.toFixed(2))} / ${sym} ${m.montoObjetivo.toFixed(2)}</span></div>
