@@ -1355,14 +1355,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="mid-grid-3col">
     <div class="card" style="padding:18px">
-      <div class="section-header"><div class="section-title">Cuentas</div><button id="btn-transferir" class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="openTransferModal()">🔄 Transferir</button></div>
+      <div class="section-header"><div class="section-title">Cuentas</div><div style="display:flex;align-items:center;gap:6px"><button id="cuentas-op-ocultas-btn" class="config-action-btn neutral" style="font-size:9px;display:none;padding:3px 7px" onclick="toggleCuentasOpOcultasView()"></button><button id="btn-transferir" class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="openTransferModal()">🔄 Transferir</button></div></div>
       <div style="font-size:10px;color:var(--text3);margin-top:-8px;margin-bottom:8px">BCP · BBVA · Efectivo</div>
       <table class="account-table"><thead><tr><th>Cuenta</th><th>Previo</th><th style="text-align:right">Actual</th></tr></thead><tbody id="accounts-tbody"></tbody></table>
       <div id="account-filter-badge" style="display:none;margin-top:8px"><div class="filter-badge"><span id="filter-badge-text"></span><span style="cursor:pointer" onclick="clearAccountFilter()"> ✕</span></div></div>
     </div>
     <div class="card" style="padding:18px">
-      <div class="section-header"><div class="section-title">Ahorros</div><div style="font-size:10px;color:var(--text3)">Soles · Dólares</div></div>
-      <table class="account-table"><thead><tr><th>Cuenta</th><th>Previo</th><th style="text-align:right">Saldo</th></tr></thead><tbody id="savings-tbody"></tbody></table>
+      <div class="section-header"><div class="section-title">Ahorros</div><div style="display:flex;align-items:center;gap:8px"><button id="ahorros-ocultas-btn" class="config-action-btn neutral" style="font-size:9px;display:none;padding:3px 7px" onclick="toggleCuentasOcultasView()"></button><div style="font-size:10px;color:var(--text3)">Soles · Dólares</div></div></div>
+      <table class="account-table" id="savings-table"><thead><tr><th>Cuenta</th><th>Previo</th><th style="text-align:right">Saldo</th></tr></thead><tbody id="savings-tbody"></tbody></table>
     </div>
     <div class="card" style="padding:18px">
       <div class="section-title" style="margin-bottom:6px">Tipo de Cambio <span style="font-size:10px;color:var(--text3)">(clic para editar)</span></div>
@@ -3137,8 +3137,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '01/09/26 - 07:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos Frecuentes con duración: ahora se distinguen 2 estados al terminar la duración. Si quedaron meses sin registrar, muestra "🔴 Vencido" y NO se puede ocultar (para que no se te pase por alto). Si registraste todos los meses de la duración, muestra "⏹ Finalizado" con botón "🙈 Ocultar" — no borra nada, solo lo saca de la lista principal (queda su historial intacto). Nuevo botón "🙈 Ocultos (N)" arriba de la lista para ver solo los que ocultaste, con botón "👁️ Mostrar" para regresarlos. Verificado con Playwright: un pago con 4 de 12 meses sin registrar se queda visible como Vencido, uno completo se puede ocultar y reaparecer, y el contador del botón de Ocultos se actualiza correctamente.';
+const APP_VERSION_DATE = '01/09/26 - 18:43'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mismo comportamiento de ocultar en S/0 que ya tenía Ahorros, ahora también en la tabla de Cuentas (BCP, BBVA, Efectivo, y personalizadas tipo operativa/otras). Botón "🙈 Ocultas (N)" junto al título "Cuentas", con la misma vista de "mostrar de nuevo" (👁️ Mostrar) — reusa el mismo control central (state.cuentaForzarVisible), así que una cuenta que muestres desde aquí también reaparece en Ahorros e Intereses si aplica, y viceversa. Verificado con Playwright: BBVA en S/0 se oculta sola, aparece en la vista de Ocultas, y al mostrarla reaparece en la tabla normal con su S/0.00 visible.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4538,13 +4538,18 @@ function getTodasCuentasAhorro(){
 // punto de color que la cuenta ya tiene asignado en Finanzas → Cuentas
 // (getCuentaColor), para reconocerla de un vistazo sin leer el nombre.
 function poblarAhiCuentaTabs(){
-  const cuentas=getTodasCuentasAhorro();
+  const hoyTabs=new Date();
+  const saldosHoy=reconstructSaldoAt(hoyTabs.getFullYear(), hoyTabs.getMonth())||{};
+  const cuentas=getTodasCuentasAhorro().filter(c=>cuentaAhorroVisible(c, saldosHoy[c]||0));
   const wrap=document.getElementById('ahi-cuenta-tabs');
   const sinCuentas=document.getElementById('ahi-sin-cuentas');
   const contenido=document.getElementById('ahi-contenido');
   if(!cuentas.length){
     wrap.innerHTML='';
     sinCuentas.style.display='block';
+    sinCuentas.innerHTML = getTodasCuentasAhorro().length
+      ? 'Todas tus cuentas de ahorro están en S/0 y ocultas. Ve a Finanzas → Ahorros → "🙈 Ocultas" para volver a mostrar alguna.'
+      : 'No tienes cuentas de ahorro configuradas todavía. Crea una desde Finanzas → Cuentas.';
     contenido.style.display='none';
     ahiCuentaActual=null;
     return false;
@@ -5720,31 +5725,40 @@ function renderAccountsTables(){
 
   // Cuentas table: operativa defaults + all custom (op, otras — NOT ahorro defaults)
   const allOpRows=[];
+  const allOpRowsOcultas=[]; // en S/0 y no forzadas a mostrar — para la vista "🙈 Ocultas"
   // Add default operativa only if they exist in state.cuentas
   defaultOp.forEach(k=>{
     const tieneSaldo = curSaldo[k]!==undefined && curSaldo[k]!==0;
-    if(state.cuentas[k]!==undefined || tieneSaldo)
-      allOpRows.push({k,l:k,ic:defaultIcons[k],s:'S/',otras:false});
+    if(state.cuentas[k]!==undefined || tieneSaldo){
+      const fila={k,l:k,ic:defaultIcons[k],s:'S/',otras:false};
+      if(cuentaAhorroVisible(k, curSaldo[k]||0)) allOpRows.push(fila); else allOpRowsOcultas.push(fila);
+    }
   });
   // Add all custom accounts (op, otras — ahorro custom go in savings table)
   Object.entries(custom).forEach(([k,v])=>{
     if(v.type==='ahorro') return; // skip, goes in savings table
-    allOpRows.push({k,l:k,ic:v.type==='otras'?'📋':'💳',s:v.currency==='USD'?'$':'S/',otras:v.type==='otras'});
+    const fila={k,l:k,ic:v.type==='otras'?'📋':'💳',s:v.currency==='USD'?'$':'S/',otras:v.type==='otras'};
+    if(cuentaAhorroVisible(k, curSaldo[k]||0)) allOpRows.push(fila); else allOpRowsOcultas.push(fila);
   });
 
   // Ahorro table: default ahorro + custom ahorro
   const ahRows=[];
+  const ahRowsOcultas=[]; // en S/0 y no forzadas a mostrar — para la vista "🙈 Cuentas ocultas"
   defaultAh.forEach(k=>{
     // Ojo: antes esto era "curSaldo[k]!==0", pero para una cuenta borrada
     // curSaldo[k] es undefined, y undefined!==0 es TRUE en JS — por eso las
     // cuentas por defecto seguían apareciendo aunque las borraras.
     const tieneSaldo = curSaldo[k]!==undefined && curSaldo[k]!==0;
-    if(state.cuentas[k]!==undefined || tieneSaldo)
-      ahRows.push({k,l:k,ic:defaultIcons[k],s:defaultAhCur[k],otras:false});
+    if(state.cuentas[k]!==undefined || tieneSaldo){
+      const fila={k,l:k,ic:defaultIcons[k],s:defaultAhCur[k],otras:false};
+      if(cuentaAhorroVisible(k, curSaldo[k]||0)) ahRows.push(fila); else ahRowsOcultas.push(fila);
+    }
   });
   Object.entries(custom).forEach(([k,v])=>{
-    if(v.type==='ahorro')
-      ahRows.push({k,l:k,ic:'🏦',s:v.currency==='USD'?'$':'S/',otras:false});
+    if(v.type==='ahorro'){
+      const fila={k,l:k,ic:'🏦',s:v.currency==='USD'?'$':'S/',otras:false};
+      if(cuentaAhorroVisible(k, curSaldo[k]||0)) ahRows.push(fila); else ahRowsOcultas.push(fila);
+    }
   });
 
   // Si una cuenta personalizada se crea con el MISMO nombre que una de las 5
@@ -5762,7 +5776,25 @@ function renderAccountsTables(){
   const allOpRowsDeduped=dedupePorNombre(allOpRows);
   const ahRowsDeduped=dedupePorNombre(ahRows);
 
-  document.getElementById('accounts-tbody').innerHTML=allOpRowsDeduped.length?makeRows(ordenarPorPreferencia(allOpRowsDeduped),'op'):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</td></tr>';
+  // Botón "🙈 Ocultas" de Cuentas operativas — mismo patrón que en Ahorros:
+  // solo aparece si hay alguna en S/0 sin forzar a mostrar.
+  const allOpRowsOcultasDeduped=dedupePorNombre(allOpRowsOcultas);
+  const btnOpOcultas=document.getElementById('cuentas-op-ocultas-btn');
+  if(btnOpOcultas){
+    btnOpOcultas.style.display=allOpRowsOcultasDeduped.length?'inline-flex':'none';
+    btnOpOcultas.textContent=cuentasOpOcultasView?'‹ Volver':`🙈 Ocultas (${allOpRowsOcultasDeduped.length})`;
+  }
+  if(cuentasOpOcultasView){
+    document.getElementById('accounts-tbody').innerHTML = allOpRowsOcultasDeduped.length
+      ? allOpRowsOcultasDeduped.map(r=>`<tr>
+          <td style="opacity:.7">${escapeHtml(r.l)} <span style="font-size:9px;color:var(--text3)">(${r.s} 0)</span></td>
+          <td style="text-align:right;font-size:11px;color:var(--text3)">—</td>
+          <td style="text-align:right"><button onclick="mostrarCuentaForzada('${r.k}')" style="font-size:9px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">👁️ Mostrar</button></td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">No tienes cuentas ocultas.</td></tr>';
+  } else {
+    document.getElementById('accounts-tbody').innerHTML=allOpRowsDeduped.length?makeRows(ordenarPorPreferencia(allOpRowsDeduped),'op'):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</td></tr>';
+  }
 
   // Filas de TOTAL por moneda — coinciden con lo que muestran las tarjetas
   // "Ahorro Soles" y "Ahorro Dólares" de arriba (mismo criterio de suma).
@@ -5782,6 +5814,27 @@ function renderAccountsTables(){
     if(hayS) totalFilas+=filaTotal('Total Soles', totS, prevS, fmtS);
     if(hayD) totalFilas+=filaTotal('Total Dólares', totD, prevD, fmtD);
   }
+
+  // Botón "🙈 Cuentas ocultas" — solo aparece si hay alguna en S/0 sin
+  // forzar a mostrar. Al tocarlo, la MISMA tabla cambia a mostrar solo esas
+  // cuentas ocultas, cada una con un botón para volver a mostrarla.
+  const ahRowsOcultasDeduped=dedupePorNombre(ahRowsOcultas);
+  const btnOcultas=document.getElementById('ahorros-ocultas-btn');
+  if(btnOcultas){
+    btnOcultas.style.display=ahRowsOcultasDeduped.length?'inline-flex':'none';
+    btnOcultas.textContent=cuentasOcultasView?'‹ Volver':`🙈 Ocultas (${ahRowsOcultasDeduped.length})`;
+  }
+  if(cuentasOcultasView){
+    document.getElementById('savings-tbody').innerHTML = ahRowsOcultasDeduped.length
+      ? ahRowsOcultasDeduped.map(r=>`<tr>
+          <td style="opacity:.7">${escapeHtml(r.l)} <span style="font-size:9px;color:var(--text3)">(S/0)</span></td>
+          <td style="text-align:right;font-size:11px;color:var(--text3)">—</td>
+          <td style="text-align:right"><button onclick="mostrarCuentaForzada('${r.k}')" style="font-size:9px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">👁️ Mostrar</button></td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">No tienes cuentas ocultas.</td></tr>';
+    return;
+  }
+
   document.getElementById('savings-tbody').innerHTML=ahRowsDeduped.length?(makeRows(ordenarPorPreferencia(ahRowsDeduped),'ahorro')+totalFilas):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">—</td></tr>';
 }
 // ── Reordenar Cuentas/Ahorros a mano — flechas ▲▼ (cualquier dispositivo) o
@@ -10016,6 +10069,41 @@ function closeCuentasModal(){
 const DEFAULT_CUENTA_COLORS={BCP:'#3b82f6',BBVA:'#1e3a8a',Efectivo:'#22c55e','Ahorro Soles':'#a78bfa','Ahorro Dólares':'#2dd4bf'};
 function getCuentaColor(key){
   return (state.cuentaColors||{})[key] || DEFAULT_CUENTA_COLORS[key] || '#5b8def';
+}
+
+// ══════════════════════════════════════════════════════
+//  VISIBILIDAD DE CUENTAS DE AHORRO EN S/0 — cuando una cuenta de ahorro
+//  queda en S/0 (ej. moviste toda la plata a otro banco), se OCULTA sola
+//  de la tabla de Ahorros (Finanzas) y de las pestañas de "Ahorros e
+//  Intereses" — sin borrar nada, el historial sigue intacto. Se puede
+//  volver a mostrar en cualquier momento desde "🙈 Cuentas ocultas".
+// ══════════════════════════════════════════════════════
+function cuentaAhorroVisible(nombre, saldo){
+  if(saldo && saldo!==0) return true; // con cualquier saldo distinto de 0, siempre visible
+  return !!(state.cuentaForzarVisible && state.cuentaForzarVisible[nombre]); // en S/0, solo si se forzó a mostrar
+}
+function mostrarCuentaForzada(nombre){
+  if(!state.cuentaForzarVisible) state.cuentaForzarVisible={};
+  state.cuentaForzarVisible[nombre]=true;
+  saveState();
+  renderAccountsTables();
+  if(typeof renderAhorrosIntereses==='function' && document.getElementById('page-ahorros-intereses')) renderAhorrosIntereses();
+}
+function ocultarCuentaForzada(nombre){
+  if(state.cuentaForzarVisible) delete state.cuentaForzarVisible[nombre];
+  saveState();
+  renderAccountsTables();
+  if(typeof renderAhorrosIntereses==='function' && document.getElementById('page-ahorros-intereses')) renderAhorrosIntereses();
+}
+let cuentasOcultasView=false;
+function toggleCuentasOcultasView(){
+  cuentasOcultasView=!cuentasOcultasView;
+  renderAccountsTables();
+}
+let cuentasOpOcultasView=false;
+function toggleCuentasOpOcultasView(){
+  cuentasOpOcultasView=!cuentasOpOcultasView;
+  renderAccountsTables();
 }
 
 // ══════════════════════════════════════════════════════
