@@ -3137,8 +3137,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '02/09/26 - 05:33'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Implementados los 6 puntos del PDF: (1) revisado y confirmado el ocultar/mostrar automático de cuentas en S/0 — funciona correctamente en ciclo completo. (2) Botón "💯 Todo" en Transferencia entre cuentas, llena el monto con el saldo real completo de la cuenta origen de un toque. (3) Flechas ◀▶ para reordenar las pestañas de Ahorros e Intereses, usando el mismo state.ordenCuentas que ya usan Cuentas/Ahorros — un solo orden consistente en toda la app. (4) Nuevo botón 🏷️ en Gestionar Cuentas para renombrar una cuenta — actualiza las 13 estructuras que la referencian por nombre (cuentas, customCuentas, movimientos, TREA, método de interés, color, visibilidad forzada, orden manual, snapshots de cada mes, pagos frecuentes, metas de ahorro ×2, deudas), sin crear ni borrar ningún movimiento. (5) Confirmado con prueba real: sin datos previos, "Ahorro Soles"/"Ahorro Dólares" no aparecen en ningún lado, nunca son obligatorias — el código ya estaba limpio. seedDemo() sigue existiendo solo para cuentas nuevas y vacías (bien protegida contra pisar datos reales) — pendiente de confirmar si se elimina también. (6) Revisión completa: Firebase con proyectos distintos, Firestore con documentos distintos, localStorage revisado — se encontró y corrigió un bug real de aislamiento (la clave del modo compacto en la app de Nathy tenía el prefijo "miguel_" en vez de "nathy_", riesgo real de mezcla si ambas apps se abren en el mismo navegador bajo el mismo dominio de GitHub Pages). Sintaxis validada sin errores en ambos archivos, sin funciones ni IDs duplicados. Verificado todo con Playwright: renombrado global confirmado sin ningún rastro del nombre viejo (JSON.stringify completo del state), transferencia con "Todo" exacta, reordenamiento de pestañas persistente.';
+const APP_VERSION_DATE = '02/09/26 - 05:43'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Eliminados por completo los datos demo de seedDemo() — antes contenía movimientos, montos y saldos REALES de tu cuenta original (BBVA, Katherine, Vanessa, "Ahorro Soles" con S/13,109.74, etc.) que se sembraban en cualquier cuenta nueva y vacía. Se borró todo ese contenido, dejando la función vacía (mismo patrón ya usado en la app de Nathy) en vez de quitar la llamada en el flujo de login, para no tocar esa parte del código. Verificado: sin ningún rastro de esos montos/nombres en el archivo, y seedDemo() confirmado como no-op total (no siembra nada, sin errores) al llamarlo sobre una cuenta vacía.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -18893,62 +18893,14 @@ function getUpcomingCalEventsThisMonth(){
 
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
-  // Don't seed if user explicitly cleared all data
-  if(localStorage.getItem('miguel_mf_cleared')==='1'){
-    localStorage.removeItem('miguel_mf_cleared');
-    return;
-  }
-  // 🚨 GUARDA CRÍTICA (agregada tras un incidente real de pérdida de datos):
-  // antes esto solo miraba "state.movimientos.length>0" — si por lo que
-  // sea la subcolección de movimientos se leía vacía en un momento dado
-  // (ej. un parpadeo de red, aunque el resto de la cuenta sí tenga datos
-  // reales), esto volvía a sembrar el histórico de ejemplo ENCIMA de una
-  // cuenta real, y un guardado posterior podía terminar subiendo esos
-  // datos viejos a la nube. Ahora también exige que _remoteDocExisted NO
-  // sea true — es decir, que de verdad no exista un documento en Firestore
-  // todavía (cuenta genuinamente nueva), no solo que la lista local esté
-  // vacía por cualquier otro motivo.
-  if(state.movimientos.length>0) return;
-  if(_remoteDocExisted===true) return;
-  state.movimientos=[
-    {id:'m01',type:'expense',desc:'Café',amount:2.20,account:'BBVA',date:'2026-05-10',currency:'PEN',cat:'🍔 Comida'},
-    {id:'m02',type:'expense',desc:'Recarga',amount:5.00,account:'BBVA',date:'2026-05-10',currency:'PEN',cat:'📱 Servicios'},
-    {id:'m03',type:'expense',desc:'Terno',amount:120.00,account:'BBVA',date:'2026-05-12',currency:'PEN',cat:'👗 Ropa'},
-    {id:'m04',type:'expense',desc:'GLP',amount:50.00,account:'BBVA',date:'2026-05-13',currency:'PEN',cat:'🏠 Vivienda'},
-    {id:'m05',type:'expense',desc:'Terno',amount:110.00,account:'BBVA',date:'2026-05-19',currency:'PEN',cat:'👗 Ropa'},
-    {id:'m06',type:'expense',desc:'Pacifico 14',amount:212.40,account:'BBVA',date:'2026-05-20',currency:'PEN',cat:'🏦 Finanzas'},
-    {id:'m07',type:'expense',desc:'Crédito',amount:2773.27,account:'BBVA',date:'2026-05-29',currency:'PEN',cat:'🏦 Finanzas'},
-    {id:'m08',type:'expense',desc:'Cuota 15 Ripley',amount:1053.48,account:'BBVA',date:'2026-05-29',currency:'PEN',cat:'🏦 Finanzas'},
-    {id:'m09',type:'expense',desc:'Vanessa',amount:74.00,account:'BBVA',date:'2026-05-29',currency:'PEN'},
-    {id:'m10',type:'income',desc:'Jose',amount:6.48,account:'BBVA',date:'2026-05-06',currency:'PEN'},
-    {id:'m11',type:'income',desc:'Spotify',amount:27.50,account:'BBVA',date:'2026-05-09',currency:'PEN',cat:'📱 Servicios'},
-    {id:'m12',type:'income',desc:'CTS',amount:2454.00,account:'BBVA',date:'2026-05-15',currency:'PEN',cat:'💼 Trabajo'},
-    {id:'m13',type:'income',desc:'Vanessa',amount:1170.00,account:'BBVA',date:'2026-05-20',currency:'PEN'},
-    {id:'m14',type:'income',desc:'Sueldo',amount:4694.85,account:'BBVA',date:'2026-05-29',currency:'PEN',cat:'💼 Trabajo'},
-    {id:'m15',type:'income',desc:'Bono',amount:634.21,account:'BBVA',date:'2026-05-29',currency:'PEN',cat:'💼 Trabajo'},
-    {id:'m16',type:'ahorro',desc:'Ahorro',amount:4660.69,account:'Ahorro Soles',date:'2026-05-29',currency:'PEN'},
-    {id:'m17',type:'ahorro',desc:'Intereses',amount:12.81,account:'Ahorro Soles',date:'2026-05-31',currency:'PEN'},
-    {id:'m18',type:'income',desc:'Fabian',amount:17.50,account:'Ahorro Soles',date:'2026-05-24',currency:'PEN'},
-    {id:'m19',type:'ahorro',desc:'Intereses',amount:3.46,account:'Ahorro Dólares',date:'2026-05-31',currency:'USD'},
-    {id:'j01',type:'expense',desc:'Otro',amount:40.05,account:'BBVA',date:'2026-06-02',currency:'PEN',cat:'📦 Otros'},
-    {id:'j02',type:'expense',desc:'Katherine',amount:300.00,account:'BBVA',date:'2026-06-05',currency:'PEN'},
-    {id:'j03',type:'ahorro',desc:'Katherine',amount:310.30,account:'Ahorro Soles',date:'2026-06-05',currency:'PEN'},
-    {id:'j04',type:'income',desc:'Spotify',amount:15.13,account:'BBVA',date:'2026-06-09',currency:'PEN',cat:'📱 Servicios'},
-  ];
-  state.cuentas={BCP:0,BBVA:101.08,Efectivo:5.50,'Ahorro Soles':13109.74,'Ahorro Dólares':1808.98};
-  state.customCuentas={};
-  state.tarjetas=[];
-  state.deudas=[];
-  state.serviciosByMonth={};
-  state.combustibleGlp=[];
-  state.combustibleGas=[];
-  state.tcTracker=[];
-  state.deudasMayores=[];
-  state.calendarEvents=[];
-  state.snapshots={'2026-05':{BCP:0,BBVA:426.00,Efectivo:0,'Ahorro Soles':12799.44,'Ahorro Dólares':1805.52}};
-  state.budgets={'🍔 Comida':{limit:300},'👗 Ropa':{limit:200},'🏦 Finanzas':{limit:4500},'📱 Servicios':{limit:50}};
-  state.projGoals={soles:20000,dolar:3000};
-  saveState();
+  // Desactivado a pedido de Miguel — esta función originalmente sembraba
+  // datos de ejemplo (con nombres, montos y saldos REALES de su cuenta
+  // original) en cualquier cuenta nueva que detectara vacía. Se elimina el
+  // contenido por completo (no solo se desactiva con un guard) para no
+  // dejar ningún rastro de esos datos dando vueltas en el código. Se deja
+  // la función vacía en vez de borrar la llamada en el flujo de login,
+  // para no tener que tocar esa parte del código.
+  return;
 }
 
 
