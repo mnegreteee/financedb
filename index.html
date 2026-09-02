@@ -3137,8 +3137,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '01/09/26 - 19:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Bug corregido: Pichincha S/. se mostraba en S/0.00 (en ROJO, señal de que el número real era negativo, no cero exacto) y no se ocultaba — el problema era que cuentaAhorroVisible() comparaba con "saldo!==0" a secas, y la suma/resta de muchos movimientos con decimales puede dejar un residuo microscópico por precisión de punto flotante (ej. -0.0000000004 en vez de 0 exacto), que se ve como "S/0.00" pero nunca es matemáticamente igual a 0. Ahora se usa una tolerancia de medio centavo — cualquier cosa que se REDONDEE a S/0.00 al mostrarse se trata como cero de verdad. No se tocó el motor de cálculo de saldos (reconstructSaldoAt) por ser más riesgoso, solo el punto exacto donde se decide si ocultar o no. Verificado con Playwright: un residuo de -0.0000000004 ahora sí se oculta correctamente, mientras que un saldo real chico (S/0.01) se sigue mostrando sin problema.';
+const APP_VERSION_DATE = '02/09/26 - 05:33'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Implementados los 6 puntos del PDF: (1) revisado y confirmado el ocultar/mostrar automático de cuentas en S/0 — funciona correctamente en ciclo completo. (2) Botón "💯 Todo" en Transferencia entre cuentas, llena el monto con el saldo real completo de la cuenta origen de un toque. (3) Flechas ◀▶ para reordenar las pestañas de Ahorros e Intereses, usando el mismo state.ordenCuentas que ya usan Cuentas/Ahorros — un solo orden consistente en toda la app. (4) Nuevo botón 🏷️ en Gestionar Cuentas para renombrar una cuenta — actualiza las 13 estructuras que la referencian por nombre (cuentas, customCuentas, movimientos, TREA, método de interés, color, visibilidad forzada, orden manual, snapshots de cada mes, pagos frecuentes, metas de ahorro ×2, deudas), sin crear ni borrar ningún movimiento. (5) Confirmado con prueba real: sin datos previos, "Ahorro Soles"/"Ahorro Dólares" no aparecen en ningún lado, nunca son obligatorias — el código ya estaba limpio. seedDemo() sigue existiendo solo para cuentas nuevas y vacías (bien protegida contra pisar datos reales) — pendiente de confirmar si se elimina también. (6) Revisión completa: Firebase con proyectos distintos, Firestore con documentos distintos, localStorage revisado — se encontró y corrigió un bug real de aislamiento (la clave del modo compacto en la app de Nathy tenía el prefijo "miguel_" en vez de "nathy_", riesgo real de mezcla si ambas apps se abren en el mismo navegador bajo el mismo dominio de GitHub Pages). Sintaxis validada sin errores en ambos archivos, sin funciones ni IDs duplicados. Verificado todo con Playwright: renombrado global confirmado sin ningún rastro del nombre viejo (JSON.stringify completo del state), transferencia con "Todo" exacta, reordenamiento de pestañas persistente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3626,6 +3626,19 @@ function onTransferAccountChange(){
   const distintasCuentas = origen!==destino;
   document.getElementById('tr-currency-warn').style.display=(!mismaMoneda && distintasCuentas)?'block':'none';
   document.getElementById('tr-submit-btn').disabled = !mismaMoneda || !distintasCuentas;
+}
+// Llena el monto con el saldo REAL completo de la cuenta origen (mismo
+// motor que el resto de la app: reconstructSaldoAt) — para cuando se
+// quiere mover TODA la plata de una cuenta a otra de un solo toque, sin
+// tener que copiar el número a mano desde otra pantalla.
+function usarSaldoCompletoTransfer(){
+  const origen=document.getElementById('tr-origen').value;
+  if(!origen){ alert('Elige primero la cuenta de origen.'); return; }
+  const hoy=new Date();
+  const saldoActual=(reconstructSaldoAt(hoy.getFullYear(), hoy.getMonth())||{})[origen]||0;
+  const symTodo=getAccountCurrency(origen)==='USD'?'$':'S/';
+  if(saldoActual<=0){ alert(`"${origen}" no tiene saldo positivo para transferir (${symTodo} ${saldoActual.toFixed(2)}).`); return; }
+  document.getElementById('tr-monto').value=saldoActual.toFixed(2);
 }
 // Lógica central de una transferencia — extraída para poder usarse tanto
 // desde el modal (saveTransfer, lee los campos del formulario) como
@@ -4540,7 +4553,18 @@ function getTodasCuentasAhorro(){
 function poblarAhiCuentaTabs(){
   const hoyTabs=new Date();
   const saldosHoy=reconstructSaldoAt(hoyTabs.getFullYear(), hoyTabs.getMonth())||{};
-  const cuentas=getTodasCuentasAhorro().filter(c=>cuentaAhorroVisible(c, saldosHoy[c]||0));
+  let cuentas=getTodasCuentasAhorro().filter(c=>cuentaAhorroVisible(c, saldosHoy[c]||0));
+  // Mismo orden manual (state.ordenCuentas) que ya usan las tablas de
+  // Cuentas/Ahorros en Finanzas — así reordenar en un lado también
+  // reordena en el otro, un solo orden consistente en toda la app.
+  const orden=state.ordenCuentas||[];
+  cuentas=[...cuentas].sort((a,b)=>{
+    const ia=orden.indexOf(a), ib=orden.indexOf(b);
+    if(ia===-1 && ib===-1) return 0;
+    if(ia===-1) return 1;
+    if(ib===-1) return -1;
+    return ia-ib;
+  });
   const wrap=document.getElementById('ahi-cuenta-tabs');
   const sinCuentas=document.getElementById('ahi-sin-cuentas');
   const contenido=document.getElementById('ahi-contenido');
@@ -4557,13 +4581,17 @@ function poblarAhiCuentaTabs(){
   sinCuentas.style.display='none';
   contenido.style.display='block';
   if(!ahiCuentaActual || !cuentas.includes(ahiCuentaActual)) ahiCuentaActual=cuentas[0];
-  wrap.innerHTML=cuentas.map(c=>{
+  wrap.innerHTML=cuentas.map((c,idx)=>{
     const color=getCuentaColor(c);
     const activo=c===ahiCuentaActual;
+    const flechaIzq=idx===0?'':`<span onclick="event.stopPropagation();moverAhiCuentaTab('${c.replace(/'/g,"\\'")}',-1)" style="cursor:pointer;color:var(--text3);font-size:10px;padding:0 3px" title="Mover antes">◀</span>`;
+    const flechaDer=idx===cuentas.length-1?'':`<span onclick="event.stopPropagation();moverAhiCuentaTab('${c.replace(/'/g,"\\'")}',1)" style="cursor:pointer;color:var(--text3);font-size:10px;padding:0 3px" title="Mover después">▶</span>`;
     return `<div class="ahi-cuenta-tab ${activo?'active':''}" onclick="cambiarAhiCuentaTab('${c.replace(/'/g,"\\'")}')">
-      <div style="display:flex;align-items:center;justify-content:center;gap:7px">
+      <div style="display:flex;align-items:center;justify-content:center;gap:5px">
+        ${flechaIzq}
         <span class="ahi-cuenta-dot" style="background:${color}"></span>
         <span style="font-size:13px;font-weight:600">${escapeHtml(c)}</span>
+        ${flechaDer}
       </div>
     </div>`;
   }).join('');
@@ -4574,6 +4602,33 @@ function cambiarAhiCuentaTab(cuenta){
   ahiMovsMesesOpen=null;
   document.getElementById('ahi-detalle-dias-card').style.display='none';
   renderAhorrosIntereses();
+}
+// Reordenar las pestañas de cuenta (◀▶) — usa el mismo state.ordenCuentas
+// que las tablas de Cuentas/Ahorros en Finanzas, así el orden es uno solo
+// y consistente en toda la app, se reordene desde donde se reordene.
+function moverAhiCuentaTab(key, dir){
+  const hoyMov=new Date();
+  const saldosMov=reconstructSaldoAt(hoyMov.getFullYear(), hoyMov.getMonth())||{};
+  const orden=state.ordenCuentas||[];
+  const cuentasVisibles=getTodasCuentasAhorro().filter(c=>cuentaAhorroVisible(c, saldosMov[c]||0))
+    .sort((a,b)=>{
+      const ia=orden.indexOf(a), ib=orden.indexOf(b);
+      if(ia===-1 && ib===-1) return 0;
+      if(ia===-1) return 1;
+      if(ib===-1) return -1;
+      return ia-ib;
+    });
+  const idx=cuentasVisibles.indexOf(key), swapIdx=idx+dir;
+  if(idx===-1||swapIdx<0||swapIdx>=cuentasVisibles.length) return;
+  const otherKey=cuentasVisibles[swapIdx];
+  if(!state.ordenCuentas) state.ordenCuentas=[];
+  // Cualquier cuenta que todavía no esté en el orden manual (nunca se
+  // reordenó antes) se agrega al final, en el orden en que aparece ahora.
+  cuentasVisibles.forEach(k=>{ if(!state.ordenCuentas.includes(k)) state.ordenCuentas.push(k); });
+  const ia=state.ordenCuentas.indexOf(key), ib=state.ordenCuentas.indexOf(otherKey);
+  [state.ordenCuentas[ia], state.ordenCuentas[ib]]=[state.ordenCuentas[ib], state.ordenCuentas[ia]];
+  saveState();
+  poblarAhiCuentaTabs();
 }
 // Moneda real de una cuenta de ahorro (las 2 por defecto ya tienen moneda
 // fija por su nombre; las personalizadas la traen en su propia config).
@@ -10203,12 +10258,19 @@ function renderCuentasList(){
   const defaultTypes={BCP:'operativa',BBVA:'operativa',Efectivo:'operativa','Ahorro Soles':'ahorro','Ahorro Dólares':'ahorro'};
   const defaultCurs={BCP:'PEN',BBVA:'PEN',Efectivo:'PEN','Ahorro Soles':'PEN','Ahorro Dólares':'USD'};
   const isDefault=k=>k in defaultTypes;
+  // Saldo REAL a la fecha de hoy — el mismo motor (snapshots + historial de
+  // movimientos) que usa el resto de la app. OJO: "state.cuentas[k]" es un
+  // campo aparte que el resto de la app YA NO usa para calcular nada — solo
+  // se llenó al crear la cuenta y podía quedar desactualizado para siempre.
+  const hoyCuentas=new Date();
+  const saldosReales=reconstructSaldoAt(hoyCuentas.getFullYear(), hoyCuentas.getMonth())||{};
 
   function rowHTML(k,t,cur){
-    const bal=state.cuentas[k]||0;
+    const bal=saldosReales[k]||0;
     const sym=cur==='USD'?'$':'S/';
     const balStr=(bal>=0?'':'-')+sym+' '+Math.abs(bal).toFixed(2);
     const editBtn=`<button class="config-action-btn neutral" onclick="editCuenta('${k}')" style="font-size:10px;padding:3px 8px">✏ Editar saldo</button>`;
+    const renameBtn=`<button class="config-action-btn neutral" onclick="renombrarCuentaUI('${k}')" title="Cambiar el nombre de esta cuenta en toda la app" style="font-size:10px;padding:3px 8px">🏷️</button>`;
     const reconBtn=`<button class="config-action-btn neutral" onclick="openReconciliarModal('${k}')" title="Comparar con el saldo real del banco" style="font-size:10px;padding:3px 8px">🔍</button>`;
     const delBtn=`<button class="config-action-btn danger" onclick="startDeleteCuenta('${k}')" style="font-size:10px;padding:3px 8px">🗑</button>`;
     const tLabel={'operativa':'operativa · ','ahorro':'ahorro · ','otras':'otras · '};
@@ -10221,7 +10283,7 @@ function renderCuentasList(){
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-family:var(--mono);font-size:12px;color:${bal>=0?'var(--text2)':'var(--red)'}">${balStr}</span>
-        ${editBtn}${reconBtn}${delBtn}
+        ${editBtn}${renameBtn}${reconBtn}${delBtn}
       </div>
     </div>`;
   }
@@ -10246,12 +10308,30 @@ function updateCuentaColor(key,color){
 }
 
 function editCuenta(key){
-  const cur=state.cuentas[key]||0;
-  const newBal=prompt(`Nuevo saldo para "${key}" (actual: ${cur.toFixed(2)}):`,cur.toFixed(2));
+  // Ojo: antes esto escribía en state.cuentas[key], un campo que el resto
+  // de la app YA NO lee para calcular nada (todo usa reconstructSaldoAt,
+  // basado en snapshots + historial de movimientos) — así que "editar el
+  // saldo" no cambiaba nada de verdad en ningún otro lado, solo un campo
+  // suelto y desactualizado. Ahora corrige el saldo REAL con un movimiento
+  // de corrección, el mismo mecanismo seguro que ya usa "🔍 Reconciliar".
+  const hoy=new Date();
+  const saldoActual=(reconstructSaldoAt(hoy.getFullYear(), hoy.getMonth())||{})[key]||0;
+  const newBal=prompt(`Nuevo saldo para "${key}" (actual: ${saldoActual.toFixed(2)}):`,saldoActual.toFixed(2));
   if(newBal===null) return;
   const val=parseFloat(newBal);
   if(isNaN(val)){alert('Valor inválido.');return;}
-  state.cuentas[key]=val;
+  const diff=val-saldoActual;
+  if(Math.abs(diff)<0.005) return; // sin cambio real, no crea un movimiento de 0
+  const currency=(state.customCuentas&&state.customCuentas[key]&&state.customCuentas[key].currency) || (key==='Ahorro Dólares'?'USD':'PEN');
+  pushMovimiento({
+    id:'editbal-'+Date.now(),
+    type: diff>0?'income':'expense',
+    desc:'Corrección de saldo (editar cuenta)',
+    amount: Math.abs(diff),
+    account: key,
+    date: todayISO(),
+    currency,
+  });
   saveState(); renderCuentasList(); render();
 }
 
@@ -10310,6 +10390,106 @@ function doDeleteCuenta(key){
   if(state.ahorroMetodoInteres) delete state.ahorroMetodoInteres[key];
   if(state.cuentaColors) delete state.cuentaColors[key];
   saveState(); renderCuentasList(); render();
+}
+
+// ══════════════════════════════════════════════════════
+//  RENOMBRAR CUENTA — cambia el nombre de una cuenta EN TODA LA APP, sin
+//  borrar ni crear ningún movimiento (el historial y los saldos quedan
+//  exactamente iguales, solo cambia la etiqueta). Toca las 13 estructuras
+//  de datos que referencian una cuenta por su nombre: saldo crudo,
+//  configuración personalizada, TREA, método de interés, color,
+//  visibilidad forzada, orden manual, snapshots de cada mes, movimientos,
+//  destino de pagos frecuentes, cuenta vinculada/origen de metas de
+//  ahorro, y cuenta de pago de deudas.
+// ══════════════════════════════════════════════════════
+function renombrarCuentaGlobal(oldName, newName){
+  newName=(newName||'').trim();
+  if(!newName){ alert('El nombre no puede quedar vacío.'); return false; }
+  if(newName===oldName) return true; // sin cambios reales
+  const nombresEnUso=new Set([...Object.keys(state.cuentas||{}), ...Object.keys(state.customCuentas||{})]);
+  if(nombresEnUso.has(newName)){ alert(`Ya existe una cuenta llamada "${newName}". Usa otro nombre.`); return false; }
+
+  const DEFAULT_TYPES={BCP:'operativa',BBVA:'operativa',Efectivo:'operativa','Ahorro Soles':'ahorro','Ahorro Dólares':'ahorro'};
+  const DEFAULT_CURS={BCP:'PEN',BBVA:'PEN',Efectivo:'PEN','Ahorro Soles':'PEN','Ahorro Dólares':'USD'};
+
+  // 1. Si era una cuenta "por defecto" (BCP/BBVA/Efectivo/Ahorro Soles/
+  // Ahorro Dólares), al renombrarla deja de coincidir con esa clave
+  // especial — se convierte en una cuenta personalizada normal con el
+  // mismo tipo y moneda, para que se siga viendo igual en todas las tablas.
+  if(!(state.customCuentas && oldName in state.customCuentas) && DEFAULT_TYPES[oldName]){
+    if(!state.customCuentas) state.customCuentas={};
+    state.customCuentas[newName]={type:DEFAULT_TYPES[oldName], currency:DEFAULT_CURS[oldName]};
+  } else if(state.customCuentas && oldName in state.customCuentas){
+    state.customCuentas[newName]=state.customCuentas[oldName];
+    delete state.customCuentas[oldName];
+  }
+
+  // 2. Saldo "crudo" (campo vestigial que ya no se usa para calcular nada,
+  // pero se mueve igual por si algo más lo llega a leer).
+  if(state.cuentas && oldName in state.cuentas){
+    state.cuentas[newName]=state.cuentas[oldName];
+    delete state.cuentas[oldName];
+  }
+
+  // 3. TREA, método de interés, color, visibilidad forzada — objetos
+  // simples de cuenta → valor, se mueve la clave directo.
+  [state.ahorroTREA, state.ahorroMetodoInteres, state.cuentaColors, state.cuentaForzarVisible].forEach(obj=>{
+    if(obj && oldName in obj){ obj[newName]=obj[oldName]; delete obj[oldName]; }
+  });
+
+  // 4. Orden manual de cuentas (▲▼ / arrastrar) — reemplazar el nombre
+  // viejo por el nuevo donde aparezca en la lista.
+  if(Array.isArray(state.ordenCuentas)){
+    state.ordenCuentas=state.ordenCuentas.map(k=>k===oldName?newName:k);
+  }
+
+  // 5. Snapshots — cada mes es un objeto {cuenta: saldo}, hay que revisar
+  // TODOS los meses guardados, no solo el actual.
+  if(state.snapshots){
+    Object.keys(state.snapshots).forEach(mesKey=>{
+      const snap=state.snapshots[mesKey];
+      if(snap && oldName in snap){ snap[newName]=snap[oldName]; delete snap[oldName]; }
+    });
+  }
+
+  // 6. Movimientos — cada uno referencia su cuenta por nombre en .account
+  (state.movimientos||[]).forEach(mv=>{ if(mv.account===oldName) mv.account=newName; });
+
+  // 7. Pagos Frecuentes — el "destino" cuando el método de pago es "cuenta"
+  // (no aplica si paga con tarjeta, ahí destino es el nombre de la tarjeta)
+  (state.pagosFrecuentes||[]).forEach(pf=>{
+    if(pf.metodoPago==='cuenta' && pf.destino===oldName) pf.destino=newName;
+  });
+
+  // 8. Metas de ahorro grandes — cuenta vinculada (donde vive el ahorro) y
+  // cuenta de origen habitual (de dónde suele salir el aporte mensual)
+  (state.metasAhorro||[]).forEach(m=>{
+    if(m.cuentaVinculada===oldName) m.cuentaVinculada=newName;
+    if(m.cuentaOrigenHabitual===oldName) m.cuentaOrigenHabitual=newName;
+  });
+
+  // 9. Deudas — cuenta que se usó/usará para pagarlas
+  (state.deudas||[]).forEach(d=>{
+    if(d.cuentaPago===oldName) d.cuentaPago=newName;
+  });
+
+  return true;
+}
+// Wrapper con el prompt + re-render de todo lo que podría mostrar nombres
+// de cuenta — se llama desde el botón "✏️ Nombre" en Gestionar Cuentas.
+function renombrarCuentaUI(key){
+  const nuevoNombre=prompt(`Nuevo nombre para "${key}":`, key);
+  if(nuevoNombre===null) return; // canceló
+  const trimmed=nuevoNombre.trim();
+  if(trimmed===key) return; // no cambió nada
+  const ok=renombrarCuentaGlobal(key, trimmed);
+  if(!ok) return;
+  saveState();
+  if(typeof ahiCuentaActual!=='undefined' && ahiCuentaActual===key) ahiCuentaActual=trimmed;
+  renderCuentasList();
+  render();
+  if(document.getElementById('page-ahorros-intereses') && typeof renderAhorrosIntereses==='function') renderAhorrosIntereses();
+  toast(`Cuenta renombrada a "${trimmed}" en toda la app`);
 }
 
 function saveNewCuenta(){
@@ -19298,7 +19478,12 @@ if(state.projGoals){
       ⚠️ Estas cuentas están en monedas distintas. Para cambiar de soles a dólares (o viceversa) usa el <a href="#" onclick="closeTransferModal();showPage('tc-tracker');return false;" style="color:inherit;text-decoration:underline">Historial de Operaciones de TC</a> en vez de una transferencia simple.
     </div>
     <div class="field-row">
-      <div class="field"><label>Monto</label><input id="tr-monto" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Monto</label>
+        <div style="display:flex;gap:6px">
+          <input id="tr-monto" type="number" step="0.01" placeholder="0.00" style="flex:1">
+          <button type="button" onclick="usarSaldoCompletoTransfer()" title="Llenar con el saldo real completo de la cuenta origen" style="font-size:10px;padding:0 10px;white-space:nowrap;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--accent);cursor:pointer;font-weight:600">💯 Todo</button>
+        </div>
+      </div>
       <div class="field"><label>Fecha</label><input id="tr-fecha" type="date"></div>
     </div>
     <div class="field-row">
