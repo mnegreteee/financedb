@@ -1617,6 +1617,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
   </div>
 
+  <div id="tct-resumen" style="display:none"></div>
+
   <div class="tct-table-wrap">
     <table class="tct-table">
       <thead id="tct-thead"></thead>
@@ -3137,8 +3139,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '02/09/26 - 05:57'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Dos cambios en Cuentas/Ahorros: (1) NUEVO botón "🙈" en TODAS las filas (no solo las que estaban en S/0) para ocultar cualquier cuenta a mano, sin importar su saldo — respaldo confiable independiente del auto-ocultado en S/0, para casos donde el saldo real no sea exactamente cero (ej. una diferencia real de centavos, no un residuo de coma flotante). Usa el mismo sistema de "🙈 Ocultas"/"👁️ Mostrar" ya existente. (2) Bug de visualización corregido: los saldos negativos en esas tablas solo se distinguían por el color rojo, sin el signo "-" visible en el número — así que un saldo negativo chico podía verse igual que "S/ 0.00" real. Ahora muestra el signo explícito. Verificado con Playwright: -S/0.30 (una diferencia real, no residuo) ahora se ve correctamente como "-S/ 0.30" en vez de "S/ 0.30", y el botón manual oculta/muestra cualquier cuenta correctamente incluso con saldo negativo real.';
+const APP_VERSION_DATE = '03/09/26 - 19:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Comparador de TC: nuevo aviso entre las casas de cambio y la tabla con (1) según el último registro, mejor empresa para comprar/vender dólares ahora, y (2) el mejor tipo de cambio histórico de compra/venta en todo lo registrado (pueden ser fechas/empresas distintas). Verificado con Playwright sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10373,7 +10375,14 @@ function editCuenta(key){
 }
 
 function startDeleteCuenta(key){
-  const bal=state.cuentas[key]||0;
+  // Usa el saldo REAL reconstruido, no state.cuentas[key] directo — ese
+  // campo puede desincronizarse (ver el caso real de Pichincha/BBVA). Si
+  // se usara el campo viejo acá y por error dijera "S/0" mientras la
+  // cuenta en realidad tenía plata, se podría borrar la cuenta SIN avisar
+  // que hay que transferir el saldo primero — el peor lugar posible para
+  // que el número esté mal.
+  const hoyDel=new Date();
+  const bal=(reconstructSaldoAt(hoyDel.getFullYear(), hoyDel.getMonth())||{})[key]||0;
   pendingDeleteKey=key;
   if(Math.abs(bal)>0.01){
     // Has balance — show transfer UI
@@ -15634,6 +15643,49 @@ function renderTcOperaciones(){
   }).join('');
 }
 
+// Aviso entre las casas de cambio y la tabla: (1) según el ÚLTIMO registro,
+// qué empresa conviene más para comprar/vender dólares ahora mismo, y (2)
+// el mejor tipo de cambio de compra/venta en TODO el histórico ingresado
+// (pueden ser de fechas y empresas distintas entre sí).
+function renderTCResumen(rows, empresas){
+  const el=document.getElementById('tct-resumen');
+  if(!el) return;
+  if(!rows.length || !empresas.length){ el.style.display='none'; return; }
+
+  const ahorroActual=getTotalAhorroSoles();
+  const ultimaFila=rows[rows.length-1]; // rows ya viene ordenado por fecha ascendente
+  const rUltima=computeTCRow(ultimaFila, empresas, ahorroActual);
+
+  // Histórico completo: la mejor compra (venta más baja) y mejor venta
+  // (compra más alta) de CUALQUIER empresa en CUALQUIER fecha registrada.
+  let histCompra=null, histVenta=null; // {valor, empresa, fecha}
+  rows.forEach(row=>{
+    empresas.forEach(e=>{
+      const rate=(row.rates && row.rates[e.id])||{};
+      const compra=parseFloat(rate.compra), venta=parseFloat(rate.venta);
+      if(!isNaN(venta) && venta>0 && (!histCompra || venta<histCompra.valor)){
+        histCompra={valor:venta, empresa:e, fecha:row.fecha};
+      }
+      if(!isNaN(compra) && compra>0 && (!histVenta || compra>histVenta.valor)){
+        histVenta={valor:compra, empresa:e, fecha:row.fecha};
+      }
+    });
+  });
+
+  const fmtFecha=f=>{ const [y,m,d]=f.split('-'); return `${d}/${m}/${y}`; };
+
+  const lineaUltima = (rUltima.mejorCompra || rUltima.mejorVenta)
+    ? `📌 En base al último registro (<b>${fmtFecha(ultimaFila.fecha)}</b>), la mejor opción de <b>compra</b> es ${rUltima.mejorCompra?`<b style="color:${rUltima.mejorCompra.empresa.color}">${escapeHtml(rUltima.mejorCompra.empresa.nombre)}</b>`:'—'} y la mejor opción de <b>venta</b> es ${rUltima.mejorVenta?`<b style="color:${rUltima.mejorVenta.empresa.color}">${escapeHtml(rUltima.mejorVenta.empresa.nombre)}</b>`:'—'}.`
+    : '📌 Aún no hay tasas registradas en el último renglón para comparar.';
+
+  const lineaHistorica = (histCompra || histVenta)
+    ? `🏆 Mejor tipo de cambio histórico: ${histCompra?`<b>compra ${histCompra.valor}</b> (${escapeHtml(histCompra.empresa.nombre)}, ${fmtFecha(histCompra.fecha)})`:'—'}${histCompra&&histVenta?' · ':''}${histVenta?`<b>venta ${histVenta.valor}</b> (${escapeHtml(histVenta.empresa.nombre)}, ${fmtFecha(histVenta.fecha)})`:''}`
+    : '';
+
+  el.style.display='block';
+  el.style.cssText='display:block;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;line-height:1.6';
+  el.innerHTML=`<div>${lineaUltima}</div>${lineaHistorica?`<div style="margin-top:4px;color:var(--text2)">${lineaHistorica}</div>`:''}`;
+}
 function renderTCTracker(){
   const empresas = state.tcEmpresas || [];
   const ahorroActual = getTotalAhorroSoles();
@@ -15645,6 +15697,7 @@ function renderTCTracker(){
   if(!tbody) return;
 
   const rows = (state.tcTracker||[]).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+  renderTCResumen(rows, empresas);
 
   if(!rows.length){
     const totalCols = 2 + empresas.length*3 + 2 + 3 + 1;
