@@ -2184,7 +2184,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div id="ahi-sin-cuentas" class="dash-empty" style="display:none">No tienes cuentas de ahorro configuradas todavía. Crea una desde Finanzas → Cuentas.</div>
 
   <div id="ahi-contenido">
-    <div class="dash-split" id="ahi-summary" style="grid-template-columns:repeat(3,1fr);align-items:stretch"></div>
+    <div class="dash-split" id="ahi-summary" style="grid-template-columns:repeat(4,1fr);align-items:stretch"></div>
 
     <div id="ahi-detalle-dias-card" class="card" style="padding:14px 20px;margin-top:16px;margin-bottom:16px;display:none">
       <div class="section-header" style="margin-bottom:10px">
@@ -3139,8 +3139,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '03/09/26 - 20:17'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Sincronización multi-dispositivo completa (A+B+C), portada de la app de Nathy tras confirmarla ahí: cada sección de datos (cuentas, customCuentas, TREA, pagos frecuentes, metas, deudas, tipo de cambio, presupuestos, etc.) ahora vive en su PROPIO documento de Firestore (subcolección "secciones"), igual que ya hacían los movimientos — en vez de compartir un solo bloque que cualquier dispositivo podía sobreescribir entero. Escribir una sección es físicamente imposible que pise otra, sin importar el momento exacto en que 2 dispositivos guarden. Listener en tiempo real: si guardas algo en un dispositivo, los demás lo adoptan solos, sin recargar. Migración automática y no destructiva desde el formato viejo (no se borra el bloque anterior, queda de respaldo). También se actualizaron guardarSesionesEnLaNubeSinRiesgo/obtenerSesionesFrescas (historial de sesiones en Seguridad) y "Borrar todos mis datos" al nuevo formato. Ninguna otra función de la app se tocó. Verificado con Playwright: regresión completa de las 11 páginas sin errores nuevos, migración desde el formato viejo, y escritura por secciones sin pisar entre sí — mismos resultados exactos que en la app de Nathy.';
+const APP_VERSION_DATE = '04/09/26 - 11:06'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Ahorros e Intereses: nueva tarjeta "GANADO HASTA HOY" (color ámbar), entre TREA e Interés Proy. — muestra el interés REAL acumulado desde el día 1 del mes hasta hoy (no proyecta el resto del mes, solo suma lo que ya pasó día a día según el saldo real de cada día y la TREA). Distinto de "Interés proy. este mes", que sí proyecta el mes completo. Nuevo helper calcularInteresAcumuladoHastaHoy(). Verificado con Playwright: con saldo constante y 4 de 30 días transcurridos, dio exactamente 4/30 del total proyectado del mes (S/9.04 de S/67.80), y regresión completa de las 11 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4870,6 +4870,19 @@ function calcularInteresDiarioMes(cuenta, y, m){
   });
   return {interes:total, dias:detalle};
 }
+// Interés REAL acumulado desde el día 1 del mes hasta HOY (no proyecta el
+// resto del mes, solo suma lo que ya pasó) — ej. si hoy es el día 3 y cada
+// día ganaste ≈2 soles, esto da ≈6 soles, sin contar los días 4 en
+// adelante que todavía no ocurrieron. Distinto de "Interés proy. este
+// mes", que sí proyecta el mes completo.
+function calcularInteresAcumuladoHastaHoy(cuenta, y, m){
+  const {dias}=calcularInteresDiarioMes(cuenta,y,m);
+  if(!dias.length) return null;
+  const hoyStr=todayLocalISO();
+  const hastaHoy=dias.filter(d=>d.fecha<=hoyStr);
+  if(!hastaHoy.length) return null;
+  return hastaHoy.reduce((s,d)=>s+d.interesDia,0);
+}
 // MÉTODO MENSUAL: tasa mensual equivalente de la TREA × saldo PROMEDIO del
 // mes (ponderado por días) — más simple, da casi lo mismo que el diario.
 function calcularInteresMensualPromedioMes(cuenta, y, m){
@@ -4982,10 +4995,12 @@ function renderAhorrosIntereses(){
   const resDiario=calcularInteresDiarioMes(cuenta, hoy.getFullYear(), hoy.getMonth());
   const resMensual=calcularInteresMensualPromedioMes(cuenta, hoy.getFullYear(), hoy.getMonth());
   const interesProy = metodo==='diario' ? resDiario.interes : resMensual.interes;
+  const interesAcumulado = calcularInteresAcumuladoHastaHoy(cuenta, hoy.getFullYear(), hoy.getMonth());
 
   document.getElementById('ahi-summary').innerHTML=`
     <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">SALDO ACTUAL</div><div class="dash-kpi-val">${M(sym+' '+numFmt(saldoActual))}</div><div class="dash-kpi-sub">${MONTHS[hoy.getMonth()]} ${hoy.getFullYear()}</div></div>
     <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">TREA ${MONTHS[hoy.getMonth()].toUpperCase()}</div><div class="dash-kpi-val">${treaMes?treaMes.toFixed(2)+'%':'—'}</div><div class="dash-kpi-sub">${treaMes?'anual':'sin configurar'}</div></div>
+    <div class="dash-kpi kpi-amber"><div class="dash-kpi-label">GANADO HASTA HOY</div><div class="dash-kpi-val" style="color:var(--amber)">${interesAcumulado!==null?M('≈ '+sym+' '+numFmt(interesAcumulado)):'—'}</div><div class="dash-kpi-sub">día 1 al ${hoy.getDate()} de ${MONTHS[hoy.getMonth()]}</div></div>
     <div class="dash-kpi kpi-teal" style="padding-bottom:10px">
       <div class="dash-kpi-label">INTERÉS PROY. ESTE MES</div>
       <div class="dash-kpi-val" style="color:var(--teal)">${interesProy!==null?M('≈ '+sym+' '+numFmt(interesProy)):'—'}</div>
@@ -5626,7 +5641,7 @@ function renderSummaryCards(){
 
   if(dp!==null){
     const diff=dc-dp;
-    document.getElementById('sub-disp-cur').innerHTML=`<span style="color:${diff>=0?'var(--green)':'var(--red)'}">${M((diff>=0?'+':'')+fmtS(Math.abs(diff)))}</span> vs anterior`;
+    document.getElementById('sub-disp-cur').innerHTML=`<span style="color:${diff>=0?'var(--green)':'var(--red)'}">${M((diff>=0?'+':'-')+fmtS(Math.abs(diff)))}</span> vs anterior`;
   } else document.getElementById('sub-disp-cur').textContent=MONTHS[state.currentMonth]+' '+state.currentYear;
 
   // Reconstruir saldos del mes seleccionado para los cards
@@ -6573,7 +6588,7 @@ function renderChartSummary(){
   const cards=[
     { label:'Ingresos', body:`<div class="chart-summary-value" style="color:var(--green)">${M(fmtS(cur.ingresos))}</div><div class="chart-summary-sub ${dIng.cls}">${dIng.text}</div>` },
     { label:'Gastos', body:`<div class="chart-summary-value" style="color:var(--red)">${M(fmtS(cur.gastos))}</div><div class="chart-summary-sub ${dGas.cls}">${dGas.text}</div>` },
-    { label:'Balance del mes', body:`<div class="chart-summary-value" style="color:${cur.resultado>=0?'var(--green)':'var(--red)'}">${M(fmtS(cur.resultado))}</div><div class="chart-summary-sub ${dBal.cls}">${dBal.text}</div>` },
+    { label:'Balance del mes', body:`<div class="chart-summary-value" style="color:${cur.resultado>=0?'var(--green)':'var(--red)'}">${M((cur.resultado>=0?'':'-')+fmtS(Math.abs(cur.resultado)))}</div><div class="chart-summary-sub ${dBal.cls}">${dBal.text}</div>` },
     { label:'Gasto prom. diario', body:`<div class="chart-summary-value">${M(fmtS(avgDaily))}</div><div class="chart-summary-sub ${dAvg.cls}">${dAvg.text}</div>` },
     { label:'Top 3 · Mayor gasto por categoría', body:top3Html },
     { label:'Movimientos', body:`<div class="chart-summary-value">${M(nMovs)}</div><div class="chart-summary-sub" style="color:var(--text2)">registrados este mes</div>` },
