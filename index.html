@@ -3139,8 +3139,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '03/09/26 - 19:32'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Comparador de TC: nuevo aviso entre las casas de cambio y la tabla con (1) según el último registro, mejor empresa para comprar/vender dólares ahora, y (2) el mejor tipo de cambio histórico de compra/venta en todo lo registrado (pueden ser fechas/empresas distintas). Verificado con Playwright sin errores.';
+const APP_VERSION_DATE = '03/09/26 - 20:17'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Sincronización multi-dispositivo completa (A+B+C), portada de la app de Nathy tras confirmarla ahí: cada sección de datos (cuentas, customCuentas, TREA, pagos frecuentes, metas, deudas, tipo de cambio, presupuestos, etc.) ahora vive en su PROPIO documento de Firestore (subcolección "secciones"), igual que ya hacían los movimientos — en vez de compartir un solo bloque que cualquier dispositivo podía sobreescribir entero. Escribir una sección es físicamente imposible que pise otra, sin importar el momento exacto en que 2 dispositivos guarden. Listener en tiempo real: si guardas algo en un dispositivo, los demás lo adoptan solos, sin recargar. Migración automática y no destructiva desde el formato viejo (no se borra el bloque anterior, queda de respaldo). También se actualizaron guardarSesionesEnLaNubeSinRiesgo/obtenerSesionesFrescas (historial de sesiones en Seguridad) y "Borrar todos mis datos" al nuevo formato. Ninguna otra función de la app se tocó. Verificado con Playwright: regresión completa de las 11 páginas sin errores nuevos, migración desde el formato viejo, y escritura por secciones sin pisar entre sí — mismos resultados exactos que en la app de Nathy.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3199,6 +3199,88 @@ let editingBudgetCat=null;
 // Firebase initialized lazily after DOM+scripts load (see initFirebase below)
 let db = null;
 let DOC_REF = null;
+
+// ══════════════════════════════════════════════════════
+//  SINCRONIZACIÓN MULTI-DISPOSITIVO — antes, cada guardado sobreescribía
+//  TODO el bloque "meta" (todo el state salvo movimientos) con lo que ese
+//  dispositivo tenía en memoria, sin importar si otro dispositivo había
+//  cambiado algo más mientras tanto. Con la app abierta en varios
+//  dispositivos a la vez, esto podía borrar en silencio cambios reales
+//  hechos desde otro lado (motivó un incidente real de pérdida de datos).
+//
+//  Solución: cada sección (cuentas, customCuentas, pagosFrecuentes,
+//  metasAhorro, tcTracker, etc.) vive en su PROPIO documento de Firestore
+//  — igual que ya hacían los movimientos —, así que escribir "cuentas" es
+//  físicamente imposible que pise "pagosFrecuentes" de otro dispositivo,
+//  ni siquiera si ambos guardan en el mismo instante. Solo se escriben las
+//  secciones que ESTE dispositivo cambió desde su última sincronización.
+let _lastSyncedMeta = null;
+// Claves que son "vista" de este dispositivo puntual, no datos compartidos
+// — nunca se sincronizan ni se fusionan entre dispositivos (si Device B
+// adoptara el mes que Device A estaba viendo, saltaría de mes solo, sin
+// que nadie lo pidiera).
+const TC_KEYS_LOCALES_NO_SYNC = new Set(['currentYear','currentMonth','currentTab']);
+// Extrae "meta" (state sin movimientos) de forma consistente — se usa
+// tanto al guardar como al capturar la foto de sincronización.
+function _snapshotMeta(){
+  const {movimientos, ...meta} = state;
+  return meta;
+}
+// Subcolección donde vive cada sección de "meta" como su propio documento.
+function _seccionesColl(){
+  return DOC_REF.collection('secciones');
+}
+// Escribe SOLO las secciones que cambiaron localmente desde la última
+// sincronización (comparando contra _lastSyncedMeta) — las que no se
+// tocaron acá ni se leen ni se escriben, así jamás se pisan entre
+// dispositivos. Devuelve la lista de claves que sí se escribieron.
+async function _writeSeccionesCambiadas(localMeta, lastSynced){
+  const claves = Object.keys(localMeta);
+  const batch = db.batch();
+  const escritas = [];
+  claves.forEach(k=>{
+    if(TC_KEYS_LOCALES_NO_SYNC.has(k)) return;
+    const localStr = JSON.stringify(localMeta[k]);
+    const syncedStr = JSON.stringify(lastSynced ? lastSynced[k] : undefined);
+    if(localStr !== syncedStr){
+      batch.set(_seccionesColl().doc(k), {
+        value: localStr,
+        savedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      escritas.push(k);
+    }
+  });
+  if(escritas.length) await batch.commit();
+  return escritas;
+}
+// Lee TODAS las secciones actuales de la nube y arma el "meta" completo.
+async function _readTodasLasSecciones(){
+  const snap = await _seccionesColl().get();
+  const meta = {};
+  snap.forEach(doc=>{
+    try{ meta[doc.id] = JSON.parse(doc.data().value); }
+    catch(e){ console.warn('Sección corrupta, se ignora:', doc.id, e); }
+  });
+  return meta;
+}
+// Migración única del formato viejo (un solo bloque "meta" en el documento
+// principal) al nuevo (una sección = un documento). Solo corre si la
+// subcolección de secciones está vacía Y el documento principal todavía
+// tiene el bloque viejo — NO se borra el bloque viejo acá, se deja como
+// respaldo por si algo sale mal con la migración.
+async function _migrarASeccionesSiNecesario(metaVieja){
+  const claves = Object.keys(metaVieja||{});
+  if(!claves.length) return;
+  const batch = db.batch();
+  claves.forEach(k=>{
+    if(TC_KEYS_LOCALES_NO_SYNC.has(k)) return;
+    batch.set(_seccionesColl().doc(k), {
+      value: JSON.stringify(metaVieja[k]),
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  });
+  await batch.commit();
+}
 
 function setSyncStatus(status){
   // status: 'saving' | 'ok' | 'error' | 'loading'
@@ -3292,19 +3374,29 @@ function syncMovimientosSubcollection(){
   });
 }
 
-function _doFirestoreWrite(){
+async function _doFirestoreWrite(){
   // Segunda capa de protección — jamás escribir a Firestore en modo demo.
   if(demoMode){ console.warn('_doFirestoreWrite() bloqueado: modo demo activo.'); return; }
   if(!DOC_REF){setSyncStatus('error');return;}
-  const{movimientos,...meta}=state;
-  const mainDocWrite = DOC_REF.set({
-    meta: JSON.stringify(meta),
-    savedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, {merge:true});
-  const movsWrite = syncMovimientosSubcollection();
-  Promise.all([mainDocWrite, movsWrite])
-    .then(()=>setSyncStatus('ok'))
-    .catch(err=>{console.error('Firestore save error:',err);setSyncStatus('error');});
+  const localMeta = _snapshotMeta();
+  try{
+    // Con cada sección en su propio documento, escribir ya no necesita
+    // traer y fusionar nada — se escriben SOLO las secciones que este
+    // dispositivo cambió, y el resto ni se toca (imposible pisar lo de
+    // otro dispositivo, sin importar el momento exacto en que guarde).
+    await _writeSeccionesCambiadas(localMeta, _lastSyncedMeta);
+    await DOC_REF.set({
+      savedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      schemaV2: true // marca que esta cuenta ya usa secciones separadas (no el bloque "meta" viejo)
+    }, {merge:true});
+    await syncMovimientosSubcollection();
+
+    _lastSyncedMeta = JSON.parse(JSON.stringify(localMeta));
+    setSyncStatus('ok');
+  }catch(err){
+    console.error('Firestore save error:',err);
+    setSyncStatus('error');
+  }
 }
 
 // immediate=true escribe a Firestore de inmediato (sin esperar el debounce de 800ms).
@@ -3916,12 +4008,25 @@ function loadState(){
   // Then load from Firestore (overrides localStorage if newer)
   if(!DOC_REF){setSyncStatus('error');return Promise.resolve();}
   setSyncStatus('loading');
-  return DOC_REF.get().then(doc=>{
+  return DOC_REF.get().then(async doc=>{
     if(doc.exists){
       _remoteDocExisted = true;
       const data=doc.data();
       try{
-        const meta=JSON.parse(data.meta||'{}');
+        // Formato nuevo: cada sección es su propio documento en la
+        // subcolección "secciones" — se lee primero así.
+        let meta = await _readTodasLasSecciones();
+        // Migración única desde el formato viejo (un solo bloque "meta" en
+        // el documento principal): si todavía no hay ninguna sección pero
+        // SÍ existe ese bloque viejo, se reparte en documentos individuales
+        // una sola vez. No se borra el bloque viejo, queda como respaldo.
+        if(!Object.keys(meta).length && data.meta){
+          try{
+            const metaVieja = JSON.parse(data.meta);
+            await _migrarASeccionesSiNecesario(metaVieja);
+            meta = metaVieja;
+          }catch(eMig){ console.error('Error migrando al formato de secciones:', eMig); }
+        }
         // Formato antiguo: movimientos guardados como un solo bloque JSON en el doc principal.
         // Se mantiene como referencia de migración; si ya existe la subcolección, se ignora.
         const legacyMovimientos = JSON.parse(data.movimientos||'[]');
@@ -3993,6 +4098,9 @@ function loadState(){
             _lastSyncedMovs = {};
             syncMovimientosSubcollection().catch(e=>console.warn('Migración de movimientos falló:',e));
           }
+          // Foto de referencia para saber "qué secciones cambié yo desde
+          // acá" (ver _writeSeccionesCambiadas / iniciarListenerTiempoReal).
+          _lastSyncedMeta = JSON.parse(JSON.stringify(_snapshotMeta()));
           setSyncStatus('ok');
         });
       }catch(e){console.error('Parse error:',e);setSyncStatus('error');}
@@ -7837,10 +7945,14 @@ async function detectarUbicacionPorIP(){
 async function guardarSesionesEnLaNubeSinRiesgo(){
   if(!DOC_REF) return;
   try{
-    const doc=await DOC_REF.get();
-    const remoteMeta=doc.exists?JSON.parse(doc.data().meta||'{}'):{};
-    remoteMeta.historialSesiones=state.historialSesiones||[];
-    await DOC_REF.set({meta:JSON.stringify(remoteMeta), savedAt:firebase.firestore.FieldValue.serverTimestamp()}, {merge:true});
+    // Con el formato de secciones, escribir "historialSesiones" ya es en
+    // sí mismo un guardado acotado — nunca toca ninguna otra sección, así
+    // que ni siquiera hace falta leer primero.
+    await _seccionesColl().doc('historialSesiones').set({
+      value: JSON.stringify(state.historialSesiones||[]),
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    if(_lastSyncedMeta) _lastSyncedMeta.historialSesiones = state.historialSesiones||[];
   }catch(e){ /* silencioso a propósito — si falla, la sesión igual queda visible localmente */ }
 }
 async function registrarNuevaSesion(){
@@ -7892,10 +8004,10 @@ function tiempoRelativoSesion(iso){
 async function obtenerSesionesFrescas(){
   if(!DOC_REF) return state.historialSesiones||[];
   try{
-    const doc=await DOC_REF.get();
+    const doc=await _seccionesColl().doc('historialSesiones').get();
     if(doc.exists){
-      const meta=JSON.parse(doc.data().meta||'{}');
-      if(Array.isArray(meta.historialSesiones)) state.historialSesiones=meta.historialSesiones;
+      const value=JSON.parse(doc.data().value||'[]');
+      if(Array.isArray(value)) state.historialSesiones=value;
     }
   }catch(e){ /* si falla, se sigue mostrando lo que ya había en local */ }
   return state.historialSesiones||[];
@@ -9818,11 +9930,13 @@ async function deleteAllData(){
   // where reload happened before the delete finished, pulling old data back.
   if(DOC_REF){
     try{
-      // Borrar la subcolección de movimientos explícitamente — borrar el doc
-      // padre NO elimina sus subcolecciones en Firestore.
+      // Borrar las subcolecciones explícitamente — borrar el doc padre NO
+      // elimina sus subcolecciones en Firestore.
       await deleteSubcollection(DOC_REF.collection('movimientos'));
+      await deleteSubcollection(DOC_REF.collection('secciones'));
       await DOC_REF.delete();
       _lastSyncedMovs = {};
+      _lastSyncedMeta = null;
     }catch(e){ console.warn('Error borrando Firestore:', e); }
   }
   location.reload();
@@ -19088,16 +19202,67 @@ function initFirebase(){
         // intervalos duplicados corriendo en paralelo.
         if(_notifIntervalId) clearInterval(_notifIntervalId);
         _notifIntervalId=setInterval(checkBrowserNotifications, 60*60*1000);
+        iniciarListenerTiempoReal(); // ver más abajo — sincroniza cambios de otros dispositivos sin recargar
       });
     } else {
       currentUser = null;
       if(_notifIntervalId){ clearInterval(_notifIntervalId); _notifIntervalId=null; }
+      detenerListenerTiempoReal();
       const fabBtn=document.getElementById('fab-add-btn'); if(fabBtn) fabBtn.style.display='none';
       const scr = document.getElementById('login-screen');
       scr.style.display='flex';
       scr.classList.remove('hidden');
     }
   });
+}
+
+// ══════════════════════════════════════════════════════
+//  LISTENER EN TIEMPO REAL — con la app abierta en varios dispositivos a
+//  la vez, esto hace que un cambio guardado en uno aparezca en los demás
+//  sin tener que recargar la página. Escucha la colección de secciones
+//  completa (un evento trae todos los documentos que cambiaron desde la
+//  última vez, no uno por uno) y solo adopta las que ESTE dispositivo no
+//  haya tocado desde su última sincronización — nunca pisa algo que se
+//  esté editando activamente acá.
+// ══════════════════════════════════════════════════════
+let _tcUnsubscribeListener = null;
+function iniciarListenerTiempoReal(){
+  detenerListenerTiempoReal(); // por si quedó uno de una sesión anterior
+  if(!DOC_REF) return;
+  _tcUnsubscribeListener = _seccionesColl().onSnapshot(snap=>{
+    if(demoMode) return;
+    if(!_lastSyncedMeta) return; // todavía no terminamos la carga inicial
+    let huboCambiosAjenos = false;
+    snap.docChanges().forEach(change=>{
+      // hasPendingWrites=true es la confirmación local optimista de ESTE
+      // mismo dispositivo justo después de escribir — se ignora para no
+      // reaccionar a los propios cambios (ya se aplican en _doFirestoreWrite).
+      if(change.doc.metadata.hasPendingWrites) return;
+      if(change.type==='removed') return; // no debería pasar en uso normal
+      const k = change.doc.id;
+      if(TC_KEYS_LOCALES_NO_SYNC.has(k)) return;
+      let remoteValue;
+      try{ remoteValue = JSON.parse(change.doc.data().value); }catch(e){ return; }
+      const localStr = JSON.stringify(state[k]);
+      const syncedStr = JSON.stringify(_lastSyncedMeta[k]);
+      const remoteStr = JSON.stringify(remoteValue);
+      const sinCambiarAca = localStr === syncedStr; // no lo tocamos desde la última sincronización
+      const cambioEnLaNube = remoteStr !== syncedStr; // otro dispositivo lo cambió
+      if(sinCambiarAca && cambioEnLaNube){
+        state[k] = remoteValue;
+        _lastSyncedMeta[k] = remoteValue;
+        huboCambiosAjenos = true;
+      }
+    });
+    if(huboCambiosAjenos){
+      clearSaldoCache();
+      render();
+      toast('🔄 Actualizado con cambios de otro dispositivo');
+    }
+  }, err=>console.warn('Listener en tiempo real desconectado:', err));
+}
+function detenerListenerTiempoReal(){
+  if(_tcUnsubscribeListener){ _tcUnsubscribeListener(); _tcUnsubscribeListener=null; }
 }
 
 function startApp(){
