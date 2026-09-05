@@ -2094,7 +2094,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div style="display:flex;gap:8px;margin-bottom:16px">
     <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px">Todos</button>
     <button class="config-action-btn neutral" id="cp-filter-deseado" onclick="setComprasFilter('deseado')" style="font-size:11px">🎯 Deseados</button>
-    <button class="config-action-btn neutral" id="cp-filter-comprado" onclick="setComprasFilter('comprado')" style="font-size:11px">✅ Comprados</button>
+    <button class="config-action-btn neutral" id="cp-filter-en_camino" onclick="setComprasFilter('en_camino')" style="font-size:11px">🚚 En camino</button>
+    <button class="config-action-btn neutral" id="cp-filter-entregado" onclick="setComprasFilter('entregado')" style="font-size:11px">📦 Entregados</button>
   </div>
 
   <div id="compras-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
@@ -2163,10 +2164,24 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
     </div>
     <div class="field"><label>Fecha</label><input id="cpc-fecha" type="date"></div>
+    <div class="field"><label>Link de seguimiento <small>(opcional — pega la URL o solo el código de rastreo)</small></label><input id="cpc-tracking" type="text" placeholder="Ej. https://... o LP123456789CN"></div>
     <div class="field"><label>Categoría <small>(opcional — para que reste del presupuesto)</small></label><select id="cpc-cat"></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarMarcarCompradoModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarMarcarComprado()">✅ Confirmar compra</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MARCAR ARTÍCULO DE LA LISTA DE COMPRAS COMO LLEGADO -->
+<div class="modal-overlay" id="cp-llegado-overlay" onclick="if(event.target===this)cerrarMarcarLlegadoModal()">
+  <div class="modal" style="width:360px">
+    <div class="modal-title"><span id="cp-llegado-title">📦 Marcar como llegado</span><button class="modal-close" onclick="cerrarMarcarLlegadoModal()">✕</button></div>
+    <div class="field"><label>Fecha de llegada</label><input id="cpl-fecha" type="date"></div>
+    <div class="field"><label>Link de seguimiento <small>(opcional — puedes completarlo/corregirlo aquí también)</small></label><input id="cpl-tracking" type="text" placeholder="Ej. https://... o LP123456789CN"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarMarcarLlegadoModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarMarcarLlegado()">📦 Confirmar llegada</button>
     </div>
   </div>
 </div>
@@ -3150,8 +3165,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 13:49'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva función: al elegir categoría en Servicios, Pagos/Ingresos Frecuentes o Deudas, la app pregunta si quieres aplicar esa misma categoría a los movimientos anteriores que coincidan (ej. todos los "Sueldo" de meses pasados). Nunca se aplica sola — siempre pregunta primero cuántos encontró y pide confirmación. Diseñado con cuidado para no confundir cosas parecidas pero distintas: en Servicios usa coincidencia por prefijo del nombre (así "Spotify - Zektor" no se confunde con "Spotify Duo - OtraPersona"), en Pagos Frecuentes y Deudas usa coincidencia exacta del texto completo. No se ofrece para Compra/Venta de USD porque esas operaciones no tienen un nombre en común que sirva para buscar hacia atrás. Verificado con Playwright: los 3 casos (incluida la distinción cuidadosa entre coincidencias exactas y parecidas), y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '05/09/26 - 15:06'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Lista de Compras: nuevas pestañas "🚚 En camino" y "📦 Entregados" (reemplazan "Comprados"), separando lo que ya pagaste pero todavía no llega de lo que ya recibiste. Al marcar como comprado, ahora también puedes pegar un link/código de seguimiento (si no es una URL completa, arma automático el link de 17TRACK). Nuevo botón "📦 Marcar llegado" que pide la fecha de llegada. Días transcurridos: mientras está en camino cuenta en vivo (hoy − fecha de compra) y se resalta en ámbar/rojo pasados 15/25 días; en cuanto llega, se congela en el total real (fecha de llegada − fecha de compra) y ya no sigue subiendo. El nombre del producto sigue siendo clickeable al link si lo tiene, y el comentario reutiliza el campo "Notas" que ya existía. Verificado con Playwright: marcar comprado con tracking, marcar llegado con el congelamiento correcto de días, separación correcta entre las pestañas En camino/Entregados, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -18253,6 +18268,25 @@ function cerrarHistorialPrecioCompra(){
   historialModalItemId=null;
 }
 let compradoModalItemId=null;
+// Si pegas la URL completa de rastreo la deja tal cual; si solo pegas el
+// código/número de seguimiento, arma automáticamente el link de 17TRACK
+// (el rastreador universal que sirve para casi cualquier courier/tienda).
+function normalizarLinkSeguimiento(valor){
+  const v=(valor||'').trim();
+  if(!v) return '';
+  if(/^https?:\/\//i.test(v)) return v;
+  return 'https://t.17track.net/en#nums='+encodeURIComponent(v);
+}
+// Mientras el pedido sigue en camino, cuenta en vivo (hoy - fecha de
+// compra); en cuanto se marca como llegado, se CONGELA en el total real
+// (fecha de llegada - fecha de compra) y ya no sigue subiendo.
+function diasTranscurridosCompra(item){
+  if(!item.fechaComprado) return null;
+  const inicio=new Date(item.fechaComprado+'T00:00:00');
+  const finStr=item.fechaLlegada||todayLocalISO();
+  const fin=new Date(finStr+'T00:00:00');
+  return Math.round((fin-inicio)/86400000);
+}
 function abrirMarcarCompradoModal(id){
   compradoModalItemId=id;
   const item=(state.listaCompras||[]).find(x=>x.id===id);
@@ -18268,6 +18302,7 @@ function abrirMarcarCompradoModal(id){
   document.getElementById('cpc-monto').value=getUltimoPrecio(item);
   document.getElementById('cpc-currency').value=item.moneda||'PEN';
   document.getElementById('cpc-fecha').value=todayLocalISO();
+  document.getElementById('cpc-tracking').value='';
   updateCategorySelects();
   document.getElementById('cpc-cat').value='';
   document.getElementById('cp-comprado-overlay').classList.add('open');
@@ -18316,8 +18351,10 @@ function confirmarMarcarComprado(){
   }
   item.estado='comprado';
   item.fechaComprado=fecha;
+  item.fechaLlegada=null; // recién comprado, todavía "en camino"
   item.montoComprado=monto;
   item.catComprado=cat;
+  item.linkSeguimiento=normalizarLinkSeguimiento(document.getElementById('cpc-tracking').value);
   // Se registra también como último punto del historial de precio, para
   // que el historial refleje el precio real que terminó pagando.
   if(!item.historialPrecio) item.historialPrecio=[];
@@ -18326,49 +18363,96 @@ function confirmarMarcarComprado(){
   cerrarMarcarCompradoModal();
   renderListaCompras();
 }
+let llegadoModalItemId=null;
+function abrirMarcarLlegadoModal(id){
+  llegadoModalItemId=id;
+  const item=(state.listaCompras||[]).find(x=>x.id===id);
+  if(!item) return;
+  document.getElementById('cp-llegado-title').textContent='📦 Marcar como llegado: '+item.nombre;
+  document.getElementById('cpl-fecha').value=todayLocalISO();
+  document.getElementById('cpl-tracking').value=item.linkSeguimiento||'';
+  document.getElementById('cp-llegado-overlay').classList.add('open');
+}
+function cerrarMarcarLlegadoModal(){
+  document.getElementById('cp-llegado-overlay').classList.remove('open');
+  llegadoModalItemId=null;
+}
+function confirmarMarcarLlegado(){
+  const item=(state.listaCompras||[]).find(x=>x.id===llegadoModalItemId);
+  if(!item) return;
+  const fecha=document.getElementById('cpl-fecha').value||todayLocalISO();
+  if(fecha<item.fechaComprado){ alert('La fecha de llegada no puede ser anterior a la fecha de compra.'); return; }
+  item.fechaLlegada=fecha;
+  const trackingVal=document.getElementById('cpl-tracking').value.trim();
+  if(trackingVal) item.linkSeguimiento=normalizarLinkSeguimiento(trackingVal);
+  saveState();
+  cerrarMarcarLlegadoModal();
+  renderListaCompras();
+  toast('Marcado como llegado — '+diasTranscurridosCompra(item)+' día(s) en total');
+}
 function renderListaCompras(){
   const items=state.listaCompras||[];
   const deseados=items.filter(x=>x.estado==='deseado');
-  const comprados=items.filter(x=>x.estado==='comprado');
+  const enCamino=items.filter(x=>x.estado==='comprado' && !x.fechaLlegada);
+  const entregados=items.filter(x=>x.estado==='comprado' && x.fechaLlegada);
   const totalDeseado=deseados.reduce((s,x)=>s+getUltimoPrecio(x)*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
-  const totalComprado=comprados.reduce((s,x)=>s+(x.montoComprado||getUltimoPrecio(x))*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
+  const totalComprado=[...enCamino,...entregados].reduce((s,x)=>s+(x.montoComprado||getUltimoPrecio(x))*(x.moneda==='USD'?(state.tc?state.tc.venta:1):1),0);
   document.getElementById('compras-summary').innerHTML=`
     <div class="dash-kpi kpi-blue"><div class="dash-kpi-label">DESEADOS</div><div class="dash-kpi-val">${deseados.length}</div><div class="dash-kpi-sub">≈ S/ ${numFmt(totalDeseado)}</div></div>
-    <div class="dash-kpi kpi-green"><div class="dash-kpi-label">COMPRADOS</div><div class="dash-kpi-val">${comprados.length}</div><div class="dash-kpi-sub">≈ S/ ${numFmt(totalComprado)}</div></div>
+    <div class="dash-kpi kpi-amber"><div class="dash-kpi-label">EN CAMINO</div><div class="dash-kpi-val">${enCamino.length}</div><div class="dash-kpi-sub">🚚 por llegar</div></div>
+    <div class="dash-kpi kpi-green"><div class="dash-kpi-label">ENTREGADOS</div><div class="dash-kpi-val">${entregados.length}</div><div class="dash-kpi-sub">≈ S/ ${numFmt(totalComprado)}</div></div>
     <div class="dash-kpi kpi-purple"><div class="dash-kpi-label">TOTAL EN LA LISTA</div><div class="dash-kpi-val">${items.length}</div><div class="dash-kpi-sub">artículos</div></div>
   `;
-  ['all','deseado','comprado'].forEach(f=>{
+  ['all','deseado','en_camino','entregado'].forEach(f=>{
     const btn=document.getElementById('cp-filter-'+f);
     if(!btn) return;
     btn.style.background = comprasFilter===f?'var(--accent)':'';
     btn.style.color      = comprasFilter===f?'#fff':'';
     btn.style.borderColor= comprasFilter===f?'var(--accent)':'';
   });
-  const visibles = comprasFilter==='all' ? items : items.filter(x=>x.estado===comprasFilter);
+  let visibles;
+  if(comprasFilter==='all') visibles=items;
+  else if(comprasFilter==='en_camino') visibles=enCamino;
+  else if(comprasFilter==='entregado') visibles=entregados;
+  else visibles=items.filter(x=>x.estado===comprasFilter);
   const grid=document.getElementById('compras-grid');
   document.getElementById('compras-empty').style.display = visibles.length ? 'none' : 'block';
   grid.innerHTML=visibles.slice().reverse().map(item=>{
     const sym=item.moneda==='USD'?'$':'S/';
     const precio=getUltimoPrecio(item);
     const esComprado=item.estado==='comprado';
+    const yaLlego=esComprado && !!item.fechaLlegada;
     const hist=item.historialPrecio||[];
     const cambio = hist.length>1 ? (hist[hist.length-1].precio - hist[hist.length-2].precio) : 0;
     const cambioTxt = cambio!==0 ? `<span style="font-size:10px;color:${cambio>0?'var(--red)':'var(--green)'}">${cambio>0?'▲':'▼'} ${sym}${numFmt(cambio)} vs. anterior</span>` : '';
-    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px${esComprado?';opacity:.75':''}">
+    const dias = esComprado ? diasTranscurridosCompra(item) : null;
+    // Mientras está en camino, se resalta en naranja/rojo pasados ciertos
+    // días — puede ser señal de que algo se demoró más de lo normal.
+    const diasColor = !esComprado||yaLlego ? 'var(--text3)' : (dias>=25?'var(--red)':dias>=15?'var(--amber)':'var(--text3)');
+    let badge;
+    if(!esComprado) badge=`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:var(--bg3);color:var(--text3);white-space:nowrap">🎯 Deseado</span>`;
+    else if(yaLlego) badge=`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:var(--green);color:#fff;white-space:nowrap">📦 Entregado</span>`;
+    else badge=`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:var(--amber);color:#fff;white-space:nowrap">🚚 En camino</span>`;
+    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px${yaLlego?';opacity:.75':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         ${item.link
           ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-bottom:1px dashed var(--accent)" title="Abrir enlace del producto">${escapeHtml(item.nombre)} <span style="font-size:10px;color:var(--accent)">↗</span></a>`
           : `<div style="font-size:13px;font-weight:600">${escapeHtml(item.nombre)}</div>`}
-        <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${esComprado?'var(--green)':'var(--bg3)'};color:${esComprado?'#fff':'var(--text3)'};white-space:nowrap">${esComprado?'✅ Comprado':'🎯 Deseado'}</span>
+        ${badge}
       </div>
       <div style="font-size:20px;font-weight:700">${sym} ${numFmt(precio)}</div>
       ${cambioTxt}
       ${item.notas?`<div style="font-size:11px;color:var(--text3)">${escapeHtml(item.notas)}</div>`:''}
-      ${esComprado?`<div style="font-size:10px;color:var(--text3)">Comprado el ${item.fechaComprado}</div>`:''}
+      ${esComprado?`
+        <div style="font-size:10px;color:var(--text3)">Comprado el ${item.fechaComprado}${yaLlego?` · Llegó el ${item.fechaLlegada}`:''}</div>
+        <div style="font-size:10px;color:${diasColor};font-weight:600">${yaLlego?`⏱ Tardó ${dias} día(s) en total`:`⏱ Lleva ${dias} día(s) en camino`}</div>
+        ${item.linkSeguimiento?`<a href="${escapeHtml(item.linkSeguimiento)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent)">📍 Ver seguimiento ↗</a>`:''}
+      `:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
         ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirActualizarPrecioModal('${item.id}')">💲 Actualizar precio</button>`:''}
         <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirHistorialPrecioCompra('${item.id}')">📈 Historial (${hist.length})</button>
         ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirMarcarCompradoModal('${item.id}')">✅ Marcar comprado</button>`:''}
+        ${esComprado&&!yaLlego?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirMarcarLlegadoModal('${item.id}')">📦 Marcar llegado</button>`:''}
         <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirCompraModal('${item.id}')">✏ Editar</button>
       </div>
     </div>`;
