@@ -3145,8 +3145,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 03:49'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Completada la reversión real de "Eliminar" para los 9 tipos nuevos de ayer: categoría, pago frecuente nuevo, descuento pendiente, evento, inversión (compra/venta/valorización/efectivo — con manejo especial para valorizaciones fusionadas: restaura solo los precios que esa acción agregó, sin borrar la fila completa si tenía datos de otras acciones), servicio nuevo, marcar pago de servicio (desmarcar queda solo informativo, sin deshacer automático — no hay forma segura de recrear el movimiento original exacto), recarga de combustible, y kilometraje. Se agregaron IDs únicos donde faltaban (descuentosPendientes) para poder identificar con precisión qué borrar. Verificado con Node.js: los 10 casos (incluido el especial de valorización fusionada) revierten exactamente lo que deben sin tocar datos de otras acciones, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '05/09/26 - 08:44'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Auditoría sistemática de todos los tipos de Actividad Reciente (68 tipos, 83 llamadas) buscando el mismo patrón de bug encontrado antes en deuda_item: un tipo usado tanto para crear como para editar sin manejo diferenciado. Encontrado y corregido 1 caso real: saveTCMov (editar un consumo de tarjeta desde el formulario completo, no el rápido) nunca registraba nada en Actividad Reciente al editar — solo al crear. Ahora usa un tipo separado (tc_consumo_editado) con foto de "antes", incluyendo el caso especial de que editar la fecha puede mover el consumo a otro mes de facturación (el "Eliminar" lo regresa correctamente al mes y valores originales). Se revisaron y descartaron 2 falsos positivos (guardarInversion y revertirAccion en el bot, ambos ya diseñados correctamente). Verificado con Playwright: los 2 escenarios de esta corrección (editar sin cambiar de mes, editar cambiando de mes), y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3485,7 +3485,29 @@ function tiempoRelativo(ts){
   const d=new Date(ts);
   return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗'};
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',
+  tarjeta_nueva:'💳',tarjeta_editada:'💳',tarjeta_eliminada:'💳',
+  meta_nueva:'🎯',meta_editada:'🎯',meta_eliminada:'🎯',
+  inversion_editada:'📈',inversion_eliminada:'📈',
+  deuda_mayor_nueva:'🏦',deuda_mayor_eliminada:'🏦',
+  servicio_nuevo:'🧾',servicio_editado:'🧾',servicio_eliminado:'🧾',
+  evento_editado:'📅',evento_eliminado:'📅',
+  afp_aporte:'🪙',afp_aporte_eliminado:'🪙',afp_saldo_nuevo:'🪙',afp_saldo_editado:'🪙',afp_saldo_eliminado:'🪙',
+  pago_frecuente_editado:'💡',pago_frecuente_eliminado:'💡',
+  combustible_registro_eliminado:'⛽',
+  acceso_rapido_nuevo:'⚡',sugerencia_ignorada:'🙈',pago_frecuente_registrado:'💡',
+  cuenta_eliminada:'🏦',
+  movimiento_eliminado:'💵',tc_consumo_eliminado:'💳',tc_consumo_editado:'💳',cuenta_nueva:'🏦',
+  deuda_eliminada:'🤝',deuda_item_editado:'🧾',deuda_item_eliminado:'🧾',
+  compra_nueva:'🛒',compra_editada:'🛒',compra_eliminada:'🛒',
+  tc_consumo_pagado:'✅',deuda_mayor_cuota:'✅',
+  tc_manual:'💱',presupuesto:'📊',presupuesto_eliminado:'📊',
+  categoria_editada:'🏷️',categoria_eliminada:'🏷️',
+  acceso_rapido_editado:'⚡',acceso_rapido_eliminado:'⚡',
+  trea:'📈',trea_eliminada:'📈',
+  tc_empresa_nueva:'💱',tc_empresa_renombrada:'💱',tc_empresa_eliminada:'💱',
+  sueldo_config:'💼',sueldo_parametros:'💼',sueldo_boleta_nueva:'💼',sueldo_boleta_editada:'💼',sueldo_boleta_eliminada:'💼',
+  mantenimiento_nuevo:'🔧',mantenimiento_editado:'🔧',mantenimiento_eliminado:'🔧',mantenimiento_registrado:'🔧'};
 function abrirActividadReciente(){
   renderActividadReciente();
   document.getElementById('actividad-overlay').classList.add('open');
@@ -3623,6 +3645,311 @@ function eliminarActividad(logId){
       if(Array.isArray(arr)) state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']=arr.filter(f=>f.id!==ref.fuelRowId);
     } else if(entry.tipo==='km_manual'){
       state.kmManual=(state.kmManual||[]).filter(k=>k.id!==ref.kmManualId);
+    } else if(entry.tipo==='tarjeta_nueva' || entry.tipo==='acceso_rapido_nuevo'){
+      if(entry.tipo==='tarjeta_nueva') state.tarjetas=(state.tarjetas||[]).filter(t=>t.id!==ref.tarjetaId);
+      else state.consumosFrecuentes=(state.consumosFrecuentes||[]).filter(c=>c.id!==ref.cfId);
+    } else if(entry.tipo==='tarjeta_editada'){
+      if(ref.snapshotAntes){
+        const t=(state.tarjetas||[]).find(x=>x.id===ref.tarjetaId);
+        if(t) Object.assign(t, ref.snapshotAntes);
+      }
+    } else if(entry.tipo==='tarjeta_eliminada'){
+      const snap=ref.tarjetaSnapshot;
+      if(snap && !( (state.tarjetas||[]).some(t=>t.id===snap.id) )){
+        if(!state.tarjetas) state.tarjetas=[];
+        state.tarjetas.push(snap);
+      }
+    } else if(entry.tipo==='cuenta_eliminada'){
+      const nombre=ref.cuentaNombre;
+      const snap=ref.cuentaSnapshotWeb||ref.cuentaSnapshot;
+      if(snap){
+        if(snap.customCuentas){ if(!state.customCuentas) state.customCuentas={}; state.customCuentas[nombre]=snap.customCuentas; }
+        if(snap.saldoCrudo!==null && snap.saldoCrudo!==undefined){ if(!state.cuentas) state.cuentas={}; state.cuentas[nombre]=snap.saldoCrudo; }
+        if(snap.ahorroTREA){ if(!state.ahorroTREA) state.ahorroTREA={}; state.ahorroTREA[nombre]=snap.ahorroTREA; }
+        if(snap.ahorroMetodoInteres){ if(!state.ahorroMetodoInteres) state.ahorroMetodoInteres={}; state.ahorroMetodoInteres[nombre]=snap.ahorroMetodoInteres; }
+        if(snap.cuentaColor){ if(!state.cuentaColors) state.cuentaColors={}; state.cuentaColors[nombre]=snap.cuentaColor; }
+      }
+    } else if(entry.tipo==='meta_nueva'){
+      state.metasAhorro=(state.metasAhorro||[]).filter(m=>m.id!==ref.metaId);
+    } else if(entry.tipo==='meta_editada'){
+      if(ref.snapshotAntes){
+        const idx=(state.metasAhorro||[]).findIndex(m=>m.id===ref.metaId);
+        if(idx>=0) state.metasAhorro[idx]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='meta_eliminada'){
+      if(ref.metaSnapshot){
+        if(!state.metasAhorro) state.metasAhorro=[];
+        state.metasAhorro.push(ref.metaSnapshot);
+      }
+    } else if(entry.tipo==='inversion_editada'){
+      if(ref.snapshotAntes && state.inversiones && Array.isArray(state.inversiones[ref.invKind])){
+        const idx=state.inversiones[ref.invKind].findIndex(i=>i.id===ref.invId);
+        if(idx>=0) state.inversiones[ref.invKind][idx]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='inversion_eliminada'){
+      if(ref.itemSnapshot && state.inversiones){
+        if(!Array.isArray(state.inversiones[ref.invKind])) state.inversiones[ref.invKind]=[];
+        state.inversiones[ref.invKind].push(ref.itemSnapshot);
+      }
+    } else if(entry.tipo==='deuda_mayor_nueva'){
+      state.deudasMayores=(state.deudasMayores||[]).filter(d=>d.id!==ref.deudaMayorId);
+    } else if(entry.tipo==='deuda_mayor_eliminada'){
+      if(ref.deudaMayorSnapshot){
+        if(!state.deudasMayores) state.deudasMayores=[];
+        state.deudasMayores.push(ref.deudaMayorSnapshot);
+      }
+    } else if(entry.tipo==='servicio_nuevo'){
+      const mesServ1=(state.serviciosByMonth||{})[ref.monthKey];
+      if(mesServ1) delete mesServ1[ref.serviceId];
+    } else if(entry.tipo==='servicio_editado'){
+      if(ref.snapshotAntes){
+        const mesServ2=(state.serviciosByMonth||{})[ref.monthKey];
+        if(mesServ2) mesServ2[ref.serviceId]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='servicio_eliminado'){
+      if(ref.servicioSnapshot){
+        if(!state.serviciosByMonth) state.serviciosByMonth={};
+        if(!state.serviciosByMonth[ref.monthKey]) state.serviciosByMonth[ref.monthKey]={};
+        state.serviciosByMonth[ref.monthKey][ref.servicioId]=ref.servicioSnapshot;
+      }
+    } else if(entry.tipo==='evento_editado'){
+      if(ref.snapshotAntes){
+        const idxEv=(state.calendarEvents||[]).findIndex(e=>e.id===ref.eventoId);
+        if(idxEv>=0) state.calendarEvents[idxEv]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='evento_eliminado'){
+      if(ref.eventoSnapshot){
+        if(!state.calendarEvents) state.calendarEvents=[];
+        state.calendarEvents.push(ref.eventoSnapshot);
+      }
+    } else if(entry.tipo==='afp_aporte'){
+      if(!state.afp) state.afp={aportes:{},saldos:[]};
+      if(ref.afpMontoAnterior===null || ref.afpMontoAnterior===undefined) delete state.afp.aportes[ref.afpAporteKey];
+      else state.afp.aportes[ref.afpAporteKey]=ref.afpMontoAnterior;
+    } else if(entry.tipo==='afp_aporte_eliminado'){
+      if(!state.afp) state.afp={aportes:{},saldos:[]};
+      if(ref.afpMontoBorrado!==undefined) state.afp.aportes[ref.afpAporteKey]=ref.afpMontoBorrado;
+    } else if(entry.tipo==='afp_saldo_nuevo'){
+      if(state.afp && Array.isArray(state.afp.saldos)) state.afp.saldos=state.afp.saldos.filter(s=>s.id!==ref.afpSaldoId);
+    } else if(entry.tipo==='afp_saldo_editado'){
+      if(ref.snapshotAntes && state.afp && Array.isArray(state.afp.saldos)){
+        const idxS=state.afp.saldos.findIndex(s=>s.id===ref.afpSaldoId);
+        if(idxS>=0) state.afp.saldos[idxS]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='afp_saldo_eliminado'){
+      if(ref.afpSaldoSnapshot){
+        if(!state.afp) state.afp={aportes:{},saldos:[]};
+        if(!Array.isArray(state.afp.saldos)) state.afp.saldos=[];
+        state.afp.saldos.push(ref.afpSaldoSnapshot);
+      }
+    } else if(entry.tipo==='pago_frecuente_editado'){
+      if(ref.snapshotAntes){
+        const idxPF=(state.pagosFrecuentes||[]).findIndex(p=>p.id===ref.pfId);
+        if(idxPF>=0) state.pagosFrecuentes[idxPF]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='pago_frecuente_eliminado'){
+      if(ref.pfSnapshot){
+        if(!state.pagosFrecuentes) state.pagosFrecuentes=[];
+        state.pagosFrecuentes.push(ref.pfSnapshot);
+      }
+    } else if(entry.tipo==='pago_frecuente_registrado'){
+      const pfReg=(state.pagosFrecuentes||[]).find(p=>p.id===ref.pfId);
+      if(pfReg && pfReg.pagosRegistrados) delete pfReg.pagosRegistrados[ref.periodoKey];
+    } else if(entry.tipo==='combustible_registro_eliminado'){
+      if(ref.filaSnapshot){
+        const arrKey=ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas';
+        if(!Array.isArray(state[arrKey])) state[arrKey]=[];
+        state[arrKey].push(ref.filaSnapshot);
+      }
+    } else if(entry.tipo==='movimiento_eliminado'){
+      const m=ref.movimientoSnapshot;
+      if(m && !state.movimientos.some(x=>x.id===m.id)){
+        state.movimientos.push(m);
+        const a=m.currency==='PEN'?m.amount:0, usd=m.currency==='USD'?m.amount:0;
+        if(!state.cuentas) state.cuentas={};
+        if(m.type==='income') state.cuentas[m.account]=(state.cuentas[m.account]||0)+(m.currency==='PEN'?a:usd);
+        else if(m.type==='expense') state.cuentas[m.account]=(state.cuentas[m.account]||0)-(m.currency==='PEN'?a:usd);
+        else if(m.type==='ahorro') state.cuentas[m.account]=(state.cuentas[m.account]||0)+(m.currency==='PEN'?a:usd);
+      }
+    } else if(entry.tipo==='tc_consumo_eliminado'){
+      if(ref.consumoSnapshot){
+        const t=getTarjeta(ref.tarjetaId);
+        if(t){
+          if(!t.movs) t.movs={};
+          if(!t.movs[ref.monthKey]) t.movs[ref.monthKey]=[];
+          if(!t.movs[ref.monthKey].some(m=>m.id===ref.consumoSnapshot.id)) t.movs[ref.monthKey].push(ref.consumoSnapshot);
+        }
+      }
+    } else if(entry.tipo==='tc_consumo_editado'){
+      if(ref.snapshotAntes){
+        const t=getTarjeta(ref.tarjetaId);
+        if(t && t.movs){
+          // La edición pudo haber movido el consumo de mes (si cambió la
+          // fecha y eso corrió el ciclo de facturación) — se busca en
+          // AMBOS meses posibles, no solo en el actual.
+          [ref.monthKeyDespues, ref.monthKeyAntes].forEach(mk=>{
+            if(t.movs[mk]){
+              const idx=t.movs[mk].findIndex(m=>m.id===ref.consumoId);
+              if(idx>=0){
+                if(mk!==ref.monthKeyAntes){
+                  // Estaba en el mes nuevo — se saca de ahí y se restaura en el mes original.
+                  t.movs[mk].splice(idx,1);
+                  if(!t.movs[ref.monthKeyAntes]) t.movs[ref.monthKeyAntes]=[];
+                  t.movs[ref.monthKeyAntes].push(ref.snapshotAntes);
+                } else {
+                  t.movs[mk][idx]=ref.snapshotAntes;
+                }
+              }
+            }
+          });
+        }
+      }
+    } else if(entry.tipo==='cuenta_nueva'){
+      if(state.customCuentas) delete state.customCuentas[ref.cuentaNombre];
+      if(state.cuentas) delete state.cuentas[ref.cuentaNombre];
+      if(state.cuentaColors) delete state.cuentaColors[ref.cuentaNombre];
+    } else if(entry.tipo==='deuda_eliminada'){
+      if(ref.deudaSnapshot){
+        if(!state.deudas) state.deudas=[];
+        state.deudas.push(ref.deudaSnapshot);
+      }
+    } else if(entry.tipo==='deuda_item_editado'){
+      if(ref.snapshotAntes){
+        const d=(state.deudas||[]).find(x=>x.id===ref.deudaId);
+        if(d && Array.isArray(d.items)){
+          const it=d.items.find(x=>x.id===ref.itemId);
+          if(it){ Object.assign(it, ref.snapshotAntes); recalcDeudaMonto(d); }
+        }
+      }
+    } else if(entry.tipo==='deuda_item_eliminado'){
+      if(ref.itemSnapshot){
+        const d=(state.deudas||[]).find(x=>x.id===ref.deudaId);
+        if(d){
+          if(!Array.isArray(d.items)) d.items=[];
+          d.items.push(ref.itemSnapshot);
+          recalcDeudaMonto(d);
+        }
+      }
+    } else if(entry.tipo==='compra_nueva'){
+      state.listaCompras=(state.listaCompras||[]).filter(x=>x.id!==ref.compraId);
+    } else if(entry.tipo==='compra_editada'){
+      if(ref.snapshotAntes){
+        const idx=(state.listaCompras||[]).findIndex(x=>x.id===ref.compraId);
+        if(idx>=0) state.listaCompras[idx]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='compra_eliminada'){
+      if(ref.compraSnapshot){
+        if(!state.listaCompras) state.listaCompras=[];
+        state.listaCompras.push(ref.compraSnapshot);
+      }
+    } else if(entry.tipo==='tc_consumo_pagado'){
+      const t=getTarjeta(ref.tarjetaId);
+      const mov=t && t.movs && t.movs[ref.monthKey] && t.movs[ref.monthKey].find(m=>m.id===ref.consumoId);
+      if(mov) mov.pagado=ref.pagadoAntes;
+    } else if(entry.tipo==='deuda_mayor_cuota'){
+      const d=(state.deudasMayores||[]).find(x=>x.id===ref.deudaMayorId);
+      const c=d && d.cuotas && d.cuotas.find(x=>x.numero==ref.cuotaNumero);
+      if(c) c.pagado=ref.pagadoAntes;
+    } else if(entry.tipo==='tc_manual'){
+      if(!state.tc) state.tc={};
+      if(ref.tcValorAntes===undefined || ref.tcValorAntes===null) delete state.tc[ref.tcField];
+      else state.tc[ref.tcField]=ref.tcValorAntes;
+    } else if(entry.tipo==='presupuesto'){
+      if(!state.budgets) state.budgets={};
+      if(ref.presupuestoLimitAntes===null || ref.presupuestoLimitAntes===undefined) delete state.budgets[ref.presupuestoCat];
+      else state.budgets[ref.presupuestoCat]={limit:ref.presupuestoLimitAntes};
+    } else if(entry.tipo==='presupuesto_eliminado'){
+      if(ref.presupuestoLimitBorrado!==null && ref.presupuestoLimitBorrado!==undefined){
+        if(!state.budgets) state.budgets={};
+        state.budgets[ref.presupuestoCat]={limit:ref.presupuestoLimitBorrado};
+      }
+    } else if(entry.tipo==='categoria_editada'){
+      // Solo se puede revertir automático si NO se renombró (mismo nombre,
+      // solo cambió el color) — si se renombró en toda la app, deshacerlo
+      // sería más riesgoso que útil, se deja como registro informativo.
+      if(ref.categoriaColorAntes && ref.categoriaNombre===ref.categoriaNombreAntes && state.customCategorias){
+        state.customCategorias[ref.categoriaNombre]=ref.categoriaColorAntes;
+      }
+    } else if(entry.tipo==='categoria_eliminada'){
+      if(ref.categoriaColorBorrado){
+        if(!state.customCategorias) state.customCategorias={};
+        state.customCategorias[ref.categoriaNombre]=ref.categoriaColorBorrado;
+      }
+    } else if(entry.tipo==='acceso_rapido_editado'){
+      if(ref.snapshotAntes){
+        const idx=(state.consumosFrecuentes||[]).findIndex(x=>x.id===ref.cfId);
+        if(idx>=0) state.consumosFrecuentes[idx]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='acceso_rapido_eliminado'){
+      if(ref.cfSnapshot){
+        if(!state.consumosFrecuentes) state.consumosFrecuentes=[];
+        state.consumosFrecuentes.push(ref.cfSnapshot);
+      }
+    } else if(entry.tipo==='trea'){
+      if(state.ahorroTREA && state.ahorroTREA[ref.treaCuenta]){
+        if(ref.treaValorAntes===null || ref.treaValorAntes===undefined) delete state.ahorroTREA[ref.treaCuenta][ref.treaKey];
+        else state.ahorroTREA[ref.treaCuenta][ref.treaKey]=ref.treaValorAntes;
+      }
+    } else if(entry.tipo==='trea_eliminada'){
+      if(ref.treaValorBorrado!==undefined){
+        if(!state.ahorroTREA) state.ahorroTREA={};
+        if(!state.ahorroTREA[ref.treaCuenta]) state.ahorroTREA[ref.treaCuenta]={};
+        state.ahorroTREA[ref.treaCuenta][ref.treaKey]=ref.treaValorBorrado;
+      }
+    } else if(entry.tipo==='tc_empresa_nueva'){
+      state.tcEmpresas=(state.tcEmpresas||[]).filter(x=>x.id!==ref.empresaId);
+    } else if(entry.tipo==='tc_empresa_renombrada'){
+      const e=(state.tcEmpresas||[]).find(x=>x.id===ref.empresaId);
+      if(e) e.nombre=ref.nombreAntes;
+    } else if(entry.tipo==='tc_empresa_eliminada'){
+      if(ref.empresaSnapshot){
+        if(!state.tcEmpresas) state.tcEmpresas=[];
+        state.tcEmpresas.push(ref.empresaSnapshot);
+        if(ref.ratesSnapshot){
+          Object.entries(ref.ratesSnapshot).forEach(([rowId,rate])=>{
+            const row=(state.tcTracker||[]).find(r=>r.id===rowId);
+            if(row){ if(!row.rates) row.rates={}; row.rates[ref.empresaSnapshot.id]=rate; }
+          });
+        }
+      }
+    } else if(entry.tipo==='sueldo_config'){
+      state.sueldoConfig=ref.sueldoConfigAntes||null;
+      if(typeof recalcularTodosLosAnios==='function') recalcularTodosLosAnios();
+    } else if(entry.tipo==='sueldo_parametros'){
+      if(!state.sueldoParametros) state.sueldoParametros={};
+      if(ref.sueldoParamAntes) state.sueldoParametros[ref.sueldoParamAnio]=ref.sueldoParamAntes;
+      else delete state.sueldoParametros[ref.sueldoParamAnio];
+      if(typeof recalcularTodosLosAnios==='function') recalcularTodosLosAnios();
+    } else if(entry.tipo==='sueldo_boleta_nueva'){
+      state.sueldoBoletas=(state.sueldoBoletas||[]).filter(b=>b.id!==ref.sueldoBoletaId);
+    } else if(entry.tipo==='sueldo_boleta_editada'){
+      if(ref.sueldoBoletaAntes){
+        const idx=(state.sueldoBoletas||[]).findIndex(b=>b.id===ref.sueldoBoletaId);
+        if(idx>=0) state.sueldoBoletas[idx]=ref.sueldoBoletaAntes;
+      }
+    } else if(entry.tipo==='sueldo_boleta_eliminada'){
+      if(ref.sueldoBoletaSnapshot){
+        if(!state.sueldoBoletas) state.sueldoBoletas=[];
+        state.sueldoBoletas.push(ref.sueldoBoletaSnapshot);
+      }
+    } else if(entry.tipo==='mantenimiento_nuevo'){
+      state.mantenimientos=(state.mantenimientos||[]).filter(x=>x.id!==ref.mantId);
+    } else if(entry.tipo==='mantenimiento_editado'){
+      if(ref.snapshotAntes){
+        const idx=(state.mantenimientos||[]).findIndex(x=>x.id===ref.mantId);
+        if(idx>=0) state.mantenimientos[idx]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='mantenimiento_eliminado'){
+      if(ref.mantSnapshot){
+        if(!state.mantenimientos) state.mantenimientos=[];
+        state.mantenimientos.push(ref.mantSnapshot);
+      }
+    } else if(entry.tipo==='mantenimiento_registrado'){
+      const item=(state.mantenimientos||[]).find(x=>x.id===ref.mantId);
+      if(item){
+        item.historial=(item.historial||[]).filter(h=>h.id!==ref.mantRegistroId);
+        if(ref.snapshotAntes){ item.kmUltimo=ref.snapshotAntes.kmUltimo; item.proximosPlanificados=ref.snapshotAntes.proximosPlanificados; }
+      }
     }
   }catch(err){
     console.error('Error revirtiendo actividad:', err);
@@ -4866,7 +5193,9 @@ function guardarAhiTrea(){
   const key=y+'-'+String(m+1).padStart(2,'0');
   if(!state.ahorroTREA[ahiCuentaActual]) state.ahorroTREA[ahiCuentaActual]={};
   if(editingAhiTreaKey && editingAhiTreaKey!==key) delete state.ahorroTREA[ahiCuentaActual][editingAhiTreaKey];
+  const valorAntes=state.ahorroTREA[ahiCuentaActual][key];
   state.ahorroTREA[ahiCuentaActual][key]=valor;
+  logActividad('trea', `TREA ${ahiCuentaActual} ${key}: ${valor}%`, {treaCuenta:ahiCuentaActual, treaKey:key, treaValorAntes:valorAntes===undefined?null:valorAntes});
   saveState();
   cerrarAhiTreaModal();
   renderAhorrosIntereses();
@@ -4877,7 +5206,9 @@ function eliminarAhiTrea(key){
   if(!k||!ahiCuentaActual) return;
   if(!confirm('¿Eliminar este cambio de TREA?')) return;
   migrarTREASiNecesario();
+  const valorBorrado=state.ahorroTREA[ahiCuentaActual]?state.ahorroTREA[ahiCuentaActual][k]:undefined;
   if(state.ahorroTREA[ahiCuentaActual]) delete state.ahorroTREA[ahiCuentaActual][k];
+  if(valorBorrado!==undefined) logActividad('trea_eliminada', `TREA eliminada: ${ahiCuentaActual} ${k}`, {treaCuenta:ahiCuentaActual, treaKey:k, treaValorBorrado:valorBorrado});
   saveState();
   cerrarAhiTreaModal();
   renderAhorrosIntereses();
@@ -7532,16 +7863,24 @@ function saveInvCompra(){
   if(!state.inversiones.compras) state.inversiones.compras=[];
   if(editingInvCompraId){
     const c=state.inversiones.compras.find(x=>x.id===editingInvCompraId);
-    if(c){c.simbolo=simbolo;c.tipo=tipo;c.origen=origen;c.moneda=moneda;c.fecha=fecha;c.precio=precio;c.cantidad=cantidad;c.comision=comision;}
+    if(c){
+      const antes={...c};
+      c.simbolo=simbolo;c.tipo=tipo;c.origen=origen;c.moneda=moneda;c.fecha=fecha;c.precio=precio;c.cantidad=cantidad;c.comision=comision;
+      logActividad('inversion_editada', `Compra editada: ${simbolo} x${cantidad}`, {invKind:'compras', invId:c.id, snapshotAntes:antes});
+    }
   } else {
-    state.inversiones.compras.push({id:'ic'+Date.now(),simbolo,tipo,origen,moneda,fecha,precio,cantidad,comision});
+    const nuevaCompra={id:'ic'+Date.now(),simbolo,tipo,origen,moneda,fecha,precio,cantidad,comision};
+    state.inversiones.compras.push(nuevaCompra);
+    logActividad('inversion', `Compra: ${simbolo} x${cantidad}`, {invKind:'compras', invId:nuevaCompra.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
   }
   saveState(); closeInvCompraModal(); renderInversiones();
 }
 function deleteInvCompra(id){
   const targetId=id||editingInvCompraId;
   if(!targetId||!confirm('¿Eliminar esta compra? Esto puede afectar tu costo promedio y posiciones abiertas.')) return;
+  const compraBorrada=(state.inversiones.compras||[]).find(x=>x.id===targetId);
   state.inversiones.compras=(state.inversiones.compras||[]).filter(x=>x.id!==targetId);
+  if(compraBorrada) logActividad('inversion_eliminada', `Compra eliminada: ${compraBorrada.simbolo} x${compraBorrada.cantidad}`, {invKind:'compras', itemSnapshot:compraBorrada});
   saveState(); closeInvCompraModal(); renderInversiones();
 }
 
@@ -7606,16 +7945,24 @@ function saveInvVenta(){
   const moneda=invMonedaFor(simbolo);
   if(editingInvVentaId){
     const v=state.inversiones.ventas.find(x=>x.id===editingInvVentaId);
-    if(v){v.simbolo=simbolo;v.fecha=fecha;v.precio=precio;v.cantidad=cantidad;v.comision=comision;v.moneda=moneda;}
+    if(v){
+      const antes={...v};
+      v.simbolo=simbolo;v.fecha=fecha;v.precio=precio;v.cantidad=cantidad;v.comision=comision;v.moneda=moneda;
+      logActividad('inversion_editada', `Venta editada: ${simbolo} x${cantidad}`, {invKind:'ventas', invId:v.id, snapshotAntes:antes});
+    }
   } else {
-    state.inversiones.ventas.push({id:'ivv'+Date.now(),simbolo,fecha,precio,cantidad,comision,moneda});
+    const nuevaVenta={id:'ivv'+Date.now(),simbolo,fecha,precio,cantidad,comision,moneda};
+    state.inversiones.ventas.push(nuevaVenta);
+    logActividad('inversion', `Venta: ${simbolo} x${cantidad}`, {invKind:'ventas', invId:nuevaVenta.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
   }
   saveState(); closeInvVentaModal(); renderInversiones();
 }
 function deleteInvVenta(id){
   const targetId=id||editingInvVentaId;
   if(!targetId||!confirm('¿Eliminar esta venta?')) return;
+  const ventaBorrada=(state.inversiones.ventas||[]).find(x=>x.id===targetId);
   state.inversiones.ventas=(state.inversiones.ventas||[]).filter(x=>x.id!==targetId);
+  if(ventaBorrada) logActividad('inversion_eliminada', `Venta eliminada: ${ventaBorrada.simbolo} x${ventaBorrada.cantidad}`, {invKind:'ventas', itemSnapshot:ventaBorrada});
   saveState(); closeInvVentaModal(); renderInversiones();
 }
 
@@ -7724,18 +8071,31 @@ function saveInvValor(){
   if(!state.inversiones.valorizaciones) state.inversiones.valorizaciones=[];
   if(editingInvValorId){
     const val=state.inversiones.valorizaciones.find(x=>x.id===editingInvValorId);
-    if(val){val.fecha=fecha;val.precios=precios;}
+    if(val){
+      const antes={...val};
+      val.fecha=fecha;val.precios=precios;
+      logActividad('inversion_editada', `Valorización editada: ${fecha}`, {invKind:'valorizaciones', invId:val.id, snapshotAntes:antes});
+    }
   } else {
     const existente=state.inversiones.valorizaciones.find(x=>x.fecha===fecha);
-    if(existente){ existente.precios={...existente.precios,...precios}; }
-    else state.inversiones.valorizaciones.push({id:'ival'+Date.now(),fecha,precios});
+    if(existente){
+      const preciosAntes={...existente.precios};
+      existente.precios={...existente.precios,...precios};
+      logActividad('inversion', `Valorización: ${fecha}`, {invKind:'valorizaciones', invId:existente.id, valorizacionEraNueva:false, valorizacionPreciosAntes:preciosAntes});
+    } else {
+      const nuevaVal={id:'ival'+Date.now(),fecha,precios};
+      state.inversiones.valorizaciones.push(nuevaVal);
+      logActividad('inversion', `Valorización: ${fecha}`, {invKind:'valorizaciones', invId:nuevaVal.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
+    }
   }
   saveState(); closeInvValorModal(); renderInversiones();
 }
 function deleteInvValor(id){
   const targetId=id||editingInvValorId;
   if(!targetId||!confirm('¿Eliminar esta valorización?')) return;
+  const valBorrada=(state.inversiones.valorizaciones||[]).find(x=>x.id===targetId);
   state.inversiones.valorizaciones=(state.inversiones.valorizaciones||[]).filter(x=>x.id!==targetId);
+  if(valBorrada) logActividad('inversion_eliminada', `Valorización eliminada: ${valBorrada.fecha}`, {invKind:'valorizaciones', itemSnapshot:valBorrada});
   saveState(); closeInvValorModal(); renderInversiones();
 }
 
@@ -7787,22 +8147,30 @@ function saveInvEfectivo(){
   if(!state.inversiones.efectivo) state.inversiones.efectivo=[];
   if(editingInvEfectivoId){
     const e=state.inversiones.efectivo.find(x=>x.id===editingInvEfectivoId);
-    if(e){e.fecha=fecha;e.moneda=moneda;e.monto=monto;e.nota=nota;}
+    if(e){
+      const antes={...e};
+      e.fecha=fecha;e.moneda=moneda;e.monto=monto;e.nota=nota;
+      logActividad('inversion_editada', `Efectivo editado: ${nota||fecha}`, {invKind:'efectivo', invId:e.id, snapshotAntes:antes});
+    }
   } else {
-    state.inversiones.efectivo.push({id:'ie'+Date.now(),fecha,moneda,monto,nota});
+    const nuevoEfectivo={id:'ie'+Date.now(),fecha,moneda,monto,nota};
+    state.inversiones.efectivo.push(nuevoEfectivo);
+    logActividad('inversion', `Efectivo: ${nota||fecha}`, {invKind:'efectivo', invId:nuevoEfectivo.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
   }
   saveState(); closeInvEfectivoModal(); renderInversiones();
 }
 function deleteInvEfectivo(id){
   const targetId=id||editingInvEfectivoId;
   if(!targetId||!confirm('¿Eliminar este registro de efectivo?')) return;
+  const efBorrado=(state.inversiones.efectivo||[]).find(x=>x.id===targetId);
   state.inversiones.efectivo=(state.inversiones.efectivo||[]).filter(x=>x.id!==targetId);
+  if(efBorrado) logActividad('inversion_eliminada', `Efectivo eliminado: ${efBorrado.nota||efBorrado.fecha}`, {invKind:'efectivo', itemSnapshot:efBorrado});
   saveState(); closeInvEfectivoModal(); renderInversiones();
 }
 
 // ── TC ────────────────────────────────────────────────
 function editTC(f){currentTCField=f;document.getElementById('tc-field-label').textContent=f==='compra'?'Compra':'Venta';document.getElementById('tc-modal-label').textContent='Editar TC '+(f==='compra'?'Compra':'Venta');document.getElementById('tc-input').value=state.tc[f].toFixed(4);document.getElementById('tc-modal-overlay').classList.add('open');}
-function saveTC(){const v=parseFloat(document.getElementById('tc-input').value);if(isNaN(v)||v<=0)return;state.tc[currentTCField]=v;state.tc.mode='manual';saveState();closeTCModal();render();}
+function saveTC(){const v=parseFloat(document.getElementById('tc-input').value);if(isNaN(v)||v<=0)return;const antes=state.tc[currentTCField];state.tc[currentTCField]=v;state.tc.mode='manual';logActividad('tc_manual', `Tipo de cambio (${currentTCField}) editado: ${v}`, {tcField:currentTCField, tcValorAntes:antes});saveState();closeTCModal();render();}
 function closeTCModal(){document.getElementById('tc-modal-overlay').classList.remove('open');}
 
 // ── MOVIMIENTO MODAL ──────────────────────────────────
@@ -7861,6 +8229,7 @@ function deleteMovimiento(id,e){
   const m=state.movimientos.find(x=>x.id===id);
   if(!m||!confirm('¿Eliminar "'+m.desc+'"?'))return;
   revertAccount(m);state.movimientos=state.movimientos.filter(x=>x.id!==id);
+  logActividad('movimiento_eliminado', `${m.desc} — ${m.currency==='USD'?'$':'S/'} ${Number(m.amount).toFixed(2)} (${m.account})`, {movimientoSnapshot:m});
   saveState();render();
 }
 // ── DETECCIÓN DE DUPLICADOS ───────────────────────────
@@ -8240,12 +8609,17 @@ function saveBudget(){
   const limit=parseFloat(document.getElementById('bm-limit').value);
   if(!cat||isNaN(limit)||limit<=0){alert('Completa los campos.');return;}
   if(!state.budgets)state.budgets={};
+  const antes=state.budgets[cat]?state.budgets[cat].limit:null;
   state.budgets[cat]={limit};
+  logActividad('presupuesto', `Presupuesto ${cat}: S/ ${limit.toFixed(2)}`, {presupuestoCat:cat, presupuestoLimitAntes:antes});
   saveState();closeBudgetModal();renderPresupuesto();
 }
 function deleteBudget(cat){
   if(!confirm('¿Eliminar presupuesto de '+cat+'?'))return;
-  delete state.budgets[cat];saveState();renderPresupuesto();
+  const limitBorrado=state.budgets[cat]?state.budgets[cat].limit:null;
+  delete state.budgets[cat];
+  if(limitBorrado!==null) logActividad('presupuesto_eliminado', `Presupuesto eliminado: ${cat}`, {presupuestoCat:cat, presupuestoLimitBorrado:limitBorrado});
+  saveState();renderPresupuesto();
 }
 // Consumos de tarjeta con categoría, cuya FECHA DE COMPRA (no el período de
 // pago/facturación) cae dentro del mes y año dados — usado tanto en
@@ -8611,9 +8985,13 @@ function saveMeta(){
 
   if(editingMetaId){
     const m=state.metasAhorro.find(x=>x.id===editingMetaId);
+    const antesM=m?{...m}:null;
     if(m){ Object.keys(m).forEach(k=>delete m[k]); Object.assign(m,{id:editingMetaId},datos); }
+    logActividad('meta_editada', `Meta editada: ${nombre}`, {metaId:editingMetaId, snapshotAntes:antesM});
   } else {
-    state.metasAhorro.push({id:'meta-'+Date.now(), ...datos});
+    const nuevaMeta={id:'meta-'+Date.now(), ...datos};
+    state.metasAhorro.push(nuevaMeta);
+    logActividad('meta_nueva', `Meta nueva: ${nombre}`, {metaId:nuevaMeta.id});
   }
   saveState();
   closeMetaModal();
@@ -8622,7 +9000,9 @@ function saveMeta(){
 function deleteMeta(){
   if(!editingMetaId) return;
   if(!confirm('¿Eliminar esta meta? (la cuenta de ahorro vinculada, si tiene, NO se borra — solo se desvincula de esta meta)')) return;
+  const metaBorrada=(state.metasAhorro||[]).find(m=>m.id===editingMetaId);
   state.metasAhorro=(state.metasAhorro||[]).filter(m=>m.id!==editingMetaId);
+  if(metaBorrada) logActividad('meta_eliminada', `Meta eliminada: ${metaBorrada.nombre}`, {metaSnapshot:metaBorrada});
   saveState();
   closeMetaModal();
   renderMetasAhorro();
@@ -9866,8 +10246,17 @@ function saveServicesForMonth(svcs){
 function togglePayment(sid,pid){
   const key=paymentKey(sid,pid);const svc=getServiceDef(sid,state.currentYear,state.currentMonth);const person=svc.people.find(p=>p.id===pid);
   if(!state.payments)state.payments={};
-  if(state.payments[key]){delete state.payments[key];removeSrvPayment(sid,pid,svc);}
-  else{state.payments[key]=true;addSrvPayment(sid,pid,svc,person);}
+  const movId='srv-'+key;
+  if(state.payments[key]){
+    delete state.payments[key];removeSrvPayment(sid,pid,svc);
+    // Desmarcar un pago ya hecho no tiene un "deshacer" simple y seguro (no
+    // hay forma confiable de re-crear el movimiento original exacto) — se
+    // registra solo como informativo, igual que en el bot.
+    logActividad('servicio_pago_info', `Pago desmarcado: ${svc.name} - ${person.name} — S/ ${Number(svc.pricePerPerson).toFixed(2)}`, {});
+  } else {
+    state.payments[key]=true;addSrvPayment(sid,pid,svc,person);
+    logActividad('servicio_pago', `Pago marcado: ${svc.name} - ${person.name} — S/ ${Number(svc.pricePerPerson).toFixed(2)}`, {movId, paymentsKey:key});
+  }
   saveState();renderServicios();render();
 }
 function addSrvPayment(sid,pid,svc,person){
@@ -9933,12 +10322,15 @@ function saveSrvEdit(){
   const valid=tempPeople.filter(p=>p.name.trim());
   if(!valid.length)return alert('Agrega al menos una persona.');
   if(!state.servicios)state.servicios={};
+  const esNuevo=!editingSrvId;
   const sid=editingSrvId||'srv'+Date.now();
   const iconMap={spotify:'🎵',youtube:'▶️',netflix:'🎬',amazon:'📦',disney:'🏰',hbo:'🎭',apple:'🍎'};
   const ik=Object.keys(iconMap).find(k=>name.toLowerCase().includes(k));
   const allSvcs={...getAllServices()};
+  const svcAntes=esNuevo?null:allSvcs[sid];
   allSvcs[sid]={name,icon:iconMap[ik]||'📡',pricePerPerson:price,payDay,account,people:valid.map(p=>({...p,name:p.name.trim()}))};
   saveServicesForMonth(allSvcs);
+  logActividad(esNuevo?'servicio_nuevo':'servicio_editado', `Servicio ${esNuevo?'nuevo':'editado'}: ${name}`, {serviceId:sid, monthKey:monthKey(state.currentYear,state.currentMonth), snapshotAntes:svcAntes});
   closeSrvEdit();renderServicios();render();
 }
 function deleteService(sid){
@@ -9954,6 +10346,7 @@ function deleteService(sid){
   const allSvcsD={...getAllServices()};
   delete allSvcsD[sid];
   saveServicesForMonth(allSvcsD);
+  if(svc) logActividad('servicio_eliminado', `Servicio eliminado: ${svc.name}`, {servicioId:sid, monthKey:monthKey(state.currentYear,state.currentMonth), servicioSnapshot:svc});
   renderServicios();render();
 }
 function closeSrvEdit(){document.getElementById('srv-edit-overlay').classList.remove('open');}
@@ -10628,6 +11021,13 @@ function confirmDeleteWithTransfer(){
   cancelTransfer();
 }
 function doDeleteCuenta(key){
+  const cuentaSnapshot={
+    customCuentas: (state.customCuentas||{})[key] || null,
+    saldoCrudo: (state.cuentas && key in state.cuentas) ? state.cuentas[key] : null,
+    ahorroTREA: (state.ahorroTREA||{})[key] || null,
+    ahorroMetodoInteres: (state.ahorroMetodoInteres||{})[key] || null,
+    cuentaColor: (state.cuentaColors||{})[key] || null,
+  };
   delete (state.customCuentas||{})[key];
   delete state.cuentas[key];
   // Limpiar también los datos que quedarían huérfanos ligados a esta cuenta
@@ -10638,6 +11038,7 @@ function doDeleteCuenta(key){
   if(state.ahorroTREA) delete state.ahorroTREA[key];
   if(state.ahorroMetodoInteres) delete state.ahorroMetodoInteres[key];
   if(state.cuentaColors) delete state.cuentaColors[key];
+  logActividad('cuenta_eliminada', `Cuenta eliminada: ${key} (el historial de movimientos no se borró)`, {cuentaNombre:key, cuentaSnapshotWeb:cuentaSnapshot});
   saveState(); renderCuentasList(); render();
 }
 
@@ -10779,6 +11180,7 @@ function saveNewCuenta(){
   document.getElementById('nc-name').value='';
   document.getElementById('nc-balance').value='';
   document.getElementById('nc-color').value='#5b8def';
+  logActividad('cuenta_nueva', `Cuenta nueva: ${name} — S/ ${balance.toFixed(2)}`, {cuentaNombre:name});
   saveState(); renderCuentasList(); render();
 }
 
@@ -10869,17 +11271,23 @@ function saveNewCategoria(){
   if(editingCategoriaName){
     // ── Modo edición ──
     const oldName=editingCategoriaName;
+    const oldColor=(state.customCategorias||{})[oldName];
     if(name!==oldName && getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
     if(!state.customCategorias) state.customCategorias={};
     delete state.customCategorias[oldName];
     state.customCategorias[name]=color;
     if(name!==oldName) renameCategoriaEverywhere(oldName,name);
+    // Si solo cambió el color (mismo nombre), "Eliminar" puede restaurarlo
+    // solo. Si además se renombró en TODA la app, deshacerlo automático es
+    // más riesgoso que útil — se deja como registro informativo.
+    logActividad('categoria_editada', `Categoría editada: ${oldName}${name!==oldName?' → '+name:''}`, {categoriaNombre:name, categoriaNombreAntes:oldName, categoriaColorAntes:(name===oldName?oldColor:null)});
     cancelEditCategoria();
   } else {
     // ── Modo creación ──
     if(getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
     if(!state.customCategorias) state.customCategorias={};
     state.customCategorias[name]=color;
+    logActividad('categoria', `Categoría nueva: ${name}`, {categoriaNombre:name});
     document.getElementById('ncat-name').value='';
     document.getElementById('ncat-color').value='#a78bfa';
   }
@@ -10891,7 +11299,9 @@ function saveNewCategoria(){
 
 function deleteCategoria(name){
   if(!confirm(`¿Eliminar la categoría "${name}"? Los movimientos que ya la tengan asignada la conservarán en su historial, pero ya no podrás elegirla para nuevos.`)) return;
+  const colorBorrado=state.customCategorias?state.customCategorias[name]:null;
   if(state.customCategorias) delete state.customCategorias[name];
+  if(colorBorrado) logActividad('categoria_eliminada', `Categoría eliminada: ${name}`, {categoriaNombre:name, categoriaColorBorrado:colorBorrado});
   saveState();
   renderCategoriasList();
   updateCategorySelects();
@@ -11213,9 +11623,15 @@ function guardarConsumoFrecuenteModal(){
   if(!Array.isArray(state.consumosFrecuentes)) state.consumosFrecuentes=[];
   if(editId){
     const cf=state.consumosFrecuentes.find(x=>x.id===editId);
-    if(cf) Object.assign(cf,{nombre,monto,currency,tarjetaId,cat});
+    if(cf){
+      const antes={...cf};
+      Object.assign(cf,{nombre,monto,currency,tarjetaId,cat});
+      logActividad('acceso_rapido_editado', `Acceso rápido editado: ${nombre}`, {cfId:editId, snapshotAntes:antes});
+    }
   } else {
-    state.consumosFrecuentes.push({id:'cf'+Date.now(),nombre,monto,currency,tarjetaId,cat});
+    const nuevoCF={id:'cf'+Date.now(),nombre,monto,currency,tarjetaId,cat};
+    state.consumosFrecuentes.push(nuevoCF);
+    logActividad('acceso_rapido_nuevo', `Acceso rápido nuevo: ${nombre}`, {cfId:nuevoCF.id});
   }
   saveState();
   cerrarConsumoFrecuenteModal();
@@ -11224,7 +11640,9 @@ function guardarConsumoFrecuenteModal(){
 }
 function eliminarConsumoFrecuente(id){
   if(!confirm('¿Eliminar este consumo frecuente? (esto no borra los consumos ya registrados con él, solo el acceso rápido)')) return;
+  const cfBorrado=(state.consumosFrecuentes||[]).find(x=>x.id===id);
   state.consumosFrecuentes=(state.consumosFrecuentes||[]).filter(x=>x.id!==id);
+  if(cfBorrado) logActividad('acceso_rapido_eliminado', `Acceso rápido eliminado: ${cfBorrado.nombre}`, {cfSnapshot:cfBorrado});
   saveState();
   renderConsumosFrecuentes();
 }
@@ -11654,7 +12072,12 @@ function toggleTCPaid(movId, paid){
   const t=getTarjeta(currentTCId); if(!t) return;
   const movs=t.movs&&t.movs[currentTCMonth];
   const mov=movs&&movs.find(m=>m.id===movId);
-  if(mov){ mov.pagado=paid; saveState(); renderTCDetail(); }
+  if(mov){
+    const antes=mov.pagado;
+    mov.pagado=paid;
+    logActividad('tc_consumo_pagado', `${paid?'Marcado pagado':'Desmarcado pagado'}: ${mov.desc} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey:currentTCMonth, consumoId:movId, pagadoAntes:antes});
+    saveState(); renderTCDetail();
+  }
 }
 
 function markSelectedPaid(){
@@ -11842,6 +12265,7 @@ function saveTCMov(){
       if(m){foundInMonth=mk; foundMov=m;}
     });
     if(foundMov&&foundInMonth){
+      const antes={...foundMov};
       // Recalculate target month based on new date and tarjeta cycle
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
@@ -11856,6 +12280,8 @@ function saveTCMov(){
         currentTCMonth=newMk;
         renderTCMonthSelector(t);
       }
+      const symTCe=currency==='USD'?'$':'S/';
+      logActividad('tc_consumo_editado', `Consumo editado: ${desc} — ${symTCe} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKeyAntes:foundInMonth, monthKeyDespues:newMk, consumoId:editingTCMovId, snapshotAntes:antes});
     }
   } else {
     // New mov: calculate billing month from date
@@ -11884,8 +12310,14 @@ function saveTCMov(){
 function deleteTCMov(movId){
   if(!confirm('¿Eliminar este consumo?')) return;
   const t=getTarjeta(currentTCId); if(!t) return;
+  let consumoBorrado=null;
   if(t.movs&&t.movs[currentTCMonth]){
+    consumoBorrado=t.movs[currentTCMonth].find(m=>m.id===movId);
     t.movs[currentTCMonth]=t.movs[currentTCMonth].filter(m=>m.id!==movId);
+  }
+  if(consumoBorrado){
+    const symTC=consumoBorrado.currency==='USD'?'$':'S/';
+    logActividad('tc_consumo_eliminado', `${consumoBorrado.desc} — ${symTC} ${Number(consumoBorrado.monto).toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey:currentTCMonth, consumoSnapshot:consumoBorrado});
   }
   saveState(); renderTCDetail();
 }
@@ -11945,9 +12377,13 @@ function saveTCCard(){
   const existingId=delBtn.style.display!=='none'?delBtn.dataset.id:null;
   if(existingId){
     const t=getTarjeta(existingId);
+    const antesT=t?{...t}:null;
     if(t) Object.assign(t,data);
+    logActividad('tarjeta_editada', `Tarjeta editada: ${data.banco}${data.cat?' '+data.cat:''}`, {tarjetaId:existingId, snapshotAntes:antesT});
   } else {
-    state.tarjetas.push({id:'tc'+Date.now(),...data,movs:{}});
+    const nuevaTarjeta={id:'tc'+Date.now(),...data,movs:{}};
+    state.tarjetas.push(nuevaTarjeta);
+    logActividad('tarjeta_nueva', `Tarjeta nueva: ${data.banco}${data.cat?' '+data.cat:''}`, {tarjetaId:nuevaTarjeta.id});
   }
   saveState(); closeTCConfigModal();
   renderTarjetas();
@@ -11957,7 +12393,9 @@ function saveTCCard(){
 function deleteTCCard(){
   const tid=document.getElementById('tc-delete-btn').dataset.id;
   if(!confirm('¿Eliminar esta tarjeta y todos sus movimientos?')) return;
+  const tarjetaBorrada=getTarjeta(tid);
   state.tarjetas=(state.tarjetas||[]).filter(t=>t.id!==tid);
+  if(tarjetaBorrada) logActividad('tarjeta_eliminada', `Tarjeta eliminada: ${tarjetaBorrada.banco}${tarjetaBorrada.cat?' '+tarjetaBorrada.cat:''} (con todo su historial de consumos)`, {tarjetaSnapshot:tarjetaBorrada});
   saveState(); closeTCConfigModal();
   if(currentTCId===tid){ closeTCDetail(); } else { renderTarjetas(); }
 }
@@ -13916,9 +14354,15 @@ function savePagoFrecuente(){
   if(!state.pagosFrecuentes) state.pagosFrecuentes=[];
   if(editingPFId){
     const pf=state.pagosFrecuentes.find(p=>p.id===editingPFId);
-    if(pf){ Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,duracionMeses,fechaAnual,meses,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago}); }
+    if(pf){
+      const antes={...pf};
+      Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,duracionMeses,fechaAnual,meses,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago});
+      logActividad('pago_frecuente_editado', `Pago frecuente editado: ${nombre}`, {pfId:pf.id, snapshotAntes:antes});
+    }
   } else {
-    state.pagosFrecuentes.push({id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, duracionMeses, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]});
+    const nuevoPF={id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, duracionMeses, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]};
+    state.pagosFrecuentes.push(nuevoPF);
+    logActividad('pago_frecuente_nuevo', `Pago frecuente nuevo: ${nombre}`, {pfId:nuevoPF.id});
   }
   saveState();
   closePagoFrecuenteModal();
@@ -13930,7 +14374,9 @@ function deletePagoFrecuente(){
   const id=document.getElementById('pf-delete-btn').dataset.id;
   if(!id) return;
   if(!confirm('¿Eliminar este pago frecuente? Los movimientos que ya registró se conservan en tu historial, solo se borra la configuración.')) return;
+  const pfBorrado=(state.pagosFrecuentes||[]).find(p=>p.id===id);
   state.pagosFrecuentes=(state.pagosFrecuentes||[]).filter(p=>p.id!==id);
+  if(pfBorrado) logActividad('pago_frecuente_eliminado', `Pago frecuente eliminado: ${pfBorrado.nombre}`, {pfSnapshot:pfBorrado});
   saveState();
   closePagoFrecuenteModal();
   renderPagosFrecuentes();
@@ -14773,7 +15219,9 @@ function saveDeuda(){
 
 function deleteDeuda(){
   if(!editingDeudaId||!confirm('¿Eliminar este préstamo?')) return;
+  const deudaBorrada=(state.deudas||[]).find(x=>x.id===editingDeudaId);
   state.deudas=(state.deudas||[]).filter(x=>x.id!==editingDeudaId);
+  if(deudaBorrada) logActividad('deuda_eliminada', `Deuda eliminada: ${deudaBorrada.nombre}`, {deudaSnapshot:deudaBorrada});
   saveState(); closeDeudaModal(); renderDeudas(); toast('Préstamo eliminado','info');
 }
 
@@ -14810,9 +15258,10 @@ function saveDeudaItem(){
   if(editingDeudaItemId){
     const it=d.items.find(x=>x.id===editingDeudaItemId);
     if(!it){ closeDeudaItemModal(); return; }
+    const antes={...it};
     it.desc=desc; it.monto=monto; it.fecha=fecha;
     recalcDeudaMonto(d);
-    logActividad('deuda_item', `Editado: ${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:it.id});
+    logActividad('deuda_item_editado', `Editado: ${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:it.id, snapshotAntes:antes});
     saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto actualizado');
   } else {
     const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
@@ -14825,8 +15274,10 @@ function saveDeudaItem(){
 function deleteDeudaItem(deudaId, itemId){
   const d=(state.deudas||[]).find(x=>x.id===deudaId); if(!d) return;
   if(!confirm('¿Quitar este gasto de la deuda?')) return;
+  const itemBorrado=(d.items||[]).find(it=>it.id===itemId);
   d.items=(d.items||[]).filter(it=>it.id!==itemId);
   recalcDeudaMonto(d);
+  if(itemBorrado) logActividad('deuda_item_eliminado', `Gasto de deuda eliminado: ${itemBorrado.desc} (${d.nombre})`, {deudaId, itemSnapshot:itemBorrado});
   saveState(); renderDeudas();
 }
 
@@ -15100,7 +15551,9 @@ function guardarKmManual(){
   const ahora=new Date();
   const pad=n=>String(n).padStart(2,'0');
   const fechaHora=`${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
-  state.kmManual.push({id:'kmm-'+Date.now(), km, fechaHora});
+  const nuevoKm={id:'kmm-'+Date.now(), km, fechaHora};
+  state.kmManual.push(nuevoKm);
+  logActividad('km_manual', `Kilometraje actualizado: ${km} km`, {kmManualId:nuevoKm.id});
   saveState();
   inp.value='';
   renderMantenimiento();
@@ -15316,9 +15769,15 @@ function guardarConfigMantenimiento(){
   if(!state.mantenimientos) state.mantenimientos=[];
   if(editingMantId){
     const item=state.mantenimientos.find(x=>x.id===editingMantId);
-    if(item) Object.assign(item,{nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp]});
+    if(item){
+      const antes={...item};
+      Object.assign(item,{nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp]});
+      logActividad('mantenimiento_editado', `Mantenimiento editado: ${nombre}`, {mantId:editingMantId, snapshotAntes:antes});
+    }
   } else {
-    state.mantenimientos.push({id:'mant-'+Date.now(), nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp], historial:[]});
+    const nuevoMant={id:'mant-'+Date.now(), nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp], historial:[]};
+    state.mantenimientos.push(nuevoMant);
+    logActividad('mantenimiento_nuevo', `Tipo de mantenimiento nuevo: ${nombre}`, {mantId:nuevoMant.id});
   }
   saveState();
   cerrarConfigMantenimiento();
@@ -15327,7 +15786,9 @@ function guardarConfigMantenimiento(){
 }
 function eliminarTipoMantenimiento(){
   if(!editingMantId || !confirm('¿Eliminar este tipo de mantenimiento? También se pierde su historial.')) return;
+  const mantBorrado=(state.mantenimientos||[]).find(x=>x.id===editingMantId);
   state.mantenimientos=(state.mantenimientos||[]).filter(x=>x.id!==editingMantId);
+  if(mantBorrado) logActividad('mantenimiento_eliminado', `Mantenimiento eliminado: ${mantBorrado.nombre} (con todo su historial)`, {mantSnapshot:mantBorrado});
   saveState();
   cerrarConfigMantenimiento();
   renderMantenimiento();
@@ -15354,13 +15815,16 @@ function guardarRegistrarMantenimiento(){
   const nota=(document.getElementById('mant-reg-nota').value||'').trim();
   if(isNaN(km)||km<0||!fecha){alert('Completa el kilometraje y la fecha.');return;}
   if(!item.historial) item.historial=[];
-  item.historial.push({id:'mreg-'+Date.now(), km, fecha, nota});
+  const snapshotAntes={kmUltimo:item.kmUltimo, proximosPlanificados:[...(item.proximosPlanificados||[])]};
+  const nuevoRegistro={id:'mreg-'+Date.now(), km, fecha, nota};
+  item.historial.push(nuevoRegistro);
   item.kmUltimo=km; // reinicia el contador de ESTE tipo desde este punto
   // Cualquier hito planificado de ESTE tipo que ya se haya alcanzado o
   // pasado se retira — los demás tipos no se ven afectados en absoluto.
   if(Array.isArray(item.proximosPlanificados)){
     item.proximosPlanificados=item.proximosPlanificados.filter(k=>k>km);
   }
+  logActividad('mantenimiento_registrado', `${item.nombre} registrado: ${km} km`, {mantId:item.id, mantRegistroId:nuevoRegistro.id, snapshotAntes});
   saveState();
   cerrarRegistrarMantenimiento();
   renderMantenimiento();
@@ -15557,7 +16021,9 @@ function updateFuelField(type, id, field, value){
 function deleteFuelRow(type, id){
   if(!confirm('¿Eliminar esta recarga?')) return;
   const key=fuelStateKey(type);
+  const filaBorrada=(state[key]||[]).find(r=>r.id===id);
   state[key]=(state[key]||[]).filter(r=>r.id!==id);
+  if(filaBorrada) logActividad('combustible_registro_eliminado', `Recarga ${type==='glp'?'GLP':'Gasolina'} eliminada`, {fuelTipo:type, filaSnapshot:filaBorrada});
   saveState();
   renderFuelSection(type);
 }
@@ -16047,7 +16513,9 @@ function addTCEmpresa(){
   if(!state.tcEmpresas) state.tcEmpresas=[];
   const usedColors = new Set(state.tcEmpresas.map(e=>e.color));
   const color = TCT_PALETTE.find(c=>!usedColors.has(c)) || TCT_PALETTE[state.tcEmpresas.length % TCT_PALETTE.length];
-  state.tcEmpresas.push({id:'emp-'+Date.now(), nombre:nombre.trim(), color});
+  const nuevaEmpresa={id:'emp-'+Date.now(), nombre:nombre.trim(), color};
+  state.tcEmpresas.push(nuevaEmpresa);
+  logActividad('tc_empresa_nueva', `Casa de cambio nueva: ${nuevaEmpresa.nombre}`, {empresaId:nuevaEmpresa.id});
   saveState();
   renderTCTracker();
 }
@@ -16057,7 +16525,9 @@ function renameTCEmpresa(id){
   if(!e) return;
   const nuevo = prompt('Nuevo nombre para "'+e.nombre+'":', e.nombre);
   if(nuevo===null || !nuevo.trim()) return;
+  const antes=e.nombre;
   e.nombre = nuevo.trim();
+  logActividad('tc_empresa_renombrada', `Casa de cambio renombrada: ${antes} → ${e.nombre}`, {empresaId:id, nombreAntes:antes});
   saveState();
   renderTCTracker();
 }
@@ -16067,9 +16537,11 @@ function deleteTCEmpresa(id){
   if(!e) return;
   if(!confirm('¿Eliminar "'+e.nombre+'"? Se borrarán sus tipos de cambio registrados en todas las fechas.')) return;
   state.tcEmpresas=(state.tcEmpresas||[]).filter(x=>x.id!==id);
+  const ratesGuardados={};
   (state.tcTracker||[]).forEach(row=>{
-    if(row.rates && row.rates[id]) delete row.rates[id];
+    if(row.rates && row.rates[id]){ ratesGuardados[row.id]=row.rates[id]; delete row.rates[id]; }
   });
+  logActividad('tc_empresa_eliminada', `Casa de cambio eliminada: ${e.nombre}`, {empresaSnapshot:e, ratesSnapshot:ratesGuardados});
   saveState();
   renderTCTracker();
 }
@@ -16204,7 +16676,7 @@ function saveDMFijo(){
     alert('Completa todos los campos correctamente.'); return;
   }
   if(!state.deudasMayores) state.deudasMayores=[];
-  state.deudasMayores.push({
+  const nuevaDM={
     id: 'dm-'+Date.now(),
     tipo: 'fijo',
     nombre, currency,
@@ -16212,7 +16684,9 @@ function saveDMFijo(){
     fechaInicio: fecha,
     numCuotas,
     cuotas: generateCuotasFijas(fecha, numCuotas, monto)
-  });
+  };
+  state.deudasMayores.push(nuevaDM);
+  logActividad('deuda_mayor_nueva', `Deuda mayor nueva: ${nombre}`, {deudaMayorId:nuevaDM.id});
   saveState();
   closeDMFormModal();
   renderDeudasMayores();
@@ -16230,14 +16704,16 @@ function saveDMAmortizado(){
   }
   const {factor, cuota, cuotas} = generateAmortizacion(importe, tasa, plazo, fecha);
   if(!state.deudasMayores) state.deudasMayores=[];
-  state.deudasMayores.push({
+  const nuevaDMA={
     id: 'dm-'+Date.now(),
     tipo: 'amortizado',
     nombre, currency,
     importe, tasa, plazo, factor, cuotaCalc: cuota,
     fechaInicio: fecha,
     cuotas
-  });
+  };
+  state.deudasMayores.push(nuevaDMA);
+  logActividad('deuda_mayor_nueva', `Deuda mayor nueva: ${nombre}`, {deudaMayorId:nuevaDMA.id});
   saveState();
   closeDMFormModal();
   renderDeudasMayores();
@@ -16246,7 +16722,9 @@ function saveDMAmortizado(){
 function deleteDeudaMayor(id){
   if(!id) return;
   if(!confirm('¿Eliminar esta deuda mayor y todo su historial de cuotas?')) return;
+  const dmBorrada=(state.deudasMayores||[]).find(d=>d.id===id);
   state.deudasMayores=(state.deudasMayores||[]).filter(d=>d.id!==id);
+  if(dmBorrada) logActividad('deuda_mayor_eliminada', `Deuda mayor eliminada: ${dmBorrada.nombre}`, {deudaMayorSnapshot:dmBorrada});
   saveState();
   if(currentDMId===id){ closeDMDetail(); } else { renderDeudasMayores(); }
 }
@@ -16391,7 +16869,12 @@ function toggleDMCuotaPagado(numero, checked){
   const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
   if(!d) return;
   const c = d.cuotas.find(x=>x.numero==numero);
-  if(c){ c.pagado=checked; saveState(); renderDMDetail(); }
+  if(c){
+    const antes=c.pagado;
+    c.pagado=checked;
+    logActividad('deuda_mayor_cuota', `${checked?'Cuota marcada pagada':'Cuota desmarcada'}: ${d.nombre} #${numero}`, {deudaMayorId:currentDMId, cuotaNumero:numero, pagadoAntes:antes});
+    saveState(); renderDMDetail();
+  }
 }
 
 function updateDMCuotaFecha(numero, value){
@@ -16830,6 +17313,7 @@ function onComisionFlujoChange(){
   document.getElementById('sc-comision-flujo-pct-wrap').style.display=document.getElementById('sc-comision-flujo').checked?'block':'none';
 }
 function guardarConfigSueldo(){
+  const antes=state.sueldoConfig?{...state.sueldoConfig}:null;
   state.sueldoConfig={
     sistemaPension:document.getElementById('sc-sistema').value,
     afpNombre:document.getElementById('sc-afp-nombre').value,
@@ -16841,6 +17325,7 @@ function guardarConfigSueldo(){
     ingresoAnterior:parseFloat(document.getElementById('sc-ingreso-anterior').value)||0,
     retencionAnterior:parseFloat(document.getElementById('sc-retencion-anterior').value)||0,
   };
+  logActividad('sueldo_config', 'Configuración de sueldo actualizada', {sueldoConfigAntes:antes});
   cerrarConfigSueldo();
   recalcularTodosLosAnios();
   saveState();
@@ -16861,6 +17346,7 @@ function cerrarParametrosSueldo(){ document.getElementById('sueldo-parametros-ov
 function guardarParametrosSueldo(){
   const anio=parseInt(document.getElementById('sp-anio').value);
   if(!state.sueldoParametros) state.sueldoParametros={};
+  const antes=state.sueldoParametros[anio]?{...state.sueldoParametros[anio]}:null;
   state.sueldoParametros[anio]={
     anio,
     uit:parseFloat(document.getElementById('sp-uit').value)||5500,
@@ -16869,6 +17355,7 @@ function guardarParametrosSueldo(){
     afpPrima:parseFloat(document.getElementById('sp-afp-prima').value)||1.37,
     onpTasa:parseFloat(document.getElementById('sp-onp-tasa').value)||13,
   };
+  logActividad('sueldo_parametros', `Parámetros de sueldo ${anio} actualizados`, {sueldoParamAnio:anio, sueldoParamAntes:antes});
   cerrarParametrosSueldo();
   recalcularTodosLosAnios();
   saveState();
@@ -16898,6 +17385,7 @@ function guardarBoletaSueldo(){
   const pension=calcularDescuentosPensionMes(ingresoMes);
   if(!Array.isArray(state.sueldoBoletas)) state.sueldoBoletas=[];
   const idx=state.sueldoBoletas.findIndex(b=>b.anio===anio&&b.mes===mes);
+  const boletaAntes=idx>=0?{...state.sueldoBoletas[idx]}:null;
   const boleta={
     id:idx>=0?state.sueldoBoletas[idx].id:'sb-'+Date.now(),
     anio,mes,basica,bono,otros,utilidades,
@@ -16906,6 +17394,7 @@ function guardarBoletaSueldo(){
     pensionAporte:pension.aporte,pensionPrima:pension.prima,pensionComision:pension.comisionFlujo,
   };
   if(idx>=0) state.sueldoBoletas[idx]=boleta; else state.sueldoBoletas.push(boleta);
+  logActividad(idx>=0?'sueldo_boleta_editada':'sueldo_boleta_nueva', `Boleta de sueldo ${idx>=0?'editada':'nueva'}: ${anio}-${String(mes+1).padStart(2,'0')}`, {sueldoBoletaId:boleta.id, sueldoBoletaAntes:boletaAntes});
   // Recalcula TODOS los meses del año en orden — así enero/febrero/etc. ya
   // no se quedan con el estimado viejo de cuando aún faltaban meses por
   // registrar (esto era la causa real de la "gran diferencia" reportada).
@@ -16932,7 +17421,7 @@ function recalcularBoletasAnio(anio){
 function eliminarBoletaSueldo(id){
   const boleta=(state.sueldoBoletas||[]).find(b=>b.id===id);
   state.sueldoBoletas=(state.sueldoBoletas||[]).filter(b=>b.id!==id);
-  if(boleta) recalcularBoletasAnio(boleta.anio);
+  if(boleta){ recalcularBoletasAnio(boleta.anio); logActividad('sueldo_boleta_eliminada', `Boleta de sueldo eliminada: ${boleta.anio}-${String(boleta.mes+1).padStart(2,'0')}`, {sueldoBoletaSnapshot:boleta}); }
   saveState();
   renderSueldos();
 }
@@ -17260,7 +17749,9 @@ function guardarAFPAporte(){
   migrarAFPSiNecesario();
   const key=afpMonthKey(y,m);
   if(editingAFPAporteKey && editingAFPAporteKey!==key) delete state.afp.aportes[editingAFPAporteKey];
+  const montoAnterior=state.afp.aportes[key];
   state.afp.aportes[key]=monto;
+  logActividad('afp_aporte', `Aporte AFP ${key}: S/ ${monto.toFixed(2)}`, {afpAporteKey:key, afpMontoAnterior: montoAnterior===undefined?null:montoAnterior});
   saveState();
   cerrarAFPAporteModal();
   renderAFP();
@@ -17270,7 +17761,9 @@ function eliminarAFPAporte(key){
   if(!k) return;
   if(!confirm('¿Eliminar este aporte?')) return;
   migrarAFPSiNecesario();
+  const montoBorrado=state.afp.aportes[k];
   delete state.afp.aportes[k];
+  if(montoBorrado!==undefined) logActividad('afp_aporte_eliminado', `Aporte AFP eliminado: ${k} — S/ ${Number(montoBorrado).toFixed(2)}`, {afpAporteKey:k, afpMontoBorrado:montoBorrado});
   saveState();
   cerrarAFPAporteModal();
   renderAFP();
@@ -17366,9 +17859,15 @@ function guardarAFPSaldo(){
   migrarAFPSiNecesario();
   if(editingAFPSaldoId){
     const s=state.afp.saldos.find(x=>x.id===editingAFPSaldoId);
-    if(s){ s.fecha=fecha; s.saldoTotal=saldoTotal; }
+    if(s){
+      const antes={...s};
+      s.fecha=fecha; s.saldoTotal=saldoTotal;
+      logActividad('afp_saldo_editado', `Saldo AFP editado: ${fecha} — S/ ${saldoTotal.toFixed(2)}`, {afpSaldoId:s.id, snapshotAntes:antes});
+    }
   } else {
-    state.afp.saldos.push({id:'afp-saldo-'+Date.now(), fecha, saldoTotal});
+    const nuevoSaldo={id:'afp-saldo-'+Date.now(), fecha, saldoTotal};
+    state.afp.saldos.push(nuevoSaldo);
+    logActividad('afp_saldo_nuevo', `Saldo AFP: ${fecha} — S/ ${saldoTotal.toFixed(2)}`, {afpSaldoId:nuevoSaldo.id});
   }
   saveState();
   cerrarAFPSaldoModal();
@@ -17379,7 +17878,9 @@ function eliminarAFPSaldo(id){
   if(!sid) return;
   if(!confirm('¿Eliminar este saldo registrado? Esto también recalcula la rentabilidad de los saldos vecinos.')) return;
   migrarAFPSiNecesario();
+  const saldoBorrado=state.afp.saldos.find(x=>x.id===sid);
   state.afp.saldos=state.afp.saldos.filter(x=>x.id!==sid);
+  if(saldoBorrado) logActividad('afp_saldo_eliminado', `Saldo AFP eliminado: ${saldoBorrado.fecha}`, {afpSaldoSnapshot:saldoBorrado});
   saveState();
   cerrarAFPSaldoModal();
   renderAFP();
@@ -17597,6 +18098,7 @@ function guardarCompra(){
   if(editingCompraId){
     const item=state.listaCompras.find(x=>x.id===editingCompraId);
     if(item){
+      const antes={...item, historialPrecio:[...(item.historialPrecio||[])]};
       item.nombre=nombre; item.link=link; item.moneda=moneda; item.notas=notas;
       const ultimo=getUltimoPrecio(item);
       // Solo se agrega una entrada nueva al historial si el precio
@@ -17606,12 +18108,15 @@ function guardarCompra(){
         if(!item.historialPrecio) item.historialPrecio=[];
         item.historialPrecio.push({precio, fecha:todayLocalISO()});
       }
+      logActividad('compra_editada', `Artículo editado: ${nombre}`, {compraId:item.id, snapshotAntes:antes});
     }
   } else {
-    state.listaCompras.push({
+    const nuevaCompra={
       id:'cp-'+Date.now(), nombre, link, notas, moneda, estado:'deseado',
       historialPrecio:[{precio, fecha:todayLocalISO()}],
-    });
+    };
+    state.listaCompras.push(nuevaCompra);
+    logActividad('compra_nueva', `Artículo nuevo: ${nombre} — ${moneda==='USD'?'$':'S/'} ${precio.toFixed(2)}`, {compraId:nuevaCompra.id});
   }
   saveState();
   cerrarCompraModal();
@@ -17621,7 +18126,9 @@ function eliminarCompra(id){
   const cid=id||editingCompraId;
   if(!cid) return;
   if(!confirm('¿Eliminar este artículo de tu lista?')) return;
+  const compraBorrada=(state.listaCompras||[]).find(x=>x.id===cid);
   state.listaCompras=(state.listaCompras||[]).filter(x=>x.id!==cid);
+  if(compraBorrada) logActividad('compra_eliminada', `Artículo eliminado: ${compraBorrada.nombre}`, {compraSnapshot:compraBorrada});
   saveState();
   cerrarCompraModal();
   renderListaCompras();
@@ -19173,9 +19680,15 @@ function saveCalEvent(){
   if(!state.calendarEvents) state.calendarEvents=[];
   if(editingCalEventId){
     const ev = state.calendarEvents.find(e=>e.id===editingCalEventId);
-    if(ev){ ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.recurrenteAnual=recurrenteAnual; ev.fijado=fijado; ev.icono=icono; ev.notas=notas; }
+    if(ev){
+      const antes={...ev};
+      ev.titulo=titulo; ev.fecha=fecha; ev.tipo=tipo; ev.recurrente=recurrente; ev.recurrenteAnual=recurrenteAnual; ev.fijado=fijado; ev.icono=icono; ev.notas=notas;
+      logActividad('evento_editado', `Evento editado: ${titulo}`, {eventoId:ev.id, snapshotAntes:antes});
+    }
   } else {
-    state.calendarEvents.push({id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, recurrenteAnual, fijado, icono, notas});
+    const nuevoEv={id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, recurrenteAnual, fijado, icono, notas};
+    state.calendarEvents.push(nuevoEv);
+    logActividad('evento', `Evento: ${titulo} — ${fecha}`, {eventoId:nuevoEv.id});
   }
   saveState();
   closeCalEventModal();
@@ -19184,7 +19697,9 @@ function saveCalEvent(){
 
 function deleteCalEvent(){
   if(!editingCalEventId || !confirm('¿Eliminar este evento?')) return;
+  const evBorrado=(state.calendarEvents||[]).find(e=>e.id===editingCalEventId);
   state.calendarEvents = (state.calendarEvents||[]).filter(e=>e.id!==editingCalEventId);
+  if(evBorrado) logActividad('evento_eliminado', `Evento eliminado: ${evBorrado.titulo}`, {eventoSnapshot:evBorrado});
   saveState();
   closeCalEventModal();
   renderCalendario();
