@@ -3145,8 +3145,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 03:33'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Se revirtió el "Historial de Cambios" de ayer (quedaba redundante y menos útil) y en su lugar se combinó todo en "Config → Actividad Reciente", que ya existía y era más completa (acciones legibles, botón Eliminar que además deshace el efecto real). Cada entrada ahora muestra: usuario (correo o "Bot de Telegram"), dispositivo (ej. "Windows · Chrome" o "Telegram Bot"), IP (reutiliza el mismo mecanismo de Seguridad, sin pedir permiso de nuevo), fecha y hora exacta + relativa, el cambio realizado, y el botón Eliminar de siempre. El bot ahora también escribe ahí (guardarMovimiento, guardarConsumoTC, guardarTransferencia) — antes sus acciones eran invisibles en esta sección, que es justo lo que reportaste. Las transferencias del bot generan UNA sola entrada combinada ("BBVA → Efectibank — S/1,500.00"), no 2 sueltas, igual que en la web. Verificado con Playwright + Node: movimiento simple y transferencia combinada del bot con formato correcto, "Eliminar" deshaciendo correctamente tanto un movimiento como una transferencia completa creados por el bot, render con los 3 campos nuevos, estado vacío, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '05/09/26 - 03:49'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Completada la reversión real de "Eliminar" para los 9 tipos nuevos de ayer: categoría, pago frecuente nuevo, descuento pendiente, evento, inversión (compra/venta/valorización/efectivo — con manejo especial para valorizaciones fusionadas: restaura solo los precios que esa acción agregó, sin borrar la fila completa si tenía datos de otras acciones), servicio nuevo, marcar pago de servicio (desmarcar queda solo informativo, sin deshacer automático — no hay forma segura de recrear el movimiento original exacto), recarga de combustible, y kilometraje. Se agregaron IDs únicos donde faltaban (descuentosPendientes) para poder identificar con precisión qué borrar. Verificado con Node.js: los 10 casos (incluido el especial de valorización fusionada) revierten exactamente lo que deben sin tocar datos de otras acciones, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3485,7 +3485,7 @@ function tiempoRelativo(ts){
   const d=new Date(ts);
   return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽'};
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗'};
 function abrirActividadReciente(){
   renderActividadReciente();
   document.getElementById('actividad-overlay').classList.add('open');
@@ -3591,6 +3591,38 @@ function eliminarActividad(logId){
       const arr=state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']||[];
       const fila=arr.find(f=>f.id===ref.fuelRowId);
       if(fila) delete fila.gastoRegistrado;
+    } else if(entry.tipo==='categoria'){
+      if(state.customCategorias) delete state.customCategorias[ref.categoriaNombre];
+    } else if(entry.tipo==='pago_frecuente_nuevo'){
+      state.pagosFrecuentes=(state.pagosFrecuentes||[]).filter(p=>p.id!==ref.pfId);
+    } else if(entry.tipo==='descuento_pendiente'){
+      const pf=(state.pagosFrecuentes||[]).find(p=>p.id===ref.pfId);
+      if(pf && Array.isArray(pf.descuentosPendientes)) pf.descuentosPendientes=pf.descuentosPendientes.filter(d=>d.id!==ref.descuentoId);
+    } else if(entry.tipo==='evento'){
+      state.calendarEvents=(state.calendarEvents||[]).filter(e=>e.id!==ref.eventoId);
+    } else if(entry.tipo==='inversion'){
+      if(state.inversiones && Array.isArray(state.inversiones[ref.invKind])){
+        if(ref.invKind==='valorizaciones' && ref.valorizacionPreciosAntes!==null && ref.valorizacionPreciosAntes!==undefined){
+          // Se fusionó con una valorización que YA existía — restaurar los
+          // precios de antes en vez de borrar la fila completa (que tendría
+          // datos de otras acciones que no vinieron de esta acción).
+          const v=state.inversiones.valorizaciones.find(x=>x.id===ref.invId);
+          if(v) v.precios=ref.valorizacionPreciosAntes;
+        } else {
+          state.inversiones[ref.invKind]=state.inversiones[ref.invKind].filter(i=>i.id!==ref.invId);
+        }
+      }
+    } else if(entry.tipo==='servicio'){
+      const mesServ=(state.serviciosByMonth||{})[ref.monthKey];
+      if(mesServ) delete mesServ[ref.serviceId];
+    } else if(entry.tipo==='servicio_pago'){
+      _revertirMovOConsumo(ref);
+      if(ref.paymentsKey && state.payments) delete state.payments[ref.paymentsKey];
+    } else if(entry.tipo==='combustible_registro'){
+      const arr=state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas'];
+      if(Array.isArray(arr)) state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']=arr.filter(f=>f.id!==ref.fuelRowId);
+    } else if(entry.tipo==='km_manual'){
+      state.kmManual=(state.kmManual||[]).filter(k=>k.id!==ref.kmManualId);
     }
   }catch(err){
     console.error('Error revirtiendo actividad:', err);
@@ -14113,7 +14145,7 @@ function confirmarPFQuickDescuento(){
   if(!concepto){alert('Escribe un concepto (ej. "Zapatos").');return;}
   if(monto<=0){alert('Ingresa un monto válido.');return;}
   if(!pf.descuentosPendientes) pf.descuentosPendientes=[];
-  pf.descuentosPendientes.push({concepto, monto, fecha:todayISO()});
+  pf.descuentosPendientes.push({id:'desc-'+Date.now(), concepto, monto, fecha:todayISO()});
   saveState();
   closePFQuickDescuento();
   renderPagosFrecuentes();
