@@ -3145,8 +3145,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '04/09/26 - 17:31'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Revisión adicional del bug de signo negativo: se encontraron y corrigieron 2 casos más. (1) Badge "vs mes anterior" junto a Patrimonio Neto Total — mostraba solo el color rojo sin el "-" cuando el patrimonio bajó respecto al mes pasado. (2) Diferencia entre retención de 5ta real vs estimada (Config → Sueldo) — mismo problema. Se revisaron otros 9 lugares con patrones similares y ya estaban bien (usan .toFixed() directo sobre el número con signo, que sí preserva el "-" solo, o ya tenían el signo explícito correcto). Verificado con Playwright: ambos casos ahora muestran "-S/ 740.00" y "-S/ 85.30" en vez de solo el monto positivo con color rojo. Nota: este cambio y los 3 del PDF de hoy (reordenar/recolorear casas de cambio + contraste de texto) TODAVÍA NO se aplicaron a la app de Nathy, a pedido explícito.';
+const APP_VERSION_DATE = '04/09/26 - 23:47'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'El listener en tiempo real de hoy (A+B+C) solo cubría "secciones" — un movimiento agregado por el bot de Telegram (ej. una captura de Apple Pay) o desde otro dispositivo no aparecía hasta recargar la página. Se agregó un segundo listener sobre la colección de movimientos, con las mismas protecciones: ignora los propios cambios optimistas (hasPendingWrites), no duplica si el contenido ya es idéntico, y actualiza _lastSyncedMovs para no reintentar subir lo que se acaba de recibir. Verificado con Playwright: un movimiento nuevo del "bot" aparece solo con su aviso correspondiente, sin duplicarse en el caso de eco de la propia escritura ni de contenido repetido, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -19268,6 +19268,7 @@ function initFirebase(){
 //  esté editando activamente acá.
 // ══════════════════════════════════════════════════════
 let _tcUnsubscribeListener = null;
+let _movsUnsubscribeListener = null;
 function iniciarListenerTiempoReal(){
   detenerListenerTiempoReal(); // por si quedó uno de una sesión anterior
   if(!DOC_REF) return;
@@ -19302,9 +19303,41 @@ function iniciarListenerTiempoReal(){
       toast('🔄 Actualizado con cambios de otro dispositivo');
     }
   }, err=>console.warn('Listener en tiempo real desconectado:', err));
+
+  // Movimientos agregados desde OTRO lado (el bot de Telegram, un atajo, u
+  // otro dispositivo) — sin esto, aparecían recién al recargar la página,
+  // porque el listener de arriba solo cubre "secciones", no movimientos.
+  _movsUnsubscribeListener = DOC_REF.collection('movimientos').onSnapshot(snap=>{
+    if(demoMode) return;
+    if(!_lastSyncedMeta) return; // todavía no terminamos la carga inicial
+    let huboCambiosAjenos = false;
+    snap.docChanges().forEach(change=>{
+      if(change.doc.metadata.hasPendingWrites) return; // propia escritura optimista
+      const id = change.doc.id;
+      if(change.type==='removed'){
+        const idx=state.movimientos.findIndex(m=>m.id===id);
+        if(idx!==-1){ state.movimientos.splice(idx,1); delete _lastSyncedMovs[id]; huboCambiosAjenos=true; }
+        return;
+      }
+      const data = change.doc.data();
+      const serialized = JSON.stringify(data);
+      if(_lastSyncedMovs[id] === serialized) return; // ya lo teníamos exactamente así (ej. eco de nuestra propia escritura)
+      const idx = state.movimientos.findIndex(m=>m.id===id);
+      if(idx===-1) state.movimientos.push(data);
+      else state.movimientos[idx] = data;
+      _lastSyncedMovs[id] = serialized;
+      huboCambiosAjenos = true;
+    });
+    if(huboCambiosAjenos){
+      clearSaldoCache();
+      render();
+      toast('🔄 Nuevo movimiento de otro dispositivo');
+    }
+  }, err=>console.warn('Listener de movimientos desconectado:', err));
 }
 function detenerListenerTiempoReal(){
   if(_tcUnsubscribeListener){ _tcUnsubscribeListener(); _tcUnsubscribeListener=null; }
+  if(_movsUnsubscribeListener){ _movsUnsubscribeListener(); _movsUnsubscribeListener=null; }
 }
 
 function startApp(){
