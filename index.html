@@ -2908,6 +2908,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="field"><label>TC usado</label><input id="tcopc-tc" type="number" step="0.0001" placeholder="0.0000" oninput="tcOpCompraAutoCalc()"></div>
     </div>
     <div class="field"><label>Monto Dólares recibido <span style="font-size:10px;color:var(--text3)">(ajusta si el banco cobró comisión)</span></label><input id="tcopc-dolares" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><select id="tcopc-cat"></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTcOpCompraModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveTcOpCompra()">Guardar</button>
@@ -3017,6 +3018,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="field"><label>TC usado</label><input id="tcopv-tc" type="number" step="0.0001" placeholder="0.0000" oninput="tcOpVentaAutoCalc()"></div>
     </div>
     <div class="field"><label>Monto Soles recibido <span style="font-size:10px;color:var(--text3)">(ajusta si el banco cobró comisión)</span></label><input id="tcopv-soles" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><select id="tcopv-cat"></select></div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
       <button class="config-action-btn danger" id="tcopv-delete-btn" style="display:none" onclick="deleteTcOpVenta()">🗑 Quitar venta</button>
       <div style="display:flex;gap:8px;margin-left:auto">
@@ -3064,7 +3066,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="modal-overlay" id="srv-edit-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeSrvEdit')">
   <div class="srv-modal">
     <div class="modal-title"><span id="srv-edit-title">Editar servicio</span><button class="modal-close" onclick="closeSrvEdit()">✕</button></div>
-    <div class="field"><label>Nombre</label><input id="srv-edit-name" type="text" placeholder="Ej. Netflix"></div>
+    <div class="field"><label>Nombre</label><input id="srv-edit-name" type="text" placeholder="Ej. Netflix" onblur="suggestCategoriaFor('srv-edit-name','srv-edit-cat','srv-edit-cat-hint')"></div>
     <div class="field-row">
       <div class="field"><label>Precio/persona (S/)</label><input id="srv-edit-price" type="number" step="0.01" placeholder="15.00"></div>
       <div class="field"><label>Día de pago</label><input id="srv-edit-day" type="number" min="1" max="28" placeholder="9"></div>
@@ -3074,6 +3076,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <option value="BCP">BCP</option><option value="BBVA" selected>BBVA</option>
         <option value="Efectivo">Efectivo</option><option value="Ahorro Soles">Ahorro Soles</option>
       </select>
+    </div>
+    <div class="field"><label>Categoría <span id="srv-edit-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
+      <select id="srv-edit-cat" onchange="document.getElementById('srv-edit-cat-hint').textContent=''"></select>
     </div>
     <div class="field"><label>Personas</label><div id="srv-edit-people"></div><button class="add-person-btn" onclick="addPersonField()">+ Agregar persona</button></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
@@ -3145,8 +3150,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 08:44'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Auditoría sistemática de todos los tipos de Actividad Reciente (68 tipos, 83 llamadas) buscando el mismo patrón de bug encontrado antes en deuda_item: un tipo usado tanto para crear como para editar sin manejo diferenciado. Encontrado y corregido 1 caso real: saveTCMov (editar un consumo de tarjeta desde el formulario completo, no el rápido) nunca registraba nada en Actividad Reciente al editar — solo al crear. Ahora usa un tipo separado (tc_consumo_editado) con foto de "antes", incluyendo el caso especial de que editar la fecha puede mover el consumo a otro mes de facturación (el "Eliminar" lo regresa correctamente al mes y valores originales). Se revisaron y descartaron 2 falsos positivos (guardarInversion y revertirAccion en el bot, ambos ya diseñados correctamente). Verificado con Playwright: los 2 escenarios de esta corrección (editar sin cambiar de mes, editar cambiando de mes), y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '05/09/26 - 13:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Agregada categoría a 4 secciones que no la tenían: Servicios (Spotify/YT, con sugerencia inteligente), Deudas/Préstamos (con sugerencia, y el cobro ya usa tu categoría elegida en vez del valor fijo "💰 Préstamos" de siempre), y Compra/Venta de USD (categoría independiente para cada operación — recuerda que a diferencia de transferencias, esto SÍ suma a tus reportes de gasto por categoría, ya que sí crea un movimiento real). Pagos y Ingresos Frecuentes resultó más simple de lo esperado: el campo ya existía pero estaba bloqueado para ingresos — ahora "Sueldo" y cualquier otro ingreso también puede llevar categoría (ej. "Trabajo"), y sí queda reflejada en el movimiento real, sin afectar los reportes de gasto (esos son solo de gastos). Se reutilizó el sistema de sugerencia inteligente que YA existía en la app (suggestCategoriaForDesc) en vez de construir uno nuevo. Se corrigieron los mismos 2 puntos en el bot (index.js): el pago de un ingreso frecuente y el pago de un servicio compartido ahora también llevan la categoría correspondiente. Verificado con Playwright + Node: las 4 secciones guardan y aplican la categoría correctamente (incluido el caso "Sueldo" que pediste validar), la sugerencia inteligente funciona en el campo nuevo, los 2 fixes del bot producen el movimiento correcto, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10264,7 +10269,9 @@ function addSrvPayment(sid,pid,svc,person){
   const date=new Date(state.currentYear,state.currentMonth,svc.payDay||9).toISOString().slice(0,10);
   const movId='srv-'+paymentKey(sid,pid);
   state.movimientos=state.movimientos.filter(m=>m.id!==movId);
-  pushMovimiento({id:movId,type:'income',desc:svc.name+' - '+person.name,amount:svc.pricePerPerson,account:acct,date,currency:'PEN'});
+  const mov={id:movId,type:'income',desc:svc.name+' - '+person.name,amount:svc.pricePerPerson,account:acct,date,currency:'PEN'};
+  if(svc.cat) mov.cat=svc.cat;
+  pushMovimiento(mov);
   state.cuentas[acct]=(state.cuentas[acct]||0)+svc.pricePerPerson;
 }
 function removeSrvPayment(sid,pid,svc){
@@ -10292,6 +10299,9 @@ function openNewServiceModal(){
   document.getElementById('srv-edit-day').value='9';
   updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
   document.getElementById('srv-edit-account').value='BBVA';
+  updateCategorySelects();
+  document.getElementById('srv-edit-cat').value='';
+  document.getElementById('srv-edit-cat-hint').textContent='';
   tempPeople=[{id:'np'+Date.now(),name:'',avatar:randomAvatar()}];renderPeopleFields();
   document.getElementById('srv-edit-overlay').classList.add('open');
 }
@@ -10303,6 +10313,9 @@ function openEditService(sid){
   document.getElementById('srv-edit-day').value=svc.payDay||9;
   updateAccountSelects(); // asegura que la cuenta del servicio (aunque sea tipo "otras") esté en la lista
   document.getElementById('srv-edit-account').value=svc.account||'BBVA';
+  updateCategorySelects();
+  document.getElementById('srv-edit-cat').value=svc.cat||'';
+  document.getElementById('srv-edit-cat-hint').textContent='';
   tempPeople=svc.people.map(p=>({...p}));renderPeopleFields();
   document.getElementById('srv-edit-overlay').classList.add('open');
 }
@@ -10321,6 +10334,7 @@ function saveSrvEdit(){
   if(isNaN(price)||price<=0)return alert('Precio inválido.');
   const valid=tempPeople.filter(p=>p.name.trim());
   if(!valid.length)return alert('Agrega al menos una persona.');
+  const cat=document.getElementById('srv-edit-cat').value||'';
   if(!state.servicios)state.servicios={};
   const esNuevo=!editingSrvId;
   const sid=editingSrvId||'srv'+Date.now();
@@ -10328,7 +10342,7 @@ function saveSrvEdit(){
   const ik=Object.keys(iconMap).find(k=>name.toLowerCase().includes(k));
   const allSvcs={...getAllServices()};
   const svcAntes=esNuevo?null:allSvcs[sid];
-  allSvcs[sid]={name,icon:iconMap[ik]||'📡',pricePerPerson:price,payDay,account,people:valid.map(p=>({...p,name:p.name.trim()}))};
+  allSvcs[sid]={name,icon:iconMap[ik]||'📡',pricePerPerson:price,payDay,account,cat,people:valid.map(p=>({...p,name:p.name.trim()}))};
   saveServicesForMonth(allSvcs);
   logActividad(esNuevo?'servicio_nuevo':'servicio_editado', `Servicio ${esNuevo?'nuevo':'editado'}: ${name}`, {serviceId:sid, monthKey:monthKey(state.currentYear,state.currentMonth), snapshotAntes:svcAntes});
   closeSrvEdit();renderServicios();render();
@@ -11337,7 +11351,7 @@ function getAllCategorias(){
 function updateCategorySelects(){
   const cats = Object.keys(getAllCategorias());
   // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
-  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat'].forEach(id=>{
+  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat','srv-edit-cat','tcopc-cat','tcopv-cat'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -11348,6 +11362,14 @@ function updateCategorySelects(){
     const cur=bm.value;
     bm.innerHTML=cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
     bm.value = cats.includes(cur) ? cur : (cats[0]||'');
+  }
+  // d-cat (Deudas) usa "💰 Préstamos (por defecto)" en vez de "Sin categoría",
+  // porque si se deja vacío igual se le pone esa categoría al cobrar.
+  const dcat=document.getElementById('d-cat');
+  if(dcat){
+    const cur=dcat.value;
+    dcat.innerHTML='<option value="">💰 Préstamos (por defecto)</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
+    dcat.value = cats.includes(cur) ? cur : '';
   }
 }
 
@@ -14310,11 +14332,13 @@ function getPFProximaFechaAnual(pf){
 // Un ingreso (ej. sueldo) solo puede depositarse en una cuenta — no tiene
 // sentido "consumirlo" en una tarjeta de crédito, así que para ese tipo se
 // oculta el selector de método de pago entero y se fuerza a "cuenta". La
-// categoría tampoco aplica (las categorías son para presupuesto de gastos).
+// categoría SÍ se muestra también para ingresos (ej. "Sueldo" → categoría
+// "Trabajo") — útil para verlo etiquetado en tu historial de movimientos,
+// aunque no sume a los reportes de gasto por categoría (esos son solo de
+// gastos, no de ingresos, así que no hay riesgo de inflar nada ahí).
 function onPFTipoChange(){
   const esIngreso=document.getElementById('pf-tipo').value==='ingreso';
   document.getElementById('pf-metodo-wrap').style.display=esIngreso?'none':'block';
-  document.getElementById('pf-cat').closest('.field').style.display=esIngreso?'none':'block';
   document.getElementById('pf-cuenta-label').textContent=esIngreso?'¿En qué cuenta te llega?':'Cuenta';
   if(esIngreso){
     document.getElementById('pf-metodo').value='cuenta';
@@ -14341,7 +14365,7 @@ function savePagoFrecuente(){
   const currency=document.getElementById('pf-currency').value;
   const metodoPago=tipo==='ingreso'?'cuenta':document.getElementById('pf-metodo').value;
   const destino=metodoPago==='cuenta'?document.getElementById('pf-cuenta').value:document.getElementById('pf-tarjeta').value;
-  const categoria=tipo==='ingreso'?'':(document.getElementById('pf-cat').value||'');
+  const categoria=document.getElementById('pf-cat').value||'';
   const diaPagoRaw=document.getElementById('pf-dia-pago').value;
   const diaPago=document.getElementById('pf-dia-pago-ultimo').checked ? 'ultimo' : (diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null);
   if(!nombre){alert('Ingresa un nombre.');return;}
@@ -14782,8 +14806,9 @@ function confirmarPFRegistrar(){
 // (que es cuando realmente sale o entra el dinero), pero lo marca como
 // "registrado" bajo el mes OBJETIVO elegido — así se puede adelantar el
 // pago del próximo mes sin que quede mal registrado en el mes equivocado.
-// Un ingreso (tipo:'ingreso') SIEMPRE va a una cuenta (nunca a tarjeta,
-// eso no tendría sentido) y no lleva categoría (las categorías son de gasto).
+// Un ingreso (ej. sueldo) también puede llevar categoría (ej. "Trabajo")
+// para que se vea etiquetado en tu historial de movimientos — no afecta
+// los reportes de gasto por categoría, esos son solo de gastos.
 // Si el tipo es "base con descuentos", `detalle` trae el desglose (monto
 // base + cada concepto descontado) para poder mostrarlo luego en el
 // historial — el movimiento en sí solo guarda el monto FINAL ya calculado.
@@ -14799,7 +14824,7 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
     if(esIngreso || pf.metodoPago==='cuenta'){
       if(!state.movimientos) state.movimientos=[];
       const mov={id:'pf-mov-'+Date.now(), type:esIngreso?'income':'expense', desc:pf.nombre, amount:monto, account:pf.destino, date:hoy, currency:pf.currency};
-      if(!esIngreso && pf.categoria) mov.cat=pf.categoria;
+      if(pf.categoria) mov.cat=pf.categoria;
       pushMovimiento(mov);
       refActividad={movId:mov.id};
     } else {
@@ -15147,6 +15172,8 @@ function openDeudaModal(id){
   editingDeudaId = id || null;
   const dBtn = document.getElementById('d-delete-btn');
   const tipoSel=document.getElementById('d-tipo');
+  updateCategorySelects();
+  document.getElementById('d-cat-hint').textContent='';
   if(id){
     const d=(state.deudas||[]).find(x=>x.id===id);
     if(!d) return;
@@ -15156,6 +15183,7 @@ function openDeudaModal(id){
     document.getElementById('d-currency').value = d.currency||'PEN';
     document.getElementById('d-fecha').value    = d.fecha;
     document.getElementById('d-nota').value     = d.nota||'';
+    document.getElementById('d-cat').value      = d.cat||'';
     tipoSel.value = Array.isArray(d.items) ? 'acumulativa' : 'simple';
     tipoSel.disabled = Array.isArray(d.items); // no tiene sentido cambiar el tipo después de tener gastos guardados
     dBtn.style.display='inline-flex';
@@ -15166,6 +15194,7 @@ function openDeudaModal(id){
     document.getElementById('d-currency').value = 'PEN';
     document.getElementById('d-fecha').value    = todayLocalISO();
     document.getElementById('d-nota').value     = '';
+    document.getElementById('d-cat').value      = '';
     tipoSel.value='simple';
     tipoSel.disabled=false;
     dBtn.style.display='none';
@@ -15181,13 +15210,14 @@ function saveDeuda(){
   const currency= document.getElementById('d-currency').value;
   const fecha   = document.getElementById('d-fecha').value;
   const nota    = (document.getElementById('d-nota').value||'').trim();
+  const cat     = document.getElementById('d-cat').value||'';
   if(!nombre||!fecha){alert('Completa nombre y fecha.');return;}
 
   if(!state.deudas) state.deudas=[];
   if(editingDeudaId){
     const d=state.deudas.find(x=>x.id===editingDeudaId);
     if(d){
-      d.nombre=nombre;d.currency=currency;d.fecha=fecha;d.nota=nota;
+      d.nombre=nombre;d.currency=currency;d.fecha=fecha;d.nota=nota;d.cat=cat;
       if(!Array.isArray(d.items)){ // solo se puede editar el monto a mano si NO es acumulativa
         const monto=parseFloat(document.getElementById('d-monto').value)||0;
         if(monto<=0){alert('Completa el monto.');return;}
@@ -15198,7 +15228,7 @@ function saveDeuda(){
     const symD=currency==='USD'?'$':'S/';
     if(tipo==='acumulativa'){
       const nuevaDeuda={
-        id:'deu'+Date.now(), nombre, monto:0, currency, fecha, nota,
+        id:'deu'+Date.now(), nombre, monto:0, currency, fecha, nota, cat,
         status:'pendiente', fechaPago:null, cuentaPago:null, items:[],
       };
       state.deudas.push(nuevaDeuda);
@@ -15207,7 +15237,7 @@ function saveDeuda(){
       const monto=parseFloat(document.getElementById('d-monto').value)||0;
       if(monto<=0){alert('Completa el monto.');return;}
       const nuevaDeuda={
-        id:'deu'+Date.now(), nombre, monto, currency, fecha, nota,
+        id:'deu'+Date.now(), nombre, monto, currency, fecha, nota, cat,
         status:'pendiente', fechaPago:null, cuentaPago:null,
       };
       state.deudas.push(nuevaDeuda);
@@ -15328,7 +15358,7 @@ function confirmarDeudaPago(){
     account:cuenta,
     date:fechaPago,
     currency,
-    cat:'💰 Préstamos'
+    cat: d.cat || '💰 Préstamos'
   });
 
   saveState(); closeDeudaPago(); renderDeudas(); render();
@@ -16149,6 +16179,8 @@ function openTcOpCompraModal(){
   document.getElementById('tcopc-soles').value='';
   document.getElementById('tcopc-tc').value='';
   document.getElementById('tcopc-dolares').value='';
+  updateCategorySelects();
+  document.getElementById('tcopc-cat').value='';
   document.getElementById('tcop-compra-modal-overlay').classList.add('open');
 }
 function closeTcOpCompraModal(){ document.getElementById('tcop-compra-modal-overlay').classList.remove('open'); }
@@ -16164,22 +16196,25 @@ function saveTcOpCompra(){
   const soles=parseFloat(document.getElementById('tcopc-soles').value);
   const tc=parseFloat(document.getElementById('tcopc-tc').value);
   const dolares=parseFloat(document.getElementById('tcopc-dolares').value);
+  const cat=document.getElementById('tcopc-cat').value||'';
   if(!fecha||!cuenta||isNaN(soles)||soles<=0||isNaN(dolares)||dolares<=0){alert('Completa fecha, cuenta, soles y dólares.');return;}
   const tcEfectivo=tc>0?tc:(soles/dolares);
   const desc=`Compra USD @ TC ${tcEfectivo.toFixed(4)}`;
   const solId='tcop-mov-'+Date.now()+'a'+Math.random().toString(36).slice(2,5);
   const usdId='tcop-mov-'+Date.now()+'b'+Math.random().toString(36).slice(2,5);
   const cuentaUsd=document.getElementById('tcopc-cuenta-usd').value||'Ahorro Dólares';
-  pushMovimiento({id:solId,type:'expense',desc,amount:soles,account:cuenta,date:fecha,currency:'PEN'});
+  const movSol={id:solId,type:'expense',desc,amount:soles,account:cuenta,date:fecha,currency:'PEN'};
+  if(cat) movSol.cat=cat;
+  pushMovimiento(movSol);
   state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-soles;
   pushMovimiento({id:usdId,type:'income',desc,amount:dolares,account:cuentaUsd,date:fecha,currency:'USD'});
   state.cuentas[cuentaUsd]=(state.cuentas[cuentaUsd]||0)+dolares;
 
   if(!state.tcOperaciones) state.tcOperaciones=[];
   state.tcOperaciones.push({
-    id:'tcop-'+Date.now(), fechaCompra:fecha, cuentaCompra:cuenta, cuentaUsd, montoSolesCompra:soles, tcCompra:tcEfectivo, montoDolaresCompra:dolares,
+    id:'tcop-'+Date.now(), fechaCompra:fecha, cuentaCompra:cuenta, cuentaUsd, montoSolesCompra:soles, tcCompra:tcEfectivo, montoDolaresCompra:dolares, catCompra:cat,
     movCompraSolId:solId, movCompraUsdId:usdId,
-    fechaVenta:null, cuentaVenta:null, montoDolaresVenta:null, tcVenta:null, montoSolesVenta:null,
+    fechaVenta:null, cuentaVenta:null, montoDolaresVenta:null, tcVenta:null, montoSolesVenta:null, catVenta:'',
     movVentaUsdId:null, movVentaSolId:null,
   });
   const opIdCompra=state.tcOperaciones[state.tcOperaciones.length-1].id;
@@ -16211,6 +16246,8 @@ function openTcOpVentaModal(opId){
     tcOpVentaAutoCalc();
   }
   document.getElementById('tcopv-delete-btn').style.display = op.fechaVenta ? 'inline-flex' : 'none';
+  updateCategorySelects();
+  document.getElementById('tcopv-cat').value=op.catVenta||'';
   document.getElementById('tcop-venta-modal-overlay').classList.add('open');
 }
 function closeTcOpVentaModal(){ document.getElementById('tcop-venta-modal-overlay').classList.remove('open'); editingTcOpVentaId=null; }
@@ -16227,6 +16264,7 @@ function saveTcOpVenta(){
   const dolares=parseFloat(document.getElementById('tcopv-dolares').value);
   const tc=parseFloat(document.getElementById('tcopv-tc').value);
   const soles=parseFloat(document.getElementById('tcopv-soles').value);
+  const cat=document.getElementById('tcopv-cat').value||'';
   if(!fecha||!cuenta||isNaN(dolares)||dolares<=0||isNaN(soles)||soles<=0){alert('Completa fecha, cuenta, dólares y soles.');return;}
   // Si ya había una venta registrada (edición), primero se revierten sus movimientos
   tcOpRevertirMov(op.movVentaUsdId);
@@ -16241,10 +16279,12 @@ function saveTcOpVenta(){
   const cuentaUsdVenta = op.cuentaUsd || 'Ahorro Dólares';
   pushMovimiento({id:usdId,type:'expense',desc,amount:dolares,account:cuentaUsdVenta,date:fecha,currency:'USD'});
   state.cuentas[cuentaUsdVenta]=(state.cuentas[cuentaUsdVenta]||0)-dolares;
-  pushMovimiento({id:solId,type:'income',desc,amount:soles,account:cuenta,date:fecha,currency:'PEN'});
+  const movSol={id:solId,type:'income',desc,amount:soles,account:cuenta,date:fecha,currency:'PEN'};
+  if(cat) movSol.cat=cat;
+  pushMovimiento(movSol);
   state.cuentas[cuenta]=(state.cuentas[cuenta]||0)+soles;
 
-  op.fechaVenta=fecha; op.cuentaVenta=cuenta; op.montoDolaresVenta=dolares; op.tcVenta=tcEfectivo; op.montoSolesVenta=soles;
+  op.fechaVenta=fecha; op.cuentaVenta=cuenta; op.montoDolaresVenta=dolares; op.tcVenta=tcEfectivo; op.montoSolesVenta=soles; op.catVenta=cat;
   op.movVentaUsdId=usdId; op.movVentaSolId=solId;
   logActividad('tc_operacion', `Venta USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:op.id, accion:'venta'});
   saveState(); closeTcOpVentaModal(); render(); toast('Venta de dólares registrada');
@@ -20301,7 +20341,7 @@ if(state.projGoals){
       <span id="deuda-modal-title">Nueva Deuda / Préstamo</span>
       <button class="modal-close" onclick="closeDeudaModal()">✕</button>
     </div>
-    <div class="field"><label>Nombre del deudor</label><input id="d-nombre" type="text" placeholder="Ej. Pepito García"></div>
+    <div class="field"><label>Nombre del deudor</label><input id="d-nombre" type="text" placeholder="Ej. Pepito García" onblur="suggestCategoriaFor('d-nombre','d-cat','d-cat-hint')"></div>
     <div class="field"><label>Tipo de deuda</label>
       <select id="d-tipo" onchange="onDeudaTipoChange()">
         <option value="simple">💰 Monto único (préstamo de una sola vez)</option>
@@ -20318,6 +20358,11 @@ if(state.projGoals){
       El monto se calcula solo, sumando los gastos que le agregues con "+ Agregar gasto" desde la tarjeta de esta deuda.
     </div>
     <div class="field"><label>Fecha del préstamo</label><input id="d-fecha" type="date"></div>
+    <div class="field"><label>Categoría <span id="d-cat-hint" style="font-size:10px;color:var(--accent)"></span> <span style="font-size:10px;color:var(--text3)">(opcional — se usa cuando cobres el préstamo)</span></label>
+      <select id="d-cat" onchange="document.getElementById('d-cat-hint').textContent=''">
+        <option value="">💰 Préstamos (por defecto)</option>
+      </select>
+    </div>
     <div class="field"><label>Nota / Motivo <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
       <input id="d-nota" type="text" placeholder="Ej. Para gastos de viaje, préstamo personal...">
     </div>
