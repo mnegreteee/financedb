@@ -934,7 +934,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-afp" onclick="showPage('afp')">🪙 AFP</button>
         <button class="nav-dropdown-item" id="nav-compras" onclick="showPage('compras')">🛒 Lista de Compras</button>
         <button class="nav-dropdown-item" id="nav-ahorros-intereses" onclick="showPage('ahorros-intereses')">💰 Ahorros e Intereses</button>
-        <button class="nav-dropdown-item" id="nav-historial-cambios" onclick="showPage('historial-cambios')">📜 Historial de Cambios</button>
         <button class="nav-dropdown-item" id="nav-minijuegos" onclick="showPage('minijuegos')">🎮 Minijuegos</button>
       </div>
     </div>
@@ -2356,21 +2355,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 </div>
 
-<!-- ══ PAGE: HISTORIAL DE CAMBIOS ══ -->
-<div class="page" id="page-historial-cambios">
-<div class="container">
-  <div class="section-header" style="margin-bottom:16px">
-    <div class="section-title">📜 Historial de Cambios</div>
-  </div>
-  <p style="color:var(--text2);font-size:12px;margin-bottom:16px">
-    Quién cambió qué, desde dónde y cuándo — se guardan las últimas 60 actualizaciones. Incluye cambios hechos desde la app web y desde el bot de Telegram.
-  </p>
-  <div class="card" style="padding:0;overflow:hidden">
-    <div id="historial-cambios-list"></div>
-  </div>
-</div>
-</div>
-
 <!-- ══ PAGE: MINIJUEGOS ══ -->
 <div class="page" id="page-minijuegos">
 <div class="container">
@@ -3161,8 +3145,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 01:00'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva sección "📜 Historial de Cambios" (menú Otros) — quién cambió qué, desde dónde y cuándo, últimas 60 entradas. Se registra automáticamente en cada guardado exitoso (secciones + movimientos), tanto desde la app web (con tu correo y navegador/dispositivo detectado) como desde el bot de Telegram (registro automático agregado a escribirSeccionesCambiadas, cubre las ~30 funciones del bot sin tocarlas una por una). El registro corre en su propia escritura, aparte del mecanismo general de "solo lo que cambió" — así anotar el cambio no cuenta como otro cambio más. Se corrigió una condición de carrera real detectada en pruebas: si no se esperaba (await) el registro, dos guardados seguidos podían perderse entre sí. Verificado con Playwright: registro correcto de sección+movimientos combinados, sin pérdida entre guardados consecutivos, registro del bot sin pisar el de la web, render de la página, y regresión completa de las 13 páginas sin errores.';
+const APP_VERSION_DATE = '05/09/26 - 03:33'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Se revirtió el "Historial de Cambios" de ayer (quedaba redundante y menos útil) y en su lugar se combinó todo en "Config → Actividad Reciente", que ya existía y era más completa (acciones legibles, botón Eliminar que además deshace el efecto real). Cada entrada ahora muestra: usuario (correo o "Bot de Telegram"), dispositivo (ej. "Windows · Chrome" o "Telegram Bot"), IP (reutiliza el mismo mecanismo de Seguridad, sin pedir permiso de nuevo), fecha y hora exacta + relativa, el cambio realizado, y el botón Eliminar de siempre. El bot ahora también escribe ahí (guardarMovimiento, guardarConsumoTC, guardarTransferencia) — antes sus acciones eran invisibles en esta sección, que es justo lo que reportaste. Las transferencias del bot generan UNA sola entrada combinada ("BBVA → Efectibank — S/1,500.00"), no 2 sueltas, igual que en la web. Verificado con Playwright + Node: movimiento simple y transferencia combinada del bot con formato correcto, "Eliminar" deshaciendo correctamente tanto un movimiento como una transferencia completa creados por el bot, render con los 3 campos nuevos, estado vacío, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3256,73 +3240,7 @@ function _seccionesColl(){
 // sincronización (comparando contra _lastSyncedMeta) — las que no se
 // tocaron acá ni se leen ni se escriben, así jamás se pisan entre
 // dispositivos. Devuelve la lista de claves que sí se escribieron.
-// ══════════════════════════════════════════════════════
-//  HISTORIAL DE CAMBIOS — quién cambió qué, desde dónde y cuándo. Útil
-//  para diagnosticar (ej. confirmar si un cambio del bot de Telegram
-//  realmente llegó a Firestore) y para que, si varias personas comparten
-//  la misma cuenta (ej. Nathy + Miguel), quede claro quién tocó qué.
-//  Se guarda como su propia sección ("historialCambios"), un array con
-//  las últimas entradas más recientes primero — se recorta para no
-//  crecer sin límite para siempre.
-// ══════════════════════════════════════════════════════
-const HISTORIAL_CAMBIOS_MAX = 60;
-function detectarNavegador(){
-  const ua = navigator.userAgent;
-  let etiqueta = 'Navegador';
-  if(/iPhone|iPad/.test(ua)) etiqueta = 'iPhone/iPad';
-  else if(/Android/.test(ua)) etiqueta = 'Android';
-  else if(/Macintosh/.test(ua)) etiqueta = 'Mac';
-  else if(/Windows/.test(ua)) etiqueta = 'Windows';
-  if(/Edg\//.test(ua)) etiqueta += ' · Edge';
-  else if(/Chrome\//.test(ua)) etiqueta += ' · Chrome';
-  else if(/Safari\//.test(ua)) etiqueta += ' · Safari';
-  else if(/Firefox\//.test(ua)) etiqueta += ' · Firefox';
-  return etiqueta;
-}
-// Agrega una entrada al historial y la sube a Firestore de inmediato — es
-// un escritura APARTE del mecanismo general de "solo lo que cambió", para
 // que registrar el cambio no cuente a su vez como otro cambio pendiente.
-async function registrarCambioEnHistorial(resumen){
-  if(!DOC_REF || demoMode || !resumen) return;
-  try{
-    const entrada = {
-      fecha: new Date().toISOString(),
-      quien: currentUser || 'Desconocido',
-      origen: 'Web · ' + detectarNavegador(),
-      resumen,
-    };
-    const actual = Array.isArray(state.historialCambios) ? state.historialCambios : [];
-    const nuevo = [entrada, ...actual].slice(0, HISTORIAL_CAMBIOS_MAX);
-    state.historialCambios = nuevo;
-    await _seccionesColl().doc('historialCambios').set({
-      value: JSON.stringify(nuevo),
-      savedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    if(_lastSyncedMeta) _lastSyncedMeta.historialCambios = nuevo;
-  }catch(e){ console.warn('No se pudo registrar en el historial de cambios:', e); }
-}
-function renderHistorialCambios(){
-  const wrap=document.getElementById('historial-cambios-list');
-  if(!wrap) return;
-  const entradas=Array.isArray(state.historialCambios)?state.historialCambios:[];
-  if(!entradas.length){
-    wrap.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Sin cambios registrados todavía — en cuanto guardes algo, va a aparecer acá.</div>`;
-    return;
-  }
-  wrap.innerHTML=entradas.map((e,idx)=>{
-    const fecha=new Date(e.fecha);
-    const fechaTxt=isNaN(fecha)?'—':fecha.toLocaleString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const esBot=/telegram/i.test(e.origen||'');
-    const borde=idx<entradas.length-1?'border-bottom:1px solid var(--border)':'';
-    return `<div style="padding:10px 16px;${borde};display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
-      <div style="min-width:0">
-        <div style="font-size:12px;font-weight:600">${escapeHtml(e.resumen||'—')}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${escapeHtml(e.quien||'Desconocido')} · ${esBot?'🤖 ':'💻 '}${escapeHtml(e.origen||'—')}</div>
-      </div>
-      <div style="font-size:10px;color:var(--text3);white-space:nowrap;flex-shrink:0">${fechaTxt}</div>
-    </div>`;
-  }).join('');
-}
 
 async function _writeSeccionesCambiadas(localMeta, lastSynced){
   const claves = Object.keys(localMeta);
@@ -3330,7 +3248,6 @@ async function _writeSeccionesCambiadas(localMeta, lastSynced){
   const escritas = [];
   claves.forEach(k=>{
     if(TC_KEYS_LOCALES_NO_SYNC.has(k)) return;
-    if(k==='historialCambios') return; // se maneja aparte, ver registrarCambioEnHistorial
     const localStr = JSON.stringify(localMeta[k]);
     const syncedStr = JSON.stringify(lastSynced ? lastSynced[k] : undefined);
     if(localStr !== syncedStr){
@@ -3484,25 +3401,17 @@ async function _doFirestoreWrite(){
     // traer y fusionar nada — se escriben SOLO las secciones que este
     // dispositivo cambió, y el resto ni se toca (imposible pisar lo de
     // otro dispositivo, sin importar el momento exacto en que guarde).
-    const seccionesEscritas = await _writeSeccionesCambiadas(localMeta, _lastSyncedMeta);
+    // "actividadLog" (Config → Actividad Reciente) es una sección más —
+    // se sincroniza solo, sin ningún manejo especial.
+    await _writeSeccionesCambiadas(localMeta, _lastSyncedMeta);
     await DOC_REF.set({
       savedAt: firebase.firestore.FieldValue.serverTimestamp(),
       schemaV2: true // marca que esta cuenta ya usa secciones separadas (no el bloque "meta" viejo)
     }, {merge:true});
-    const movsResumen = await syncMovimientosSubcollection();
+    await syncMovimientosSubcollection();
 
     _lastSyncedMeta = JSON.parse(JSON.stringify(localMeta));
     setSyncStatus('ok');
-
-    // Historial de cambios — se espera a que termine antes de seguir, para
-    // que 2 guardados seguidos (ej. agregar 2 movimientos rápido) no se
-    // pisen entre sí tratando de leer/escribir state.historialCambios al
-    // mismo tiempo. No debe tumbar el guardado principal si falla — por
-    // eso ya se marcó 'ok' antes, y el try/catch de adentro es silencioso.
-    const partes=[];
-    if(seccionesEscritas.length) partes.push('Actualizó: '+seccionesEscritas.join(', '));
-    if(movsResumen) partes.push(movsResumen);
-    if(partes.length) await registrarCambioEnHistorial(partes.join(' · '));
   }catch(err){
     console.error('Firestore save error:',err);
     setSyncStatus('error');
@@ -3547,9 +3456,21 @@ function toast(msg, tipo){
 //  encontrarlo y borrarlo sin ir a revisar tarjeta por tarjeta.
 // ══════════════════════════════════════════════════════
 const ACTIVIDAD_MAX=80; // se recorta lo más viejo para no crecer sin límite
+// Caché simple de la IP de esta sesión (se llena en registrarNuevaSesion,
+// vía el mismo fetch que ya se hacía para el historial de sesiones de
+// Seguridad — no se pide de nuevo). logActividad es síncrona y se llama
+// desde decenas de lugares, así que no puede esperar un fetch cada vez.
+let _ipSesionActual=null;
 function logActividad(tipo, resumen, ref){
   if(!Array.isArray(state.actividadLog)) state.actividadLog=[];
-  state.actividadLog.push({id:'act-'+Date.now()+Math.random().toString(36).slice(2,6), ts:Date.now(), tipo, resumen, ref});
+  const {dispositivo,navegador}=detectarDispositivoNavegador();
+  state.actividadLog.push({
+    id:'act-'+Date.now()+Math.random().toString(36).slice(2,6),
+    ts:Date.now(), tipo, resumen, ref,
+    quien: currentUser||'Desconocido',
+    dispositivo: dispositivo+' · '+navegador,
+    ip: _ipSesionActual,
+  });
   if(state.actividadLog.length>ACTIVIDAD_MAX) state.actividadLog=state.actividadLog.slice(-ACTIVIDAD_MAX);
 }
 function tiempoRelativo(ts){
@@ -3581,15 +3502,25 @@ function renderActividadReciente(){
     cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Aún no hay actividad registrada.</div>';
     return;
   }
-  cont.innerHTML=log.map(entry=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-      <div style="font-size:16px;flex-shrink:0">${ACTIVIDAD_ICONOS[entry.tipo]||'📌'}</div>
+  cont.innerHTML=log.map(entry=>{
+    const esBot=entry.quien==='Bot de Telegram';
+    const fechaAbs=new Date(entry.ts).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const detalle=[
+      escapeHtml(entry.quien||'Desconocido'),
+      escapeHtml(entry.dispositivo||'—'),
+      entry.ip?('IP '+escapeHtml(entry.ip)):null,
+    ].filter(Boolean).join(' · ');
+    return `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:16px;flex-shrink:0;margin-top:1px">${esBot?'🤖':(ACTIVIDAD_ICONOS[entry.tipo]||'📌')}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(entry.resumen)}</div>
-        <div style="font-size:10px;color:var(--text3)">${tiempoRelativo(entry.ts)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${detalle}</div>
+        <div style="font-size:10px;color:var(--text3)">${fechaAbs} · ${tiempoRelativo(entry.ts)}</div>
       </div>
       <button onclick="eliminarActividad('${entry.id}')" style="font-size:10px;padding:5px 10px;background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;cursor:pointer;flex-shrink:0">Eliminar</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 // Revierte un movimiento de cuenta O un consumo de tarjeta, según qué datos
 // traiga el ref — reutilizado por varios tipos de actividad (pago frecuente
@@ -4479,7 +4410,6 @@ function showPage(name){
   if(name==='afp')         renderAFP();
   if(name==='compras')     renderListaCompras();
   if(name==='ahorros-intereses') renderAhorrosIntereses();
-  if(name==='historial-cambios') renderHistorialCambios();
   if(name==='minijuegos')  initMinijuegos();
 }
 
@@ -5340,7 +5270,6 @@ function render(){
   if(active('tc-tracker'))  renderTCTracker();
   if(active('inversiones')) renderInversiones();
   if(active('calendario'))  renderCalendario();
-  if(active('historial-cambios')) renderHistorialCambios();
 }
 function updateTitles(){
   const label=MONTHS[state.currentMonth]+' '+state.currentYear;
@@ -8098,6 +8027,7 @@ async function registrarNuevaSesion(){
   const ipInfo=await detectarUbicacionPorIP();
   if(ipInfo){
     nueva.ipPais=ipInfo.pais; nueva.ipCiudad=ipInfo.ciudad; nueva.ip=ipInfo.ip;
+    _ipSesionActual=ipInfo.ip; // caché simple para Actividad Reciente (logActividad es síncrona, no puede esperar este fetch cada vez)
     await guardarSesionesEnLaNubeSinRiesgo();
     if(document.getElementById('seguridad-overlay').classList.contains('open')) renderHistorialSesiones();
   }
