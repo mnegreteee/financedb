@@ -30,13 +30,19 @@
 :root[data-theme="dark"]{
   --bg:#0f1117;--bg2:#161820;--bg3:#1e2028;--bg4:#262830;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
-  --text:#f0f0f2;--text2:#9899a6;--text3:#5a5b66;
+  /* text2/text3 antes eran demasiado oscuros sobre fondo oscuro (#9899a6 y
+     #5a5b66, contraste real ~5.3:1 y ~2.3:1) — se pedía específicamente
+     que se lean bien montos/fechas secundarios, así que se suben cerca del
+     blanco manteniendo algo de jerarquía frente a --text. */
+  --text:#f0f0f2;--text2:#cacbd3;--text3:#a8a9b3;
   --card-shadow:0 1px 3px rgba(0,0,0,.4);
 }
 :root[data-theme="light"]{
   --bg:#f4f5f7;--bg2:#ffffff;--bg3:#f0f1f3;--bg4:#e4e5e8;
   --border:rgba(0,0,0,0.08);--border2:rgba(0,0,0,0.14);
-  --text:#1a1b1e;--text2:#6b6c78;--text3:#a0a1ae;
+  /* mismo ajuste en espejo para el tema claro — text2/text3 se acercan al
+     negro en vez de quedar en un gris casi ilegible sobre fondo claro. */
+  --text:#1a1b1e;--text2:#3a3b44;--text3:#5c5d67;
   --card-shadow:0 1px 4px rgba(0,0,0,.08);
 }
 :root{
@@ -3139,8 +3145,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '04/09/26 - 11:06'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Ahorros e Intereses: nueva tarjeta "GANADO HASTA HOY" (color ámbar), entre TREA e Interés Proy. — muestra el interés REAL acumulado desde el día 1 del mes hasta hoy (no proyecta el resto del mes, solo suma lo que ya pasó día a día según el saldo real de cada día y la TREA). Distinto de "Interés proy. este mes", que sí proyecta el mes completo. Nuevo helper calcularInteresAcumuladoHastaHoy(). Verificado con Playwright: con saldo constante y 4 de 30 días transcurridos, dio exactamente 4/30 del total proyectado del mes (S/9.04 de S/67.80), y regresión completa de las 11 páginas sin errores.';
+const APP_VERSION_DATE = '04/09/26 - 17:31'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Revisión adicional del bug de signo negativo: se encontraron y corrigieron 2 casos más. (1) Badge "vs mes anterior" junto a Patrimonio Neto Total — mostraba solo el color rojo sin el "-" cuando el patrimonio bajó respecto al mes pasado. (2) Diferencia entre retención de 5ta real vs estimada (Config → Sueldo) — mismo problema. Se revisaron otros 9 lugares con patrones similares y ya estaban bien (usan .toFixed() directo sobre el número con signo, que sí preserva el "-" solo, o ya tenían el signo explícito correcto). Verificado con Playwright: ambos casos ahora muestran "-S/ 740.00" y "-S/ 85.30" en vez de solo el monto positivo con color rojo. Nota: este cambio y los 3 del PDF de hoy (reordenar/recolorear casas de cambio + contraste de texto) TODAVÍA NO se aplicaron a la app de Nathy, a pedido explícito.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -13251,7 +13257,7 @@ function renderDashboard(){
   if(pUsdEl){ pUsdEl.textContent = M((patrimonioUSD<0?'-':'')+fmtD(patrimonioUSD)); pUsdEl.style.color = patrimonioUSD>=0?'var(--text)':'var(--red)'; }
   const vBadge = document.getElementById('dash-var-badge');
   if(vBadge){
-    const sign = patrimonioVar >= 0 ? '+' : '';
+    const sign = patrimonioVar >= 0 ? '+' : '-';
     const cls  = patrimonioVar > 0 ? 'dash-var-up' : patrimonioVar < 0 ? 'dash-var-dn' : 'dash-var-nt';
     vBadge.className = 'dash-var-badge ' + cls;
     vBadge.textContent = sign + fmtS(Math.abs(patrimonioVar)) + ' vs mes anterior';
@@ -15900,12 +15906,33 @@ function renderTCEmpresaChips(){
   const wrap = document.getElementById('tct-empresa-chips');
   if(!wrap) return;
   const empresas = state.tcEmpresas || [];
-  wrap.innerHTML = empresas.map(e=>`
+  wrap.innerHTML = empresas.map((e,idx)=>`
     <div class="tct-empresa-chip">
-      <span class="tct-empresa-dot" style="background:${e.color}"></span>
+      ${idx===0?'':`<span onclick="moverTCEmpresa('${e.id}',-1)" style="cursor:pointer;color:var(--text3);font-size:9px" title="Mover antes">◀</span>`}
+      <input type="color" value="${e.color}" onchange="updateTCEmpresaColor('${e.id}',this.value)" title="Cambiar color" style="width:14px;height:14px;padding:0;border:none;border-radius:50%;cursor:pointer;flex-shrink:0;background:${e.color}">
       <span onclick="renameTCEmpresa('${e.id}')" style="cursor:pointer" title="Clic para renombrar">${escapeHtml(e.nombre)}</span>
+      ${idx===empresas.length-1?'':`<span onclick="moverTCEmpresa('${e.id}',1)" style="cursor:pointer;color:var(--text3);font-size:9px" title="Mover después">▶</span>`}
       <button class="tct-empresa-del" onclick="deleteTCEmpresa('${e.id}')" title="Eliminar casa de cambio">✕</button>
     </div>`).join('');
+}
+// Reordenar las casas de cambio — el orden del array determina el orden de
+// las columnas en la tabla y de los chips, así que mover una acá también
+// mueve su columna correspondiente.
+function moverTCEmpresa(id, dir){
+  if(!state.tcEmpresas) return;
+  const idx=state.tcEmpresas.findIndex(e=>e.id===id);
+  const swapIdx=idx+dir;
+  if(idx===-1||swapIdx<0||swapIdx>=state.tcEmpresas.length) return;
+  [state.tcEmpresas[idx], state.tcEmpresas[swapIdx]]=[state.tcEmpresas[swapIdx], state.tcEmpresas[idx]];
+  saveState();
+  renderTCTracker();
+}
+function updateTCEmpresaColor(id, color){
+  const e=(state.tcEmpresas||[]).find(x=>x.id===id);
+  if(!e) return;
+  e.color=color;
+  saveState();
+  renderTCTracker();
 }
 
 // ── CRUD FILAS ─────────────────────────────────────────
@@ -16901,7 +16928,7 @@ function renderSueldos(){
     const ingreso=b.basica+b.bono+b.otros+(b.utilidades||0);
     const tieneReal=b.retencion5taReal!==null&&b.retencion5taReal!==undefined;
     const diff=tieneReal?b.retencion5taReal-b.retencion5taEstimada:null;
-    const diffTxt=tieneReal?`<span style="color:${Math.abs(diff)<2?'var(--green)':'var(--red)'}">${diff>=0?'+':''}${fmtS(diff)}</span>`:'—';
+    const diffTxt=tieneReal?`<span style="color:${Math.abs(diff)<2?'var(--green)':'var(--red)'}">${diff>=0?'+':'-'}${fmtS(Math.abs(diff))}</span>`:'—';
     const utilTxt=b.utilidades?` <span title="Incluye S/${b.utilidades.toFixed(2)} de utilidades" style="cursor:help">💰</span>`:'';
     return `<tr>
       <td>${MONTHS[b.mes]}</td>
