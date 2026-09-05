@@ -3150,8 +3150,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 13:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Agregada categoría a 4 secciones que no la tenían: Servicios (Spotify/YT, con sugerencia inteligente), Deudas/Préstamos (con sugerencia, y el cobro ya usa tu categoría elegida en vez del valor fijo "💰 Préstamos" de siempre), y Compra/Venta de USD (categoría independiente para cada operación — recuerda que a diferencia de transferencias, esto SÍ suma a tus reportes de gasto por categoría, ya que sí crea un movimiento real). Pagos y Ingresos Frecuentes resultó más simple de lo esperado: el campo ya existía pero estaba bloqueado para ingresos — ahora "Sueldo" y cualquier otro ingreso también puede llevar categoría (ej. "Trabajo"), y sí queda reflejada en el movimiento real, sin afectar los reportes de gasto (esos son solo de gastos). Se reutilizó el sistema de sugerencia inteligente que YA existía en la app (suggestCategoriaForDesc) en vez de construir uno nuevo. Se corrigieron los mismos 2 puntos en el bot (index.js): el pago de un ingreso frecuente y el pago de un servicio compartido ahora también llevan la categoría correspondiente. Verificado con Playwright + Node: las 4 secciones guardan y aplican la categoría correctamente (incluido el caso "Sueldo" que pediste validar), la sugerencia inteligente funciona en el campo nuevo, los 2 fixes del bot producen el movimiento correcto, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '05/09/26 - 13:49'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva función: al elegir categoría en Servicios, Pagos/Ingresos Frecuentes o Deudas, la app pregunta si quieres aplicar esa misma categoría a los movimientos anteriores que coincidan (ej. todos los "Sueldo" de meses pasados). Nunca se aplica sola — siempre pregunta primero cuántos encontró y pide confirmación. Diseñado con cuidado para no confundir cosas parecidas pero distintas: en Servicios usa coincidencia por prefijo del nombre (así "Spotify - Zektor" no se confunde con "Spotify Duo - OtraPersona"), en Pagos Frecuentes y Deudas usa coincidencia exacta del texto completo. No se ofrece para Compra/Venta de USD porque esas operaciones no tienen un nombre en común que sirva para buscar hacia atrás. Verificado con Playwright: los 3 casos (incluida la distinción cuidadosa entre coincidencias exactas y parecidas), y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10346,6 +10346,7 @@ function saveSrvEdit(){
   saveServicesForMonth(allSvcs);
   logActividad(esNuevo?'servicio_nuevo':'servicio_editado', `Servicio ${esNuevo?'nuevo':'editado'}: ${name}`, {serviceId:sid, monthKey:monthKey(state.currentYear,state.currentMonth), snapshotAntes:svcAntes});
   closeSrvEdit();renderServicios();render();
+  if(cat) aplicarCategoriaRetroactiva(name+' - ', cat, 'prefijo');
 }
 function deleteService(sid){
   if(!confirm('¿Eliminar este servicio?'))return;
@@ -11418,6 +11419,28 @@ function suggestCategoriaFor(descId, catId, hintId){
     catEl.value=suggested;
     if(hintEl) hintEl.textContent='🧠 Sugerido';
   }
+}
+
+// Aplica una categoría hacia atrás — a todos los movimientos YA existentes
+// que coincidan con un nombre/descripción (ej. todos los "Sueldo" de meses
+// anteriores). Solo se ofrece cuando el usuario elige una categoría al
+// EDITAR algo que ya tenía movimientos previos — nunca se aplica solo,
+// siempre se pregunta primero cuántos encontró y se pide confirmación.
+// matchTipo: 'exacto' (desc===texto) o 'prefijo' (desc empieza con texto,
+// usado en Servicios porque el desc real incluye " - NombrePersona" al final).
+function aplicarCategoriaRetroactiva(texto, categoria, matchTipo){
+  if(!categoria || !texto) return;
+  const coincidencias=(state.movimientos||[]).filter(m=>{
+    const yaEsIgual = m.cat===categoria;
+    if(yaEsIgual) return false;
+    return matchTipo==='prefijo' ? m.desc.startsWith(texto) : m.desc===texto;
+  });
+  if(!coincidencias.length) return;
+  const ok=confirm(`Encontré ${coincidencias.length} movimiento(s) anterior(es) de "${texto}". ¿Aplicarles también la categoría "${categoria}"?`);
+  if(!ok) return;
+  coincidencias.forEach(m=>{ m.cat=categoria; });
+  saveState();
+  toast(`${coincidencias.length} movimiento(s) actualizado(s) con la nueva categoría`);
 }
 
 
@@ -14392,6 +14415,10 @@ function savePagoFrecuente(){
   closePagoFrecuenteModal();
   renderPagosFrecuentes();
   toast(editingPFId?'Pago frecuente actualizado':'Pago frecuente guardado');
+  // Se ofrece DESPUÉS de cerrar el modal — si el usuario dice que no, no se
+  // pierde nada de lo ya guardado, la categoría del pago frecuente en sí ya
+  // quedó bien igual.
+  if(categoria) aplicarCategoriaRetroactiva(nombre, categoria, 'exacto');
 }
 
 function deletePagoFrecuente(){
@@ -15245,6 +15272,7 @@ function saveDeuda(){
     }
   }
   saveState(); closeDeudaModal(); renderDeudas(); toast('Préstamo guardado');
+  if(cat) aplicarCategoriaRetroactiva('Cobro préstamo — '+nombre, cat, 'exacto');
 }
 
 function deleteDeuda(){
