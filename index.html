@@ -2108,11 +2108,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="dash-split compras-summary-grid" id="compras-summary" style="margin-bottom:16px"></div>
 
-  <div style="display:flex;gap:8px;margin-bottom:16px">
-    <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px">Todos</button>
-    <button class="config-action-btn neutral" id="cp-filter-deseado" onclick="setComprasFilter('deseado')" style="font-size:11px">🎯 Deseados</button>
-    <button class="config-action-btn neutral" id="cp-filter-en_camino" onclick="setComprasFilter('en_camino')" style="font-size:11px">🚚 En camino</button>
-    <button class="config-action-btn neutral" id="cp-filter-entregado" onclick="setComprasFilter('entregado')" style="font-size:11px">📦 Entregados</button>
+  <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">
+    <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px;flex-shrink:0">Todos</button>
+    <button class="config-action-btn neutral" id="cp-filter-deseado" onclick="setComprasFilter('deseado')" style="font-size:11px;flex-shrink:0">🎯 Deseados</button>
+    <button class="config-action-btn neutral" id="cp-filter-en_camino" onclick="setComprasFilter('en_camino')" style="font-size:11px;flex-shrink:0">🚚 En camino</button>
+    <button class="config-action-btn neutral" id="cp-filter-entregado" onclick="setComprasFilter('entregado')" style="font-size:11px;flex-shrink:0">📦 Entregados</button>
   </div>
 
   <div id="compras-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
@@ -2603,10 +2603,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <!-- Filtro -->
-  <div style="display:flex;gap:8px;margin-bottom:10px">
-    <button class="config-action-btn neutral" id="d-filter-all"    onclick="setDeudaFilter('all')"     style="font-size:11px">Todos</button>
-    <button class="config-action-btn neutral" id="d-filter-pendiente" onclick="setDeudaFilter('pendiente')" style="font-size:11px">⏳ Pendientes</button>
-    <button class="config-action-btn neutral" id="d-filter-pagado"  onclick="setDeudaFilter('pagado')"  style="font-size:11px">✅ Cobrados</button>
+  <div style="display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">
+    <button class="config-action-btn neutral" id="d-filter-all"    onclick="setDeudaFilter('all')"     style="font-size:11px;flex-shrink:0">Todos</button>
+    <button class="config-action-btn neutral" id="d-filter-pendiente" onclick="setDeudaFilter('pendiente')" style="font-size:11px;flex-shrink:0">⏳ Pendientes</button>
+    <button class="config-action-btn neutral" id="d-filter-pagado"  onclick="setDeudaFilter('pagado')"  style="font-size:11px;flex-shrink:0">✅ Cobrados</button>
   </div>
   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px;font-size:10px">
     <span style="color:var(--text3)">Ordenar:</span>
@@ -3182,8 +3182,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '07/09/26 - 21:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mismo fix del diseño responsivo aplicado a 2 secciones más con el mismo problema de columnas fijas: Ahorros e Intereses (4 tarjetas) y Lista de Compras (4 tarjetas — esta última era un bug propio de hoy: al agregar "En camino" quedaron 4 tarjetas pero el contenedor seguía fijo en 3 columnas, encontrado al revisar el resto de la app por el mismo patrón). Ambas ahora responden igual que AFP: ancha → todas en una fila, tablet → 2 columnas, celular → 1 por fila. Verificado con Playwright con capturas en 393px, sin ningún número cortado, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '07/09/26 - 22:01'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregida la fila de pestañas de filtro en Lista de Compras (Todos/Deseados/En camino/Entregados) — en celular se desbordaba sin poder verse ni desplazarse, dejando "Entregados" cortado y encimado sobre la primera tarjeta de la lista (reportado con captura marcada). Ahora esa fila se puede deslizar horizontalmente (como sugeriste) para ver todas las pestañas sin que se corten. Se aplicó preventivamente el mismo arreglo a la fila de Deudas (Todos/Pendientes/Cobrados), que tenía el mismo riesgo aunque no se había reportado. La fila de Finanzas (Todos/Ingresos/Gastos/Ahorro) usa un diseño distinto que reparte el ancho en partes iguales, así que no tenía este riesgo y no se tocó. Verificado con Playwright: la fila es desplazable, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
