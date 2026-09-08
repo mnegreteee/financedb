@@ -1379,7 +1379,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="mid-grid-3col">
     <div class="card" style="padding:18px">
       <div class="section-header"><div class="section-title">Cuentas</div><div style="display:flex;align-items:center;gap:6px"><button id="cuentas-op-ocultas-btn" class="config-action-btn neutral" style="font-size:9px;display:none;padding:3px 7px" onclick="toggleCuentasOpOcultasView()"></button><button id="btn-transferir" class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="openTransferModal()">🔄 Transferir</button></div></div>
-      <div style="font-size:10px;color:var(--text3);margin-top:-8px;margin-bottom:8px">BCP · BBVA · Efectivo</div>
+      <div id="cuentas-op-subtitulo" style="font-size:10px;color:var(--text3);margin-top:-8px;margin-bottom:8px">BCP · BBVA · Efectivo</div>
       <table class="account-table"><thead><tr><th>Cuenta</th><th>Previo</th><th style="text-align:right">Actual</th></tr></thead><tbody id="accounts-tbody"></tbody></table>
       <div id="account-filter-badge" style="display:none;margin-top:8px"><div class="filter-badge"><span id="filter-badge-text"></span><span style="cursor:pointer" onclick="clearAccountFilter()"> ✕</span></div></div>
     </div>
@@ -3182,8 +3182,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '07/09/26 - 22:01'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corregida la fila de pestañas de filtro en Lista de Compras (Todos/Deseados/En camino/Entregados) — en celular se desbordaba sin poder verse ni desplazarse, dejando "Entregados" cortado y encimado sobre la primera tarjeta de la lista (reportado con captura marcada). Ahora esa fila se puede deslizar horizontalmente (como sugeriste) para ver todas las pestañas sin que se corten. Se aplicó preventivamente el mismo arreglo a la fila de Deudas (Todos/Pendientes/Cobrados), que tenía el mismo riesgo aunque no se había reportado. La fila de Finanzas (Todos/Ingresos/Gastos/Ahorro) usa un diseño distinto que reparte el ancho en partes iguales, así que no tenía este riesgo y no se tocó. Verificado con Playwright: la fila es desplazable, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '07/09/26 - 22:11'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corregido el subtítulo bajo "Cuentas" en Finanzas — decía siempre "BCP · BBVA · Efectivo", un texto fijo que nunca se actualizaba, sin importar qué cuentas tuvieras de verdad (por eso mencionaba BCP aunque no lo uses, y no mencionaba "Agora (YT)" ni "Corredor" que sí tienes). Ahora se genera dinámicamente con las cuentas operativas reales, reutilizando la misma lista que ya arma la tabla de al lado — nunca se puede desincronizar entre los dos. Verificado con Playwright: el subtítulo muestra exactamente "BBVA · Efectivo · Agora (YT) · Corredor" cuando esas son las cuentas reales, sin ningún rastro de BCP, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6402,6 +6402,14 @@ function renderAccountsTables(){
   }
   const allOpRowsDeduped=dedupePorNombre(allOpRows);
   const ahRowsDeduped=dedupePorNombre(ahRows);
+
+  // El subtítulo bajo "Cuentas" antes decía siempre "BCP · BBVA · Efectivo"
+  // sin importar cuáles tuvieras de verdad — ahora refleja las cuentas
+  // operativas reales (incluye las personalizadas, ej. "Agora (YT)").
+  const subtituloEl=document.getElementById('cuentas-op-subtitulo');
+  if(subtituloEl){
+    subtituloEl.textContent = allOpRowsDeduped.length ? allOpRowsDeduped.map(r=>r.l).join(' · ') : 'Sin cuentas registradas';
+  }
 
   // Botón "🙈 Ocultas" de Cuentas operativas — mismo patrón que en Ahorros:
   // solo aparece si hay alguna en S/0 sin forzar a mostrar.
