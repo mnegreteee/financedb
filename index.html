@@ -792,6 +792,23 @@ body.compact-mode .anual-table{font-size:11px;}
 .dm-tipo-opt-desc{font-size:10px;color:var(--text2);line-height:1.4;}
 .dm-preview-box{background:var(--bg3);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;}
 @media(max-width:600px){.dm-summary{grid-template-columns:1fr 1fr;}.dm-tipo-choice{grid-template-columns:1fr;}}
+/* AFP: 5 tarjetas — en pantalla ancha van en una sola fila; en tablet se
+   parten en 2 columnas (así el texto largo como "RENTAB. MENSUAL PROM."
+   tiene espacio); en celular, una por fila (si no, el texto se corta,
+   como se vio reportado desde el teléfono). */
+.afp-summary-grid{grid-template-columns:repeat(5,1fr);}
+@media(max-width:900px){.afp-summary-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:600px){.afp-summary-grid{grid-template-columns:1fr;}}
+/* Ahorros e Intereses: mismo criterio que AFP — 4 tarjetas en una fila en
+   pantalla ancha, 2 columnas en tablet, 1 por fila en celular. */
+.ahi-summary-grid{grid-template-columns:repeat(4,1fr);}
+@media(max-width:900px){.ahi-summary-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:600px){.ahi-summary-grid{grid-template-columns:1fr;}}
+/* Lista de Compras: 4 tarjetas desde que se agregó "En camino" — mismo
+   criterio de las otras 2 de arriba. */
+.compras-summary-grid{grid-template-columns:repeat(4,1fr);}
+@media(max-width:900px){.compras-summary-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:600px){.compras-summary-grid{grid-template-columns:1fr;}}
 
 
 /* ══ CALENDARIO ══ */
@@ -1969,7 +1986,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button class="config-action-btn" id="afp-patrimonio-toggle-btn" onclick="toggleAFPEnPatrimonio()" style="font-size:11px"></button>
   </div>
 
-  <div class="dash-split" id="afp-summary" style="grid-template-columns:repeat(5,1fr)"></div>
+  <div class="dash-split afp-summary-grid" id="afp-summary"></div>
 
   <div class="card" style="padding:16px 20px;margin-bottom:16px;margin-top:16px">
     <div class="section-title" style="font-size:13px;margin-bottom:10px">Evolución del fondo</div>
@@ -2089,7 +2106,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button class="btn btn-primary" style="font-size:11px" onclick="abrirCompraModal()">+ Nuevo</button>
   </div>
 
-  <div class="dash-split" id="compras-summary" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px"></div>
+  <div class="dash-split compras-summary-grid" id="compras-summary" style="margin-bottom:16px"></div>
 
   <div style="display:flex;gap:8px;margin-bottom:16px">
     <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px">Todos</button>
@@ -2205,7 +2222,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div id="ahi-sin-cuentas" class="dash-empty" style="display:none">No tienes cuentas de ahorro configuradas todavía. Crea una desde Finanzas → Cuentas.</div>
 
   <div id="ahi-contenido">
-    <div class="dash-split" id="ahi-summary" style="grid-template-columns:repeat(4,1fr);align-items:stretch"></div>
+    <div class="dash-split ahi-summary-grid" id="ahi-summary" style="align-items:stretch"></div>
 
     <div id="ahi-detalle-dias-card" class="card" style="padding:14px 20px;margin-top:16px;margin-bottom:16px;display:none">
       <div class="section-header" style="margin-bottom:10px">
@@ -3165,8 +3182,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '05/09/26 - 15:06'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Lista de Compras: nuevas pestañas "🚚 En camino" y "📦 Entregados" (reemplazan "Comprados"), separando lo que ya pagaste pero todavía no llega de lo que ya recibiste. Al marcar como comprado, ahora también puedes pegar un link/código de seguimiento (si no es una URL completa, arma automático el link de 17TRACK). Nuevo botón "📦 Marcar llegado" que pide la fecha de llegada. Días transcurridos: mientras está en camino cuenta en vivo (hoy − fecha de compra) y se resalta en ámbar/rojo pasados 15/25 días; en cuanto llega, se congela en el total real (fecha de llegada − fecha de compra) y ya no sigue subiendo. El nombre del producto sigue siendo clickeable al link si lo tiene, y el comentario reutiliza el campo "Notas" que ya existía. Verificado con Playwright: marcar comprado con tracking, marcar llegado con el congelamiento correcto de días, separación correcta entre las pestañas En camino/Entregados, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '07/09/26 - 21:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mismo fix del diseño responsivo aplicado a 2 secciones más con el mismo problema de columnas fijas: Ahorros e Intereses (4 tarjetas) y Lista de Compras (4 tarjetas — esta última era un bug propio de hoy: al agregar "En camino" quedaron 4 tarjetas pero el contenedor seguía fijo en 3 columnas, encontrado al revisar el resto de la app por el mismo patrón). Ambas ahora responden igual que AFP: ancha → todas en una fila, tablet → 2 columnas, celular → 1 por fila. Verificado con Playwright con capturas en 393px, sin ningún número cortado, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
