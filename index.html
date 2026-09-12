@@ -3196,8 +3196,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '12/09/26 - 05:52'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Completado el punto pendiente de las compras a cuotas: ahora sí se puede eliminar o renombrar la compra COMPLETA de una sola vez, en vez de ir mes por mes. Al tocar "Eliminar" en cualquier cuota, si es parte de un grupo, primero pregunta si quieres borrar solo esa cuota — si dices que no, ofrece borrar la compra completa (todas las cuotas, en todos los meses), mostrando cuántas ya están pagadas y cuánto queda pendiente antes de confirmar. También se agregó un botón "✏️📦" junto al de editar, visible solo en consumos que son parte de una compra a cuotas, para renombrar todas las cuotas de una compra a la vez (mantiene el sufijo "— Cuota X/Y" en cada una). Un consumo normal (sin cuotas) se sigue borrando exactamente igual que siempre, sin ningún cambio de comportamiento. Verificado con Playwright: borrar el grupo completo (5 cuotas de una compra), borrar solo una cuota sin tocar las demás, renombrar las 3 cuotas de otra compra a la vez, y un consumo normal sigue funcionando igual — más regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '12/09/26 - 06:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'FIX: "Eliminar" en Actividad Reciente no funcionaba correctamente para compras a cuotas completas — encontrado al preguntar Miguel si debía borrar las 5 cuotas de una vez. Causa: al registrar la creación del grupo, se guardó el id del GRUPO en el campo donde el sistema de deshacer esperaba el id de UN consumo específico, así que nunca encontraba nada que borrar (parecía funcionar pero no hacía nada). Lo mismo pasaba al revés: deshacer el borrado de una compra a cuotas completa no restauraba nada, porque no se había guardado la información de las 5 cuotas para poder traerlas de vuelta. Corregido en ambos sentidos: _revertirMovOConsumo() ahora reconoce un grupoCuotaId y borra todas las cuotas del grupo en cualquier mes en que estén; y el registro de un borrado de grupo ahora guarda las cuotas completas para poder restaurarlas todas si se deshace esa acción. Verificado con Playwright: eliminar desde Actividad Reciente la creación de un grupo de 5 cuotas las borra las 5; deshacer el borrado de un grupo de 3 cuotas las restaura las 3 con sus montos exactos; deshacer un movimiento normal (no relacionado a cuotas) sigue funcionando igual que siempre. Regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3693,6 +3693,19 @@ function _revertirMovOConsumo(ref){
     const m=state.movimientos.find(x=>x.id===ref.movId);
     if(m){ revertAccount(m); _movimientosBorradosExplicitamente.push(ref.movId); state.movimientos=state.movimientos.filter(x=>x.id!==ref.movId); }
   }
+  if(ref.grupoCuotaId){
+    // Deshacer la creación de una compra a cuotas COMPLETA: borra todas las
+    // cuotas del grupo, en cualquier mes en el que hayan quedado — no solo
+    // en el mes de la primera, porque cada cuota vive en un mes distinto.
+    const t=getTarjeta(ref.tarjetaId);
+    if(t && t.movs){
+      Object.keys(t.movs).forEach(mk=>{
+        t.movs[mk]=t.movs[mk].filter(c=>c.grupoCuotaId!==ref.grupoCuotaId);
+        if(t.movs[mk].length===0) delete t.movs[mk];
+      });
+    }
+    return;
+  }
   if(ref.tarjetaId && ref.monthKey && ref.consumoId){
     const t=getTarjeta(ref.tarjetaId);
     if(t && t.movs && t.movs[ref.monthKey]){
@@ -3913,7 +3926,20 @@ function eliminarActividad(logId){
         else if(m.type==='ahorro') state.cuentas[m.account]=(state.cuentas[m.account]||0)+(m.currency==='PEN'?a:usd);
       }
     } else if(entry.tipo==='tc_consumo_eliminado'){
-      if(ref.consumoSnapshot){
+      if(ref.snapshotsGrupo && Array.isArray(ref.snapshotsGrupo)){
+        // Deshacer el borrado de una compra a cuotas COMPLETA: restaura
+        // cada cuota en el mes exacto donde estaba (guardado como "mk" en
+        // cada snapshot al momento de borrarlas).
+        const t=getTarjeta(ref.tarjetaId);
+        if(t){
+          if(!t.movs) t.movs={};
+          ref.snapshotsGrupo.forEach(snap=>{
+            const {mk, ...consumo}=snap;
+            if(!t.movs[mk]) t.movs[mk]=[];
+            if(!t.movs[mk].some(m=>m.id===consumo.id)) t.movs[mk].push(consumo);
+          });
+        }
+      } else if(ref.consumoSnapshot){
         const t=getTarjeta(ref.tarjetaId);
         if(t){
           if(!t.movs) t.movs={};
@@ -12604,7 +12630,7 @@ function saveTCMov(){
       t.movs[mk].push(nuevoMov);
     }
     const symTCc=currency==='USD'?'$':'S/';
-    logActividad('tc_consumo', `${desc} a ${numCuotas} cuotas de ${symTCc} ${cuotaRedondeada.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:getBillingMonthKey(fecha,t), consumoId:grupoCuotaId});
+    logActividad('tc_consumo', `${desc} a ${numCuotas} cuotas de ${symTCc} ${cuotaRedondeada.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, grupoCuotaId});
     if(tarjetaId===currentTCId && ultimoMk!==currentTCMonth){
       // se queda viendo el mes de la PRIMERA cuota (más relevante que la última)
       currentTCMonth=getBillingMonthKey(fecha,t);
@@ -12727,7 +12753,7 @@ function eliminarGrupoCuotas(t, grupoCuotaId, nombreBase){
   mensaje+=`?\n\nQuedan ${pendientes.length} cuota(s) pendiente(s) por ${sym} ${sumaPendiente.toFixed(2)} que se borrarían.\n\nEsta acción no se puede deshacer.`;
   if(!confirm(mensaje)) return;
   todasLasCuotas.forEach(m=>{ eliminarUnConsumoDeTarjeta(t, m.mk, m.id); });
-  logActividad('tc_consumo_eliminado', `Compra a cuotas eliminada completa: ${nombreBase} — ${todasLasCuotas.length} cuotas (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId});
+  logActividad('tc_consumo_eliminado', `Compra a cuotas eliminada completa: ${nombreBase} — ${todasLasCuotas.length} cuotas (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, snapshotsGrupo:todasLasCuotas});
   saveState(); renderTCDetail();
   toast(`${todasLasCuotas.length} cuotas eliminadas`);
 }
