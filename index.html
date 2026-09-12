@@ -2696,6 +2696,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <h1>💳 Tarjetas de Crédito</h1>
       <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;margin-left:12px" onclick="openTCConfigModal()">+ Agregar tarjeta</button>
       <button class="btn" style="font-size:11px;padding:5px 12px" onclick="openAddMovTCFromList()">+ Nuevo consumo</button>
+      <button class="btn" style="font-size:11px;padding:5px 12px" onclick="abrirMisCuotasActivas()">📦 Mis Cuotas</button>
     </div>
 
     <!-- Cards grid -->
@@ -2821,6 +2822,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
       <button class="btn" style="margin-left:auto;font-size:11px" onclick="openTCConfigModal(currentTCId)">✏ Editar tarjeta</button>
     </div>
+    <div id="tc-detail-nota" style="display:none;background:var(--bg3);border-left:3px solid var(--accent);border-radius:6px;padding:8px 12px;margin:-8px 0 14px;font-size:12.5px;color:var(--text2);white-space:pre-wrap"></div>
 
     <!-- Month selector -->
     <div class="tc-month-sel" id="tc-month-sel"></div>
@@ -3196,8 +3198,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '12/09/26 - 06:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'FIX: "Eliminar" en Actividad Reciente no funcionaba correctamente para compras a cuotas completas — encontrado al preguntar Miguel si debía borrar las 5 cuotas de una vez. Causa: al registrar la creación del grupo, se guardó el id del GRUPO en el campo donde el sistema de deshacer esperaba el id de UN consumo específico, así que nunca encontraba nada que borrar (parecía funcionar pero no hacía nada). Lo mismo pasaba al revés: deshacer el borrado de una compra a cuotas completa no restauraba nada, porque no se había guardado la información de las 5 cuotas para poder traerlas de vuelta. Corregido en ambos sentidos: _revertirMovOConsumo() ahora reconoce un grupoCuotaId y borra todas las cuotas del grupo en cualquier mes en que estén; y el registro de un borrado de grupo ahora guarda las cuotas completas para poder restaurarlas todas si se deshace esa acción. Verificado con Playwright: eliminar desde Actividad Reciente la creación de un grupo de 5 cuotas las borra las 5; deshacer el borrado de un grupo de 3 cuotas las restaura las 3 con sus montos exactos; deshacer un movimiento normal (no relacionado a cuotas) sigue funcionando igual que siempre. Regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '12/09/26 - 07:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Verificación de diseño móvil de las 3 funciones nuevas (nota en tarjetas, Mis Cuotas Activas, Cancelar cuotas restantes), pedida antes de portar a Nathy. Se probaron con capturas reales en 393px de ancho: el campo de nota en Editar Tarjeta, el recordatorio en el detalle, el ícono en la lista, y ambos modales de cuotas se ven bien, legibles y sin desbordes. Se encontró y corrigió un bug real en el camino: el botón "Cancelar resto" dentro de "Mis Cuotas Activas" abría el modal de cancelación por DEBAJO del modal de Mis Cuotas (por orden en el HTML), dejándolo invisible aunque sí funcionaba por dentro — ahora cierra Mis Cuotas Activas antes de abrir el de cancelación, igual que ya hacía el botón "Ver detalle". Verificado con Playwright simulando el clic real: ya no quedan los 2 modales abiertos a la vez, y regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11996,7 +11998,7 @@ function buildTCCard(t, idx, total){
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col};border-radius:var(--radius) var(--radius) 0 0"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
       <div>
-        <div class="tc-bank-label">${escapeHtml(t.banco)||'—'}</div>
+        <div class="tc-bank-label">${escapeHtml(t.banco)||'—'}${t.nota&&t.nota.trim()?` <span title="${escapeHtml(t.nota.trim())}" style="font-size:11px;cursor:help">📌</span>`:''}</div>
         <div class="tc-cat-label">${t.cat||'—'}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
@@ -12034,6 +12036,9 @@ function openTCDetail(tid){
   document.getElementById('tc-detail-view').style.display='block';
   document.getElementById('tc-detail-title').textContent=t.banco+' '+t.cat;
   document.getElementById('tc-detail-sub').textContent=`Ciclo: ${t.inicio} al ${t.cierre} de cada mes | Pago: día ${t.pago}`;
+  const notaEl=document.getElementById('tc-detail-nota');
+  if(t.nota&&t.nota.trim()){ notaEl.textContent='📌 '+t.nota.trim(); notaEl.style.display='block'; }
+  else { notaEl.style.display='none'; }
   // Set current month to the payment month for today
   const {pagoMes,pagoAnio}=getSiguienteMesCalendario();
   currentTCMonth=tcMonthKey(pagoAnio,pagoMes);
@@ -12448,6 +12453,178 @@ function populateConsumoTarjetaSelect(preselectId){
   if(preselectId && tarjetas.some(t=>t.id===preselectId)) sel.value=preselectId;
   else if(tarjetas.length) sel.value=tarjetas[0].id;
 }
+// ── MIS CUOTAS ACTIVAS (vista consolidada de todas las tarjetas) ──────
+// Recorre TODAS las tarjetas y TODOS los meses, agrupa por grupoCuotaId, y
+// arma un resumen por compra: cuántas cuotas van pagadas, cuántas faltan,
+// cuánto queda pendiente en total, y cuándo cae la próxima cuota sin pagar.
+function obtenerGruposDeCuotas(){
+  const grupos={}; // grupoCuotaId -> {nombreBase, tarjetaId, tarjetaNombre, currency, cuotas:[...]}
+  (state.tarjetas||[]).forEach(t=>{
+    Object.entries(t.movs||{}).forEach(([mk,movs])=>{
+      (movs||[]).forEach(m=>{
+        if(!m.grupoCuotaId) return;
+        if(!grupos[m.grupoCuotaId]){
+          grupos[m.grupoCuotaId]={
+            grupoCuotaId:m.grupoCuotaId,
+            nombreBase:m.desc.replace(/ — Cuota \d+\/\d+$/,''),
+            tarjetaId:t.id,
+            tarjetaNombre:t.banco+(t.cat?' '+t.cat:''),
+            currency:m.currency||t.currency||'PEN',
+            conIntereses:!!m.conIntereses,
+            tea:m.tea||0,
+            cuotas:[],
+          };
+        }
+        grupos[m.grupoCuotaId].cuotas.push({...m, mk});
+      });
+    });
+  });
+  // Solo las compras que TODAVÍA tienen al menos 1 cuota pendiente — las
+  // que ya se pagaron completas no son "activas", no tiene sentido listarlas acá.
+  return Object.values(grupos)
+    .map(g=>{
+      g.cuotas.sort((a,b)=>(a.cuotaNumero||0)-(b.cuotaNumero||0));
+      const pendientes=g.cuotas.filter(c=>!c.pagado);
+      const pagadas=g.cuotas.length-pendientes.length;
+      const totalPendiente=pendientes.reduce((s,c)=>s+Number(c.monto),0);
+      const proxima=pendientes.length?pendientes[0]:null;
+      return {...g, totalCuotas:g.cuotas.length, pagadas, pendientesCount:pendientes.length, totalPendiente, proxima};
+    })
+    .filter(g=>g.pendientesCount>0)
+    .sort((a,b)=>(a.proxima?a.proxima.fecha:'').localeCompare(b.proxima?b.proxima.fecha:''));
+}
+function abrirMisCuotasActivas(){
+  renderMisCuotasActivas();
+  document.getElementById('mis-cuotas-overlay').classList.add('open');
+}
+function cerrarMisCuotasActivas(){ document.getElementById('mis-cuotas-overlay').classList.remove('open'); }
+function renderMisCuotasActivas(){
+  const cont=document.getElementById('mis-cuotas-contenido');
+  const grupos=obtenerGruposDeCuotas();
+  if(!grupos.length){
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">No tienes compras a cuotas activas en este momento.</div>';
+    return;
+  }
+  cont.innerHTML=grupos.map(g=>{
+    const sym=g.currency==='USD'?'$':'S/';
+    const montoCuota=g.proxima?Number(g.proxima.monto):0;
+    return `<div style="background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:600;font-size:13px">${escapeHtml(g.nombreBase)}${g.conIntereses?` <span style="font-size:10px;color:var(--text3);font-weight:400">(TEA ${g.tea}%)</span>`:''}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${escapeHtml(g.tarjetaNombre)} · cuota ${g.pagadas}/${g.totalCuotas} · ${sym} ${montoCuota.toFixed(2)} c/u</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:700;color:var(--amber)">${sym} ${g.totalPendiente.toFixed(2)}</div>
+          <div style="font-size:10px;color:var(--text3)">${g.pendientesCount} cuota(s) pendiente(s)</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap">
+        <div style="font-size:11px;color:var(--text3)">Próximo cobro: ${g.proxima?fmtFechaDDMMYYYY(g.proxima.fecha):'—'}</div>
+        <div style="display:flex;gap:6px">
+          <button class="config-action-btn neutral" style="font-size:10.5px;padding:4px 10px" onclick="cerrarMisCuotasActivas();openTCDetail('${g.tarjetaId}')">Ver detalle</button>
+          <button class="config-action-btn neutral" style="font-size:10.5px;padding:4px 10px" onclick="cerrarMisCuotasActivas();abrirCancelacionAnticipada('${g.grupoCuotaId}')">Cancelar resto</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── CANCELAR CUOTAS RESTANTES (pago anticipado) ───────────────────────
+// Reconstruye el monto ORIGINAL de la compra a partir de la cuota fija ya
+// calculada (es la fórmula del sistema francés despejada al revés) — hace
+// falta porque una vez repartida en cuotas, la app ya no guarda el monto
+// total en ningún lado, solo el de cada cuota individual.
+function reconstruirMontoOriginalCuotaFrances(cuotaFija, teaPct, numCuotas){
+  const tea=(teaPct||0)/100;
+  const tem=Math.pow(1+tea,1/12)-1;
+  if(tem<=0) return cuotaFija*numCuotas;
+  return cuotaFija*(Math.pow(1+tem,numCuotas)-1)/(tem*Math.pow(1+tem,numCuotas));
+}
+// Estimado de cuánto CAPITAL queda pendiente después de "cuotasYaPagadas"
+// pagos — es lo correcto para una cancelación anticipada: no se cobra el
+// interés de los meses que todavía no pasaron, solo el capital que falta.
+// Es un ESTIMADO nada más — el monto real que se cobra siempre lo confirma
+// el usuario mirando su propio banco, nunca se usa este número a ciegas.
+function calcularSaldoPendienteEstimado(cuotaFija, teaPct, numCuotas, cuotasYaPagadas){
+  const monto=reconstruirMontoOriginalCuotaFrances(cuotaFija, teaPct, numCuotas);
+  const tea=(teaPct||0)/100;
+  const tem=Math.pow(1+tea,1/12)-1;
+  let saldo=monto;
+  for(let i=0;i<cuotasYaPagadas;i++){
+    const interes=saldo*tem;
+    const amortizacion=cuotaFija-interes;
+    saldo=saldo-amortizacion;
+  }
+  return Math.max(0, saldo);
+}
+let _grupoCuotaIdEnCancelacion=null;
+function abrirCancelacionAnticipada(grupoCuotaId){
+  const g=obtenerGruposDeCuotas().find(x=>x.grupoCuotaId===grupoCuotaId);
+  if(!g){ alert('No se encontró esa compra — puede que ya no tenga cuotas pendientes.'); return; }
+  _grupoCuotaIdEnCancelacion=grupoCuotaId;
+  const sym=g.currency==='USD'?'$':'S/';
+  document.getElementById('cancelacion-resumen').innerHTML=
+    `<b>${escapeHtml(g.nombreBase)}</b> — ${escapeHtml(g.tarjetaNombre)}<br>`+
+    `Llevas pagadas ${g.pagadas}/${g.totalCuotas} cuotas. Quedan <b>${g.pendientesCount}</b> cuotas pendientes.`;
+  const estimadoWrap=document.getElementById('cancelacion-estimado-wrap');
+  const montoLabel=document.getElementById('cancelacion-monto-label');
+  const montoInput=document.getElementById('cancelacion-monto');
+  if(g.conIntereses){
+    const cuotaFija=g.proxima?Number(g.proxima.monto):0;
+    const estimado=calcularSaldoPendienteEstimado(cuotaFija, g.tea, g.totalCuotas, g.pagadas);
+    estimadoWrap.style.display='block';
+    estimadoWrap.innerHTML=`📐 Estimado por sistema francés si cancelas ahora: <b>${sym} ${estimado.toFixed(2)}</b><br>`+
+      `(cálculo aproximado — no incluye comisiones ni redondeos del banco. Confirma el monto exacto en tu app o banca por internet antes de guardar.)`;
+    montoLabel.innerHTML='Monto EXACTO que te cobra el banco <span style="font-size:10px;color:var(--text3)">(revísalo en tu app o banca por internet)</span>';
+    montoInput.value='';
+  } else {
+    estimadoWrap.style.display='none';
+    montoLabel.textContent='Monto a pagar (suma de las cuotas restantes)';
+    montoInput.value=g.totalPendiente.toFixed(2);
+  }
+  document.getElementById('cancelacion-fecha').value=todayLocalISO();
+  document.getElementById('cancelacion-anticipada-overlay').classList.add('open');
+}
+function cerrarCancelacionAnticipada(){
+  document.getElementById('cancelacion-anticipada-overlay').classList.remove('open');
+  _grupoCuotaIdEnCancelacion=null;
+}
+function confirmarCancelacionAnticipada(){
+  const g=obtenerGruposDeCuotas().find(x=>x.grupoCuotaId===_grupoCuotaIdEnCancelacion);
+  if(!g) return;
+  const monto=parseFloat(document.getElementById('cancelacion-monto').value);
+  const fecha=document.getElementById('cancelacion-fecha').value;
+  if(!monto||monto<=0){alert('Ingresa un monto válido.');return;}
+  if(!fecha){alert('Ingresa una fecha.');return;}
+  const sym=g.currency==='USD'?'$':'S/';
+  if(!confirm(`¿Confirmar que pagaste ${sym} ${monto.toFixed(2)} para cancelar las ${g.pendientesCount} cuotas restantes de "${g.nombreBase}"?\n\nEsto reemplaza esas cuotas pendientes por un solo pago — no se puede deshacer con un clic, quedaría que volver a crearlas a mano.`)) return;
+
+  const t=getTarjeta(g.tarjetaId);
+  if(!t) return;
+  // Quita SOLO las cuotas pendientes del grupo (las que ya se pagaron se
+  // quedan tal cual, como historial real de lo que efectivamente pagaste).
+  Object.keys(t.movs).forEach(mk=>{
+    t.movs[mk]=t.movs[mk].filter(c=>!(c.grupoCuotaId===g.grupoCuotaId && !c.pagado));
+    if(t.movs[mk].length===0) delete t.movs[mk];
+  });
+  const mk=getBillingMonthKey(fecha,t);
+  if(!t.movs[mk]) t.movs[mk]=[];
+  const nuevoMov={
+    id:'tcm'+Date.now()+'cancel',
+    desc:`${g.nombreBase} — Cancelación anticipada (cuotas ${g.pagadas+1} a ${g.totalCuotas})`,
+    fecha, monto, pagado:true, currency:g.currency,
+  };
+  t.movs[mk].push(nuevoMov);
+  logActividad('tc_consumo', `Cancelación anticipada: ${g.nombreBase} — ${sym} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:g.tarjetaId, monthKey:mk, consumoId:nuevoMov.id});
+  saveState();
+  cerrarCancelacionAnticipada();
+  renderTarjetas();
+  if(currentTCId===g.tarjetaId) renderTCDetail();
+  if(document.getElementById('mis-cuotas-overlay').classList.contains('open')) renderMisCuotasActivas();
+  toast('Cuotas restantes canceladas');
+}
+
 // ── COMPRAS A CUOTAS (sistema francés para las que tienen interés) ────
 // Convierte la TEA (Tasa Efectiva Anual) a TEM (tasa efectiva mensual) y
 // calcula la cuota FIJA mensual con la fórmula estándar de amortización
@@ -12788,11 +12965,12 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-linea').value=t.linea||'';
     document.getElementById('tc-f-currency').value=t.currency||'PEN';
     document.getElementById('tc-f-color').value=t.color||'#5b8def';
+    document.getElementById('tc-f-nota').value=t.nota||'';
     document.getElementById('tc-delete-btn').style.display='inline-flex';
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
-    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea'].forEach(id=>document.getElementById(id).value='');
+    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-nota'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-delete-btn').style.display='none';
@@ -12823,7 +13001,8 @@ function saveTCCard(){
     cierre:parseInt(document.getElementById('tc-f-cierre').value)||25,
     linea:parseFloat(document.getElementById('tc-f-linea').value)||0,
     currency:document.getElementById('tc-f-currency').value||'PEN',
-    color:document.getElementById('tc-f-color').value||'#5b8def'
+    color:document.getElementById('tc-f-color').value||'#5b8def',
+    nota:(document.getElementById('tc-f-nota').value||'').trim()
   };
   if(!state.tarjetas) state.tarjetas=[];
   const delBtn=document.getElementById('tc-delete-btn');
@@ -21393,12 +21572,42 @@ if(state.projGoals){
         <div class="tc-color-opt" style="background:#2dd4bf" onclick="selectTCColor('#2dd4bf')"></div>
       </div>
     </div>
+    <div class="field"><label>Nota / Comentario <span style="font-size:10px;color:var(--text3)">(opcional — ej. "Llamar en octubre a pedir exoneración de membresía")</span></label>
+      <textarea id="tc-f-nota" rows="2" placeholder="Escribe aquí cualquier recordatorio sobre esta tarjeta..." style="width:100%;resize:vertical;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;padding:8px 10px;font-family:inherit"></textarea>
+    </div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
       <button class="config-action-btn danger" id="tc-delete-btn" style="display:none" onclick="deleteTCCard()">🗑 Eliminar tarjeta</button>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn" onclick="closeTCConfigModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="saveTCCard()">Guardar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CANCELAR CUOTAS RESTANTES (pago anticipado) -->
+<div class="modal-overlay" id="cancelacion-anticipada-overlay" onclick="if(event.target===this)cerrarCancelacionAnticipada()">
+  <div class="modal" style="width:440px">
+    <div class="modal-title"><span>Cancelar cuotas restantes</span><button class="modal-close" onclick="cerrarCancelacionAnticipada()">✕</button></div>
+    <div id="cancelacion-resumen" style="font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.5"></div>
+    <div id="cancelacion-estimado-wrap" style="display:none;background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;color:var(--text3);line-height:1.5"></div>
+    <div class="field"><label id="cancelacion-monto-label">Monto a pagar</label><input id="cancelacion-monto" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="field"><label>Fecha de pago</label><input id="cancelacion-fecha" type="date"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarCancelacionAnticipada()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarCancelacionAnticipada()">Confirmar pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MIS CUOTAS ACTIVAS -->
+<div class="modal-overlay" id="mis-cuotas-overlay" onclick="if(event.target===this)cerrarMisCuotasActivas()">
+  <div class="modal" style="width:520px;max-width:95vw">
+    <div class="modal-title"><span>📦 Mis Cuotas Activas</span><button class="modal-close" onclick="cerrarMisCuotasActivas()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Todas tus compras a cuotas en curso, de todas las tarjetas juntas — no hace falta entrar tarjeta por tarjeta para verlas.</div>
+    <div id="mis-cuotas-contenido" style="max-height:55vh;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="cerrarMisCuotasActivas()">Cerrar</button>
     </div>
   </div>
 </div>
