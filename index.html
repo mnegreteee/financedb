@@ -3198,8 +3198,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '12/09/26 - 07:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Verificación de diseño móvil de las 3 funciones nuevas (nota en tarjetas, Mis Cuotas Activas, Cancelar cuotas restantes), pedida antes de portar a Nathy. Se probaron con capturas reales en 393px de ancho: el campo de nota en Editar Tarjeta, el recordatorio en el detalle, el ícono en la lista, y ambos modales de cuotas se ven bien, legibles y sin desbordes. Se encontró y corrigió un bug real en el camino: el botón "Cancelar resto" dentro de "Mis Cuotas Activas" abría el modal de cancelación por DEBAJO del modal de Mis Cuotas (por orden en el HTML), dejándolo invisible aunque sí funcionaba por dentro — ahora cierra Mis Cuotas Activas antes de abrir el de cancelación, igual que ya hacía el botón "Ver detalle". Verificado con Playwright simulando el clic real: ya no quedan los 2 modales abiertos a la vez, y regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '12/09/26 - 16:04'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo widget "📦 Compras a Cuotas" para el Dashboard (Resumen) — se agrega desde "✏️ Editar" en Mi Resumen, igual que cualquier otro widget (queda oculto por defecto). Muestra de un vistazo: cuántas compras a cuotas tienes activas en total (de todas las tarjetas juntas), cuántas cuotas llevas pagadas vs. el total (con barra de progreso), cuántas cuotas te faltan por pagar, y el monto total pendiente. Reutiliza exactamente los mismos datos que ya calcula "Mis Cuotas Activas" (obtenerGruposDeCuotas), así que nunca se pueden desincronizar entre el widget y esa vista — un botón "Ver todas →" abre esa misma pantalla. Verificado con Playwright con 2 compras mixtas (una con intereses parcialmente pagada, otra sin intereses): el widget calculó correctamente 2 compras, 5 de 15 cuotas pagadas (33%), 10 por pagar, y S/3,006.08 de total pendiente (verificado a mano: 8 cuotas de S/300.76 + 2 cuotas de S/300.00 = exacto). Capturas confirmadas en escritorio y celular. Regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -14024,6 +14024,12 @@ const DASHBOARD_WIDGET_DEFS = {
       <div id="dash-dp-list"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
     </div>`},
+  'cuotas-resumen': {label:'📦 Compras a Cuotas', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-cuotas-card">
+      <div class="dash-section-title">📦 Compras a Cuotas</div>
+      <div id="dash-cuotas-resumen-body"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="abrirMisCuotasActivas()">Ver todas →</button></div>
+    </div>`},
   'fechas': {label:'📅 Fechas Importantes', size:'large', shell:()=>`
     <div class="card" style="padding:18px" id="fecha-imp-card-wrap">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -14122,7 +14128,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'tc-comparador', visible:false}, {id:'combustible', visible:false},
   {id:'sueldos', visible:false}, {id:'comparativo', visible:false},
   {id:'anio-completo', visible:false}, {id:'minijuegos', visible:false},
-  {id:'kpi-afp', visible:false},
+  {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -14802,6 +14808,44 @@ function renderNuevosWidgetsDashboard(){
     const jugados=Object.keys(scores).length;
     mjEl.textContent=jugados;
     document.getElementById('kpi-minijuegos-sub').textContent=jugados===1?'juego con puntaje':'juegos con puntaje';
+  }
+
+  // ── Compras a Cuotas (resumen: cuántas compras, cuotas pagadas/por
+  // pagar, y cuánto queda pendiente en total) — reutiliza exactamente los
+  // mismos grupos que ya arma "Mis Cuotas Activas", así nunca se pueden
+  // desincronizar entre el widget y esa vista.
+  const cuotasEl=document.getElementById('dash-cuotas-resumen-body');
+  if(cuotasEl){
+    const grupos=obtenerGruposDeCuotas();
+    if(!grupos.length){
+      cuotasEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">📦</div>Sin compras a cuotas activas.</div>';
+    } else {
+      const totalCompras=grupos.length;
+      const cuotasPagadas=grupos.reduce((s,g)=>s+g.pagadas,0);
+      const cuotasTotales=grupos.reduce((s,g)=>s+g.totalCuotas,0);
+      const cuotasPorPagar=cuotasTotales-cuotasPagadas;
+      let pendientePen=0, pendienteUsd=0;
+      grupos.forEach(g=>{ if(g.currency==='USD') pendienteUsd+=g.totalPendiente; else pendientePen+=g.totalPendiente; });
+      const pctPagado=cuotasTotales>0?(cuotasPagadas/cuotasTotales)*100:0;
+      cuotasEl.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+          <div style="font-family:var(--mono);font-size:26px;font-weight:700">${totalCompras}</div>
+          <div style="font-size:11px;color:var(--text3);text-align:right">compra${totalCompras===1?'':'s'} a cuotas<br>activa${totalCompras===1?'':'s'}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+          <span>${cuotasPagadas} de ${cuotasTotales} cuotas pagadas</span>
+          <span style="color:var(--text3)">${pctPagado.toFixed(0)}%</span>
+        </div>
+        <div style="height:5px;background:var(--bg4);border-radius:3px;margin-bottom:12px">
+          <div style="height:5px;border-radius:3px;width:${pctPagado}%;background:var(--accent);transition:width .4s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:3px">
+          <span>Cuotas por pagar</span><span style="font-family:var(--mono)">${cuotasPorPagar}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--amber);font-weight:600">
+          <span>Total pendiente</span><span style="font-family:var(--mono)">${M(fmtTCMixed(pendientePen,pendienteUsd))}</span>
+        </div>`;
+    }
   }
 }
 
