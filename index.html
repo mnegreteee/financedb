@@ -3196,8 +3196,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '11/09/26 - 23:45'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Aplicados los mismos 3 fixes de protección de datos que se desarrollaron y probaron en la cuenta de Nathy, tras un incidente real de pérdida de datos ahí: (1) La bandera "miguel_mf_cleared" (se pone al usar "Borrar todos los datos") ya no puede quedarse pegada para siempre — se descubrió que TU seedDemo() también estaba vaciada, exactamente el mismo bug latente, así que este fix era necesario aquí también, no solo preventivo. (2) syncMovimientosSubcollection() ya no infiere borrados comparando cantidades — solo borra en la nube lo que se quitó por una acción explícita real (10 puntos del código conectados a una lista explícita). (3) _doFirestoreWrite() se niega a escribir nada hasta confirmar con éxito una lectura real de Firestore, con un límite propio de 15 segundos por lectura (Firestore no tiene uno propio), reintento automático en segundo plano si falla, y un banner que muestra el detalle técnico real del error. Verificado con Playwright: los mismos casos exactos probados en la cuenta de Nathy (bandera pegada, 80 vs 120 movimientos, botón Eliminar real, bloqueo real, timeout de conexión colgada, reintento automático), todos con el mismo resultado correcto. Regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '12/09/26 - 05:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Completado el punto pendiente de las compras a cuotas: ahora sí se puede eliminar o renombrar la compra COMPLETA de una sola vez, en vez de ir mes por mes. Al tocar "Eliminar" en cualquier cuota, si es parte de un grupo, primero pregunta si quieres borrar solo esa cuota — si dices que no, ofrece borrar la compra completa (todas las cuotas, en todos los meses), mostrando cuántas ya están pagadas y cuánto queda pendiente antes de confirmar. También se agregó un botón "✏️📦" junto al de editar, visible solo en consumos que son parte de una compra a cuotas, para renombrar todas las cuotas de una compra a la vez (mantiene el sufijo "— Cuota X/Y" en cada una). Un consumo normal (sin cuotas) se sigue borrando exactamente igual que siempre, sin ningún cambio de comportamiento. Verificado con Playwright: borrar el grupo completo (5 cuotas de una compra), borrar solo una cuota sin tocar las demás, renombrar las 3 cuotas de otra compra a la vez, y un consumo normal sigue funcionando igual — más regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9794,31 +9794,40 @@ async function descargarPlantillaHistoricoTC(){
     return;
   }
   const wb=XLSX.utils.book_new();
-  const headers=['DESCRIPCION','FECHA','MONTO','ESTADO','BANCO','CATEGORIA'];
+  const headers=['DESCRIPCION','FECHA','MONTO','MONEDA','ES_CUOTA','NUM_CUOTAS','CON_INTERESES','TEA','ESTADO','BANCO','CATEGORIA'];
   const bancoEjemplo=tarjetas[0].banco;
   const ejemplos=[
-    ['Netflix','2026-08-05',35.9,'Pagado',bancoEjemplo,'📱 Servicios'],
-    ['Bembos','2026-08-10',24.8,'Pendiente',bancoEjemplo,'🍔 Comida'],
+    ['Netflix','2026-08-05',35.9,'Soles','No','','No','','Pagado',bancoEjemplo,'📱 Servicios'],
+    ['Bembos','2026-08-10',24.8,'Soles','No','','No','','Pendiente',bancoEjemplo,'🍔 Comida'],
+    ['Lavadora','2026-09-15',900,'Soles','Sí',3,'No','','Pendiente',bancoEjemplo,'🏠 Vivienda'],
+    ['Laptop Dell','2026-09-10',3000,'Soles','Sí',12,'Sí',42,'Pendiente',bancoEjemplo,'📦 Otros'],
   ];
   const ws=XLSX.utils.aoa_to_sheet([headers,...ejemplos]);
-  ws['!cols']=[{wch:24},{wch:14},{wch:12},{wch:14},{wch:16},{wch:20}];
+  ws['!cols']=[{wch:24},{wch:14},{wch:12},{wch:10},{wch:11},{wch:13},{wch:15},{wch:9},{wch:14},{wch:16},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws,'Consumos Tarjeta');
 
   const wsInstr=XLSX.utils.aoa_to_sheet([
     ['Columna','Qué va ahí'],
-    ['DESCRIPCION','Nombre del consumo. Obligatorio.'],
-    ['FECHA','DÍA/MES/AÑO, ej. 1/8/2026 o 01/08/26 (también se puede AAAA-MM-DD, ej. 2026-08-15). Obligatorio.'],
-    ['MONTO','Número positivo, sin signo. Obligatorio.'],
-    ['ESTADO','Pagado o Pendiente (elige del desplegable).'],
+    ['DESCRIPCION','Nombre del consumo (o de la compra, si es a cuotas). Obligatorio.'],
+    ['FECHA','DÍA/MES/AÑO, ej. 1/8/2026 o 01/08/26 (también se puede AAAA-MM-DD, ej. 2026-08-15). Si es a cuotas, esta es la fecha del PRIMER cobro. Obligatorio.'],
+    ['MONTO','Si NO es a cuotas: el monto de ese consumo. Si SÍ es a cuotas: el monto TOTAL de la compra completa (no el de cada cuota — la app lo calcula solo). Número positivo, sin signo. Obligatorio.'],
+    ['MONEDA','Soles o Dólares (elige del desplegable). Si se deja vacío, se asume Soles.'],
+    ['ES_CUOTA','Sí o No (elige del desplegable). Si es "Sí", esta fila representa una compra a cuotas completa, no un solo consumo — se generan automáticamente todas las cuotas.'],
+    ['NUM_CUOTAS','Solo si ES_CUOTA es "Sí": el número de cuotas (ej. 12). Se ignora si ES_CUOTA es "No".'],
+    ['CON_INTERESES','Solo si ES_CUOTA es "Sí": Sí o No. Si es "Sí", se calcula la cuota fija con el sistema francés (igual que en la app). Si es "No", se reparte el monto en partes iguales.'],
+    ['TEA','Solo si CON_INTERESES es "Sí": la Tasa Efectiva Anual que te da el banco (ej. 42 para 42%). Se ignora en cualquier otro caso.'],
+    ['ESTADO','Pagado o Pendiente (elige del desplegable). Se ignora si ES_CUOTA es "Sí" — todas las cuotas nacen Pendiente.'],
     ['BANCO','MUY IMPORTANTE: elige del desplegable — son EXACTAMENTE las tarjetas que ya tienes creadas en la app. Si no ves la que buscas, créala primero en Tarjetas.'],
-    ['CATEGORIA','Opcional — elige del desplegable con tus categorías reales.'],
+    ['CATEGORIA','Opcional — elige del desplegable con tus categorías reales. Si es a cuotas, se aplica a todas las cuotas generadas.'],
   ]);
-  wsInstr['!cols']=[{wch:26},{wch:90}];
+  wsInstr['!cols']=[{wch:26},{wch:95}];
   XLSX.utils.book_append_sheet(wb,wsInstr,'Instrucciones');
 
   const bancos=[...new Set(tarjetas.map(t=>t.banco))];
   const categorias=Object.keys(getAllCategorias());
   const wsListas=hojaListasOculta([
+    {titulo:'Moneda',opciones:['Soles','Dólares']},
+    {titulo:'SiNo',opciones:['Sí','No']},
     {titulo:'Estado',opciones:['Pagado','Pendiente']},
     {titulo:'Banco',opciones:bancos},
     {titulo:'Categoria',opciones:categorias},
@@ -9827,9 +9836,12 @@ async function descargarPlantillaHistoricoTC(){
   wb.Workbook={Sheets:[{Hidden:0},{Hidden:0},{Hidden:1}]};
 
   const validaciones=[
-    {sqref:'D2:D1000', rango:`Listas!$A$2:$A$3`},
-    {sqref:'E2:E1000', rango:`Listas!$B$2:$B$${1+bancos.length}`},
-    {sqref:'F2:F1000', rango:`Listas!$C$2:$C$${1+categorias.length}`},
+    {sqref:'D2:D1000', rango:`Listas!$A$2:$A$3`},          // MONEDA
+    {sqref:'E2:E1000', rango:`Listas!$B$2:$B$3`},          // ES_CUOTA
+    {sqref:'G2:G1000', rango:`Listas!$B$2:$B$3`},          // CON_INTERESES (misma lista Sí/No)
+    {sqref:'I2:I1000', rango:`Listas!$C$2:$C$3`},          // ESTADO
+    {sqref:'J2:J1000', rango:`Listas!$D$2:$D$${1+bancos.length}`},      // BANCO
+    {sqref:'K2:K1000', rango:`Listas!$E$2:$E$${1+categorias.length}`},  // CATEGORIA
   ];
   await inyectarDesplegablesYDescargar(wb, 1, validaciones, 'Plantilla_Historico_TC.xlsx');
 }
@@ -12125,6 +12137,7 @@ function tcMovTableRow(m, cardCur){
     <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
+      ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}','${escapeHtml(m.desc.replace(/ — Cuota \d+\/\d+$/,''))}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
       <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
     </td>
   </tr>`;
@@ -12155,6 +12168,7 @@ function tcMovCardHtml(m, cardCur){
       <div class="tc-mov-card-actions">
         <input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">
         <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
+        ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}','${escapeHtml(m.desc.replace(/ — Cuota \d+\/\d+$/,''))}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
         <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
       </div>
     </div>
@@ -12408,6 +12422,60 @@ function populateConsumoTarjetaSelect(preselectId){
   if(preselectId && tarjetas.some(t=>t.id===preselectId)) sel.value=preselectId;
   else if(tarjetas.length) sel.value=tarjetas[0].id;
 }
+// ── COMPRAS A CUOTAS (sistema francés para las que tienen interés) ────
+// Convierte la TEA (Tasa Efectiva Anual) a TEM (tasa efectiva mensual) y
+// calcula la cuota FIJA mensual con la fórmula estándar de amortización
+// francesa que usan los bancos peruanos — la misma idea que ya se usa en
+// Deudas Mayores para préstamos con interés. Es aproximado a propósito: no
+// replica comisiones, seguros, ni redondeos exactos del banco, sirve para
+// llevar un estimado razonable del gasto mes a mes.
+function calcularCuotaFrances(monto, teaPct, numCuotas){
+  const tea=(teaPct||0)/100;
+  const tem=Math.pow(1+tea,1/12)-1;
+  if(tem<=0) return monto/numCuotas; // TEA en 0 -> sin intereses, reparto simple
+  return monto*(tem*Math.pow(1+tem,numCuotas))/(Math.pow(1+tem,numCuotas)-1);
+}
+// Suma "meses" meses a una fecha ISO, respetando el mismo día del mes —
+// si ese día no existe en el mes destino (ej. 31 de febrero), usa el
+// último día disponible de ese mes.
+function sumarMesesConDia(fechaISO, meses){
+  const [y,m,d]=fechaISO.split('-').map(Number);
+  const totalMes=(m-1)+meses;
+  const anioDestino=y+Math.floor(totalMes/12);
+  const mesDestino=((totalMes%12)+12)%12; // 0-indexado
+  const ultimoDiaDelMes=new Date(anioDestino,mesDestino+1,0).getDate();
+  const diaFinal=Math.min(d,ultimoDiaDelMes);
+  return anioDestino+'-'+String(mesDestino+1).padStart(2,'0')+'-'+String(diaFinal).padStart(2,'0');
+}
+function onEsCuotaChange(){
+  const esCuota=document.getElementById('tc-m-es-cuota').checked;
+  document.getElementById('tc-m-cuotas-wrap').style.display=esCuota?'block':'none';
+  document.getElementById('tc-m-pagado-wrap').style.display=esCuota?'none':'block'; // cada cuota nace "Pendiente", no tiene sentido marcar la compra entera como pagada
+  document.getElementById('tc-m-fecha-label').textContent=esCuota?'Fecha del primer cobro':'Fecha';
+  document.getElementById('tc-m-monto-label').innerHTML=esCuota?'Monto total de la compra':'Monto <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span>';
+  actualizarPreviewCuota();
+}
+function onConInteresChange(){
+  document.getElementById('tc-m-tea-wrap').style.display=document.getElementById('tc-m-con-interes').checked?'block':'none';
+  actualizarPreviewCuota();
+}
+function actualizarPreviewCuota(){
+  const prev=document.getElementById('tc-m-cuota-preview');
+  if(!prev) return;
+  if(!document.getElementById('tc-m-es-cuota').checked){ prev.textContent=''; return; }
+  const monto=parseFloat(document.getElementById('tc-m-monto').value)||0;
+  const n=parseInt(document.getElementById('tc-m-num-cuotas').value)||0;
+  const conInteres=document.getElementById('tc-m-con-interes').checked;
+  const tea=parseFloat(document.getElementById('tc-m-tea').value)||0;
+  const sym=document.getElementById('tc-m-currency').value==='USD'?'$':'S/';
+  if(monto<=0||n<2){ prev.textContent='Completa el monto y el número de cuotas (mínimo 2) para ver el estimado.'; return; }
+  const cuota=conInteres?calcularCuotaFrances(monto,tea,n):monto/n;
+  const total=cuota*n;
+  const extra=total-monto;
+  let texto=`≈ ${sym} ${cuota.toFixed(2)} × ${n} cuotas`;
+  if(conInteres&&extra>0.01) texto+=` (total ≈ ${sym} ${total.toFixed(2)}, +${sym} ${extra.toFixed(2)} de interés — aproximado)`;
+  prev.textContent=texto;
+}
 function onConsumoTarjetaChange(){
   const t=getTarjeta(document.getElementById('tc-m-tarjeta').value);
   if(t) document.getElementById('tc-m-currency').value=t.currency||'PEN';
@@ -12426,6 +12494,12 @@ function openAddMovTC(){
   document.getElementById('tc-m-hora').value=horaLimaActual();
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value='';
+  document.getElementById('tc-m-es-cuota').checked=false;
+  document.getElementById('tc-m-es-cuota').closest('.field').style.display='block';
+  document.getElementById('tc-m-num-cuotas').value='';
+  document.getElementById('tc-m-con-interes').checked=false;
+  document.getElementById('tc-m-tea').value='';
+  onEsCuotaChange();
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -12445,6 +12519,12 @@ function openAddMovTCFromList(){
   document.getElementById('tc-m-hora').value=horaLimaActual();
   updateCategorySelects();
   document.getElementById('tc-m-cat').value='';
+  document.getElementById('tc-m-es-cuota').checked=false;
+  document.getElementById('tc-m-es-cuota').closest('.field').style.display='block';
+  document.getElementById('tc-m-num-cuotas').value='';
+  document.getElementById('tc-m-con-interes').checked=false;
+  document.getElementById('tc-m-tea').value='';
+  onEsCuotaChange();
   onConsumoTarjetaChange(); // fija la moneda según la primera tarjeta seleccionada
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
@@ -12466,6 +12546,9 @@ function editTCMov(movId){
   document.getElementById('tc-m-currency').value=m.currency||(t&&t.currency)||'PEN';
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value=m.cat||'';
+  document.getElementById('tc-m-es-cuota').checked=false;
+  document.getElementById('tc-m-es-cuota').closest('.field').style.display='none'; // no se puede "convertir a cuotas" algo que ya existe, solo al crear
+  onEsCuotaChange();
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -12484,6 +12567,56 @@ function saveTCMov(){
   const tarjetaId=document.getElementById('tc-m-tarjeta').value;
   const t=getTarjeta(tarjetaId); if(!t) return;
   if(!t.movs) t.movs={};
+
+  // ── Compra a cuotas: genera un consumo por cada cuota, en el mes de
+  // facturación que le corresponda, en vez de un solo consumo. ──
+  if(!editingTCMovId && document.getElementById('tc-m-es-cuota').checked){
+    const numCuotas=parseInt(document.getElementById('tc-m-num-cuotas').value)||0;
+    const conInteres=document.getElementById('tc-m-con-interes').checked;
+    const tea=conInteres?(parseFloat(document.getElementById('tc-m-tea').value)||0):0;
+    if(numCuotas<2){alert('El número de cuotas debe ser 2 o más.');return;}
+    if(conInteres&&tea<=0){alert('Ingresa la TEA del banco (debe ser mayor a 0).');return;}
+    const grupoCuotaId='cgrp'+Date.now();
+    const cuotaCalculada=conInteres?calcularCuotaFrances(monto,tea,numCuotas):monto/numCuotas;
+    const cuotaRedondeada=Math.round(cuotaCalculada*100)/100;
+    let sumaAcumulada=0;
+    let ultimoMk=null;
+    for(let i=1;i<=numCuotas;i++){
+      const fechaCuota=i===1?fecha:sumarMesesConDia(fecha,i-1);
+      let montoEsta;
+      if(conInteres){
+        montoEsta=cuotaRedondeada; // cuota fija exacta, es lo que define al sistema francés
+      } else if(i<numCuotas){
+        montoEsta=cuotaRedondeada;
+        sumaAcumulada+=montoEsta;
+      } else {
+        // última cuota SIN intereses: absorbe el redondeo para que la suma cuadre exacto con el monto original
+        montoEsta=Math.round((monto-sumaAcumulada)*100)/100;
+      }
+      const mk=getBillingMonthKey(fechaCuota,t);
+      ultimoMk=mk;
+      if(!t.movs[mk]) t.movs[mk]=[];
+      const nuevoMov={id:'tcm'+Date.now()+'c'+i,desc:`${desc} — Cuota ${i}/${numCuotas}`,fecha:fechaCuota,monto:montoEsta,pagado:false,cat,currency,grupoCuotaId,cuotaNumero:i,cuotaTotal:numCuotas,conIntereses:conInteres};
+      if(hora&&i===1) nuevoMov.hora=hora;
+      if(conInteres) nuevoMov.tea=tea;
+      const paisCache=getPaisCache();
+      if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
+      t.movs[mk].push(nuevoMov);
+    }
+    const symTCc=currency==='USD'?'$':'S/';
+    logActividad('tc_consumo', `${desc} a ${numCuotas} cuotas de ${symTCc} ${cuotaRedondeada.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:getBillingMonthKey(fecha,t), consumoId:grupoCuotaId});
+    if(tarjetaId===currentTCId && ultimoMk!==currentTCMonth){
+      // se queda viendo el mes de la PRIMERA cuota (más relevante que la última)
+      currentTCMonth=getBillingMonthKey(fecha,t);
+      renderTCMonthSelector(t);
+    }
+    saveState(); closeTCMovModal();
+    renderTarjetas();
+    if(document.getElementById('page-tarjetas').classList.contains('active')&&currentTCId) renderTCDetail();
+    toast(`${numCuotas} cuotas creadas`);
+    return;
+  }
+
   if(!editingTCMovId){
     const dup=detectarDuplicadoConsumoTC(tarjetaId,desc,monto,fecha);
     if(dup){
@@ -12543,18 +12676,77 @@ function saveTCMov(){
 }
 
 function deleteTCMov(movId){
-  if(!confirm('¿Eliminar este consumo?')) return;
   const t=getTarjeta(currentTCId); if(!t) return;
-  let consumoBorrado=null;
-  if(t.movs&&t.movs[currentTCMonth]){
-    consumoBorrado=t.movs[currentTCMonth].find(m=>m.id===movId);
-    t.movs[currentTCMonth]=t.movs[currentTCMonth].filter(m=>m.id!==movId);
+  const consumo=(t.movs&&t.movs[currentTCMonth])?t.movs[currentTCMonth].find(m=>m.id===movId):null;
+  if(!consumo) return;
+
+  // Si es parte de una compra a cuotas, preguntar si se borra SOLO esta
+  // cuota o LA COMPRA COMPLETA (todas las cuotas del grupo) — antes solo
+  // se podía borrar de a una, mes por mes.
+  if(consumo.grupoCuotaId){
+    const nombreBase=consumo.desc.replace(/ — Cuota \d+\/\d+$/,'');
+    const soloEsta=confirm(`"${nombreBase}" es una compra a ${consumo.cuotaTotal} cuotas.\n\n¿Eliminar SOLO esta cuota (${consumo.desc})?\n\nToca "Cancelar" para ver la opción de eliminar la compra completa.`);
+    if(soloEsta){
+      eliminarUnConsumoDeTarjeta(t, currentTCMonth, movId, currentTCMonth);
+      saveState(); renderTCDetail();
+      return;
+    }
+    eliminarGrupoCuotas(t, consumo.grupoCuotaId, nombreBase);
+    return;
   }
+
+  if(!confirm('¿Eliminar este consumo?')) return;
+  eliminarUnConsumoDeTarjeta(t, currentTCMonth, movId, currentTCMonth);
+  saveState(); renderTCDetail();
+}
+// Quita un consumo puntual de t.movs[monthKey] y registra la actividad —
+// función interna compartida entre el borrado normal y el de una sola
+// cuota dentro de un grupo.
+function eliminarUnConsumoDeTarjeta(t, monthKey, movId){
+  if(!t.movs||!t.movs[monthKey]) return;
+  const consumoBorrado=t.movs[monthKey].find(m=>m.id===movId);
+  t.movs[monthKey]=t.movs[monthKey].filter(m=>m.id!==movId);
   if(consumoBorrado){
     const symTC=consumoBorrado.currency==='USD'?'$':'S/';
-    logActividad('tc_consumo_eliminado', `${consumoBorrado.desc} — ${symTC} ${Number(consumoBorrado.monto).toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey:currentTCMonth, consumoSnapshot:consumoBorrado});
+    logActividad('tc_consumo_eliminado', `${consumoBorrado.desc} — ${symTC} ${Number(consumoBorrado.monto).toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey, consumoSnapshot:consumoBorrado});
   }
+}
+// Elimina TODAS las cuotas de una compra (todos los meses), no solo la que
+// se está viendo — pensado para cancelar una compra a cuotas completa de
+// una sola vez, en vez de ir mes por mes.
+function eliminarGrupoCuotas(t, grupoCuotaId, nombreBase){
+  const todasLasCuotas=[];
+  Object.entries(t.movs||{}).forEach(([mk,movs])=>movs.forEach(m=>{ if(m.grupoCuotaId===grupoCuotaId) todasLasCuotas.push({...m, mk}); }));
+  if(!todasLasCuotas.length) return;
+  const pendientes=todasLasCuotas.filter(m=>!m.pagado);
+  const pagadas=todasLasCuotas.length-pendientes.length;
+  const sym=todasLasCuotas[0].currency==='USD'?'$':'S/';
+  const sumaPendiente=pendientes.reduce((s,m)=>s+Number(m.monto),0);
+  let mensaje=`¿Eliminar TODA la compra "${nombreBase}" — ${todasLasCuotas.length} cuotas en total`;
+  if(pagadas>0) mensaje+=` (${pagadas} ya pagada(s), no se pueden deshacer los pagos ya hechos)`;
+  mensaje+=`?\n\nQuedan ${pendientes.length} cuota(s) pendiente(s) por ${sym} ${sumaPendiente.toFixed(2)} que se borrarían.\n\nEsta acción no se puede deshacer.`;
+  if(!confirm(mensaje)) return;
+  todasLasCuotas.forEach(m=>{ eliminarUnConsumoDeTarjeta(t, m.mk, m.id); });
+  logActividad('tc_consumo_eliminado', `Compra a cuotas eliminada completa: ${nombreBase} — ${todasLasCuotas.length} cuotas (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId});
   saveState(); renderTCDetail();
+  toast(`${todasLasCuotas.length} cuotas eliminadas`);
+}
+// Renombra TODAS las cuotas de una compra a la vez (mantiene el sufijo
+// "— Cuota X/Y" de cada una) — para cuando solo hace falta corregir el
+// nombre, sin tener que entrar cuota por cuota.
+function editarNombreGrupoCuotas(t, grupoCuotaId, nombreActual){
+  const nuevoNombre=prompt('Nuevo nombre para TODAS las cuotas de esta compra:', nombreActual);
+  if(!nuevoNombre||!nuevoNombre.trim()||nuevoNombre.trim()===nombreActual) return;
+  const limpio=nuevoNombre.trim();
+  let cambiados=0;
+  Object.values(t.movs||{}).forEach(movs=>movs.forEach(m=>{
+    if(m.grupoCuotaId===grupoCuotaId){
+      m.desc=`${limpio} — Cuota ${m.cuotaNumero}/${m.cuotaTotal}`;
+      cambiados++;
+    }
+  }));
+  saveState(); renderTCDetail();
+  toast(`${cambiados} cuotas renombradas`);
 }
 
 // ── CRUD TARJETAS ─────────────────────────────────────
@@ -13179,6 +13371,10 @@ function parseTCExcel(wb){
     const estado = (row['ESTADO']||row['Estado']||row['estado']||'Pendiente').toString().trim();
     const banco  = (row['Banco'] ||row['BANCO']  ||row['banco']  ||'').toString().trim();
     const categoria=(row['CATEGORIA']||row['Categoria']||row['categoria']||row['CATEGORÍA']||row['Categoría']||'').toString().trim();
+    const monedaRaw=(row['MONEDA']||row['Moneda']||row['moneda']||'').toString().trim();
+    const currency=/d[oó]lar|usd|\$/i.test(monedaRaw)?'USD':'PEN'; // vacío o "Soles" -> PEN por defecto
+    const esCuotaRaw=(row['ES_CUOTA']||row['Es_Cuota']||row['es_cuota']||row['ES CUOTA']||'').toString().trim();
+    const esCuota=/^s[ií]/i.test(esCuotaRaw);
 
     if(!desc || !banco || isNaN(monto) || monto === 0) return;
     const fecha = parseExcelDate(rawDate, rawDateR);
@@ -13188,6 +13384,47 @@ function parseTCExcel(wb){
     const tarjeta = tarjetas.find(t =>
       t.banco.trim().toLowerCase() === banco.trim().toLowerCase()
     );
+
+    // ── Fila de compra a cuotas: se expande en N consumos, uno por cuota,
+    // usando el mismo cálculo (sistema francés) y las mismas reglas de
+    // fecha que ya usa el formulario "Agregar consumo" de la app. ──
+    if(esCuota){
+      const numCuotas=parseInt(row['NUM_CUOTAS']||row['Num_Cuotas']||row['num_cuotas']||0)||0;
+      if(numCuotas<2) return; // fila mal llenada (menos de 2 cuotas) -- se omite, igual que cualquier otra fila inválida
+      const conInteresRaw=(row['CON_INTERESES']||row['Con_Intereses']||row['con_intereses']||'').toString().trim();
+      const conIntereses=/^s[ií]/i.test(conInteresRaw);
+      const teaS=String(row['TEA']||row['Tea']||row['tea']||0).replace(',','.');
+      const tea=conIntereses?(parseFloat(teaS)||0):0;
+      const grupoCuotaId='cgrp'+Date.now()+'-'+idx;
+      const cuotaCalculada=conIntereses?calcularCuotaFrances(monto,tea,numCuotas):monto/numCuotas;
+      const cuotaRedondeada=Math.round(cuotaCalculada*100)/100;
+      let sumaAcumulada=0;
+      for(let i=1;i<=numCuotas;i++){
+        const fechaCuota=i===1?fecha:sumarMesesConDia(fecha,i-1);
+        let montoEsta;
+        if(conIntereses){
+          montoEsta=cuotaRedondeada; // cuota fija, es la definición del sistema francés
+        } else if(i<numCuotas){
+          montoEsta=cuotaRedondeada;
+          sumaAcumulada+=montoEsta;
+        } else {
+          montoEsta=Math.round((monto-sumaAcumulada)*100)/100; // la última absorbe el redondeo
+        }
+        const mkCuota=tarjeta?getBillingMonthKey(fechaCuota,tarjeta):fechaCuota.slice(0,7);
+        if(!result[banco]) result[banco]={};
+        if(!result[banco][mkCuota]) result[banco][mkCuota]=[];
+        const nuevoMov={
+          id:'tch'+Date.now()+'-'+idx+'c'+i+'-'+Math.random().toString(36).slice(2,6),
+          desc:`${titleCaseTC(desc)} — Cuota ${i}/${numCuotas}`,
+          fecha:fechaCuota, monto:montoEsta, currency, pagado:false,
+          grupoCuotaId, cuotaNumero:i, cuotaTotal:numCuotas, conIntereses,
+        };
+        if(conIntereses) nuevoMov.tea=tea;
+        if(categoria) nuevoMov.cat=categoria;
+        result[banco][mkCuota].push(nuevoMov);
+      }
+      return; // ya se procesó esta fila como cuotas, no seguir al camino normal
+    }
 
     // Determine the dashboard monthKey using the billing cycle
     // If tarjeta not found yet, fall back to calendar month (will be filtered later)
@@ -13203,6 +13440,7 @@ function parseTCExcel(wb){
       desc: titleCaseTC(desc),
       fecha,
       monto: Math.abs(monto),
+      currency,
       pagado: !/pendient|no\s*pagad|sin\s*pagar/i.test(estado) && /pagad|paid|^si$/i.test(estado),
       ...(categoria ? { cat: categoria } : {}),
     });
@@ -21146,19 +21384,40 @@ if(state.projGoals){
     <div class="field"><label>Tarjeta</label><select id="tc-m-tarjeta" onchange="onConsumoTarjetaChange()"></select></div>
     <div class="field"><label>Descripción</label><input id="tc-m-desc" type="text" placeholder="Supermercado, Gasolina..." onblur="suggestCategoriaFor('tc-m-desc','tc-m-cat','tc-m-cat-hint')"></div>
     <div class="field-row">
-      <div class="field"><label>Fecha</label><input id="tc-m-fecha" type="date"></div>
+      <div class="field"><label id="tc-m-fecha-label">Fecha</label><input id="tc-m-fecha" type="date" onchange="actualizarPreviewCuota()"></div>
       <div class="field"><label>Hora <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-m-hora" type="time"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Monto <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00"></div>
+      <div class="field"><label id="tc-m-monto-label">Monto <span style="font-size:10px;color:var(--text3)">(negativo = devolución)</span></label><input id="tc-m-monto" type="number" step="0.01" placeholder="0.00 ó -10.00" oninput="actualizarPreviewCuota()"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Moneda</label>
         <select id="tc-m-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
-      <div class="field"><label>Estado</label>
+      <div class="field" id="tc-m-pagado-wrap"><label>Estado</label>
         <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
       </div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="tc-m-es-cuota" style="width:auto" onchange="onEsCuotaChange()"> ¿Es una compra a cuotas?
+      </label>
+    </div>
+    <div id="tc-m-cuotas-wrap" style="display:none">
+      <div class="field-row">
+        <div class="field"><label>Número de cuotas</label><input id="tc-m-num-cuotas" type="number" min="2" step="1" placeholder="Ej. 12" oninput="actualizarPreviewCuota()"></div>
+        <div class="field" style="justify-content:flex-end">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="tc-m-con-interes" style="width:auto" onchange="onConInteresChange()"> Con intereses
+          </label>
+        </div>
+      </div>
+      <div class="field" id="tc-m-tea-wrap" style="display:none">
+        <label>TEA del banco (%) <span style="font-size:10px;color:var(--text3)">(Tasa Efectiva Anual — la que te da el banco para el crédito, no confundir con la TREA de ahorros)</span></label>
+        <input id="tc-m-tea" type="number" step="0.01" placeholder="Ej. 45.90" oninput="actualizarPreviewCuota()">
+      </div>
+      <div class="field"><label>Fecha del primer cobro <span style="font-size:10px;color:var(--text3)">(las siguientes cuotas caen el mismo día, mes a mes)</span></label></div>
+      <div id="tc-m-cuota-preview" style="font-size:11px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 10px;margin-top:4px;margin-bottom:8px"></div>
     </div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span> <span id="tc-m-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
       <select id="tc-m-cat" onchange="document.getElementById('tc-m-cat-hint').textContent=''">
