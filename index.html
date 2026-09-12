@@ -3198,8 +3198,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '12/09/26 - 16:04'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo widget "📦 Compras a Cuotas" para el Dashboard (Resumen) — se agrega desde "✏️ Editar" en Mi Resumen, igual que cualquier otro widget (queda oculto por defecto). Muestra de un vistazo: cuántas compras a cuotas tienes activas en total (de todas las tarjetas juntas), cuántas cuotas llevas pagadas vs. el total (con barra de progreso), cuántas cuotas te faltan por pagar, y el monto total pendiente. Reutiliza exactamente los mismos datos que ya calcula "Mis Cuotas Activas" (obtenerGruposDeCuotas), así que nunca se pueden desincronizar entre el widget y esa vista — un botón "Ver todas →" abre esa misma pantalla. Verificado con Playwright con 2 compras mixtas (una con intereses parcialmente pagada, otra sin intereses): el widget calculó correctamente 2 compras, 5 de 15 cuotas pagadas (33%), 10 por pagar, y S/3,006.08 de total pendiente (verificado a mano: 8 cuotas de S/300.76 + 2 cuotas de S/300.00 = exacto). Capturas confirmadas en escritorio y celular. Regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '12/09/26 - 16:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva función en Deudas: ahora se puede registrar dinero que TÚ le debes a otra persona (antes "Préstamos" solo servía para lo contrario, dinero que otros te deben). En "Nueva deuda" hay un selector "¿Quién le debe a quién?" — el formulario, los botones y los textos cambian según la dirección elegida. Al marcar una deuda "yo debo" como pagada, pregunta con qué cuenta pagaste (se RESTA de esa cuenta y se registra como un GASTO — al revés de "me deben", que suma y registra un INGRESO). Se puede revertir igual que antes. Además, nueva función de COMPENSACIÓN: si le debes a alguien y esa misma persona también te debe a ti, un botón "⚖️ Compensar" (visible solo cuando existe esa contraparte — misma persona, sentido contrario, misma moneda) descuenta el monto menor de ambas deudas sin tocar ninguna cuenta real — ej. le debes S/300 a Juan y Juan te debe S/150 → después de compensar, le debes solo S/150 y la deuda de Juan queda saldada. Se puede deshacer desde Actividad Reciente (restaura ambos montos originales). Verificado con Playwright: creación de deuda "yo debo", marcar pagado (resta cuenta + gasto), revertir pago (restaura cuenta), compensación completa con el ejemplo exacto (300 vs 150 → queda en 150), deshacer la compensación, y retrocompatibilidad total con deudas antiguas que no tienen el campo "direccion" (se comportan igual que siempre, como "me deben"). Capturas visuales confirmadas. Regresión completa de las 12 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3628,7 +3628,7 @@ function tiempoRelativo(ts){
   const d=new Date(ts);
   return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',
   tarjeta_nueva:'💳',tarjeta_editada:'💳',tarjeta_eliminada:'💳',
   meta_nueva:'🎯',meta_editada:'🎯',meta_eliminada:'🎯',
   inversion_editada:'📈',inversion_eliminada:'📈',
@@ -3731,6 +3731,20 @@ function eliminarActividad(logId){
       if(ref.movIdB) _revertirMovOConsumo({movId:ref.movIdB});
     } else if(entry.tipo==='deuda'){
       state.deudas=(state.deudas||[]).filter(d=>d.id!==ref.deudaId);
+    } else if(entry.tipo==='deuda_compensacion'){
+      // Deshacer una compensación: devuelve el monto descontado a AMBAS
+      // deudas, y si alguna había quedado marcada "pagada por compensación"
+      // (monto llegó a 0), la vuelve a dejar pendiente.
+      const dA=(state.deudas||[]).find(x=>x.id===ref.deudaIdA);
+      const dB=(state.deudas||[]).find(x=>x.id===ref.deudaIdB);
+      if(dA){
+        dA.monto=(dA.monto||0)+ref.montoCompensado;
+        if(ref.aQuedoSaldada){ dA.status='pendiente'; dA.fechaPago=null; dA.cuentaPago=null; }
+      }
+      if(dB){
+        dB.monto=(dB.monto||0)+ref.montoCompensado;
+        if(ref.bQuedoSaldada){ dB.status='pendiente'; dB.fechaPago=null; dB.cuentaPago=null; }
+      }
     } else if(entry.tipo==='deuda_item'){
       const d=(state.deudas||[]).find(x=>x.id===ref.deudaId);
       if(d && Array.isArray(d.items)){
@@ -15807,6 +15821,7 @@ function renderDeudas(){
 
   grid.innerHTML = sorted.map(d=>{
     const isPaid = d.status==='pagado';
+    const esYoDebo = d.direccion==='yo_debo';
     const sym    = d.currency==='USD'?'$':'S/';
     const fmtAmt = v => sym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
     const fechaLabel = new Date(d.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
@@ -15814,7 +15829,7 @@ function renderDeudas(){
     const diasLabel  = isPaid ? '' : diasTransc===0?'hoy':diasTransc===1?'hace 1 día':`hace ${diasTransc} días`;
     const pagoInfo   = isPaid
       ? `<div style="font-size:11px;color:var(--green);margin-top:4px">
-           ✅ Cobrado el ${new Date(d.fechaPago+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})}
+           ✅ ${esYoDebo?'Pagado':'Cobrado'} el ${new Date(d.fechaPago+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})}
            → <strong>${d.cuentaPago||'—'}</strong>
          </div>` : '';
 
@@ -15830,12 +15845,17 @@ function renderDeudas(){
           </div>`).join('')}
       </div>` : '';
 
+    const puedeCompensar = !isPaid && hayCandidatosCompensacion(d).length>0;
+
     return`<div class="deuda-card ${isPaid?'pagado pagado-bar':'pendiente'}">
       <div class="deuda-card-header">
-        <div class="deuda-nombre">${escapeHtml(d.nombre)}${esAcumulativa?' <span style="font-size:9px;color:var(--text3);font-weight:400">🧾 acumulativa</span>':''}</div>
-        <span class="deuda-badge ${isPaid?'paid':'pend'}">${isPaid?'✅ Cobrado':'⏳ Pendiente'}</span>
+        <div class="deuda-nombre">${escapeHtml(d.nombre)}
+          <span style="font-size:9px;font-weight:600;color:${esYoDebo?'var(--red)':'var(--green)'}">${esYoDebo?'🔴 YO DEBO':'🟢 ME DEBEN'}</span>
+          ${esAcumulativa?' <span style="font-size:9px;color:var(--text3);font-weight:400">🧾 acumulativa</span>':''}
+        </div>
+        <span class="deuda-badge ${isPaid?'paid':'pend'}">${isPaid?(esYoDebo?'✅ Pagado':'✅ Cobrado'):'⏳ Pendiente'}</span>
       </div>
-      <div class="deuda-monto ${isPaid?'paid-amt':''}">${M(fmtAmt(d.monto))}</div>
+      <div class="deuda-monto ${isPaid?'paid-amt':''}" style="${!isPaid&&esYoDebo?'color:var(--red)':''}">${M(fmtAmt(d.monto))}</div>
       <div class="deuda-info">
         <span>📅 ${fechaLabel}</span>
         ${diasLabel?`<span style="color:${diasTransc>30?'var(--red)':'var(--text3)'}">${diasLabel}</span>`:''}
@@ -15844,10 +15864,11 @@ function renderDeudas(){
       ${itemsHtml}
       ${pagoInfo}
       <div class="deuda-actions">
-        ${!isPaid?`<button class="btn btn-primary" style="font-size:11px;padding:4px 12px" onclick="openDeudaPago('${d.id}')">✅ Marcar cobrado</button>`:''}
+        ${!isPaid?`<button class="btn btn-primary" style="font-size:11px;padding:4px 12px" onclick="openDeudaPago('${d.id}')">✅ Marcar ${esYoDebo?'pagado':'cobrado'}</button>`:''}
+        ${puedeCompensar?`<button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="abrirCompensacion('${d.id}')">⚖️ Compensar</button>`:''}
         ${(esAcumulativa&&!isPaid)?`<button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="openDeudaItemModal('${d.id}')">+ Agregar gasto</button>`:''}
         <button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="openDeudaModal('${d.id}')">✏ Editar</button>
-        ${isPaid?`<button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="revertDeudaPago('${d.id}')">↩ Revertir cobro</button>`:''}
+        ${isPaid?`<button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="revertDeudaPago('${d.id}')">↩ Revertir ${esYoDebo?'pago':'cobro'}</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -15872,22 +15893,35 @@ function onDeudaTipoChange(){
     infoAcum.style.display='none';
   }
 }
+// Cambia el texto del formulario según quién le debe a quién — el modelo
+// de datos es el mismo objeto "deuda" en los dos casos (mismo arreglo
+// state.deudas), solo cambia el campo "direccion" y cómo se interpreta.
+function onDeudaDireccionChange(){
+  const esYoDebo=document.getElementById('d-direccion').value==='yo_debo';
+  document.getElementById('d-nombre-label').textContent=esYoDebo?'Nombre de la persona a quien le debes':'Nombre del deudor';
+  document.getElementById('d-monto-label').textContent=esYoDebo?'Monto que le debes':'Monto prestado';
+  document.getElementById('d-cat-sub').textContent=esYoDebo?'(opcional — se usa cuando pagues la deuda)':'(opcional — se usa cuando cobres el préstamo)';
+}
 function openDeudaModal(id){
   editingDeudaId = id || null;
   const dBtn = document.getElementById('d-delete-btn');
   const tipoSel=document.getElementById('d-tipo');
+  const direccionSel=document.getElementById('d-direccion');
   updateCategorySelects();
   document.getElementById('d-cat-hint').textContent='';
   if(id){
     const d=(state.deudas||[]).find(x=>x.id===id);
     if(!d) return;
-    document.getElementById('deuda-modal-title').textContent='Editar Préstamo';
+    const esYoDebo=d.direccion==='yo_debo';
+    document.getElementById('deuda-modal-title').textContent=esYoDebo?'Editar Deuda':'Editar Préstamo';
     document.getElementById('d-nombre').value   = d.nombre;
     document.getElementById('d-monto').value    = d.monto;
     document.getElementById('d-currency').value = d.currency||'PEN';
     document.getElementById('d-fecha').value    = d.fecha;
     document.getElementById('d-nota').value     = d.nota||'';
     document.getElementById('d-cat').value      = d.cat||'';
+    direccionSel.value = esYoDebo?'yo_debo':'me_deben';
+    direccionSel.disabled = true; // no tiene sentido cambiar de sentido una deuda ya guardada — se borra y se crea de nuevo si hubo un error
     tipoSel.value = Array.isArray(d.items) ? 'acumulativa' : 'simple';
     tipoSel.disabled = Array.isArray(d.items); // no tiene sentido cambiar el tipo después de tener gastos guardados
     dBtn.style.display='inline-flex';
@@ -15899,10 +15933,13 @@ function openDeudaModal(id){
     document.getElementById('d-fecha').value    = todayLocalISO();
     document.getElementById('d-nota').value     = '';
     document.getElementById('d-cat').value      = '';
+    direccionSel.value='me_deben';
+    direccionSel.disabled=false;
     tipoSel.value='simple';
     tipoSel.disabled=false;
     dBtn.style.display='none';
   }
+  onDeudaDireccionChange();
   onDeudaTipoChange();
   document.getElementById('deuda-modal-overlay').classList.add('open');
 }
@@ -15915,6 +15952,8 @@ function saveDeuda(){
   const fecha   = document.getElementById('d-fecha').value;
   const nota    = (document.getElementById('d-nota').value||'').trim();
   const cat     = document.getElementById('d-cat').value||'';
+  const direccion=document.getElementById('d-direccion').value||'me_deben';
+  const esYoDebo=direccion==='yo_debo';
   if(!nombre||!fecha){alert('Completa nombre y fecha.');return;}
 
   if(!state.deudas) state.deudas=[];
@@ -15930,26 +15969,27 @@ function saveDeuda(){
     }
   } else {
     const symD=currency==='USD'?'$':'S/';
+    const verboAccion=esYoDebo?'Deuda':'Préstamo (acumulativa)';
     if(tipo==='acumulativa'){
       const nuevaDeuda={
-        id:'deu'+Date.now(), nombre, monto:0, currency, fecha, nota, cat,
+        id:'deu'+Date.now(), nombre, monto:0, currency, fecha, nota, cat, direccion,
         status:'pendiente', fechaPago:null, cuentaPago:null, items:[],
       };
       state.deudas.push(nuevaDeuda);
-      logActividad('deuda', `Préstamo (acumulativa): ${nombre}`, {deudaId:nuevaDeuda.id});
+      logActividad('deuda', `${esYoDebo?'Deuda (acumulativa)':'Préstamo (acumulativa)'}: ${nombre}`, {deudaId:nuevaDeuda.id});
     } else {
       const monto=parseFloat(document.getElementById('d-monto').value)||0;
       if(monto<=0){alert('Completa el monto.');return;}
       const nuevaDeuda={
-        id:'deu'+Date.now(), nombre, monto, currency, fecha, nota, cat,
+        id:'deu'+Date.now(), nombre, monto, currency, fecha, nota, cat, direccion,
         status:'pendiente', fechaPago:null, cuentaPago:null,
       };
       state.deudas.push(nuevaDeuda);
-      logActividad('deuda', `Préstamo: ${nombre} — ${symD} ${monto.toFixed(2)}`, {deudaId:nuevaDeuda.id});
+      logActividad('deuda', `${esYoDebo?'Deuda':'Préstamo'}: ${nombre} — ${symD} ${monto.toFixed(2)}`, {deudaId:nuevaDeuda.id});
     }
   }
-  saveState(); closeDeudaModal(); renderDeudas(); toast('Préstamo guardado');
-  if(cat) aplicarCategoriaRetroactiva('Cobro préstamo — '+nombre, cat, 'exacto');
+  saveState(); closeDeudaModal(); renderDeudas(); toast(esYoDebo?'Deuda guardada':'Préstamo guardado');
+  if(cat) aplicarCategoriaRetroactiva((esYoDebo?'Pago deuda — ':'Cobro préstamo — ')+nombre, cat, 'exacto');
 }
 
 function deleteDeuda(){
@@ -16020,12 +16060,20 @@ function deleteDeudaItem(deudaId, itemId){
 function openDeudaPago(id){
   const d=(state.deudas||[]).find(x=>x.id===id); if(!d) return;
   payingDeudaId=id;
+  const esYoDebo=d.direccion==='yo_debo';
   const sym=d.currency==='USD'?'$':'S/';
   const fmtA=v=>sym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  document.getElementById('dp-titulo').textContent=esYoDebo?'✅ Registrar pago':'✅ Registrar cobro';
+  document.getElementById('dp-nombre-label').textContent=esYoDebo?'Le pagas a':'Deudor';
   document.getElementById('dp-nombre').textContent=d.nombre;
   document.getElementById('dp-monto').textContent=M(fmtA(d.monto));
+  document.getElementById('dp-fecha-label').textContent=esYoDebo?'Fecha de pago':'Fecha de cobro';
   document.getElementById('dp-fecha').value=todayLocalISO();
+  document.getElementById('dp-cuenta-label').textContent=esYoDebo?'Pagar desde cuenta':'Depositar en cuenta';
+  document.getElementById('dp-parcial-label').innerHTML=(esYoDebo?'¿Pago parcial?':'¿Cobro parcial?')+' <span style="font-size:10px;color:var(--text3)">(dejar en blanco = monto completo)</span>';
+  document.getElementById('dp-parcial').placeholder=esYoDebo?'Monto pagado':'Monto cobrado';
   document.getElementById('dp-parcial').value='';
+  document.getElementById('dp-confirmar-btn').textContent=esYoDebo?'✅ Confirmar pago':'✅ Confirmar cobro';
   // Populate account selector — prefer same-currency accounts
   const keys=[...new Set([...Object.keys(state.cuentas||{}),...Object.keys(state.customCuentas||{})])];
   const cuentaSel=document.getElementById('dp-cuenta');
@@ -16038,28 +16086,32 @@ function closeDeudaPago(){ document.getElementById('deuda-pago-overlay').classLi
 
 function confirmarDeudaPago(){
   const d=(state.deudas||[]).find(x=>x.id===payingDeudaId); if(!d) return;
+  const esYoDebo=d.direccion==='yo_debo';
   const fechaPago = document.getElementById('dp-fecha').value;
   const cuenta    = document.getElementById('dp-cuenta').value;
   const parcial   = parseFloat(document.getElementById('dp-parcial').value);
-  const montoAcreditar = (!isNaN(parcial)&&parcial>0) ? parcial : d.monto;
-  if(!fechaPago){alert('Selecciona la fecha de cobro.');return;}
+  const montoMovido = (!isNaN(parcial)&&parcial>0) ? parcial : d.monto;
+  if(!fechaPago){alert(esYoDebo?'Selecciona la fecha de pago.':'Selecciona la fecha de cobro.');return;}
 
   // Marcar como pagado
   d.status    = 'pagado';
   d.fechaPago = fechaPago;
   d.cuentaPago= cuenta;
 
-  // Acreditar a la cuenta seleccionada
-  state.cuentas[cuenta]=(state.cuentas[cuenta]||0)+montoAcreditar;
+  // Si es una deuda que YO debo, el dinero SALE de la cuenta (se resta);
+  // si me deben a mí, el dinero ENTRA (se suma) — es el mismo flujo, solo
+  // cambia el signo del movimiento contra la cuenta.
+  state.cuentas[cuenta]=(state.cuentas[cuenta]||0)+(esYoDebo?-montoMovido:montoMovido);
 
-  // Registrar como movimiento de ingreso para que aparezca en Finanzas
+  // Registrar el movimiento para que aparezca en Finanzas — ingreso si me
+  // pagan a mí, gasto si yo soy quien paga.
   if(!state.movimientos) state.movimientos=[];
   const currency = d.currency||'PEN';
   pushMovimiento({
     id:'deu-pay-'+Date.now(),
-    type:'income',
-    desc:'Cobro préstamo — '+d.nombre,
-    amount:montoAcreditar,
+    type: esYoDebo?'expense':'income',
+    desc:(esYoDebo?'Pago deuda — ':'Cobro préstamo — ')+d.nombre,
+    amount:montoMovido,
     account:cuenta,
     date:fechaPago,
     currency,
@@ -16071,16 +16123,108 @@ function confirmarDeudaPago(){
 
 function revertDeudaPago(id){
   const d=(state.deudas||[]).find(x=>x.id===id); if(!d) return;
-  if(!confirm('¿Revertir el cobro de '+d.nombre+'? Se descontará el monto de la cuenta '+d.cuentaPago+'.')) return;
-  // Remove the ingreso movement
+  const esYoDebo=d.direccion==='yo_debo';
+  const desc=(esYoDebo?'Pago deuda — ':'Cobro préstamo — ')+d.nombre;
+  if(!confirm(`¿Revertir ${esYoDebo?'el pago':'el cobro'} de ${d.nombre}? Se ${esYoDebo?'devolverá':'descontará'} el monto ${esYoDebo?'a':'de'} la cuenta ${d.cuentaPago}.`)) return;
   // Remove payment movements tied to this debt (match by desc+date for safety)
-  const cobroAQuitar=(state.movimientos||[]).filter(m=>m.desc==='Cobro préstamo — '+d.nombre&&m.date===d.fechaPago&&m.type==='income');
-  _movimientosBorradosExplicitamente.push(...cobroAQuitar.map(m=>m.id).filter(Boolean));
-  state.movimientos=(state.movimientos||[]).filter(m=>!(m.desc==='Cobro préstamo — '+d.nombre&&m.date===d.fechaPago&&m.type==='income'));
-  // Debit the account
-  state.cuentas[d.cuentaPago]=(state.cuentas[d.cuentaPago]||0)-d.monto;
+  const tipoMov = esYoDebo?'expense':'income';
+  const movAQuitar=(state.movimientos||[]).filter(m=>m.desc===desc&&m.date===d.fechaPago&&m.type===tipoMov);
+  _movimientosBorradosExplicitamente.push(...movAQuitar.map(m=>m.id).filter(Boolean));
+  state.movimientos=(state.movimientos||[]).filter(m=>!(m.desc===desc&&m.date===d.fechaPago&&m.type===tipoMov));
+  // Revertir el efecto en la cuenta (si salió, se devuelve; si entró, se quita)
+  state.cuentas[d.cuentaPago]=(state.cuentas[d.cuentaPago]||0)+(esYoDebo?d.monto:-d.monto);
   d.status='pendiente'; d.fechaPago=null; d.cuentaPago=null;
   saveState(); renderDeudas(); render();
+}
+
+// ── COMPENSAR DEUDAS ENTRE SÍ ──────────────────────────
+// Ejemplo real que motivó esto: "yo le debo a Juan S/300, pero Juan me debe
+// S/150 — lo que realmente le debo son S/150". Nunca mueve dinero real de
+// ninguna cuenta — solo descuenta el monto menor de AMBAS deudas (siempre
+// de la MISMA persona, en sentido contrario, y en la MISMA moneda, para que
+// tenga sentido real). La que queda en 0 se marca como pagada "por
+// compensación", sin tocar ningún saldo.
+let deudaIdEnCompensacion=null;
+// Devuelve las deudas PENDIENTES de la misma persona (comparando el nombre
+// sin importar mayúsculas/espacios), en sentido CONTRARIO y misma moneda —
+// son las únicas candidatas válidas para compensar contra "d".
+function hayCandidatosCompensacion(d){
+  const nombreNorm=(d.nombre||'').trim().toLowerCase();
+  return (state.deudas||[]).filter(x=>
+    x.id!==d.id &&
+    x.status==='pendiente' &&
+    x.direccion!==d.direccion &&
+    (x.currency||'PEN')===(d.currency||'PEN') &&
+    (x.nombre||'').trim().toLowerCase()===nombreNorm
+  );
+}
+function abrirCompensacion(id){
+  const d=(state.deudas||[]).find(x=>x.id===id); if(!d) return;
+  deudaIdEnCompensacion=id;
+  const esYoDebo=d.direccion==='yo_debo';
+  const sym=d.currency==='USD'?'$':'S/';
+  document.getElementById('comp-resumen').innerHTML=
+    `Vas a compensar tu deuda con <b>${escapeHtml(d.nombre)}</b>: actualmente ${esYoDebo?'le debes tú a él/ella':'te debe él/ella a ti'} <b>${sym} ${d.monto.toFixed(2)}</b>.`;
+  const candidatos=hayCandidatosCompensacion(d);
+  const sel=document.getElementById('comp-otra-deuda');
+  const selectWrap=document.getElementById('comp-select-wrap');
+  const sinOpciones=document.getElementById('comp-sin-opciones');
+  const confirmarBtn=document.getElementById('comp-confirmar-btn');
+  if(!candidatos.length){
+    selectWrap.style.display='none';
+    sinOpciones.style.display='block';
+    document.getElementById('comp-preview').style.display='none';
+    confirmarBtn.style.display='none';
+  } else {
+    selectWrap.style.display='block';
+    sinOpciones.style.display='none';
+    confirmarBtn.style.display='inline-flex';
+    sel.innerHTML=candidatos.map(c=>`<option value="${c.id}">${escapeHtml(c.nombre)} — ${c.direccion==='yo_debo'?'le debes tú':'te debe'} ${sym} ${c.monto.toFixed(2)}</option>`).join('');
+    actualizarPreviewCompensacion();
+  }
+  document.getElementById('compensacion-overlay').classList.add('open');
+}
+function cerrarCompensacion(){
+  document.getElementById('compensacion-overlay').classList.remove('open');
+  deudaIdEnCompensacion=null;
+}
+function actualizarPreviewCompensacion(){
+  const dA=(state.deudas||[]).find(x=>x.id===deudaIdEnCompensacion); if(!dA) return;
+  const idB=document.getElementById('comp-otra-deuda').value;
+  const dB=(state.deudas||[]).find(x=>x.id===idB);
+  const preview=document.getElementById('comp-preview');
+  if(!dB){ preview.style.display='none'; return; }
+  const sym=dA.currency==='USD'?'$':'S/';
+  const montoCompensado=Math.min(dA.monto,dB.monto);
+  const restanteA=Math.max(0,dA.monto-montoCompensado);
+  const restanteB=Math.max(0,dB.monto-montoCompensado);
+  const esAYoDebo=dA.direccion==='yo_debo';
+  preview.style.display='block';
+  preview.innerHTML=`Se descuentan <b>${sym} ${montoCompensado.toFixed(2)}</b> de ambas deudas.<br>`+
+    `Resultado: ${restanteA>0.005
+      ? `${esAYoDebo?'le sigues debiendo':'te sigue debiendo'} <b>${sym} ${restanteA.toFixed(2)}</b>`
+      : `<span style="color:var(--green)">esta deuda queda saldada ✅</span>`}`+
+    (restanteB>0.005 ? `` : `<br><span style="color:var(--green)">la otra deuda también queda saldada ✅</span>`);
+}
+function confirmarCompensacion(){
+  const dA=(state.deudas||[]).find(x=>x.id===deudaIdEnCompensacion); if(!dA) return;
+  const idB=document.getElementById('comp-otra-deuda').value;
+  const dB=(state.deudas||[]).find(x=>x.id===idB); if(!dB) return;
+  const sym=dA.currency==='USD'?'$':'S/';
+  const montoCompensado=Math.min(dA.monto,dB.monto);
+  const hoy=todayLocalISO();
+  dA.monto=Math.max(0,dA.monto-montoCompensado);
+  dB.monto=Math.max(0,dB.monto-montoCompensado);
+  let aQuedoSaldada=false, bQuedoSaldada=false;
+  if(dA.monto<=0.005){ dA.monto=0; dA.status='pagado'; dA.fechaPago=hoy; dA.cuentaPago='(Compensación)'; aQuedoSaldada=true; }
+  if(dB.monto<=0.005){ dB.monto=0; dB.status='pagado'; dB.fechaPago=hoy; dB.cuentaPago='(Compensación)'; bQuedoSaldada=true; }
+  // Tipo de log PROPIO (no "deuda") — ese tipo, al deshacer desde Actividad
+  // Reciente, BORRA la deuda entera (piensa que se creó de cero), lo cual
+  // sería incorrecto acá: deshacer una compensación debe devolver el monto
+  // descontado a ambas deudas, no borrarlas.
+  logActividad('deuda_compensacion', `Compensación entre ${dA.nombre} y ${dB.nombre}: se descontaron ${sym} ${montoCompensado.toFixed(2)} de ambas deudas`, {deudaIdA:dA.id, deudaIdB:dB.id, montoCompensado, aQuedoSaldada, bQuedoSaldada});
+  saveState(); cerrarCompensacion(); renderDeudas();
+  toast('Deudas compensadas');
 }
 
 
@@ -21118,7 +21262,13 @@ if(state.projGoals){
       <span id="deuda-modal-title">Nueva Deuda / Préstamo</span>
       <button class="modal-close" onclick="closeDeudaModal()">✕</button>
     </div>
-    <div class="field"><label>Nombre del deudor</label><input id="d-nombre" type="text" placeholder="Ej. Pepito García" onblur="suggestCategoriaFor('d-nombre','d-cat','d-cat-hint')"></div>
+    <div class="field"><label>¿Quién le debe a quién? <span style="font-size:10px;color:var(--text3)">(no se puede cambiar después de guardar)</span></label>
+      <select id="d-direccion" onchange="onDeudaDireccionChange()">
+        <option value="me_deben">🟢 Me deben a mí</option>
+        <option value="yo_debo">🔴 Yo le debo a esta persona</option>
+      </select>
+    </div>
+    <div class="field"><label id="d-nombre-label">Nombre del deudor</label><input id="d-nombre" type="text" placeholder="Ej. Pepito García" onblur="suggestCategoriaFor('d-nombre','d-cat','d-cat-hint')"></div>
     <div class="field"><label>Tipo de deuda</label>
       <select id="d-tipo" onchange="onDeudaTipoChange()">
         <option value="simple">💰 Monto único (préstamo de una sola vez)</option>
@@ -21126,7 +21276,7 @@ if(state.projGoals){
       </select>
     </div>
     <div class="field-row" id="d-monto-row">
-      <div class="field"><label>Monto prestado</label><input id="d-monto" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label id="d-monto-label">Monto prestado</label><input id="d-monto" type="number" step="0.01" placeholder="0.00"></div>
       <div class="field"><label>Moneda</label>
         <select id="d-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
@@ -21135,7 +21285,7 @@ if(state.projGoals){
       El monto se calcula solo, sumando los gastos que le agregues con "+ Agregar gasto" desde la tarjeta de esta deuda.
     </div>
     <div class="field"><label>Fecha del préstamo</label><input id="d-fecha" type="date"></div>
-    <div class="field"><label>Categoría <span id="d-cat-hint" style="font-size:10px;color:var(--accent)"></span> <span style="font-size:10px;color:var(--text3)">(opcional — se usa cuando cobres el préstamo)</span></label>
+    <div class="field"><label>Categoría <span id="d-cat-hint" style="font-size:10px;color:var(--accent)"></span> <span id="d-cat-sub" style="font-size:10px;color:var(--text3)">(opcional — se usa cuando cobres el préstamo)</span></label>
       <select id="d-cat" onchange="document.getElementById('d-cat-hint').textContent=''">
         <option value="">💰 Préstamos (por defecto)</option>
       </select>
@@ -21498,23 +21648,43 @@ if(state.projGoals){
 <!-- MODAL MARCAR COMO PAGADO -->
 <div class="modal-overlay" id="deuda-pago-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeDeudaPago')">
   <div class="modal modal-sm" style="width:400px">
-    <div class="modal-title"><span>✅ Registrar cobro</span><button class="modal-close" onclick="closeDeudaPago()">✕</button></div>
+    <div class="modal-title"><span id="dp-titulo">✅ Registrar cobro</span><button class="modal-close" onclick="closeDeudaPago()">✕</button></div>
     <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:2px">Deudor</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:2px" id="dp-nombre-label">Deudor</div>
       <div style="font-size:15px;font-weight:700" id="dp-nombre">—</div>
       <div style="font-family:var(--mono);font-size:20px;font-weight:500;color:var(--amber);margin-top:4px" id="dp-monto">S/ 0.00</div>
     </div>
-    <div class="field"><label>Fecha de cobro</label><input id="dp-fecha" type="date"></div>
-    <div class="field"><label>Depositar en cuenta</label>
+    <div class="field"><label id="dp-fecha-label">Fecha de cobro</label><input id="dp-fecha" type="date"></div>
+    <div class="field"><label id="dp-cuenta-label">Depositar en cuenta</label>
       <select id="dp-cuenta"></select>
     </div>
     <div class="field" id="dp-parcial-wrap">
-      <label>¿Cobro parcial? <span style="font-size:10px;color:var(--text3)">(dejar en blanco = monto completo)</span></label>
+      <label id="dp-parcial-label">¿Cobro parcial? <span style="font-size:10px;color:var(--text3)">(dejar en blanco = monto completo)</span></label>
       <input id="dp-parcial" type="number" step="0.01" placeholder="Monto cobrado">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeDeudaPago()">Cancelar</button>
-      <button class="btn btn-primary" onclick="confirmarDeudaPago()">✅ Confirmar cobro</button>
+      <button class="btn btn-primary" id="dp-confirmar-btn" onclick="confirmarDeudaPago()">✅ Confirmar cobro</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: COMPENSAR DEUDAS (descontar una deuda con otra de la misma persona, en sentido contrario) -->
+<div class="modal-overlay" id="compensacion-overlay" onclick="if(event.target===this)cerrarCompensacion()">
+  <div class="modal modal-sm" style="width:420px">
+    <div class="modal-title"><span>⚖️ Compensar deudas</span><button class="modal-close" onclick="cerrarCompensacion()">✕</button></div>
+    <div id="comp-resumen" style="font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.5"></div>
+    <div class="field" id="comp-select-wrap">
+      <label>Compensar con esta otra deuda de la misma persona:</label>
+      <select id="comp-otra-deuda" onchange="actualizarPreviewCompensacion()"></select>
+    </div>
+    <div id="comp-sin-opciones" style="display:none;font-size:12px;color:var(--text3);background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      No tienes ninguna deuda pendiente de esta persona en sentido contrario para compensar.
+    </div>
+    <div id="comp-preview" style="display:none;background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12.5px;line-height:1.6"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarCompensacion()">Cancelar</button>
+      <button class="btn btn-primary" id="comp-confirmar-btn" onclick="confirmarCompensacion()">Confirmar compensación</button>
     </div>
   </div>
 </div>
