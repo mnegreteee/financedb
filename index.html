@@ -3202,8 +3202,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '13/09/26 - 21:22'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Confirmado y probado: la Búsqueda Global ya buscaba "contiene la palabra en cualquier parte" desde el principio — buscar "bembos" ya encontraba "Bembos", "Bembos Nathy" y "Cena en Bembos con amigos" (Miguel preguntó para confirmar, no era un bug). Pero al probarlo se encontró un caso relacionado que sí fallaba: buscar SIN tilde (ej. "cafe") no encontraba algo guardado CON tilde (ej. "Café"). Corregido: la búsqueda ahora ignora tildes/acentos en ambos lados (lo que escribes y lo que está guardado), así que "cafe", "café", "CAFE" y "Café" ahora encuentran lo mismo. Verificado con Playwright: el ejemplo original de Miguel sigue funcionando igual, y el nuevo caso (buscar sin tilde) ahora también encuentra resultados con tilde, en cualquier combinación de mayúsculas/minúsculas y con/sin acento. Regresión completa de las 14 páginas sin errores.';
+const APP_VERSION_DATE = '13/09/26 - 21:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo filtro de mes/año en la Búsqueda Global — pedido por Miguel para reducir resultados cuando hay muchas coincidencias del mismo nombre (ej. "Bembos" repetido cada mes). Dos selectores nuevos junto al cuadro de texto: "Cualquier mes" y "Cualquier año", combinables entre sí (solo mes, solo año, o ambos), más un botón "✕ Filtro" para quitarlo rápido. Se aplica a las 3 categorías con fecha propia (Movimientos, Consumos de tarjeta, Deudas) — Servicios y Consumos Frecuentes no tienen ese concepto, así que no les afecta. Verificado con Playwright con 4 combinaciones: sin filtro (9 resultados), mes+año específico (3 resultados, solo febrero 2026), solo año (1 resultado), y solo mes sin año (3 resultados). Capturas visuales confirmadas mostrando cómo pasa de 9 a 3 resultados al aplicar el filtro. Regresión completa de las 14 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12715,16 +12715,30 @@ function resaltarElemento(id){
 function normalizarBusqueda(s){
   return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 }
-function buscarGlobal(query){
+function buscarGlobal(query, filtroMes, filtroAnio){
   const q=normalizarBusqueda((query||'').trim());
   if(!q) return [];
   const resultados=[];
 
-  const movsMatch=(state.movimientos||[]).filter(m=>normalizarBusqueda(m.desc).includes(q))
+  // Si hay un mes y/o año seleccionado en el filtro, solo deja pasar
+  // fechas que coincidan — se aplica únicamente a las categorías que
+  // tienen una fecha propia (Movimientos, Consumos de tarjeta, Deudas).
+  // Servicios y Consumos Frecuentes no tienen ese concepto, así que el
+  // filtro de fecha no les afecta en absoluto.
+  const pasaFiltroFecha=(fechaStr)=>{
+    if(!fechaStr) return !(filtroMes||filtroAnio); // sin fecha propia: solo pasa si no hay filtro activo
+    const d=new Date(fechaStr+'T12:00:00');
+    if(filtroAnio && d.getFullYear()!==parseInt(filtroAnio)) return false;
+    if(filtroMes!==undefined && filtroMes!=='' && filtroMes!==null && d.getMonth()!==parseInt(filtroMes)) return false;
+    return true;
+  };
+
+  const movsMatch=(state.movimientos||[]).filter(m=>normalizarBusqueda(m.desc).includes(q) && pasaFiltroFecha(m.date))
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(movsMatch.length) resultados.push({
     categoria:'💵 Movimientos',
-    items:movsMatch.slice(0,15).map(m=>({
+    totalEncontrados:movsMatch.length,
+    items:movsMatch.slice(0,30).map(m=>({
       titulo:m.desc, subtitulo:fmtFechaDDMMYYYY(m.date),
       monto:m.amount, currency:m.currency||'PEN',
       accion:()=>{
@@ -12739,24 +12753,26 @@ function buscarGlobal(query){
   (state.tarjetas||[]).forEach(t=>{
     Object.entries(t.movs||{}).forEach(([mk,movs])=>{
       (movs||[]).forEach(m=>{
-        if(normalizarBusqueda(m.desc).includes(q)) tcMatch.push({...m, tarjetaId:t.id, tarjetaNombre:t.banco+(t.cat?' '+t.cat:''), mk});
+        if(normalizarBusqueda(m.desc).includes(q) && pasaFiltroFecha(m.fecha)) tcMatch.push({...m, tarjetaId:t.id, tarjetaNombre:t.banco+(t.cat?' '+t.cat:''), mk});
       });
     });
   });
   if(tcMatch.length) resultados.push({
     categoria:'💳 Consumos de tarjeta',
-    items:tcMatch.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,15).map(m=>({
+    totalEncontrados:tcMatch.length,
+    items:tcMatch.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,30).map(m=>({
       titulo:m.desc, subtitulo:`${m.tarjetaNombre} · ${fmtFechaDDMMYYYY(m.fecha)}`,
       monto:m.monto, currency:m.currency||'PEN',
       accion:()=>{ showPage('tarjetas'); openTCDetail(m.tarjetaId, m.mk); },
     })),
   });
 
-  const deudasMatch=(state.deudas||[]).filter(d=>normalizarBusqueda(d.nombre).includes(q))
+  const deudasMatch=(state.deudas||[]).filter(d=>normalizarBusqueda(d.nombre).includes(q) && pasaFiltroFecha(d.fecha))
     .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   if(deudasMatch.length) resultados.push({
     categoria:'🤝 Deudas y Préstamos',
-    items:deudasMatch.slice(0,15).map(d=>({
+    totalEncontrados:deudasMatch.length,
+    items:deudasMatch.slice(0,30).map(d=>({
       titulo:d.nombre, subtitulo:d.direccion==='yo_debo'?'Tú le debes':'Te debe a ti',
       monto:d.monto, currency:d.currency||'PEN',
       accion:()=>{ deudaFilter='all'; showPage('deudas'); resaltarElemento('deuda-card-'+d.id); },
@@ -12766,6 +12782,7 @@ function buscarGlobal(query){
   const serviciosMatch=Object.entries(state.servicios||{}).filter(([,s])=>normalizarBusqueda(s.name).includes(q));
   if(serviciosMatch.length) resultados.push({
     categoria:'🔗 Servicios Compartidos',
+    totalEncontrados:serviciosMatch.length,
     items:serviciosMatch.map(([sid,s])=>({
       titulo:s.name, subtitulo:`${(s.people||[]).length} persona(s)`,
       monto:null, currency:null,
@@ -12776,6 +12793,7 @@ function buscarGlobal(query){
   const cfMatch=(state.consumosFrecuentes||[]).filter(c=>normalizarBusqueda(c.nombre).includes(q));
   if(cfMatch.length) resultados.push({
     categoria:'⚡ Consumos Frecuentes',
+    totalEncontrados:cfMatch.length,
     items:cfMatch.map(c=>({
       titulo:c.nombre, subtitulo:'Acceso rápido de tarjeta',
       monto:c.monto, currency:c.currency||'PEN',
@@ -12787,27 +12805,46 @@ function buscarGlobal(query){
 }
 function abrirBusquedaGlobal(){
   document.getElementById('busqueda-global-input').value='';
+  document.getElementById('busqueda-filtro-mes').value='';
+  // Poblar el selector de años dinámicamente — de 3 años atrás a 1 año adelante
+  // del año actual, para cubrir el rango típico de datos guardados sin tener
+  // que escanear todo el historial cada vez que se abre la búsqueda.
+  const anioSel=document.getElementById('busqueda-filtro-anio');
+  const anioActual=new Date().getFullYear();
+  let opcionesAnio='<option value="">Cualquier año</option>';
+  for(let y=anioActual+1;y>=anioActual-3;y--) opcionesAnio+=`<option value="${y}">${y}</option>`;
+  anioSel.innerHTML=opcionesAnio;
+  anioSel.value='';
   document.getElementById('busqueda-global-resultados').innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Escribe algo para buscar en toda la app.</div>';
   document.getElementById('busqueda-global-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('busqueda-global-input').focus(),50);
 }
+function limpiarFiltroFechaBusqueda(){
+  document.getElementById('busqueda-filtro-mes').value='';
+  document.getElementById('busqueda-filtro-anio').value='';
+  ejecutarBusquedaGlobal();
+}
 function cerrarBusquedaGlobal(){ document.getElementById('busqueda-global-overlay').classList.remove('open'); }
 function ejecutarBusquedaGlobal(){
   const q=document.getElementById('busqueda-global-input').value;
+  const filtroMes=document.getElementById('busqueda-filtro-mes').value;
+  const filtroAnio=document.getElementById('busqueda-filtro-anio').value;
   const cont=document.getElementById('busqueda-global-resultados');
   if(!q.trim()){
     cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Escribe algo para buscar en toda la app.</div>';
     return;
   }
-  const grupos=buscarGlobal(q);
+  const grupos=buscarGlobal(q, filtroMes, filtroAnio);
   if(!grupos.length){
-    cont.innerHTML=`<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin resultados para "${escapeHtml(q)}".</div>`;
+    const conFiltro=filtroMes||filtroAnio;
+    cont.innerHTML=`<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin resultados para "${escapeHtml(q)}"${conFiltro?' con ese filtro de fecha':''}.</div>`;
     return;
   }
   window._busquedaGlobalAcciones=[];
-  cont.innerHTML=grupos.map(g=>`
-    <div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${g.categoria}</div>
+  cont.innerHTML=grupos.map(g=>{
+    const sobran=g.totalEncontrados-g.items.length;
+    return `<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${g.categoria}${g.totalEncontrados?` (${g.totalEncontrados})`:''}</div>
       ${g.items.map(it=>{
         const idx=window._busquedaGlobalAcciones.length;
         window._busquedaGlobalAcciones.push(it.accion);
@@ -12820,7 +12857,9 @@ function ejecutarBusquedaGlobal(){
           ${it.monto!=null?`<div style="font-family:var(--mono);font-size:12.5px;font-weight:600;flex-shrink:0;margin-left:10px">${M(sym+' '+Math.abs(it.monto).toFixed(2))}</div>`:''}
         </div>`;
       }).join('')}
-    </div>`).join('');
+      ${sobran>0?`<div style="text-align:center;font-size:10.5px;color:var(--text3);padding-top:6px">+ ${sobran} más — escribe algo más específico para acotar</div>`:''}
+    </div>`;
+  }).join('');
 }
 
 // ── MIS CUOTAS ACTIVAS (vista consolidada de todas las tarjetas) ──────
@@ -22316,8 +22355,21 @@ if(state.projGoals){
 <div class="modal-overlay" id="busqueda-global-overlay" onclick="if(event.target===this)cerrarBusquedaGlobal()">
   <div class="modal" style="width:520px;max-width:95vw">
     <div class="modal-title"><span>🔍 Buscar en toda la app</span><button class="modal-close" onclick="cerrarBusquedaGlobal()">✕</button></div>
-    <input id="busqueda-global-input" type="text" placeholder="Ej. Bembos, Juan, Netflix..." oninput="ejecutarBusquedaGlobal()" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;margin-bottom:12px">
-    <div id="busqueda-global-resultados" style="max-height:55vh;overflow-y:auto"></div>
+    <input id="busqueda-global-input" type="text" placeholder="Ej. Bembos, Juan, Netflix..." oninput="ejecutarBusquedaGlobal()" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;margin-bottom:8px">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <select id="busqueda-filtro-mes" onchange="ejecutarBusquedaGlobal()" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px">
+        <option value="">Cualquier mes</option>
+        <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+        <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+        <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+        <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+      </select>
+      <select id="busqueda-filtro-anio" onchange="ejecutarBusquedaGlobal()" style="flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;padding:6px 8px">
+        <option value="">Cualquier año</option>
+      </select>
+      <button class="btn" style="font-size:11px;padding:6px 10px" onclick="limpiarFiltroFechaBusqueda()" title="Quitar el filtro de mes/año">✕ Filtro</button>
+    </div>
+    <div id="busqueda-global-resultados" style="max-height:52vh;overflow-y:auto"></div>
   </div>
 </div>
 
