@@ -958,6 +958,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
     <button class="eye-btn" id="compact-btn" onclick="toggleCompact()" title="Adaptar vista al dispositivo" style="font-size:15px">📱</button>
+    <button class="eye-btn" id="search-btn" onclick="abrirBusquedaGlobal()" title="Buscar en toda la app" style="font-size:15px">🔍</button>
     <button class="eye-btn" id="demo-btn" onclick="toggleDemoMode()" title="Modo demo (números aleatorios)" style="font-size:15px">🎭</button>
     <button class="eye-btn" id="lock-btn" onclick="lockApp()" title="Bloquear y cerrar sesión" style="font-size:15px">🔒</button>
     <button class="eye-btn" id="eye-btn" onclick="toggleHide()" title="Ocultar / mostrar cifras">👁</button>
@@ -1272,6 +1273,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div class="dash-patrimonio-sub">
           <span class="dash-var-badge dash-var-nt" id="dash-var-badge">— vs mes anterior</span>
           <span style="color:var(--text3);font-size:11px" id="dash-patrimonio-formula">Disponible + Ahorros + Inversiones − Deuda tarjetas</span>
+          <span id="salud-financiera-badge" onclick="abrirSaludFinancieraDetalle()" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;white-space:nowrap;margin-left:6px">🟢 Salud financiera: 100</span>
         </div>
         <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap" id="dash-patrimonio-breakdown">
           <div><span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-right:6px">Soles</span><span class="money" id="dash-patrimonio-pen" style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text)">S/ 0.00</span></div>
@@ -3198,8 +3200,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '13/09/26 - 19:46'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '4 mejoras en Deudas/Créditos. (1) FIX: el widget "Préstamos por Cobrar" ya mezclaba deudas "me deben" y "yo debo" sin diferenciarlas — se renombró a "Deudas y Préstamos" y cada entrada muestra claramente 🟢 ME DEBE o 🔴 YO DEBO con colores distintos. (2) Widget nuevo "⚖️ Balance Neto por Persona": agrupa todas tus deudas pendientes por persona y muestra el neto real — si le debes S/300 a alguien pero también te debe S/150, muestra "le debes neto S/150"; si el neto da exactamente 0, muestra "✅ A mano". (3) Cuotas de tarjeta y Deudas Mayores ahora aparecen SOLAS en Calendario (widget Fechas Importantes + grid mensual) — se calculan al vuelo, nunca se guardan como eventos falsos, son de solo lectura (ícono 🔄, un toque te lleva a Tarjetas o Deudas según corresponda). (4) Widget nuevo "📋 Todo lo Pendiente": consolida en un solo número cuánto debes en total sumando cuotas de tarjeta + Deudas Mayores + deudas personales, con un modal de detalle que desglosa cada fuente y también muestra aparte cuánto te deben a ti. Verificado con Playwright: balance neto con 3 personas (negativo, positivo, y "a mano"), eventos automáticos generados correctamente y apareciendo en Fechas Importantes y en el grid mensual, y el panel de Todo lo Pendiente con números verificados a mano (S/3600 cuotas + S/5000 deuda mayor + S/300 deuda personal = S/8900 total, más S/230 aparte que le deben). Regresión completa de las 12 páginas + Calendario sin errores.';
+const APP_VERSION_DATE = '13/09/26 - 20:42'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '3 funciones nuevas. (1) 🔍 Búsqueda Global: ícono nuevo en la barra superior, busca por texto en Movimientos, Consumos de tarjeta (todas las tarjetas y meses), Deudas, Servicios Compartidos y Consumos Frecuentes a la vez, agrupado por sección — ej. buscar "Bembos" encuentra tanto el movimiento normal como el consumo de tarjeta. (2) Widget nuevo "🚨 Alertas de Presupuesto" (oculto por defecto, mismo estilo que "Servicios Compartidos"): muestra las categorías que ya llegaron o están cerca (70%+) de su límite mensual, con barra de progreso. (3) "💚 Salud Financiera": un puntaje simple (0-100, semáforo 🟢🟡🔴) siempre visible junto a "Patrimonio Neto Total" — combina deuda de tarjeta vs. ingreso del mes, % de línea de crédito usada, y si tienes algo de ahorro. Un toque abre el detalle de las 3 señales. No es un puntaje bancario real, es solo una referencia rápida. Verificado con Playwright: búsqueda de "bembos" encuentra ambos tipos de resultado sin mezclar con otros; alertas de presupuesto detecta correctamente 92% (alerta) vs 16.7% (tranquilo); salud financiera baja de 100 (sin deuda, con ahorro) a 10 (deuda alta, línea llena, sin ahorro) al empeorar el escenario. Capturas visuales confirmadas. Regresión completa de las 12 páginas + Calendario + Presupuesto sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12565,6 +12567,227 @@ function renderTodoPendiente(){
   }
   cont.innerHTML=html;
 }
+
+// ── ALERTAS DE PRESUPUESTO ─────────────────────────────
+// Mismo cálculo de gasto-por-categoría que ya usa renderPresupuesto() (movs
+// normales + consumos de tarjeta categorizados del mes), pero devuelto como
+// datos reutilizables en vez de HTML directo, para poder mostrarlo también
+// en un widget del Dashboard sin duplicar la lógica de cálculo.
+function obtenerAlertasPresupuesto(umbralPct=70){
+  const y=state.currentYear, m=state.currentMonth;
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense');
+  const tcMovsThisMonth=getCategorizedTCMovsForMonth(y,m);
+  const totals={};
+  movs.forEach(mv=>{
+    if(!mv.cat) return;
+    const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount;
+    totals[mv.cat]=(totals[mv.cat]||0)+amt;
+  });
+  tcMovsThisMonth.forEach(mv=>{
+    const amt=mv.currency==='USD'?mv.monto*state.tc.venta:mv.monto;
+    totals[mv.cat]=(totals[mv.cat]||0)+amt;
+  });
+  const cats=Object.keys(state.budgets||{});
+  return cats.map(cat=>{
+    const limit=state.budgets[cat].limit||0;
+    const gastado=totals[cat]||0;
+    const pct=limit>0?(gastado/limit*100):0;
+    return {cat, limit, gastado, pct};
+  }).filter(x=>x.pct>=umbralPct)
+    .sort((a,b)=>b.pct-a.pct);
+}
+
+// ── SALUD FINANCIERA ───────────────────────────────────
+// Puntaje simple (0-100) armado con 3 señales: cuánta deuda de tarjeta
+// tienes en relación a tu ingreso del mes, qué tan llena está tu línea de
+// crédito en promedio, y si tienes algo de ahorro guardado. No pretende ser
+// un puntaje bancario real (ese usa buró de crédito, historial, etc.) — es
+// solo un semáforo simple para tener una sola referencia rápida. Reutiliza
+// getAllTCMovs y sumaAhorroDe, que ya existen, para no duplicar cómo se
+// calcula la deuda de tarjeta o el ahorro en otras partes de la app.
+function calcularSaludFinanciera(){
+  const rate=state.tc?.venta||3.45;
+  const tarjetas=state.tarjetas||[];
+  let deudaTCTotal=0, pctLineaSuma=0, pctLineaCount=0;
+  tarjetas.forEach(t=>{
+    const allMovs=getAllTCMovs(t.id);
+    const toS=mv=>(mv.currency||t.currency)==='USD'?mv.monto*rate:mv.monto;
+    let deudaEnMonedaTarjeta=0;
+    allMovs.filter(mv=>!mv.pagado).forEach(mv=>{
+      deudaTCTotal+=toS(mv);
+      deudaEnMonedaTarjeta+=mv.monto;
+    });
+    const linea=parseFloat(t.linea)||0;
+    if(linea>0){
+      pctLineaSuma+=Math.min(100,(deudaEnMonedaTarjeta/linea)*100);
+      pctLineaCount++;
+    }
+  });
+  const pctLineaProm=pctLineaCount>0?pctLineaSuma/pctLineaCount:0;
+
+  const y=state.currentYear, m=state.currentMonth;
+  const ingresoMes=getMovs(y,m).filter(mv=>mv.type==='income').reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*rate:mv.amount),0);
+  const ratioDeudaIngreso=ingresoMes>0?(deudaTCTotal/ingresoMes):(deudaTCTotal>0?2:0);
+
+  const ahorroPEN=sumaAhorroDe(state.cuentas,'PEN');
+  const ahorroUSD=sumaAhorroDe(state.cuentas,'USD');
+  const ahorroTotalPEN=ahorroPEN+ahorroUSD*rate;
+
+  let score=100;
+  if(ratioDeudaIngreso>0.6) score-=35; else if(ratioDeudaIngreso>0.3) score-=15;
+  if(pctLineaProm>70) score-=35; else if(pctLineaProm>30) score-=15;
+  if(ahorroTotalPEN<=0) score-=20; else if(ahorroTotalPEN<500) score-=10;
+  score=Math.max(0,Math.min(100,score));
+
+  const nivel = score>=70?'verde':score>=40?'amarillo':'rojo';
+  const color = nivel==='verde'?'var(--green)':nivel==='amarillo'?'var(--amber)':'var(--red)';
+  const emoji = nivel==='verde'?'🟢':nivel==='amarillo'?'🟡':'🔴';
+  const etiqueta = nivel==='verde'?'Saludable':nivel==='amarillo'?'Regular':'Necesita atención';
+
+  return {score, nivel, color, emoji, etiqueta, ratioDeudaIngreso, pctLineaProm, ahorroTotalPEN, deudaTCTotal, ingresoMes};
+}
+function actualizarBadgeSaludFinanciera(){
+  const badge=document.getElementById('salud-financiera-badge');
+  if(!badge) return;
+  const sf=calcularSaludFinanciera();
+  badge.textContent=`${sf.emoji} Salud financiera: ${sf.score}`;
+}
+function abrirSaludFinancieraDetalle(){
+  const sf=calcularSaludFinanciera();
+  const cont=document.getElementById('salud-financiera-contenido');
+  const fmtPct=v=>v.toFixed(0)+'%';
+  cont.innerHTML=`
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:48px;font-weight:700;font-family:var(--mono);color:${sf.color}">${sf.score}</div>
+      <div style="font-size:13px;font-weight:600;color:${sf.color}">${sf.emoji} ${sf.etiqueta}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Puntaje simple de referencia — no es un puntaje bancario real, solo combina 3 señales para tener un vistazo rápido de tu situación.</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span>Deuda de tarjeta vs. ingreso del mes</span><span style="font-weight:600">${sf.ingresoMes>0?fmtPct(sf.ratioDeudaIngreso*100):'sin ingreso registrado'}</span></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Ideal: menos del 30%. Más del 60% es señal de alerta.</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span>% de línea de crédito usada (promedio)</span><span style="font-weight:600">${fmtPct(sf.pctLineaProm)}</span></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Ideal: menos del 30%. Usar más del 70% puede afectar tu score crediticio real.</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span>Ahorro total</span><span style="font-weight:600">${M(fmtS(sf.ahorroTotalPEN))}</span></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Tener algo guardado, aunque sea poco, ayuda a cubrir imprevistos.</div>
+      </div>
+    </div>`;
+  document.getElementById('salud-financiera-overlay').classList.add('open');
+}
+function cerrarSaludFinancieraDetalle(){ document.getElementById('salud-financiera-overlay').classList.remove('open'); }
+
+// ── BÚSQUEDA GLOBAL ─────────────────────────────────────
+// Busca en TODO lo que tiene texto libre (nombre/descripción) en la app:
+// movimientos, consumos de CUALQUIER tarjeta en CUALQUIER mes, deudas,
+// servicios compartidos, y consumos frecuentes. No busca dentro de montos
+// ni fechas, solo texto — es a propósito simple, un buscador de "¿dónde
+// registré esto?", no un filtro avanzado.
+function buscarGlobal(query){
+  const q=(query||'').trim().toLowerCase();
+  if(!q) return [];
+  const resultados=[];
+
+  const movsMatch=(state.movimientos||[]).filter(m=>(m.desc||'').toLowerCase().includes(q));
+  if(movsMatch.length) resultados.push({
+    categoria:'💵 Movimientos',
+    items:movsMatch.slice(0,15).map(m=>({
+      titulo:m.desc, subtitulo:fmtFechaDDMMYYYY(m.date),
+      monto:m.amount, currency:m.currency||'PEN',
+      accion:()=>showPage('finanzas'),
+    })),
+  });
+
+  const tcMatch=[];
+  (state.tarjetas||[]).forEach(t=>{
+    Object.entries(t.movs||{}).forEach(([mk,movs])=>{
+      (movs||[]).forEach(m=>{
+        if((m.desc||'').toLowerCase().includes(q)) tcMatch.push({...m, tarjetaId:t.id, tarjetaNombre:t.banco+(t.cat?' '+t.cat:'')});
+      });
+    });
+  });
+  if(tcMatch.length) resultados.push({
+    categoria:'💳 Consumos de tarjeta',
+    items:tcMatch.slice(0,15).map(m=>({
+      titulo:m.desc, subtitulo:`${m.tarjetaNombre} · ${fmtFechaDDMMYYYY(m.fecha)}`,
+      monto:m.monto, currency:m.currency||'PEN',
+      accion:()=>openTCDetail(m.tarjetaId),
+    })),
+  });
+
+  const deudasMatch=(state.deudas||[]).filter(d=>(d.nombre||'').toLowerCase().includes(q));
+  if(deudasMatch.length) resultados.push({
+    categoria:'🤝 Deudas y Préstamos',
+    items:deudasMatch.slice(0,15).map(d=>({
+      titulo:d.nombre, subtitulo:d.direccion==='yo_debo'?'Tú le debes':'Te debe a ti',
+      monto:d.monto, currency:d.currency||'PEN',
+      accion:()=>showPage('deudas'),
+    })),
+  });
+
+  const serviciosMatch=Object.entries(state.servicios||{}).filter(([,s])=>(s.name||'').toLowerCase().includes(q));
+  if(serviciosMatch.length) resultados.push({
+    categoria:'🔗 Servicios Compartidos',
+    items:serviciosMatch.map(([,s])=>({
+      titulo:s.name, subtitulo:`${(s.people||[]).length} persona(s)`,
+      monto:null, currency:null,
+      accion:()=>showPage('servicios'),
+    })),
+  });
+
+  const cfMatch=(state.consumosFrecuentes||[]).filter(c=>(c.nombre||'').toLowerCase().includes(q));
+  if(cfMatch.length) resultados.push({
+    categoria:'⚡ Consumos Frecuentes',
+    items:cfMatch.map(c=>({
+      titulo:c.nombre, subtitulo:'Acceso rápido de tarjeta',
+      monto:c.monto, currency:c.currency||'PEN',
+      accion:()=>showPage('tarjetas'),
+    })),
+  });
+
+  return resultados;
+}
+function abrirBusquedaGlobal(){
+  document.getElementById('busqueda-global-input').value='';
+  document.getElementById('busqueda-global-resultados').innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Escribe algo para buscar en toda la app.</div>';
+  document.getElementById('busqueda-global-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('busqueda-global-input').focus(),50);
+}
+function cerrarBusquedaGlobal(){ document.getElementById('busqueda-global-overlay').classList.remove('open'); }
+function ejecutarBusquedaGlobal(){
+  const q=document.getElementById('busqueda-global-input').value;
+  const cont=document.getElementById('busqueda-global-resultados');
+  if(!q.trim()){
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Escribe algo para buscar en toda la app.</div>';
+    return;
+  }
+  const grupos=buscarGlobal(q);
+  if(!grupos.length){
+    cont.innerHTML=`<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Sin resultados para "${escapeHtml(q)}".</div>`;
+    return;
+  }
+  window._busquedaGlobalAcciones=[];
+  cont.innerHTML=grupos.map(g=>`
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${g.categoria}</div>
+      ${g.items.map(it=>{
+        const idx=window._busquedaGlobalAcciones.length;
+        window._busquedaGlobalAcciones.push(it.accion);
+        const sym=it.currency==='USD'?'$':'S/';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border2);cursor:pointer" onclick="cerrarBusquedaGlobal();window._busquedaGlobalAcciones[${idx}]()">
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(it.titulo)}</div>
+            <div style="font-size:10.5px;color:var(--text3)">${escapeHtml(it.subtitulo||'')}</div>
+          </div>
+          ${it.monto!=null?`<div style="font-family:var(--mono);font-size:12.5px;font-weight:600;flex-shrink:0;margin-left:10px">${M(sym+' '+Math.abs(it.monto).toFixed(2))}</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
 // ── MIS CUOTAS ACTIVAS (vista consolidada de todas las tarjetas) ──────
 // Recorre TODAS las tarjetas y TODOS los meses, agrupa por grupoCuotaId, y
 // arma un resumen por compra: cuántas cuotas van pagadas, cuántas faltan,
@@ -14153,6 +14376,12 @@ const DASHBOARD_WIDGET_DEFS = {
       <div id="dash-todo-pendiente-body"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="abrirTodoPendiente()">Ver detalle completo →</button></div>
     </div>`},
+  'alertas-presupuesto': {label:'🚨 Alertas de Presupuesto', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-alertas-presupuesto-card">
+      <div class="dash-section-title">🚨 Alertas de Presupuesto</div>
+      <div id="dash-alertas-presupuesto-body"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('presupuesto')">Ver Presupuesto →</button></div>
+    </div>`},
   'fechas': {label:'📅 Fechas Importantes', size:'large', shell:()=>`
     <div class="card" style="padding:18px" id="fecha-imp-card-wrap">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -14253,6 +14482,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'anio-completo', visible:false}, {id:'minijuegos', visible:false},
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
+  {id:'alertas-presupuesto', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -14458,6 +14688,7 @@ function guardarEditorWidgets(){
 function renderDashboard(){
   setupDashboardResponsive();
   renderDashboardWidgets(); // arma los "cascarones" antes de llenarlos con datos
+  actualizarBadgeSaludFinanciera(); // siempre visible, no depende de qué widgets estén activos
   const now   = new Date();
   const curY  = now.getFullYear();
   const curM  = now.getMonth();
@@ -15021,6 +15252,28 @@ function renderNuevosWidgetsDashboard(){
         <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--green);padding:4px 0;border-top:1px solid var(--border2);margin-top:4px">
           <span>Te deben (aparte)</span><span style="font-family:var(--mono)">${M(fmtTCMixed(tp.personalesMeDeben.pen,tp.personalesMeDeben.usd))}</span>
         </div>`;
+    }
+  }
+
+  // ── Alertas de Presupuesto ──
+  const alertasEl=document.getElementById('dash-alertas-presupuesto-body');
+  if(alertasEl){
+    const alertas=obtenerAlertasPresupuesto();
+    if(!alertas.length){
+      alertasEl.innerHTML='<div class="dash-empty">✅ Ninguna categoría cerca de su límite este mes.</div>';
+    } else {
+      alertasEl.innerHTML=alertas.slice(0,5).map(a=>{
+        const pasado=a.pct>=100;
+        const color=pasado?'var(--red)':'var(--amber)';
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border2);cursor:pointer" onclick="showPage('presupuesto')">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+            <span>${a.cat}</span><span style="font-weight:600;color:${color}">${a.pct.toFixed(0)}%${pasado?' ⚠️':''}</span>
+          </div>
+          <div style="height:4px;background:var(--bg4);border-radius:2px">
+            <div style="height:4px;border-radius:2px;width:${Math.min(100,a.pct)}%;background:${color}"></div>
+          </div>
+        </div>`;
+      }).join('') + (alertas.length>5?`<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${alertas.length-5} más</div>`:'');
     }
   }
 }
@@ -22010,6 +22263,26 @@ if(state.projGoals){
       <button class="btn" onclick="cerrarCancelacionAnticipada()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarCancelacionAnticipada()">Confirmar pago</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: SALUD FINANCIERA (detalle) -->
+<div class="modal-overlay" id="salud-financiera-overlay" onclick="if(event.target===this)cerrarSaludFinancieraDetalle()">
+  <div class="modal modal-sm" style="width:420px">
+    <div class="modal-title"><span>💚 Salud Financiera</span><button class="modal-close" onclick="cerrarSaludFinancieraDetalle()">✕</button></div>
+    <div id="salud-financiera-contenido"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="cerrarSaludFinancieraDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: BÚSQUEDA GLOBAL -->
+<div class="modal-overlay" id="busqueda-global-overlay" onclick="if(event.target===this)cerrarBusquedaGlobal()">
+  <div class="modal" style="width:520px;max-width:95vw">
+    <div class="modal-title"><span>🔍 Buscar en toda la app</span><button class="modal-close" onclick="cerrarBusquedaGlobal()">✕</button></div>
+    <input id="busqueda-global-input" type="text" placeholder="Ej. Bembos, Juan, Netflix..." oninput="ejecutarBusquedaGlobal()" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;margin-bottom:12px">
+    <div id="busqueda-global-resultados" style="max-height:55vh;overflow-y:auto"></div>
   </div>
 </div>
 
