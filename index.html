@@ -3198,8 +3198,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '12/09/26 - 16:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva función en Deudas: ahora se puede registrar dinero que TÚ le debes a otra persona (antes "Préstamos" solo servía para lo contrario, dinero que otros te deben). En "Nueva deuda" hay un selector "¿Quién le debe a quién?" — el formulario, los botones y los textos cambian según la dirección elegida. Al marcar una deuda "yo debo" como pagada, pregunta con qué cuenta pagaste (se RESTA de esa cuenta y se registra como un GASTO — al revés de "me deben", que suma y registra un INGRESO). Se puede revertir igual que antes. Además, nueva función de COMPENSACIÓN: si le debes a alguien y esa misma persona también te debe a ti, un botón "⚖️ Compensar" (visible solo cuando existe esa contraparte — misma persona, sentido contrario, misma moneda) descuenta el monto menor de ambas deudas sin tocar ninguna cuenta real — ej. le debes S/300 a Juan y Juan te debe S/150 → después de compensar, le debes solo S/150 y la deuda de Juan queda saldada. Se puede deshacer desde Actividad Reciente (restaura ambos montos originales). Verificado con Playwright: creación de deuda "yo debo", marcar pagado (resta cuenta + gasto), revertir pago (restaura cuenta), compensación completa con el ejemplo exacto (300 vs 150 → queda en 150), deshacer la compensación, y retrocompatibilidad total con deudas antiguas que no tienen el campo "direccion" (se comportan igual que siempre, como "me deben"). Capturas visuales confirmadas. Regresión completa de las 12 páginas sin errores.';
+const APP_VERSION_DATE = '13/09/26 - 19:46'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '4 mejoras en Deudas/Créditos. (1) FIX: el widget "Préstamos por Cobrar" ya mezclaba deudas "me deben" y "yo debo" sin diferenciarlas — se renombró a "Deudas y Préstamos" y cada entrada muestra claramente 🟢 ME DEBE o 🔴 YO DEBO con colores distintos. (2) Widget nuevo "⚖️ Balance Neto por Persona": agrupa todas tus deudas pendientes por persona y muestra el neto real — si le debes S/300 a alguien pero también te debe S/150, muestra "le debes neto S/150"; si el neto da exactamente 0, muestra "✅ A mano". (3) Cuotas de tarjeta y Deudas Mayores ahora aparecen SOLAS en Calendario (widget Fechas Importantes + grid mensual) — se calculan al vuelo, nunca se guardan como eventos falsos, son de solo lectura (ícono 🔄, un toque te lleva a Tarjetas o Deudas según corresponda). (4) Widget nuevo "📋 Todo lo Pendiente": consolida en un solo número cuánto debes en total sumando cuotas de tarjeta + Deudas Mayores + deudas personales, con un modal de detalle que desglosa cada fuente y también muestra aparte cuánto te deben a ti. Verificado con Playwright: balance neto con 3 personas (negativo, positivo, y "a mano"), eventos automáticos generados correctamente y apareciendo en Fechas Importantes y en el grid mensual, y el panel de Todo lo Pendiente con números verificados a mano (S/3600 cuotas + S/5000 deuda mayor + S/300 deuda personal = S/8900 total, más S/230 aparte que le deben). Regresión completa de las 12 páginas + Calendario sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12467,6 +12467,104 @@ function populateConsumoTarjetaSelect(preselectId){
   if(preselectId && tarjetas.some(t=>t.id===preselectId)) sel.value=preselectId;
   else if(tarjetas.length) sel.value=tarjetas[0].id;
 }
+// ── BALANCE NETO POR PERSONA ───────────────────────────
+// Agrupa TODAS las deudas pendientes (ambas direcciones) por persona +
+// moneda, y calcula el neto real: lo que te debe menos lo que le debes.
+// Si a alguien le compensaste todo pero por algún motivo quedan 2 deudas
+// activas que se cancelan exactamente (raro, pero posible antes de usar
+// "Compensar"), igual se calcula el neto — puede dar exactamente 0.
+function obtenerBalanceNetoPorPersona(){
+  const grupos={}; // "nombre|moneda" -> {nombre, currency, meDeben, yoDebo}
+  (state.deudas||[]).filter(d=>d.status==='pendiente').forEach(d=>{
+    const nombre=(d.nombre||'').trim();
+    if(!nombre) return;
+    const key=nombre.toLowerCase()+'|'+(d.currency||'PEN');
+    if(!grupos[key]) grupos[key]={nombre, currency:d.currency||'PEN', meDeben:0, yoDebo:0};
+    if(d.direccion==='yo_debo') grupos[key].yoDebo+=d.monto;
+    else grupos[key].meDeben+=d.monto;
+  });
+  return Object.values(grupos)
+    .map(g=>({...g, neto:g.meDeben-g.yoDebo}))
+    .sort((a,b)=>Math.abs(b.neto)-Math.abs(a.neto));
+}
+// ── TODO LO PENDIENTE (consolidado) ────────────────────
+// Junta en un solo lugar las 3 fuentes de "deuda" que existen en la app,
+// que hoy viven en secciones separadas sin sumarse en ningún lado: cuotas
+// de tarjeta, Deudas Mayores, y deudas personales. Los helpers que llama
+// (obtenerGruposDeCuotas, getDMResumen) están definidos más abajo en el
+// archivo, pero como son "function" con hoisting, funcionan igual sin
+// importar el orden — solo importa que existan al momento de LLAMAR esto,
+// no al momento de definirlo.
+function obtenerTodoPendiente(){
+  const gruposCuotas=obtenerGruposDeCuotas();
+  let cuotasPen=0, cuotasUsd=0;
+  gruposCuotas.forEach(g=>{ if(g.currency==='USD') cuotasUsd+=g.totalPendiente; else cuotasPen+=g.totalPendiente; });
+
+  const deudasMayoresActivas=(state.deudasMayores||[]).map(d=>({d, r:getDMResumen(d)})).filter(x=>x.r.saldoPendiente>0.005);
+  let dmPen=0, dmUsd=0;
+  deudasMayoresActivas.forEach(({d,r})=>{ if((d.currency||'PEN')==='USD') dmUsd+=r.saldoPendiente; else dmPen+=r.saldoPendiente; });
+
+  const deudasPend=(state.deudas||[]).filter(d=>d.status==='pendiente');
+  let yoDeboPen=0, yoDeboUsd=0, meDebenPen=0, meDebenUsd=0;
+  deudasPend.forEach(d=>{
+    if(d.direccion==='yo_debo'){ if(d.currency==='USD') yoDeboUsd+=d.monto; else yoDeboPen+=d.monto; }
+    else { if(d.currency==='USD') meDebenUsd+=d.monto; else meDebenPen+=d.monto; }
+  });
+
+  return {
+    cuotasTC:          {cantidad:gruposCuotas.length,        pen:cuotasPen, usd:cuotasUsd},
+    deudasMayores:      {cantidad:deudasMayoresActivas.length, pen:dmPen,     usd:dmUsd},
+    personalesYoDebo:   {pen:yoDeboPen,  usd:yoDeboUsd},
+    personalesMeDeben:  {pen:meDebenPen, usd:meDebenUsd},
+    totalDebo:          {pen:cuotasPen+dmPen+yoDeboPen, usd:cuotasUsd+dmUsd+yoDeboUsd},
+  };
+}
+function abrirTodoPendiente(){
+  renderTodoPendiente();
+  document.getElementById('todo-pendiente-overlay').classList.add('open');
+}
+function cerrarTodoPendiente(){ document.getElementById('todo-pendiente-overlay').classList.remove('open'); }
+function renderTodoPendiente(){
+  const cont=document.getElementById('todo-pendiente-contenido');
+  const tp=obtenerTodoPendiente();
+  const hayNada = tp.cuotasTC.cantidad===0 && tp.deudasMayores.cantidad===0
+    && tp.personalesYoDebo.pen<0.005 && tp.personalesYoDebo.usd<0.005
+    && tp.personalesMeDeben.pen<0.005 && tp.personalesMeDeben.usd<0.005;
+  if(hayNada){
+    cont.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">No tienes nada pendiente por ningún lado — todo al día. 🎉</div>';
+    return;
+  }
+  const fila=(icono,titulo,sub,pen,usd,color,pagina)=>`
+    <div style="background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:10px;cursor:pointer" onclick="cerrarTodoPendiente();showPage('${pagina}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:13px">${icono} ${titulo}</div>
+          ${sub?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>`:''}
+        </div>
+        <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${color}">${M(fmtTCMixed(pen,usd))}</div>
+      </div>
+    </div>`;
+  let html='';
+  if(tp.cuotasTC.cantidad>0){
+    html+=fila('💳','Cuotas de tarjeta',`${tp.cuotasTC.cantidad} compra${tp.cuotasTC.cantidad===1?'':'s'} a cuotas activa${tp.cuotasTC.cantidad===1?'':'s'}`,tp.cuotasTC.pen,tp.cuotasTC.usd,'var(--amber)','tarjetas');
+  }
+  if(tp.deudasMayores.cantidad>0){
+    html+=fila('🏛️','Deudas Mayores',`${tp.deudasMayores.cantidad} deuda${tp.deudasMayores.cantidad===1?'':'s'} activa${tp.deudasMayores.cantidad===1?'':'s'}`,tp.deudasMayores.pen,tp.deudasMayores.usd,'var(--amber)','deudas');
+  }
+  if(tp.personalesYoDebo.pen>0.005||tp.personalesYoDebo.usd>0.005){
+    html+=fila('🔴','Deudas personales — que TÚ debes','',tp.personalesYoDebo.pen,tp.personalesYoDebo.usd,'var(--red)','deudas');
+  }
+  html+=`<div style="border-top:2px solid var(--border2);margin:14px 0 10px;padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-weight:700;font-size:13px">TOTAL que debes</div>
+    <div style="font-family:var(--mono);font-size:19px;font-weight:700;color:var(--red)">${M(fmtTCMixed(tp.totalDebo.pen,tp.totalDebo.usd))}</div>
+  </div>`;
+  if(tp.personalesMeDeben.pen>0.005||tp.personalesMeDeben.usd>0.005){
+    html+=`<div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border2)">`;
+    html+=fila('🟢','Deudas personales — que te DEBEN a ti (aparte del total anterior)','',tp.personalesMeDeben.pen,tp.personalesMeDeben.usd,'var(--green)','deudas');
+    html+='</div>';
+  }
+  cont.innerHTML=html;
+}
 // ── MIS CUOTAS ACTIVAS (vista consolidada de todas las tarjetas) ──────
 // Recorre TODAS las tarjetas y TODOS los meses, agrupa por grupoCuotaId, y
 // arma un resumen por compra: cuántas cuotas van pagadas, cuántas faltan,
@@ -14032,9 +14130,9 @@ const DASHBOARD_WIDGET_DEFS = {
       <div id="dash-dm-list"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
     </div>`},
-  'prestamos-cobrar': {label:'🤝 Préstamos por Cobrar', size:'medium', shell:()=>`
+  'prestamos-cobrar': {label:'🤝 Deudas y Préstamos', size:'medium', shell:()=>`
     <div class="card" style="padding:18px" id="dash-dp-card">
-      <div class="dash-section-title">🤝 Préstamos por Cobrar</div>
+      <div class="dash-section-title">🤝 Deudas y Préstamos</div>
       <div id="dash-dp-list"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('deudas')">Ver detalle →</button></div>
     </div>`},
@@ -14043,6 +14141,17 @@ const DASHBOARD_WIDGET_DEFS = {
       <div class="dash-section-title">📦 Compras a Cuotas</div>
       <div id="dash-cuotas-resumen-body"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="abrirMisCuotasActivas()">Ver todas →</button></div>
+    </div>`},
+  'balance-neto-persona': {label:'⚖️ Balance Neto por Persona', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-balance-card">
+      <div class="dash-section-title">⚖️ Balance Neto por Persona</div>
+      <div id="dash-balance-neto-body"><div class="dash-empty">Cargando...</div></div>
+    </div>`},
+  'todo-pendiente': {label:'📋 Todo lo Pendiente', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-todo-pendiente-card">
+      <div class="dash-section-title">📋 Todo lo Pendiente</div>
+      <div id="dash-todo-pendiente-body"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="abrirTodoPendiente()">Ver detalle completo →</button></div>
     </div>`},
   'fechas': {label:'📅 Fechas Importantes', size:'large', shell:()=>`
     <div class="card" style="padding:18px" id="fecha-imp-card-wrap">
@@ -14143,6 +14252,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'sueldos', visible:false}, {id:'comparativo', visible:false},
   {id:'anio-completo', visible:false}, {id:'minijuegos', visible:false},
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
+  {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -14635,21 +14745,22 @@ function renderDashDebts(){
   const dpPend = (state.deudas||[]).filter(d=>d.status==='pendiente');
   const dpList = document.getElementById('dash-dp-list');
   if(dpList){
-    dpList.innerHTML = !dpPend.length ? '<div class="dash-empty"><div class="dash-empty-icon">🤝</div>Sin préstamos pendientes de cobro.</div>' : (() => {
+    dpList.innerHTML = !dpPend.length ? '<div class="dash-empty"><div class="dash-empty-icon">🤝</div>Sin deudas ni préstamos pendientes.</div>' : (() => {
       const sorted = [...dpPend].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
       return sorted.slice(0,5).map(d=>{
+        const esYoDebo = d.direccion==='yo_debo';
         const sym = d.currency==='USD'?'$':'S/';
         const dias = Math.floor((new Date()-new Date(d.fecha+'T12:00:00'))/(1000*60*60*24));
         const diasLabel = dias<=0 ? 'hoy' : dias===1 ? 'hace 1 día' : 'hace '+dias+' días';
         return `<div class="dash-mov-row" onclick="showPage('deudas')" style="cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <div class="dash-mov-dot" style="background:var(--amber)"></div>
+            <div class="dash-mov-dot" style="background:${esYoDebo?'var(--red)':'var(--green)'}"></div>
             <div style="min-width:0">
-              <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escapeHtml(d.nombre)}</div>
+              <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${escapeHtml(d.nombre)} <span style="font-size:8.5px;font-weight:700;color:${esYoDebo?'var(--red)':'var(--green)'}">${esYoDebo?'YO DEBO':'ME DEBE'}</span></div>
               <div style="font-size:10px;color:${dias>30?'var(--red)':'var(--text3)'}">${diasLabel}</div>
             </div>
           </div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--amber);flex-shrink:0;margin-left:8px">${M(sym+' '+Math.abs(d.monto).toFixed(2))}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:${esYoDebo?'var(--red)':'var(--amber)'};flex-shrink:0;margin-left:8px">${M(sym+' '+Math.abs(d.monto).toFixed(2))}</div>
         </div>`;
       }).join('') + (dpPend.length>5 ? `<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${dpPend.length-5} más</div>` : '');
     })();
@@ -14858,6 +14969,57 @@ function renderNuevosWidgetsDashboard(){
         </div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--amber);font-weight:600">
           <span>Total pendiente</span><span style="font-family:var(--mono)">${M(fmtTCMixed(pendientePen,pendienteUsd))}</span>
+        </div>`;
+    }
+  }
+
+  // ── Balance Neto por Persona ──
+  const balanceEl=document.getElementById('dash-balance-neto-body');
+  if(balanceEl){
+    const balances=obtenerBalanceNetoPorPersona();
+    if(!balances.length){
+      balanceEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">⚖️</div>No tienes deudas ni préstamos pendientes con nadie.</div>';
+    } else {
+      balanceEl.innerHTML=balances.slice(0,6).map(b=>{
+        const sym=b.currency==='USD'?'$':'S/';
+        const aMano=Math.abs(b.neto)<0.005;
+        const color=aMano?'var(--text3)':(b.neto>0?'var(--green)':'var(--red)');
+        const label=aMano?'✅ A mano':(b.neto>0?'Te debe neto':'Le debes neto');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2);cursor:pointer" onclick="showPage('deudas')">
+          <div style="font-size:12.5px;font-weight:500">${escapeHtml(b.nombre)}</div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:${color}">${label}</div>
+            ${aMano?'':`<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${M(sym+' '+Math.abs(b.neto).toFixed(2))}</div>`}
+          </div>
+        </div>`;
+      }).join('') + (balances.length>6?`<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${balances.length-6} más</div>`:'');
+    }
+  }
+
+  // ── Todo lo Pendiente (resumen compacto) ──
+  const todoEl=document.getElementById('dash-todo-pendiente-body');
+  if(todoEl){
+    const tp=obtenerTodoPendiente();
+    const hayAlgo = tp.totalDebo.pen>0.005||tp.totalDebo.usd>0.005||tp.personalesMeDeben.pen>0.005||tp.personalesMeDeben.usd>0.005;
+    if(!hayAlgo){
+      todoEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">📋</div>No tienes nada pendiente por ningún lado.</div>';
+    } else {
+      todoEl.innerHTML=`
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text3)">Total que debes (todas las fuentes)</div>
+          <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--red)">${M(fmtTCMixed(tp.totalDebo.pen,tp.totalDebo.usd))}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--text2);padding:4px 0;border-top:1px solid var(--border2)">
+          <span>💳 Cuotas de tarjeta</span><span style="font-family:var(--mono)">${M(fmtTCMixed(tp.cuotasTC.pen,tp.cuotasTC.usd))}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--text2);padding:4px 0">
+          <span>🏛️ Deudas Mayores</span><span style="font-family:var(--mono)">${M(fmtTCMixed(tp.deudasMayores.pen,tp.deudasMayores.usd))}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--text2);padding:4px 0">
+          <span>🤝 Deudas personales</span><span style="font-family:var(--mono)">${M(fmtTCMixed(tp.personalesYoDebo.pen,tp.personalesYoDebo.usd))}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--green);padding:4px 0;border-top:1px solid var(--border2);margin-top:4px">
+          <span>Te deben (aparte)</span><span style="font-family:var(--mono)">${M(fmtTCMixed(tp.personalesMeDeben.pen,tp.personalesMeDeben.usd))}</span>
         </div>`;
     }
   }
@@ -17785,6 +17947,8 @@ const CAL_TIPOS = {
   gratificacion: {icon:'🎁', label:'Gratificación',        color:'#f0a53c'},
   cts:           {icon:'🏦', label:'CTS',                  color:'#5b8def'},
   evento:        {icon:'📌', label:'Evento importante',    color:'#a78bfa'},
+  cuota_tc:      {icon:'💳', label:'Cuota de tarjeta',      color:'#2dd4bf'},
+  deuda_mayor:   {icon:'🏛️', label:'Cuota deuda mayor',     color:'#f472b6'},
   otro:          {icon:'📝', label:'Otro',                 color:'#6b7280'},
 };
 const CAL_DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -17818,8 +17982,40 @@ function elapsedMonthsDays(from, to){
 // Calcula, para CADA evento del calendario (sin importar el mes, a diferencia
 // de getUpcomingCalEventsThisMonth), la próxima ocurrencia relevante y el
 // texto de conteo: "D-XX" días restantes, o "Xm Yd" transcurridos si ya pasó.
+// ── EVENTOS AUTOMÁTICOS (cuotas de tarjeta + deudas mayores) ──────────
+// Se calculan al vuelo cada vez que se necesitan, NUNCA se guardan en
+// state.calendarEvents — así siempre reflejan el estado real de las
+// cuotas/deudas sin tener que mantenerlos sincronizados a mano. Se marcan
+// con auto:true para que la interfaz sepa que son de solo lectura (no se
+// pueden editar/fijar/borrar como un evento normal — un toque te lleva a
+// la sección de origen en vez de abrir el editor).
+function getEventosAutomaticos(){
+  const autos=[];
+  obtenerGruposDeCuotas().forEach(g=>{
+    if(!g.proxima) return;
+    autos.push({
+      id:'auto-cuota-'+g.grupoCuotaId,
+      titulo:`Cuota: ${g.nombreBase} (${g.tarjetaNombre})`,
+      fecha:g.proxima.fecha,
+      tipo:'cuota_tc',
+      auto:true, origenPage:'tarjetas',
+    });
+  });
+  (state.deudasMayores||[]).forEach(d=>{
+    const r=getDMResumen(d);
+    if(!r.proximaFecha) return;
+    autos.push({
+      id:'auto-dm-'+d.id,
+      titulo:`Cuota: ${d.nombre}`,
+      fecha:r.proximaFecha,
+      tipo:'deuda_mayor',
+      auto:true, origenPage:'deudas',
+    });
+  });
+  return autos;
+}
 function getEventCountdowns(){
-  const events = state.calendarEvents || [];
+  const events = [...(state.calendarEvents || []), ...getEventosAutomaticos()];
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   return events.map(ev=>{
     let targetDate, isPast=false, elapsed=null;
@@ -17871,9 +18067,11 @@ function renderFechasImportantes(){
     const t = CAL_TIPOS[it.event.tipo] || CAL_TIPOS.otro;
     const dateLabel = it.fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'short'});
     const countColor = it.isPast ? 'var(--text2)' : (it.diffDays<=7 ? 'var(--red)' : t.color);
-    return `<div class="fecha-imp-card" onclick="showPage('calendario')">
+    const clickAccion = it.event.auto ? `showPage('${it.event.origenPage}')` : `showPage('calendario')`;
+    return `<div class="fecha-imp-card" onclick="${clickAccion}">
       <div class="fecha-imp-top">
         <div class="fecha-imp-icon" style="background:${t.color}22">${it.event.icono||t.icon}</div>
+        ${it.event.auto ? '<span title="Automático — se calcula solo, no se puede editar" style="font-size:9px;color:var(--text3)">🔄</span>' : ''}
         ${it.isPast && it.event.fijado ? '<span title="Fijado" style="font-size:12px;opacity:.7">📌</span>' : ''}
       </div>
       <div>
@@ -17888,7 +18086,7 @@ function renderFechasImportantes(){
 // Devuelve todas las ocurrencias (evento + fecha concreta) que caen en un año/mes dado,
 // resolviendo eventos recurrentes al día-del-mes correspondiente (con clamp si el mes es más corto).
 function getEventOccurrencesForMonth(year, month){
-  const events = state.calendarEvents || [];
+  const events = [...(state.calendarEvents || []), ...getEventosAutomaticos()];
   const occurrences = [];
   events.forEach(ev=>{
     const evDate = new Date(ev.fecha+'T12:00:00');
@@ -17970,7 +18168,8 @@ function renderCalendario(){
     const maxShow = 3;
     const chips = dayEvents.slice(0,maxShow).map(o=>{
       const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
-      return `<div class="cal-event-chip" style="background:${t.color}" onclick="event.stopPropagation();openCalEventModal('${o.event.id}')" title="${escapeHtml(o.event.titulo)}">${o.event.icono||t.icon} ${escapeHtml(o.event.titulo)}</div>`;
+      const clickAccion = o.event.auto ? `showPage('${o.event.origenPage}')` : `openCalEventModal('${o.event.id}')`;
+      return `<div class="cal-event-chip" style="background:${t.color}" onclick="event.stopPropagation();${clickAccion}" title="${escapeHtml(o.event.titulo)}${o.event.auto?' (automático — toca para ver el detalle)':''}">${o.event.icono||t.icon} ${escapeHtml(o.event.titulo)}</div>`;
     }).join('');
     const more = dayEvents.length>maxShow ? `<div class="cal-event-more">+${dayEvents.length-maxShow} más</div>` : '';
     return `<div class="cal-day ${isToday?'cal-today':''}" onclick="openCalEventModal(null,'${dateStr}')">
@@ -21810,6 +22009,18 @@ if(state.projGoals){
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarCancelacionAnticipada()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarCancelacionAnticipada()">Confirmar pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: TODO LO PENDIENTE (consolidado) -->
+<div class="modal-overlay" id="todo-pendiente-overlay" onclick="if(event.target===this)cerrarTodoPendiente()">
+  <div class="modal" style="width:480px;max-width:95vw">
+    <div class="modal-title"><span>📋 Todo lo Pendiente</span><button class="modal-close" onclick="cerrarTodoPendiente()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Todo lo que debes y te deben, juntando cuotas de tarjeta, Deudas Mayores, y deudas personales.</div>
+    <div id="todo-pendiente-contenido" style="max-height:60vh;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="cerrarTodoPendiente()">Cerrar</button>
     </div>
   </div>
 </div>
