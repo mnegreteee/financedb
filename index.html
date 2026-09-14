@@ -3200,8 +3200,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '13/09/26 - 20:42'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '3 funciones nuevas. (1) 🔍 Búsqueda Global: ícono nuevo en la barra superior, busca por texto en Movimientos, Consumos de tarjeta (todas las tarjetas y meses), Deudas, Servicios Compartidos y Consumos Frecuentes a la vez, agrupado por sección — ej. buscar "Bembos" encuentra tanto el movimiento normal como el consumo de tarjeta. (2) Widget nuevo "🚨 Alertas de Presupuesto" (oculto por defecto, mismo estilo que "Servicios Compartidos"): muestra las categorías que ya llegaron o están cerca (70%+) de su límite mensual, con barra de progreso. (3) "💚 Salud Financiera": un puntaje simple (0-100, semáforo 🟢🟡🔴) siempre visible junto a "Patrimonio Neto Total" — combina deuda de tarjeta vs. ingreso del mes, % de línea de crédito usada, y si tienes algo de ahorro. Un toque abre el detalle de las 3 señales. No es un puntaje bancario real, es solo una referencia rápida. Verificado con Playwright: búsqueda de "bembos" encuentra ambos tipos de resultado sin mezclar con otros; alertas de presupuesto detecta correctamente 92% (alerta) vs 16.7% (tranquilo); salud financiera baja de 100 (sin deuda, con ahorro) a 10 (deuda alta, línea llena, sin ahorro) al empeorar el escenario. Capturas visuales confirmadas. Regresión completa de las 12 páginas + Calendario + Presupuesto sin errores.';
+const APP_VERSION_DATE = '13/09/26 - 21:02'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'FIX: al hacer clic en un resultado de "Consumos de tarjeta" desde la Búsqueda Global, no pasaba nada si no estabas ya en la página de Tarjetas. Causa: openTCDetail() solo cambia de la vista de lista a la de detalle DENTRO de la página de Tarjetas, pero nunca activa esa página en sí — asume que ya la estás viendo. La acción de búsqueda solo llamaba a openTCDetail() sin antes mostrar la página, así que el cambio ocurría "por dentro" sin que se viera nada en pantalla. Corregido: ahora primero activa la página de Tarjetas (showPage) y luego abre el detalle de la tarjeta correcta. Verificado con Playwright reproduciendo el caso exacto reportado: estando en Resumen, buscar "bembos" y tocar el resultado ahora sí lleva a la tarjeta BBVA Infinite con su detalle abierto. Regresión completa de las 14 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12714,7 +12714,7 @@ function buscarGlobal(query){
     items:tcMatch.slice(0,15).map(m=>({
       titulo:m.desc, subtitulo:`${m.tarjetaNombre} · ${fmtFechaDDMMYYYY(m.fecha)}`,
       monto:m.monto, currency:m.currency||'PEN',
-      accion:()=>openTCDetail(m.tarjetaId),
+      accion:()=>{ showPage('tarjetas'); openTCDetail(m.tarjetaId); },
     })),
   });
 
