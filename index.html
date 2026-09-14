@@ -668,6 +668,8 @@ body.compact-mode .anual-table{font-size:11px;}
 /* ══ DEUDAS / PRÉSTAMOS ══ */
 .deuda-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:24px;}
 .deuda-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden;transition:all .15s;}
+@keyframes resaltar-flash{0%,100%{box-shadow:0 0 0 0 transparent;}20%,60%{box-shadow:0 0 0 3px var(--accent);}}
+.resaltado-busqueda{animation:resaltar-flash 1.8s ease-in-out;}
 .deuda-card:hover{border-color:var(--border2);}
 .deuda-card.pagado{opacity:.6;}
 .deuda-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
@@ -3200,8 +3202,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '13/09/26 - 21:02'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'FIX: al hacer clic en un resultado de "Consumos de tarjeta" desde la Búsqueda Global, no pasaba nada si no estabas ya en la página de Tarjetas. Causa: openTCDetail() solo cambia de la vista de lista a la de detalle DENTRO de la página de Tarjetas, pero nunca activa esa página en sí — asume que ya la estás viendo. La acción de búsqueda solo llamaba a openTCDetail() sin antes mostrar la página, así que el cambio ocurría "por dentro" sin que se viera nada en pantalla. Corregido: ahora primero activa la página de Tarjetas (showPage) y luego abre el detalle de la tarjeta correcta. Verificado con Playwright reproduciendo el caso exacto reportado: estando en Resumen, buscar "bembos" y tocar el resultado ahora sí lleva a la tarjeta BBVA Infinite con su detalle abierto. Regresión completa de las 14 páginas sin errores.';
+const APP_VERSION_DATE = '13/09/26 - 21:22'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Confirmado y probado: la Búsqueda Global ya buscaba "contiene la palabra en cualquier parte" desde el principio — buscar "bembos" ya encontraba "Bembos", "Bembos Nathy" y "Cena en Bembos con amigos" (Miguel preguntó para confirmar, no era un bug). Pero al probarlo se encontró un caso relacionado que sí fallaba: buscar SIN tilde (ej. "cafe") no encontraba algo guardado CON tilde (ej. "Café"). Corregido: la búsqueda ahora ignora tildes/acentos en ambos lados (lo que escribes y lo que está guardado), así que "cafe", "café", "CAFE" y "Café" ahora encuentran lo mismo. Verificado con Playwright: el ejemplo original de Miguel sigue funcionando igual, y el nuevo caso (buscar sin tilde) ahora también encuentra resultados con tilde, en cualquier combinación de mayúsculas/minúsculas y con/sin acento. Regresión completa de las 14 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10530,7 +10532,7 @@ function renderServicios(){
       return`<div class="person-row"><div class="person-info"><div class="person-avatar" style="background:${paid?'var(--green-bg)':'var(--red-bg)'}">${p.avatar||'👤'}</div><div><div class="person-name">${escapeHtml(p.name)}</div><div class="person-amount">${M(fmtS(svc.pricePerPerson))}/mes</div></div></div><button class="pay-btn ${paid?'paid':'unpaid'}" onclick="togglePayment('${sid}','${p.id}')">${paid?'✓ Pagó':'✕ Debe'}</button></div>`;
     }).join('');
     const pend=(svc.people.length-paidCount)*svc.pricePerPerson;
-    grid.innerHTML+=`<div class="srv-card"><div class="srv-header-actions"><div style="display:flex;align-items:center;gap:9px"><span style="font-size:22px">${svc.icon||'📡'}</span><div><div class="srv-title">${escapeHtml(svc.name)}</div><div class="srv-sub">${M(fmtS(svc.pricePerPerson))}/persona · Día ${svc.payDay||9} · ${svc.account||'BBVA'}</div></div></div><div style="display:flex;gap:5px"><button class="srv-edit-btn" onclick="openEditService('${sid}')">✏️</button><button class="srv-edit-btn" style="color:var(--red)" onclick="deleteService('${sid}')">🗑</button></div></div>${ph}<div class="srv-summary"><div><div class="srv-total-label">Cobrado</div><div class="srv-total-val">${M(fmtS(paidTotal))}</div></div><div style="text-align:right"><div class="srv-total-label">Pendiente</div><div style="font-family:var(--mono);font-size:14px;font-weight:500;color:${pend>0?'var(--red)':'var(--text3)'}">${M(fmtS(pend))}</div></div></div></div>`;
+    grid.innerHTML+=`<div class="srv-card" id="srv-card-${sid}"><div class="srv-header-actions"><div style="display:flex;align-items:center;gap:9px"><span style="font-size:22px">${svc.icon||'📡'}</span><div><div class="srv-title">${escapeHtml(svc.name)}</div><div class="srv-sub">${M(fmtS(svc.pricePerPerson))}/persona · Día ${svc.payDay||9} · ${svc.account||'BBVA'}</div></div></div><div style="display:flex;gap:5px"><button class="srv-edit-btn" onclick="openEditService('${sid}')">✏️</button><button class="srv-edit-btn" style="color:var(--red)" onclick="deleteService('${sid}')">🗑</button></div></div>${ph}<div class="srv-summary"><div><div class="srv-total-label">Cobrado</div><div class="srv-total-val">${M(fmtS(paidTotal))}</div></div><div style="text-align:right"><div class="srv-total-label">Pendiente</div><div style="font-family:var(--mono);font-size:14px;font-weight:500;color:${pend>0?'var(--red)':'var(--text3)'}">${M(fmtS(pend))}</div></div></div></div>`;
   });
 }
 function openNewServiceModal(){
@@ -12045,7 +12047,7 @@ function getAllTCMovs(tid){
 }
 
 // ── DETAIL VIEW ──────────────────────────────────────
-function openTCDetail(tid){
+function openTCDetail(tid, forceMonthKey){
   currentTCId=tid;
   const t=getTarjeta(tid); if(!t) return;
   document.getElementById('tc-list-view').style.display='none';
@@ -12055,9 +12057,16 @@ function openTCDetail(tid){
   const notaEl=document.getElementById('tc-detail-nota');
   if(t.nota&&t.nota.trim()){ notaEl.textContent='📌 '+t.nota.trim(); notaEl.style.display='block'; }
   else { notaEl.style.display='none'; }
-  // Set current month to the payment month for today
-  const {pagoMes,pagoAnio}=getSiguienteMesCalendario();
-  currentTCMonth=tcMonthKey(pagoAnio,pagoMes);
+  if(forceMonthKey){
+    // Alguien pidió abrir directamente en un mes específico (ej. desde la
+    // Búsqueda Global, para llevar al mes exacto donde vive ese consumo) —
+    // se respeta eso en vez del mes de pago actual/próximo por defecto.
+    currentTCMonth=forceMonthKey;
+  } else {
+    // Set current month to the payment month for today
+    const {pagoMes,pagoAnio}=getSiguienteMesCalendario();
+    currentTCMonth=tcMonthKey(pagoAnio,pagoMes);
+  }
   renderTCMonthSelector(t);
   renderTCDetail();
 }
@@ -12686,18 +12695,43 @@ function cerrarSaludFinancieraDetalle(){ document.getElementById('salud-financie
 // servicios compartidos, y consumos frecuentes. No busca dentro de montos
 // ni fechas, solo texto — es a propósito simple, un buscador de "¿dónde
 // registré esto?", no un filtro avanzado.
+// Resalta y hace scroll hacia un elemento específico tras navegar desde la
+// Búsqueda Global (ej. la tarjeta exacta de una deuda o un servicio) — usa
+// un pequeño retraso porque justo después de showPage() la página recién
+// se está pintando, así que el elemento buscado podría no existir todavía
+// en el DOM en el instante mismo del clic.
+function resaltarElemento(id){
+  setTimeout(()=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    el.classList.add('resaltado-busqueda');
+    setTimeout(()=>el.classList.remove('resaltado-busqueda'), 1900);
+  }, 120);
+}
+// Quita tildes/acentos para que buscar "cafe" también encuentre "Café" —
+// en español es muy común escribir sin tildes al buscar rápido, y sería
+// frustrante que la búsqueda fallara solo por eso.
+function normalizarBusqueda(s){
+  return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
 function buscarGlobal(query){
-  const q=(query||'').trim().toLowerCase();
+  const q=normalizarBusqueda((query||'').trim());
   if(!q) return [];
   const resultados=[];
 
-  const movsMatch=(state.movimientos||[]).filter(m=>(m.desc||'').toLowerCase().includes(q));
+  const movsMatch=(state.movimientos||[]).filter(m=>normalizarBusqueda(m.desc).includes(q))
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(movsMatch.length) resultados.push({
     categoria:'💵 Movimientos',
     items:movsMatch.slice(0,15).map(m=>({
       titulo:m.desc, subtitulo:fmtFechaDDMMYYYY(m.date),
       monto:m.amount, currency:m.currency||'PEN',
-      accion:()=>showPage('finanzas'),
+      accion:()=>{
+        const fecha=new Date(m.date+'T12:00:00');
+        state.currentYear=fecha.getFullYear(); state.currentMonth=fecha.getMonth();
+        showPage('finanzas');
+      },
     })),
   });
 
@@ -12705,40 +12739,41 @@ function buscarGlobal(query){
   (state.tarjetas||[]).forEach(t=>{
     Object.entries(t.movs||{}).forEach(([mk,movs])=>{
       (movs||[]).forEach(m=>{
-        if((m.desc||'').toLowerCase().includes(q)) tcMatch.push({...m, tarjetaId:t.id, tarjetaNombre:t.banco+(t.cat?' '+t.cat:'')});
+        if(normalizarBusqueda(m.desc).includes(q)) tcMatch.push({...m, tarjetaId:t.id, tarjetaNombre:t.banco+(t.cat?' '+t.cat:''), mk});
       });
     });
   });
   if(tcMatch.length) resultados.push({
     categoria:'💳 Consumos de tarjeta',
-    items:tcMatch.slice(0,15).map(m=>({
+    items:tcMatch.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).slice(0,15).map(m=>({
       titulo:m.desc, subtitulo:`${m.tarjetaNombre} · ${fmtFechaDDMMYYYY(m.fecha)}`,
       monto:m.monto, currency:m.currency||'PEN',
-      accion:()=>{ showPage('tarjetas'); openTCDetail(m.tarjetaId); },
+      accion:()=>{ showPage('tarjetas'); openTCDetail(m.tarjetaId, m.mk); },
     })),
   });
 
-  const deudasMatch=(state.deudas||[]).filter(d=>(d.nombre||'').toLowerCase().includes(q));
+  const deudasMatch=(state.deudas||[]).filter(d=>normalizarBusqueda(d.nombre).includes(q))
+    .sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   if(deudasMatch.length) resultados.push({
     categoria:'🤝 Deudas y Préstamos',
     items:deudasMatch.slice(0,15).map(d=>({
       titulo:d.nombre, subtitulo:d.direccion==='yo_debo'?'Tú le debes':'Te debe a ti',
       monto:d.monto, currency:d.currency||'PEN',
-      accion:()=>showPage('deudas'),
+      accion:()=>{ deudaFilter='all'; showPage('deudas'); resaltarElemento('deuda-card-'+d.id); },
     })),
   });
 
-  const serviciosMatch=Object.entries(state.servicios||{}).filter(([,s])=>(s.name||'').toLowerCase().includes(q));
+  const serviciosMatch=Object.entries(state.servicios||{}).filter(([,s])=>normalizarBusqueda(s.name).includes(q));
   if(serviciosMatch.length) resultados.push({
     categoria:'🔗 Servicios Compartidos',
-    items:serviciosMatch.map(([,s])=>({
+    items:serviciosMatch.map(([sid,s])=>({
       titulo:s.name, subtitulo:`${(s.people||[]).length} persona(s)`,
       monto:null, currency:null,
-      accion:()=>showPage('servicios'),
+      accion:()=>{ showPage('servicios'); resaltarElemento('srv-card-'+sid); },
     })),
   });
 
-  const cfMatch=(state.consumosFrecuentes||[]).filter(c=>(c.nombre||'').toLowerCase().includes(q));
+  const cfMatch=(state.consumosFrecuentes||[]).filter(c=>normalizarBusqueda(c.nombre).includes(q));
   if(cfMatch.length) resultados.push({
     categoria:'⚡ Consumos Frecuentes',
     items:cfMatch.map(c=>({
@@ -16262,7 +16297,7 @@ function renderDeudas(){
 
     const puedeCompensar = !isPaid && hayCandidatosCompensacion(d).length>0;
 
-    return`<div class="deuda-card ${isPaid?'pagado pagado-bar':'pendiente'}">
+    return`<div class="deuda-card ${isPaid?'pagado pagado-bar':'pendiente'}" id="deuda-card-${d.id}">
       <div class="deuda-card-header">
         <div class="deuda-nombre">${escapeHtml(d.nombre)}
           <span style="font-size:9px;font-weight:600;color:${esYoDebo?'var(--red)':'var(--green)'}">${esYoDebo?'🔴 YO DEBO':'🟢 ME DEBEN'}</span>
