@@ -2459,9 +2459,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         📍 <b>Km actual manual</b> — solo se usa para calcular estos mantenimientos (no afecta combustible ni nada más). Actualízalo cuando te acuerdes de revisar el odómetro.
         <div id="mant-km-manual-ultimo" style="margin-top:3px;color:var(--text2)"></div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <input id="mant-km-manual-input" type="number" min="0" step="1" placeholder="Km actual" style="width:110px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text1);font-size:12px;font-family:var(--mono)">
+        <input id="mant-km-manual-motivo" type="text" placeholder="Motivo (opcional)" style="width:130px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text1);font-size:12px">
         <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="guardarKmManual()">Guardar</button>
+        <button class="config-action-btn neutral" style="font-size:11px;padding:6px 10px" onclick="abrirHistorialKm()">📍 Historial</button>
       </div>
     </div>
     <div id="mant-sin-config" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:12px">
@@ -3206,8 +3208,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '14/09/26 - 00:23'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'FIX en Lista de Compras: el link/código de seguimiento solo se podía escribir en 2 momentos exactos — al marcar "Comprado" o al marcar "Llegado" — pero no había forma de agregarlo o corregirlo mientras el artículo estaba "En camino" (entre esos 2 pasos), que es justo cuando Miguel normalmente todavía no tiene el dato al momento de la compra. El botón "Editar" de un artículo no exponía ese campo en absoluto. Corregido: "Editar artículo" ahora muestra un campo de "Link / código de seguimiento" — solo visible cuando el artículo ya se compró (no tiene sentido antes), y se puede agregar, corregir o borrar en cualquier momento, no solo en esos 2 pasos puntuales. Verificado con Playwright: el campo queda oculto para un artículo "deseado" (aún no comprado); se puede agregar el link mientras está "En camino" después de haberlo comprado sin ese dato; y se puede volver a editar y cambiar el link las veces que haga falta. Captura visual confirmada. Regresión completa de las 14 páginas sin errores.';
+const APP_VERSION_DATE = '15/09/26 - 21:58'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '6 mejoras al "📍 Historial de Kilometraje" recién creado. (1) FIX/función principal: ahora se puede EDITAR la fecha y hora de una lectura manual — pedido por Miguel para corregir registros hechos fuera de hora (ej. registraste 600km a las 2pm por error, cuando en realidad fue a las 9am; al corregirlo, el historial recalcula bien el km/día del tramo). También se puede eliminar una lectura, con deshacer completo desde Actividad Reciente. (2) Campo opcional de "motivo" al registrar o editar una lectura (ej. "viaje al trabajo"), visible en el historial. (3) Alerta cuando llevas 7+ días (amarillo) o 14+ días (rojo) sin ninguna lectura reciente, de ninguna fuente. (4) Gráfico de línea del kilometraje en el tiempo, dentro del mismo modal. (5) Botón "Exportar Excel" con el historial completo, incluidos los km recorridos y días entre cada lectura. (6) Comando nuevo en el bot, /kmhistorial, con el mismo criterio exacto que el historial de la app. Verificado con Playwright: el caso exacto de Miguel (corregir una hora registrada mal, de 100km/6h a 100km/1h), eliminar y deshacer restaurando la lectura completa, el gráfico recibiendo los datos correctos, la exportación generando el archivo, y la alerta de 20 días mostrándose en rojo. Capturas visuales confirmadas. Regresión completa de las 14 páginas sin errores.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3636,7 +3638,7 @@ function tiempoRelativo(ts){
   const d=new Date(ts);
   return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',km_manual_editado:'✏️',km_manual_eliminado:'🗑️',
   tarjeta_nueva:'💳',tarjeta_editada:'💳',tarjeta_eliminada:'💳',
   meta_nueva:'🎯',meta_editada:'🎯',meta_eliminada:'🎯',
   inversion_editada:'📈',inversion_eliminada:'📈',
@@ -3823,6 +3825,14 @@ function eliminarActividad(logId){
       if(Array.isArray(arr)) state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']=arr.filter(f=>f.id!==ref.fuelRowId);
     } else if(entry.tipo==='km_manual'){
       state.kmManual=(state.kmManual||[]).filter(k=>k.id!==ref.kmManualId);
+    } else if(entry.tipo==='km_manual_editado'){
+      const item=(state.kmManual||[]).find(k=>k.id===ref.kmManualId);
+      if(item && ref.snapshotAntes) Object.assign(item, ref.snapshotAntes);
+    } else if(entry.tipo==='km_manual_eliminado'){
+      if(ref.kmManualSnapshot){
+        if(!Array.isArray(state.kmManual)) state.kmManual=[];
+        state.kmManual.push(ref.kmManualSnapshot);
+      }
     } else if(entry.tipo==='tarjeta_nueva' || entry.tipo==='acceso_rapido_nuevo'){
       if(entry.tipo==='tarjeta_nueva') state.tarjetas=(state.tarjetas||[]).filter(t=>t.id!==ref.tarjetaId);
       else state.consumosFrecuentes=(state.consumosFrecuentes||[]).filter(c=>c.id!==ref.cfId);
@@ -16925,11 +16935,14 @@ function guardarKmManual(){
   const ahora=new Date();
   const pad=n=>String(n).padStart(2,'0');
   const fechaHora=`${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
-  const nuevoKm={id:'kmm-'+Date.now(), km, fechaHora};
+  const motivoInp=document.getElementById('mant-km-manual-motivo');
+  const motivo=motivoInp?motivoInp.value.trim():'';
+  const nuevoKm={id:'kmm-'+Date.now(), km, fechaHora, origen:'web', motivo};
   state.kmManual.push(nuevoKm);
   logActividad('km_manual', `Kilometraje actualizado: ${km} km`, {kmManualId:nuevoKm.id});
   saveState();
   inp.value='';
+  if(motivoInp) motivoInp.value='';
   renderMantenimiento();
   toast('Kilometraje actual actualizado');
 }
@@ -16941,13 +16954,228 @@ function renderKmManualUltimo(){
   const ult=arr[0];
   const d=new Date(ult.fechaHora);
   const fechaTxt=d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-  el.textContent=`Última lectura manual: ${Math.round(ult.km).toLocaleString('es-PE')} km — registrada el ${fechaTxt}`;
+  // La alerta de "cuánto tiempo sin actualizar" usa la lectura MÁS RECIENTE
+  // de cualquier fuente (getKmActualVehiculo, que también cuenta recargas de
+  // combustible) — si acabas de cargar gasolina esa semana, ya hay un dato
+  // fresco del odómetro y no tiene sentido pedirte que lo registres a mano
+  // otra vez.
+  const actual=getKmActualVehiculo();
+  let alertaHtml='';
+  if(actual){
+    const diasSinDato=(new Date()-new Date(actual.fecha+'T12:00:00'))/(1000*60*60*24);
+    if(diasSinDato>=14){
+      alertaHtml=`<div style="color:var(--red);margin-top:2px">⚠️ Llevas ${Math.round(diasSinDato)} días sin actualizar el kilometraje (ni a mano, ni por combustible).</div>`;
+    } else if(diasSinDato>=7){
+      alertaHtml=`<div style="color:var(--amber);margin-top:2px">⏰ Llevas ${Math.round(diasSinDato)} días sin actualizar el kilometraje.</div>`;
+    }
+  }
+  el.innerHTML=`Última lectura manual: ${Math.round(ult.km).toLocaleString('es-PE')} km — registrada el ${fechaTxt}${ult.motivo?' · '+escapeHtml(ult.motivo):''}${alertaHtml}`;
 }
 // Km actual = la lectura más reciente entre TODAS las recargas (GLP+Gas) Y las
 // lecturas manuales del odómetro (state.kmManual) — la que tenga la fecha/hora
 // más reciente gana, sin importar de qué fuente venga. Las recargas solo tienen
 // fecha (sin hora), así que se comparan al mediodía de ese día (mismo criterio
 // que el resto de la app); las lecturas manuales sí llevan hora exacta.
+// ── HISTORIAL DE KILOMETRAJE ────────────────────────────────────────
+// Une en una sola línea de tiempo TODAS las lecturas del odómetro que
+// existen en la app — lecturas manuales (state.kmManual, desde la web 💻
+// o el bot 📱) y las recargas de combustible (kmFinal de GLP y Gasolina)
+// — ordenadas cronológicamente, con el km recorrido y los días
+// transcurridos desde la lectura ANTERIOR en esa misma línea de tiempo,
+// sin importar de qué fuente venga cada una. Mismo criterio que ya usa
+// getKmPromedioDiario() para no contar el mismo tramo físico dos veces
+// (el auto se mueve un solo camino real, sin importar qué combustible
+// cargues o cuándo actualizas el km a mano).
+function obtenerHistorialKm(){
+  const lecturas=[];
+  (state.kmManual||[]).forEach(row=>{
+    const km=parseFloat(row.km);
+    if(isNaN(km)||!row.fechaHora) return;
+    lecturas.push({km, ts:row.fechaHora, tipo:'manual', origen:row.origen||'web', id:row.id, motivo:row.motivo||''});
+  });
+  [['combustibleGlp','GLP'],['combustibleGas','Gasolina']].forEach(([key,label])=>{
+    (state[key]||[]).forEach(row=>{
+      const km=parseFloat(row.kmFinal);
+      if(isNaN(km)||!row.fFinal) return;
+      lecturas.push({km, ts:row.fFinal+'T12:00:00', tipo:'combustible', combustibleTipo:label, id:row.id});
+    });
+  });
+  lecturas.sort((a,b)=>a.ts<b.ts?-1:(a.ts>b.ts?1:0));
+  return lecturas.map((l,i)=>{
+    if(i===0) return {...l, kmRecorridos:null, diasTranscurridos:null, kmPorDia:null};
+    const anterior=lecturas[i-1];
+    const kmRecorridos=l.km-anterior.km;
+    const diasTranscurridos=(new Date(l.ts)-new Date(anterior.ts))/(1000*60*60*24);
+    const kmPorDia=diasTranscurridos>0 ? kmRecorridos/diasTranscurridos : null;
+    return {...l, kmRecorridos, diasTranscurridos, kmPorDia};
+  });
+}
+function iconoLecturaKm(l){
+  if(l.tipo==='combustible') return {icon:'⛽', label:l.combustibleTipo};
+  if(l.origen==='bot') return {icon:'📱', label:'Manual — Telegram'};
+  return {icon:'💻', label:'Manual — Web'};
+}
+function abrirHistorialKm(){
+  renderHistorialKm();
+  document.getElementById('historial-km-overlay').classList.add('open');
+}
+function cerrarHistorialKm(){ document.getElementById('historial-km-overlay').classList.remove('open'); }
+function renderHistorialKm(){
+  const historial=obtenerHistorialKm();
+  const statsEl=document.getElementById('historial-km-stats');
+  const listaEl=document.getElementById('historial-km-lista');
+  if(!historial.length){
+    statsEl.innerHTML='';
+    listaEl.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Aún no tienes ninguna lectura de kilometraje registrada — se llenará solo con tus recargas de combustible y con "Km actual manual".</div>';
+    return;
+  }
+  const primero=historial[0], ultimo=historial[historial.length-1];
+  const totalKm=ultimo.km-primero.km;
+  const totalDias=(new Date(ultimo.ts)-new Date(primero.ts))/(1000*60*60*24);
+  const promDiario=totalDias>0.5 ? totalKm/totalDias : null;
+  statsEl.innerHTML=`
+    <div style="flex:1;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Total recorrido</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${Math.round(totalKm).toLocaleString('es-PE')} km</div>
+    </div>
+    <div style="flex:1;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Promedio diario</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${promDiario!=null?Math.round(promDiario)+' km':'—'}</div>
+    </div>
+    <div style="flex:1;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Lecturas</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${historial.length}</div>
+    </div>`;
+
+  const filas=[...historial].reverse().map(l=>{
+    const meta=iconoLecturaKm(l);
+    const fecha=new Date(l.ts);
+    const fechaTxt=fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+    const horaTxt=l.tipo==='manual' ? fecha.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}) : '';
+    let deltaHtml='';
+    if(l.kmRecorridos!=null){
+      const dias=l.diasTranscurridos;
+      const diasTxt=dias<1 ? Math.round(dias*24)+'h' : Math.round(dias)+' día'+(Math.round(dias)===1?'':'s');
+      const kmPorDiaTxt=l.kmPorDia!=null ? ` · ${Math.round(l.kmPorDia)} km/día` : '';
+      const signo=l.kmRecorridos>=0?'+':'';
+      const color=l.kmRecorridos<0?'var(--red)':'var(--green)';
+      deltaHtml=`<div style="font-size:10.5px;color:${color};margin-top:2px">${signo}${Math.round(l.kmRecorridos).toLocaleString('es-PE')} km desde la lectura anterior · ${diasTxt}${kmPorDiaTxt}</div>`;
+    }
+    // Solo las lecturas manuales se pueden editar/borrar desde aquí — las de
+    // combustible viven en su propio módulo y se editan desde ahí, para no
+    // tener 2 lugares distintos manejando el mismo dato.
+    const editarBtn=l.tipo==='manual'
+      ? `<span onclick="abrirEditarKm('${l.id}')" style="cursor:pointer;color:var(--text3);flex-shrink:0;padding:2px" title="Editar esta lectura">✏️</span>`
+      : '';
+    return `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)">
+      <div style="font-size:20px;flex-shrink:0">${meta.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <div style="font-family:var(--mono);font-size:15px;font-weight:700">${Math.round(l.km).toLocaleString('es-PE')} km</div>
+          <div style="font-size:10.5px;color:var(--text3)">${fechaTxt}${horaTxt?' · '+horaTxt:''}</div>
+        </div>
+        <div style="font-size:10.5px;color:var(--text3)">${meta.label}${l.motivo?' · '+escapeHtml(l.motivo):''}</div>
+        ${deltaHtml}
+      </div>
+      ${editarBtn}
+    </div>`;
+  });
+  listaEl.innerHTML=filas.join('');
+  renderGraficoHistorialKm(historial);
+}
+// ── Gráfico de kilometraje en el tiempo (línea simple) ──────────────
+let historialKmChart=null;
+function renderGraficoHistorialKm(historial){
+  const wrap=document.getElementById('historial-km-chart-wrap');
+  if(historial.length<2){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  const ctx=document.getElementById('historial-km-chart').getContext('2d');
+  if(historialKmChart){ historialKmChart.destroy(); historialKmChart=null; }
+  const col='#5b8def';
+  historialKmChart=new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:historial.map(l=>new Date(l.ts).toLocaleDateString('es-PE',{day:'2-digit',month:'short'})),
+      datasets:[{ data:historial.map(l=>l.km), borderColor:col, backgroundColor:col+'22', borderWidth:2, pointRadius:2, tension:.25, fill:true }],
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(c)=>Math.round(c.parsed.y).toLocaleString('es-PE')+' km'}} },
+      scales:{
+        x:{ ticks:{color:'#8a93a6', font:{size:9}, maxRotation:0, autoSkip:true, maxTicksLimit:6}, grid:{display:false} },
+        y:{ ticks:{color:'#8a93a6', font:{size:9}, callback:(v)=>(v/1000).toFixed(0)+'k'}, grid:{color:'#ffffff11'} },
+      },
+    },
+  });
+}
+// ── Editar / eliminar una lectura manual (ej. si se registró fuera de
+// hora, o con la fecha equivocada) ──────────────────────────────────
+let editandoKmManualId=null;
+function abrirEditarKm(id){
+  const item=(state.kmManual||[]).find(x=>x.id===id);
+  if(!item) return;
+  editandoKmManualId=id;
+  document.getElementById('km-editar-valor').value=item.km;
+  const [fecha,hora]=(item.fechaHora||'').split('T');
+  document.getElementById('km-editar-fecha').value=fecha||'';
+  document.getElementById('km-editar-hora').value=hora||'';
+  document.getElementById('km-editar-motivo').value=item.motivo||'';
+  document.getElementById('km-editar-overlay').classList.add('open');
+}
+function cerrarEditarKm(){
+  document.getElementById('km-editar-overlay').classList.remove('open');
+  editandoKmManualId=null;
+}
+function guardarEdicionKm(){
+  const item=(state.kmManual||[]).find(x=>x.id===editandoKmManualId);
+  if(!item) return;
+  const km=parseFloat(document.getElementById('km-editar-valor').value);
+  const fecha=document.getElementById('km-editar-fecha').value;
+  const hora=document.getElementById('km-editar-hora').value||'00:00';
+  if(isNaN(km)||km<0||!fecha){ alert('Completa un kilometraje y una fecha válidos.'); return; }
+  const antes={...item};
+  item.km=km;
+  item.fechaHora=fecha+'T'+hora;
+  item.motivo=document.getElementById('km-editar-motivo').value.trim();
+  logActividad('km_manual_editado', `Lectura de km editada: ${km} km`, {kmManualId:item.id, snapshotAntes:antes});
+  saveState();
+  cerrarEditarKm();
+  renderHistorialKm();
+  renderMantenimiento();
+  toast('Lectura actualizada');
+}
+function eliminarLecturaKm(){
+  if(!confirm('¿Eliminar esta lectura de kilometraje? Esto puede afectar los cálculos de mantenimiento si era la lectura más reciente.')) return;
+  const item=(state.kmManual||[]).find(x=>x.id===editandoKmManualId);
+  if(item) logActividad('km_manual_eliminado', `Lectura de km eliminada: ${item.km} km`, {kmManualSnapshot:{...item}});
+  state.kmManual=(state.kmManual||[]).filter(x=>x.id!==editandoKmManualId);
+  saveState();
+  cerrarEditarKm();
+  renderHistorialKm();
+  renderMantenimiento();
+  toast('Lectura eliminada');
+}
+// ── Exportar el historial completo a Excel ──────────────────────────
+function exportarHistorialKmExcel(){
+  const historial=obtenerHistorialKm();
+  if(!historial.length){ alert('No hay ninguna lectura para exportar todavía.'); return; }
+  const headers=['FECHA','HORA','KM','FUENTE','KM_RECORRIDOS','DIAS_TRANSCURRIDOS','KM_POR_DIA','MOTIVO'];
+  const filas=historial.map(l=>{
+    const d=new Date(l.ts);
+    const fecha=d.toISOString().slice(0,10);
+    const hora=l.tipo==='manual' ? d.toTimeString().slice(0,5) : '';
+    const fuente=l.tipo==='combustible' ? l.combustibleTipo : (l.origen==='bot'?'Manual (Telegram)':'Manual (Web)');
+    return [fecha, hora, Math.round(l.km), fuente,
+      l.kmRecorridos!=null?Math.round(l.kmRecorridos):'',
+      l.diasTranscurridos!=null?+l.diasTranscurridos.toFixed(2):'',
+      l.kmPorDia!=null?Math.round(l.kmPorDia):'',
+      l.motivo||''];
+  });
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([headers,...filas]);
+  XLSX.utils.book_append_sheet(wb,ws,'Historial Km');
+  XLSX.writeFile(wb,'historial_km_'+todayLocalISO()+'.xlsx');
+}
 function getKmActualVehiculo(){
   let mejor=null;
   ['combustibleGlp','combustibleGas'].forEach(key=>{
@@ -22357,6 +22585,40 @@ if(state.projGoals){
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarCancelacionAnticipada()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarCancelacionAnticipada()">Confirmar pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: HISTORIAL DE KILOMETRAJE -->
+<div class="modal-overlay" id="historial-km-overlay" onclick="if(event.target===this)cerrarHistorialKm()">
+  <div class="modal" style="width:520px;max-width:95vw">
+    <div class="modal-title"><span>📍 Historial de Kilometraje</span><button class="modal-close" onclick="cerrarHistorialKm()">✕</button></div>
+    <div id="historial-km-stats" style="display:flex;gap:10px;margin-bottom:14px"></div>
+    <div id="historial-km-chart-wrap" style="height:140px;margin-bottom:14px;display:none"><canvas id="historial-km-chart"></canvas></div>
+    <div id="historial-km-lista" style="max-height:45vh;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:space-between;margin-top:12px">
+      <button class="config-action-btn neutral" style="font-size:11px" onclick="exportarHistorialKmExcel()">⬇ Exportar Excel</button>
+      <button class="btn" onclick="cerrarHistorialKm()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR/ELIMINAR LECTURA DE KM MANUAL -->
+<div class="modal-overlay" id="km-editar-overlay" onclick="if(event.target===this)cerrarEditarKm()">
+  <div class="modal modal-sm" style="width:360px">
+    <div class="modal-title"><span>✏️ Editar lectura de km</span><button class="modal-close" onclick="cerrarEditarKm()">✕</button></div>
+    <div class="field"><label>Kilometraje</label><input id="km-editar-valor" type="number" min="0" step="1"></div>
+    <div class="field-row">
+      <div class="field"><label>Fecha</label><input id="km-editar-fecha" type="date"></div>
+      <div class="field"><label>Hora</label><input id="km-editar-hora" type="time"></div>
+    </div>
+    <div class="field"><label>Motivo <small>(opcional)</small></label><input id="km-editar-motivo" type="text" placeholder="Ej. viaje al trabajo"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="config-action-btn" style="color:var(--red)" onclick="eliminarLecturaKm()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="cerrarEditarKm()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarEdicionKm()">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
