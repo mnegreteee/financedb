@@ -3208,8 +3208,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.52.0';
-const APP_VERSION_DATE = '15/09/26 - 21:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '6 mejoras al "📍 Historial de Kilometraje" recién creado. (1) FIX/función principal: ahora se puede EDITAR la fecha y hora de una lectura manual — pedido por Miguel para corregir registros hechos fuera de hora (ej. registraste 600km a las 2pm por error, cuando en realidad fue a las 9am; al corregirlo, el historial recalcula bien el km/día del tramo). También se puede eliminar una lectura, con deshacer completo desde Actividad Reciente. (2) Campo opcional de "motivo" al registrar o editar una lectura (ej. "viaje al trabajo"), visible en el historial. (3) Alerta cuando llevas 7+ días (amarillo) o 14+ días (rojo) sin ninguna lectura reciente, de ninguna fuente. (4) Gráfico de línea del kilometraje en el tiempo, dentro del mismo modal. (5) Botón "Exportar Excel" con el historial completo, incluidos los km recorridos y días entre cada lectura. (6) Comando nuevo en el bot, /kmhistorial, con el mismo criterio exacto que el historial de la app. Verificado con Playwright: el caso exacto de Miguel (corregir una hora registrada mal, de 100km/6h a 100km/1h), eliminar y deshacer restaurando la lectura completa, el gráfico recibiendo los datos correctos, la exportación generando el archivo, y la alerta de 20 días mostrándose en rojo. Capturas visuales confirmadas. Regresión completa de las 14 páginas sin errores.';
+const APP_VERSION_DATE = '15/09/26 - 22:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '6 mejoras al "📍 Historial de Kilometraje": (1) tarjetas nuevas de "Últimos 7 días" y "Últimos 30 días" recorridos, junto a "Km actual" y "Último tramo"; (2) la proyección de mantenimiento (fecha estimada del próximo cambio) ahora usa el ritmo REAL de uso de los últimos 30 días en vez del promedio de toda la vida del registro, que se diluía con el tiempo y no reflejaba cambios recientes de uso; (3) aviso de confirmación al registrar o editar una lectura manual de km si el valor es menor al de la lectura anterior conocida — evita errores de tipeo (ej. 456 en vez de 4568) sin bloquear el guardado si de verdad quieres hacerlo; (4) filtro de fechas (Todo / últimos 7 días / último mes) sobre la lista y el gráfico del historial — las tarjetas de arriba siempre muestran el total real, sin verse afectadas por el filtro; (5) indicador de "🏆 tramo más largo" — el récord histórico de km recorridos entre dos lecturas consecutivas, con fecha y motivo si lo tiene; (6) el motivo (si existe) también se muestra junto al récord. Validado con node --check en ambos archivos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16931,6 +16931,16 @@ function guardarKmManual(){
   const inp=document.getElementById('mant-km-manual-input');
   const km=parseFloat(inp.value);
   if(isNaN(km)||km<0){ alert('Ingresa un kilometraje válido.'); return; }
+  // Aviso de lectura sospechosa: si el nuevo valor es menor a la última
+  // lectura conocida (de cualquier fuente), probablemente sea un error de
+  // tipeo (ej. 456 en vez de 4568) — se avisa mostrando la referencia, pero
+  // se deja guardar si el usuario confirma (podría ser un caso real, como
+  // un cambio de odómetro).
+  const actualAntes=getKmActualVehiculo();
+  if(actualAntes && km<actualAntes.km){
+    const ok=confirm(`⚠️ Este valor (${Math.round(km).toLocaleString('es-PE')} km) es menor que tu última lectura conocida (${Math.round(actualAntes.km).toLocaleString('es-PE')} km).\n\n¿Seguro que quieres guardarlo así? Si fue un error de tipeo, cancela y corrígelo.`);
+    if(!ok) return;
+  }
   if(!Array.isArray(state.kmManual)) state.kmManual=[];
   const ahora=new Date();
   const pad=n=>String(n).padStart(2,'0');
@@ -17015,7 +17025,15 @@ function iconoLecturaKm(l){
   if(l.origen==='bot') return {icon:'📱', label:'Manual — Telegram'};
   return {icon:'💻', label:'Manual — Web'};
 }
+let historialKmFiltro='todo'; // 'todo' | '7' | '30' — filtra SOLO la lista y el gráfico de abajo
+function cambiarFiltroHistorialKm(valor){
+  historialKmFiltro=valor;
+  renderHistorialKm();
+}
 function abrirHistorialKm(){
+  historialKmFiltro='todo';
+  const sel=document.getElementById('historial-km-filtro');
+  if(sel) sel.value='todo';
   renderHistorialKm();
   document.getElementById('historial-km-overlay').classList.add('open');
 }
@@ -17023,9 +17041,11 @@ function cerrarHistorialKm(){ document.getElementById('historial-km-overlay').cl
 function renderHistorialKm(){
   const historial=obtenerHistorialKm();
   const statsEl=document.getElementById('historial-km-stats');
+  const recordEl=document.getElementById('historial-km-record');
   const listaEl=document.getElementById('historial-km-lista');
   if(!historial.length){
     statsEl.innerHTML='';
+    if(recordEl) recordEl.innerHTML='';
     listaEl.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">Aún no tienes ninguna lectura de kilometraje registrada — se llenará solo con tus recargas de combustible y con "Km actual manual".</div>';
     return;
   }
@@ -17033,21 +17053,83 @@ function renderHistorialKm(){
   const totalKm=ultimo.km-primero.km;
   const totalDias=(new Date(ultimo.ts)-new Date(primero.ts))/(1000*60*60*24);
   const promDiario=totalDias>0.5 ? totalKm/totalDias : null;
+  // Último tramo = distancia y tiempo entre las DOS últimas lecturas (ej.
+  // "saliste con 500, llegaste con 600" → +100 km · Xh/días). Ya viene
+  // calculado en el propio objeto `ultimo` por obtenerHistorialKm(). Si
+  // esa última lectura tiene motivo, se muestra también aquí.
+  const tramoKm=ultimo.kmRecorridos, tramoDias=ultimo.diasTranscurridos;
+  let tramoTxt='—';
+  if(tramoKm!=null){
+    const diasTxt=tramoDias<1 ? Math.round(tramoDias*24)+'h' : Math.round(tramoDias)+' día'+(Math.round(tramoDias)===1?'':'s');
+    tramoTxt=`${tramoKm>=0?'+':''}${Math.round(tramoKm).toLocaleString('es-PE')} km · ${diasTxt}`;
+  }
+  // Km recorridos en ventanas FIJAS de tiempo real (hoy - 7 / hoy - 30) — a
+  // diferencia del promedio diario histórico, esto muestra cuánto usaste el
+  // auto en concreto últimamente, sin diluirse con el resto del historial.
+  const ahoraTs=new Date();
+  function kmEnVentana(dias){
+    const desde=new Date(ahoraTs.getTime()-dias*24*60*60*1000);
+    return historial.filter(l=>l.kmRecorridos!=null && new Date(l.ts)>=desde)
+                     .reduce((acc,l)=>acc+l.kmRecorridos,0);
+  }
+  const km7=kmEnVentana(7), km30=kmEnVentana(30);
   statsEl.innerHTML=`
-    <div style="flex:1;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
-      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Total recorrido</div>
-      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${Math.round(totalKm).toLocaleString('es-PE')} km</div>
+    <div style="flex:1 1 30%;min-width:88px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${Math.round(ultimo.km).toLocaleString('es-PE')} km</div>
     </div>
-    <div style="flex:1;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+    <div style="flex:1 1 30%;min-width:88px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Último tramo</div>
+      <div style="font-family:var(--mono);font-size:13px;font-weight:700">${tramoTxt}</div>
+    </div>
+    <div style="flex:1 1 30%;min-width:88px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Últimos 7 días</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${Math.round(km7).toLocaleString('es-PE')} km</div>
+    </div>
+    <div style="flex:1 1 30%;min-width:88px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Últimos 30 días</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:700">${Math.round(km30).toLocaleString('es-PE')} km</div>
+    </div>
+    <div style="flex:1 1 30%;min-width:88px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Promedio diario</div>
       <div style="font-family:var(--mono);font-size:16px;font-weight:700">${promDiario!=null?Math.round(promDiario)+' km':'—'}</div>
     </div>
-    <div style="flex:1;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
+    <div style="flex:1 1 30%;min-width:88px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center">
       <div style="font-size:9px;color:var(--text3);text-transform:uppercase">Lecturas</div>
       <div style="font-family:var(--mono);font-size:16px;font-weight:700">${historial.length}</div>
     </div>`;
 
-  const filas=[...historial].reverse().map(l=>{
+  // Récord: el tramo (entre dos lecturas consecutivas) con más km recorridos
+  // de TODO el historial — para detectar de un vistazo un viaje largo atípico.
+  if(recordEl){
+    const conTramo=historial.filter(l=>l.kmRecorridos!=null && l.kmRecorridos>0);
+    if(conTramo.length){
+      const record=conTramo.reduce((a,b)=>b.kmRecorridos>a.kmRecorridos?b:a);
+      const fechaRecord=new Date(record.ts).toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+      const diasRecord=record.diasTranscurridos;
+      const diasRecordTxt=diasRecord<1 ? Math.round(diasRecord*24)+'h' : Math.round(diasRecord)+' día'+(Math.round(diasRecord)===1?'':'s');
+      recordEl.innerHTML=`🏆 Tu tramo más largo: +${Math.round(record.kmRecorridos).toLocaleString('es-PE')} km en ${diasRecordTxt} — ${fechaRecord}${record.motivo?' · '+escapeHtml(record.motivo):''}`;
+    } else {
+      recordEl.innerHTML='';
+    }
+  }
+
+  // El filtro de fechas (Todo / 7 días / mes) solo afecta la LISTA y el
+  // GRÁFICO de abajo — las tarjetas de arriba siempre muestran el total
+  // real, para no confundir "recorrido en la ventana filtrada" con el total.
+  let historialFiltrado=historial;
+  if(historialKmFiltro==='7' || historialKmFiltro==='30'){
+    const dias=parseInt(historialKmFiltro,10);
+    const desde=new Date(ahoraTs.getTime()-dias*24*60*60*1000);
+    historialFiltrado=historial.filter(l=>new Date(l.ts)>=desde);
+  }
+  if(!historialFiltrado.length){
+    listaEl.innerHTML='<div style="text-align:center;color:var(--text3);padding:24px;font-size:12px">No hay lecturas en ese período.</div>';
+    renderGraficoHistorialKm(historialFiltrado);
+    return;
+  }
+
+  const filas=[...historialFiltrado].reverse().map(l=>{
     const meta=iconoLecturaKm(l);
     const fecha=new Date(l.ts);
     const fechaTxt=fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
@@ -17081,7 +17163,7 @@ function renderHistorialKm(){
     </div>`;
   });
   listaEl.innerHTML=filas.join('');
-  renderGraficoHistorialKm(historial);
+  renderGraficoHistorialKm(historialFiltrado);
 }
 // ── Gráfico de kilometraje en el tiempo (línea simple) ──────────────
 let historialKmChart=null;
@@ -17133,9 +17215,20 @@ function guardarEdicionKm(){
   const fecha=document.getElementById('km-editar-fecha').value;
   const hora=document.getElementById('km-editar-hora').value||'00:00';
   if(isNaN(km)||km<0||!fecha){ alert('Completa un kilometraje y una fecha válidos.'); return; }
+  const nuevaFechaHora=fecha+'T'+hora;
+  // Mismo aviso de lectura sospechosa que al registrar: compara contra la
+  // lectura INMEDIATAMENTE ANTERIOR en la línea de tiempo completa
+  // (excluyendo este mismo registro), para detectar si la edición deja un
+  // km menor al de una lectura previa.
+  const otras=obtenerHistorialKm().filter(l=>l.id!==item.id);
+  const anterior=otras.filter(l=>l.ts<nuevaFechaHora).sort((a,b)=>a.ts<b.ts?1:-1)[0];
+  if(anterior && km<anterior.km){
+    const ok=confirm(`⚠️ Este valor (${Math.round(km).toLocaleString('es-PE')} km) es menor que la lectura anterior (${Math.round(anterior.km).toLocaleString('es-PE')} km, ${new Date(anterior.ts).toLocaleDateString('es-PE')}).\n\n¿Seguro que quieres guardarlo así?`);
+    if(!ok) return;
+  }
   const antes={...item};
   item.km=km;
-  item.fechaHora=fecha+'T'+hora;
+  item.fechaHora=nuevaFechaHora;
   item.motivo=document.getElementById('km-editar-motivo').value.trim();
   logActividad('km_manual_editado', `Lectura de km editada: ${km} km`, {kmManualId:item.id, snapshotAntes:antes});
   saveState();
@@ -17204,9 +17297,7 @@ function getKmPromedioDiario(){
   // mismo recorrido físico dos veces si sus períodos se traslapan en el
   // tiempo — que es lo normal, porque el auto se mueve todos los días sin
   // importar qué combustible cargues o cuándo actualizas el km a mano. La
-  // forma correcta: juntar TODAS las lecturas en una sola línea de tiempo, y
-  // comparar solo la primera contra la última — así cada km real se cuenta
-  // una sola vez, sin importar de qué fuente vino cada lectura.
+  // forma correcta: juntar TODAS las lecturas en una sola línea de tiempo.
   const lecturas=[];
   ['combustibleGlp','combustibleGas'].forEach(key=>{
     (state[key]||[]).forEach(row=>{
@@ -17220,6 +17311,19 @@ function getKmPromedioDiario(){
   });
   if(lecturas.length<2) return null;
   lecturas.sort((a,b)=>a.ts<b.ts?-1:a.ts>b.ts?1:0);
+  // Se prioriza el ritmo REAL de los últimos 30 días (cómo se está usando el
+  // auto AHORA) sobre el promedio de toda la vida del registro, que se
+  // diluye con el tiempo y deja de reflejar cambios recientes de uso. Si no
+  // hay suficientes lecturas en esa ventana, cae al promedio histórico completo.
+  const haceUnMes=new Date(); haceUnMes.setDate(haceUnMes.getDate()-30);
+  const haceUnMesISO=haceUnMes.toISOString().slice(0,10);
+  const recientes=lecturas.filter(l=>l.fecha>=haceUnMesISO);
+  if(recientes.length>=2){
+    const primeraR=recientes[0], ultimaR=recientes[recientes.length-1];
+    const diasR=fuelDaysBetween(primeraR.fecha, ultimaR.fecha);
+    const kmR=ultimaR.km-primeraR.km;
+    if(diasR>0 && kmR>0) return kmR/diasR;
+  }
   const primera=lecturas[0], ultima=lecturas[lecturas.length-1];
   const dias=fuelDaysBetween(primera.fecha, ultima.fecha);
   const km=ultima.km-primera.km;
@@ -22593,8 +22697,16 @@ if(state.projGoals){
 <div class="modal-overlay" id="historial-km-overlay" onclick="if(event.target===this)cerrarHistorialKm()">
   <div class="modal" style="width:520px;max-width:95vw">
     <div class="modal-title"><span>📍 Historial de Kilometraje</span><button class="modal-close" onclick="cerrarHistorialKm()">✕</button></div>
-    <div id="historial-km-stats" style="display:flex;gap:10px;margin-bottom:14px"></div>
+    <div id="historial-km-stats" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+    <div id="historial-km-record" style="font-size:10.5px;color:var(--text3);margin-bottom:12px"></div>
     <div id="historial-km-chart-wrap" style="height:140px;margin-bottom:14px;display:none"><canvas id="historial-km-chart"></canvas></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <select id="historial-km-filtro" onchange="cambiarFiltroHistorialKm(this.value)" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text1)">
+        <option value="todo">Todo el historial</option>
+        <option value="7">Últimos 7 días</option>
+        <option value="30">Último mes</option>
+      </select>
+    </div>
     <div id="historial-km-lista" style="max-height:45vh;overflow-y:auto"></div>
     <div style="display:flex;justify-content:space-between;margin-top:12px">
       <button class="config-action-btn neutral" style="font-size:11px" onclick="exportarHistorialKmExcel()">⬇ Exportar Excel</button>
