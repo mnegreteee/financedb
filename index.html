@@ -3235,8 +3235,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '19/09/26 - 14:29'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'FIX: la pregunta que escribías en el chat IA (💬) aparecía DUPLICADA en pantalla. Causa: enviarMensajeChatIA() agregaba el mensaje al historial y luego, cuando el periodo se detectaba directo de la frase (ej. "este mes"), llamaba a procesarPreguntaChatIA() sin avisarle que el mensaje YA estaba en el historial — esa función lo volvía a agregar por su cuenta. Arreglado pasando el parámetro que le dice "no lo agregues de nuevo". (Este fix es independiente del anterior sobre búsqueda exhaustiva de gastos repetidos — ese vive en index.js). Auditoría completa del chat IA (💬) en TODAS las secciones restantes, mismo patrón de fix que tarjetas/pagos/combustible: se agregaron a resumenRapido() los campos ya calculados (nunca reimplementados) con las funciones propias de la app, para que Gemini no adivine ni haga mal la aritmética. (1) Metas de ahorro: "metasAhorroEstado" usa montoActualMetaGrande() para el progreso REAL de metas grandes (el campo guardado montoActual puede estar desactualizado). (2) Inversiones: "inversionesResumen" trae costo promedio, valorización, ganancia y rentabilidad anualizada (XIRR) por posición y total — antes no existía NINGÚN resumen precalculado y el chat no podía responder nada de esta sección sin reimplementar promedios ponderados y conversión de moneda él mismo. (3) Deudas mayores: "deudasMayoresEstado" usa getDMResumen() para el saldo pendiente correcto en deudas amortizadas (no es la suma de cuotas no pagadas, eso incluiría interés futuro). (4) Presupuestos: "presupuestosEstado" combina movimientos + consumos de tarjeta por fecha real de compra, igual que la página de Presupuesto. (5) Calendario: "proximosEventosCalendario" usa getEventCountdowns() para la próxima ocurrencia real de eventos recurrentes (el campo fecha crudo es solo la fecha original, no la próxima). El prompt del bot (index.js) fue actualizado con instrucciones "DATO CLAVE" para cada uno de estos, igual que ya existían para tarjetas/pagos/servicios/combustible. REQUIERE volver a desplegar el bot (firebase deploy --only functions). Recordatorio: al subir este HTML, volver a pegar la clave real en CHAT_WIDGET_KEY_VALUE. Validado con node --check, conteo de <div>/</div> balanceado, y grep de declaraciones duplicadas.';
+const APP_VERSION_DATE = '19/09/26 - 14:39'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Chat IA (💬) — 3 mejoras: (1) Ahora saluda con tu nombre real (el "nombre del administrador del dashboard" de Ajustes, campo state.ownerName, con respaldo al usuario de Firebase) en vez de un genérico ("amigo"), tanto en el mensaje de bienvenida como en el saludo de Gemini al inicio de cada conversación nueva — y el prompt le dice a Gemini que NO repita el saludo en cada respuesta si ya hay conversación en curso. (2) Nuevo comando "/borrar": escríbelo en el chat para borrar todo el historial de esa conversación y empezar de cero — el historial del chat solo vive en localStorage (nunca se guarda en Firestore), así que este único borrado cubre "todo, local o guardado". (3) Fix de antes: la pregunta ya no aparece duplicada en pantalla al enviarla (enviarMensajeChatIA() ya no la agregaba dos veces al historial). El prompt del bot (index.js) también fue actualizado para: no repetir saludo, usar guiones en vez de asteriscos en listas, y limpiar cualquier "* " residual del lado del servidor. REQUIERE volver a desplegar el bot (firebase deploy --only functions) para que el saludo con nombre y el formato de listas tomen efecto. Recordatorio: al subir este HTML, volver a pegar la clave real en CHAT_WIDGET_KEY_VALUE. Validado con node --check y conteo de <div>/</div> balanceado.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22148,9 +22148,20 @@ function construirContextoParaIA(){
       }
     }catch(e){}
 
+    // Nombre del administrador del dashboard, para que el chat pueda
+    // saludarlo por su nombre real en vez de un genérico ("amigo", etc.) —
+    // misma lógica exacta que usa el saludo del dashboard y el branding del
+    // login (state.ownerName, con el usuario de Firebase como respaldo).
+    let nombreUsuario = '';
+    try{
+      nombreUsuario = (state.ownerName||'').trim() ||
+        (typeof currentUser!=='undefined' && currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
+    }catch(e){}
+
     return {
       fechaHoy: (typeof todayLocalISO==='function') ? todayLocalISO() : now.toISOString().slice(0,10),
       tipoCambioVenta: rate,
+      nombreUsuario,
       resumenRapido,
       datosCompletos
     };
@@ -22179,7 +22190,12 @@ function renderChatIAMensajes(){
   const cont=document.getElementById('chatia-msgs');
   if(!cont) return;
   if(!chatIAHistorial.length){
-    cont.innerHTML='<div class="chatia-msg bot">Hola 👋 Pregúntame lo que quieras sobre tus finanzas: gastos del mes, deudas, tarjetas, metas de ahorro, kilometraje... Respondo con tus datos reales.</div>';
+    let nombreSaludo='';
+    try{
+      nombreSaludo = (state.ownerName||'').trim() ||
+        (typeof currentUser!=='undefined' && currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
+    }catch(e){}
+    cont.innerHTML=`<div class="chatia-msg bot">Hola${nombreSaludo?' '+escapeHtml(nombreSaludo):''} 👋 Pregúntame lo que quieras sobre tus finanzas: gastos del mes, deudas, tarjetas, metas de ahorro, kilometraje... Respondo con tus datos reales.<br><br>💡 Tip: escribe <b>/borrar</b> en cualquier momento para empezar una conversación totalmente nueva (borra este historial).</div>`;
     return;
   }
   cont.innerHTML = chatIAHistorial.map(h=>`<div class="chatia-msg ${h.rol==='user'?'user':'bot'}">${escapeHtml(h.texto)}</div>`).join('');
@@ -22188,11 +22204,30 @@ function renderChatIAMensajes(){
 function guardarHistorialChatIA(){
   try{ localStorage.setItem('miguel_mf_chatia_historial', JSON.stringify(chatIAHistorial)); }catch(e){}
 }
+// Comando "/borrar": limpia el historial de la conversación del chat IA
+// (el ÚNICO lugar donde se guarda es localStorage — este chat nunca escribe
+// su historial en Firestore, así que "borrar todo, local o guardado" es
+// en la práctica un solo borrado). Deja el chat como recién abierto.
+function borrarHistorialChatIA(){
+  chatIAHistorial = [];
+  chatIAPreguntaPendiente = null;
+  const oldSel=document.getElementById('chatia-periodo-selector');
+  if(oldSel) oldSel.remove();
+  try{ localStorage.removeItem('miguel_mf_chatia_historial'); }catch(e){}
+  renderChatIAMensajes();
+  toast('🧹 Historial del chat borrado — empezamos de cero');
+}
 async function enviarMensajeChatIA(){
   const input=document.getElementById('chatia-input');
   const texto=(input.value||'').trim();
   if(!texto) return;
   input.value='';
+
+  // Comando especial: no se manda a Gemini, se procesa acá mismo.
+  if(/^\/borrar$/i.test(texto)){
+    borrarHistorialChatIA();
+    return;
+  }
 
   // Si había una pregunta esperando periodo y el usuario escribió otra cosa
   // en vez de tocar un botón, abandonamos ese flujo pendiente.
