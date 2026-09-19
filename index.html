@@ -3235,8 +3235,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '19/09/26 - 13:43'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Chat IA (💬) ahora pregunta el PERIODO antes de buscar, en vez de mandar siempre todo el historial. Si tu pregunta ya menciona un periodo ("agosto", "este mes", "2025", "últimos 3 meses", "todo el historial") lo detecta solo; si no, aparecen botones (Hoy / Este mes / Últimos 3 meses / Este año / Todo el historial) para elegir antes de llamar a Gemini. Con eso, filtrarDatosPorPeriodo() recorta movimientos, consumos de tarjeta, combustible, calendario, inversiones, etc. al rango elegido (cuentas/deudas/metas siguen mandándose completas por ser "estado actual", no historial) — menos datos por consulta, respuestas más rápidas. El bot (index.js) le avisa a Gemini qué periodo está viendo para que no asuma que tiene más data de la que realmente llegó. REQUIERE volver a desplegar el bot (firebase deploy --only functions) porque este cambio SÍ toca index.js. Recordatorio: al subir este HTML, volver a pegar la clave real en CHAT_WIDGET_KEY_VALUE. Validado con node --check en ambos archivos y conteo de <div>/</div> balanceado.';
+const APP_VERSION_DATE = '19/09/26 - 14:13'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Auditoría completa del chat IA (💬) en TODAS las secciones restantes, mismo patrón de fix que tarjetas/pagos/combustible: se agregaron a resumenRapido() los campos ya calculados (nunca reimplementados) con las funciones propias de la app, para que Gemini no adivine ni haga mal la aritmética. (1) Metas de ahorro: "metasAhorroEstado" usa montoActualMetaGrande() para el progreso REAL de metas grandes (el campo guardado montoActual puede estar desactualizado). (2) Inversiones: "inversionesResumen" trae costo promedio, valorización, ganancia y rentabilidad anualizada (XIRR) por posición y total — antes no existía NINGÚN resumen precalculado y el chat no podía responder nada de esta sección sin reimplementar promedios ponderados y conversión de moneda él mismo. (3) Deudas mayores: "deudasMayoresEstado" usa getDMResumen() para el saldo pendiente correcto en deudas amortizadas (no es la suma de cuotas no pagadas, eso incluiría interés futuro). (4) Presupuestos: "presupuestosEstado" combina movimientos + consumos de tarjeta por fecha real de compra, igual que la página de Presupuesto. (5) Calendario: "proximosEventosCalendario" usa getEventCountdowns() para la próxima ocurrencia real de eventos recurrentes (el campo fecha crudo es solo la fecha original, no la próxima). El prompt del bot (index.js) fue actualizado con instrucciones "DATO CLAVE" para cada uno de estos, igual que ya existían para tarjetas/pagos/servicios/combustible. REQUIERE volver a desplegar el bot (firebase deploy --only functions). Recordatorio: al subir este HTML, volver a pegar la clave real en CHAT_WIDGET_KEY_VALUE. Validado con node --check, conteo de <div>/</div> balanceado, y grep de declaraciones duplicadas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -21893,13 +21893,21 @@ function filtrarDatosPorPeriodo(datos, rango){
   out.movimientos = (datos.movimientos||[]).filter(mv=>enRango(mv.date));
 
   out.tarjetas = (datos.tarjetas||[]).map(t=>{
+    // OJO: t.movs se agrupa por MES DE PAGO/CORTE (mk), no por fecha real de
+    // compra — un consumo del 18/09 puede vivir en el bucket "2026-10" si el
+    // ciclo de esa tarjeta ya cerró. Por eso filtramos cada consumo por su
+    // campo `fecha` real (la fecha en que se hizo la compra), no por el mk
+    // del bucket donde Firestore lo tiene agrupado.
     const movsFiltrados = {};
-    Object.entries(t.movs||{}).forEach(([mk,arr])=>{ if(mesEnRango(mk)) movsFiltrados[mk]=arr; });
+    Object.entries(t.movs||{}).forEach(([mk,arr])=>{
+      const itemsEnRango = (arr||[]).filter(item=>enRango(item.fecha));
+      if(itemsEnRango.length) movsFiltrados[mk]=itemsEnRango;
+    });
     return { ...t, movs: movsFiltrados };
   });
 
-  out.combustibleGlp = (datos.combustibleGlp||[]).filter(r=>enRango(r.fFinal||r.fInicio));
-  out.combustibleGas = (datos.combustibleGas||[]).filter(r=>enRango(r.fFinal||r.fInicio));
+  out.combustibleGlp = (datos.combustibleGlp||[]).filter(r=>enRango(r.fFinal||r.fInicial));
+  out.combustibleGas = (datos.combustibleGas||[]).filter(r=>enRango(r.fFinal||r.fInicial));
   out.kmManual = (datos.kmManual||[]).filter(r=>enRango((r.fechaHora||'').slice(0,10)));
   out.calendarEvents = (datos.calendarEvents||[]).filter(e=>enRango(e.fecha));
 
@@ -21938,6 +21946,21 @@ function construirContextoParaIA(){
     // algo que estás editando en ese momento).
     const { cuentaColors, customCategorias, currentTab, editId, ...datosCompletos } = state;
 
+    // Combustible: en `state` cada fila solo guarda los campos base (fecha,
+    // galones, precio por galón, km) — el MONTO gastado y el km recorrido
+    // en esa recarga son campos CALCULADOS al vuelo por computeFuelRows()
+    // cuando la app renderiza la tabla (nunca se guardan directo en
+    // Firestore). Si mandara las filas crudas, la IA tendría que adivinar
+    // la fórmula (galones × precio) — mejor se calculan aquí con la MISMA
+    // función que usa la app, así el número siempre cuadra con lo que ves
+    // en pantalla.
+    try{
+      if(typeof computeFuelRows==='function'){
+        datosCompletos.combustibleGlp = computeFuelRows(state.combustibleGlp||[]).map(r=>({ ...r, montoPagado: r.totalGlp }));
+        datosCompletos.combustibleGas = computeFuelRows(state.combustibleGas||[]).map(r=>({ ...r, montoPagado: r.totalGlp }));
+      }
+    }catch(e){}
+
     // Un par de cálculos ya resueltos para evitar que la IA se equivoque
     // haciendo aritmética sobre kilometraje o deuda de tarjetas (que tienen
     // lógica particular) — el resto de preguntas las resuelve directo sobre
@@ -21953,6 +21976,176 @@ function construirContextoParaIA(){
         }catch(e){}
       });
       resumenRapido.deudaTotalTarjetasEnSoles = Math.round(deudaTCTotal*100)/100;
+    }catch(e){}
+
+    // Pagos/ingresos frecuentes: "pagosRegistrados" se guarda con una clave
+    // de periodo (mes "YYYY-MM", o año si es anual) que varía según la
+    // frecuencia de cada uno — mandar eso crudo hace que la IA adivine mal
+    // si ya está pagado o no. Aquí se resuelve con la MISMA lógica exacta
+    // que usa la propia app para mostrarlo en pantalla (pfActivoEnMes,
+    // getPFProximaFechaAnual, getPFProximoPeriodoSemestral,
+    // pfMesesSinRegistrar), así no hay margen de interpretación distinta.
+    try{
+      const hoyPF = new Date();
+      const mkActual = hoyPF.getFullYear()+'-'+String(hoyPF.getMonth()+1).padStart(2,'0');
+      resumenRapido.pagosFrecuentesEstado = (state.pagosFrecuentes||[]).filter(p=>!p.oculto).map(pf=>{
+        const esAnual = pf.frecuencia==='anual';
+        const esSemestral = pf.frecuencia==='semestral';
+        let periodoKey=null, proximoVencimiento=null;
+        try{
+          if(esAnual && typeof getPFProximaFechaAnual==='function'){
+            const pFecha = getPFProximaFechaAnual(pf);
+            periodoKey = pFecha ? String(pFecha.getFullYear()) : null;
+            proximoVencimiento = pFecha ? pFecha.toISOString().slice(0,10) : null;
+          } else if(esSemestral && typeof getPFProximoPeriodoSemestral==='function'){
+            const prox = getPFProximoPeriodoSemestral(pf);
+            periodoKey = prox ? prox.mk : null;
+          } else {
+            periodoKey = mkActual;
+          }
+        }catch(e){}
+        const yaPagadoEstePeriodo = !!(periodoKey && pf.pagosRegistrados && pf.pagosRegistrados[periodoKey]);
+        let vencidoSinRegistrar=false, mesesPendientesSinRegistrar=[];
+        try{
+          if(typeof pfActivoEnMes==='function' && !pfActivoEnMes(pf, hoyPF.getFullYear(), hoyPF.getMonth())){
+            mesesPendientesSinRegistrar = (typeof pfMesesSinRegistrar==='function') ? (pfMesesSinRegistrar(pf)||[]) : [];
+            vencidoSinRegistrar = mesesPendientesSinRegistrar.length>0;
+          }
+        }catch(e){}
+        return {
+          nombre: pf.nombre,
+          tipo: pf.tipo, // 'gasto' (pago) o 'ingreso'
+          frecuencia: pf.frecuencia,
+          monto: pf.montoFijo,
+          moneda: pf.currency,
+          periodoActualOProximo: periodoKey,
+          proximoVencimiento,
+          yaPagadoEstePeriodo,
+          vencidoSinRegistrar,
+          mesesPendientesSinRegistrar
+        };
+      });
+    }catch(e){}
+
+    // Servicios compartidos (Spotify, luz, etc. divididos entre personas)
+    // del mes actual: "payments" se guarda con una clave interna que ni
+    // siquiera es legible sin decodificarla — aquí se resuelve a nombre de
+    // servicio + persona + si pagó, para el mes real de hoy.
+    try{
+      const hoySrv = new Date();
+      const ySrv = hoySrv.getFullYear(), mSrv = hoySrv.getMonth();
+      const serviciosDelMes = (typeof getAllServices==='function') ? getAllServices(ySrv, mSrv) : {};
+      resumenRapido.serviciosCompartidosEsteMes = Object.entries(serviciosDelMes||{}).map(([sid,svc])=>{
+        const personas = (svc.people||[]).map(p=>{
+          // Misma fórmula que paymentKey(sid,pid) en la app, pero con el mes
+          // REAL de hoy en vez de depender de qué mes esté viendo el usuario
+          // en pantalla en ese momento (state.currentYear/currentMonth).
+          const keyReal = sid+'-'+p.id+'-'+ySrv+'-'+String(mSrv+1).padStart(2,'0');
+          return { nombre:p.name, pagado: !!(state.payments && state.payments[keyReal]), monto:svc.pricePerPerson };
+        });
+        return { servicio:svc.name, precioPorPersona:svc.pricePerPerson, diaPago:svc.payDay, cuenta:svc.account, personas };
+      });
+    }catch(e){}
+
+    // Metas de ahorro: para las "metas grandes" (esMetaGrande) el progreso REAL
+    // se lee de la cuenta vinculada (montoActualMetaGrande), NO del campo
+    // guardado m.montoActual que puede quedar desactualizado.
+    try{
+      resumenRapido.metasAhorroEstado = (state.metasAhorro||[]).map(m=>{
+        const montoActual = m.esMetaGrande
+          ? ((typeof montoActualMetaGrande==='function') ? montoActualMetaGrande(m.cuentaVinculada) : (m.montoActual||0))
+          : (m.montoActual||0);
+        const pct = m.montoObjetivo>0 ? Math.min(100,(montoActual/m.montoObjetivo)*100) : 0;
+        return {
+          nombre: m.nombre,
+          moneda: m.currency,
+          montoActual: Math.round(montoActual*100)/100,
+          montoObjetivo: m.montoObjetivo,
+          porcentajeCompletado: Math.round(pct*10)/10,
+          completada: montoActual>=m.montoObjetivo
+        };
+      });
+    }catch(e){}
+
+    // Inversiones: no existe ningún campo guardado con el resumen ya calculado
+    // (costo promedio, valorización, ganancia, XIRR) — todo se calcula al vuelo
+    // con las mismas funciones que usa la propia página de Inversiones, para
+    // no forzar a la IA a reimplementar promedios ponderados ni conversión de moneda.
+    try{
+      if(typeof invGetResumen==='function'){
+        const invResumen = invGetResumen();
+        const xirr = (typeof invXIRR==='function') ? invXIRR(invResumen) : null;
+        resumenRapido.inversionesResumen = {
+          PEN: invResumen.detalle.PEN,
+          USD: invResumen.detalle.USD,
+          utilidadRealizada: invResumen.utilidadRealizada,
+          rentabilidadAnualizadaXIRRPct: xirr!==null ? Math.round(xirr*100)/100 : null,
+          posiciones: (invResumen.posiciones||[]).map(p=>({
+            simbolo:p.simbolo, tipo:p.tipo, moneda:p.moneda, cantidad:p.cantidad,
+            costoPromedio:p.costoProm, valorActual:p.valorActual, ganancia:p.ganancia, gananciaPct:p.gananciaPct
+          }))
+        };
+      }
+    }catch(e){}
+
+    // Deudas mayores: el saldo pendiente de una deuda "amortizada" NO es la
+    // suma de las cuotas no pagadas (eso incluiría interés futuro) — es
+    // importe - amortizado ya pagado, exactamente como calcula getDMResumen().
+    try{
+      resumenRapido.deudasMayoresEstado = (state.deudasMayores||[]).map(d=>{
+        const r = (typeof getDMResumen==='function') ? getDMResumen(d) : null;
+        return {
+          nombre: d.nombre,
+          tipo: d.tipo,
+          cuotasTotales: r?r.total:null,
+          cuotasPagadas: r?r.pagadas:null,
+          cuotasRestantes: r?r.restantes:null,
+          saldoPendiente: r?Math.round(r.saldoPendiente*100)/100:null,
+          proximaFechaCuota: r?r.proximaFecha:null
+        };
+      });
+    }catch(e){}
+
+    // Presupuestos por categoría del mes REAL de hoy: el gasto combina
+    // movimientos de cuenta + consumos de tarjeta (por fecha real de compra,
+    // vía getCategorizedTCMovsForMonth), igual que la propia página de Presupuesto.
+    try{
+      const hoyBud = new Date();
+      const yBud=hoyBud.getFullYear(), mBud=hoyBud.getMonth();
+      const movsBud = (typeof getMovs==='function') ? getMovs(yBud,mBud).filter(mv=>mv.type==='expense') : [];
+      const tcMovsBud = (typeof getCategorizedTCMovsForMonth==='function') ? getCategorizedTCMovsForMonth(yBud,mBud) : [];
+      resumenRapido.presupuestosEstado = Object.keys(state.budgets||{}).map(cat=>{
+        const b = state.budgets[cat];
+        const spentMovs = movsBud.filter(mv=>mv.cat===cat).reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*rate:mv.amount),0);
+        const spentTC = tcMovsBud.filter(mv=>mv.cat===cat).reduce((s,mv)=>s+(mv.currency==='USD'?mv.monto*rate:mv.monto),0);
+        const spent = spentMovs+spentTC;
+        const pct = b.limit>0 ? Math.min(100,(spent/b.limit)*100) : 0;
+        return {
+          categoria: cat,
+          limite: b.limit,
+          gastadoEsteMes: Math.round(spent*100)/100,
+          porcentajeUsado: Math.round(pct*10)/10,
+          estado: pct>=100?'excedido':pct>=80?'alerta':'ok'
+        };
+      });
+    }catch(e){}
+
+    // Calendario: la próxima ocurrencia de un evento recurrente (anual o
+    // mensual/periódico) no se puede inferir del campo `fecha` crudo — se
+    // calcula con getEventCountdowns(), la misma función que usa la página.
+    try{
+      if(typeof getEventCountdowns==='function'){
+        resumenRapido.proximosEventosCalendario = getEventCountdowns()
+          .filter(it=>!it.isPast)
+          .slice(0,20)
+          .map(it=>({
+            titulo: it.event.titulo,
+            tipo: it.event.tipo,
+            fechaProximaOcurrencia: it.fecha.toISOString().slice(0,10),
+            diasFaltantes: it.diffDays,
+            esRecurrente: !!(it.event.recurrente||it.event.recurrenteAnual)
+          }));
+      }
     }catch(e){}
 
     return {
