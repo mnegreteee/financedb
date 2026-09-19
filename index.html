@@ -3235,8 +3235,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '19/09/26 - 13:06'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo botón flotante "💬" (estilo WhatsApp, esquina inferior IZQUIERDA para no chocar con el botón "+") para preguntarle a una IA sobre tus propias finanzas: gastos del mes, deudas, tarjetas, metas de ahorro, kilometraje, etc. Arquitectura: el navegador arma un resumen de los datos que YA están cargados en memoria (construirContextoParaIA(), sin leer Firestore de nuevo — cero costo extra) y lo manda junto a tu pregunta a una función nueva en el bot (chatFinanzas en index.js), que llama al mismo Gemini gratis que ya usa el bot para leer fotos y audios. Requiere: (1) definir el secret CHAT_WIDGET_KEY en Firebase con "firebase functions:secrets:set CHAT_WIDGET_KEY" y (2) pegar ese mismo valor en la constante CHAT_WIDGET_KEY_VALUE de este archivo (y del de Nathy) antes de que funcione — mientras no se configure, el botón aparece pero el chat responde con un error de conexión sin afectar nada más de la app. Validado con node --check y conteo de <div>/</div> balanceado.';
+const APP_VERSION_DATE = '19/09/26 - 13:43'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Chat IA (💬) ahora pregunta el PERIODO antes de buscar, en vez de mandar siempre todo el historial. Si tu pregunta ya menciona un periodo ("agosto", "este mes", "2025", "últimos 3 meses", "todo el historial") lo detecta solo; si no, aparecen botones (Hoy / Este mes / Últimos 3 meses / Este año / Todo el historial) para elegir antes de llamar a Gemini. Con eso, filtrarDatosPorPeriodo() recorta movimientos, consumos de tarjeta, combustible, calendario, inversiones, etc. al rango elegido (cuentas/deudas/metas siguen mandándose completas por ser "estado actual", no historial) — menos datos por consulta, respuestas más rápidas. El bot (index.js) le avisa a Gemini qué periodo está viendo para que no asuma que tiene más data de la que realmente llegó. REQUIERE volver a desplegar el bot (firebase deploy --only functions) porque este cambio SÍ toca index.js. Recordatorio: al subir este HTML, volver a pegar la clave real en CHAT_WIDGET_KEY_VALUE. Validado con node --check en ambos archivos y conteo de <div>/</div> balanceado.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -21800,76 +21800,166 @@ function detenerListenerTiempoReal(){
 const CHAT_FUNCTION_URL = 'https://us-central1-financedb-3bcff.cloudfunctions.net/chatFinanzas';
 const CHAT_WIDGET_KEY_VALUE = 'asdfghjklQWEasdmanm';
 let chatIAHistorial = [];
+let chatIAPreguntaPendiente = null; // pregunta esperando que elijas un periodo
 (function cargarHistorialChatIA(){
   try{ chatIAHistorial = JSON.parse(localStorage.getItem('miguel_mf_chatia_historial')||'[]'); }
   catch(e){ chatIAHistorial = []; }
 })();
 
+// Detecta si la pregunta ya menciona un periodo de tiempo ("agosto",
+// "este mes", "2025", "últimos 3 meses", "todo el historial"...). Si no
+// detecta nada, se le pregunta al usuario con botones ANTES de llamar a
+// Gemini — así no se manda todo el historial en cada consulta (menos datos
+// = respuestas más rápidas y consumo más bajo, aunque de todos modos esté
+// dentro del free tier).
+function detectarPeriodoPregunta(texto){
+  const t = (texto||'').toLowerCase();
+  const hoy = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const iso = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+
+  if(/\btodo\b|todo el historial|desde (el|que) (inicio|siempre)|historia completa|\bsiempre\b/.test(t)){
+    return { todo:true, etiqueta:'todo el historial' };
+  }
+  if(/\bhoy\b/.test(t)) return { inicio:iso(hoy), fin:iso(hoy), etiqueta:'hoy' };
+  if(/\bayer\b/.test(t)){
+    const y=new Date(hoy); y.setDate(y.getDate()-1);
+    return { inicio:iso(y), fin:iso(y), etiqueta:'ayer' };
+  }
+  if(/este mes|mes actual/.test(t)){
+    const ini=new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    return { inicio:iso(ini), fin:iso(hoy), etiqueta:'este mes' };
+  }
+  if(/mes pasado|el mes anterior/.test(t)){
+    const ini=new Date(hoy.getFullYear(), hoy.getMonth()-1, 1);
+    const fin=new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+    return { inicio:iso(ini), fin:iso(fin), etiqueta:'el mes pasado' };
+  }
+  let mRel = t.match(/últimos?\s+(\d+)\s*d[ií]as/);
+  if(mRel){
+    const n=parseInt(mRel[1],10);
+    const ini=new Date(hoy); ini.setDate(ini.getDate()-n);
+    return { inicio:iso(ini), fin:iso(hoy), etiqueta:'últimos '+n+' días' };
+  }
+  mRel = t.match(/últimos?\s+(\d+)\s*mes(es)?/);
+  if(mRel){
+    const n=parseInt(mRel[1],10);
+    const ini=new Date(hoy.getFullYear(), hoy.getMonth()-n+1, 1);
+    return { inicio:iso(ini), fin:iso(hoy), etiqueta:'últimos '+n+' meses' };
+  }
+  if(/este año|año actual/.test(t)){
+    return { inicio:hoy.getFullYear()+'-01-01', fin:iso(hoy), etiqueta:'este año' };
+  }
+  if(/año pasado|el año anterior/.test(t)){
+    const y=hoy.getFullYear()-1;
+    return { inicio:y+'-01-01', fin:y+'-12-31', etiqueta:'el '+y };
+  }
+  const MESES = {enero:0,febrero:1,marzo:2,abril:3,mayo:4,junio:5,julio:6,agosto:7,septiembre:8,setiembre:8,octubre:9,noviembre:10,diciembre:11};
+  for(const nombre in MESES){
+    if(t.includes(nombre)){
+      const yearMatch = t.match(/\b(20\d{2})\b/);
+      const year = yearMatch ? parseInt(yearMatch[1],10) : hoy.getFullYear();
+      const ini=new Date(year, MESES[nombre], 1);
+      const fin=new Date(year, MESES[nombre]+1, 0);
+      return { inicio:iso(ini), fin:iso(fin), etiqueta:nombre+' '+year };
+    }
+  }
+  const yearOnly = t.match(/\b(20\d{2})\b/);
+  if(yearOnly){
+    const y=yearOnly[1];
+    return { inicio:y+'-01-01', fin:y+'-12-31', etiqueta:y };
+  }
+  return null; // no se detectó ningún periodo
+}
+
+// Recorta `datosCompletos` (el `state` entero) al rango de fechas indicado
+// — solo afecta las colecciones que crecen con el tiempo (movimientos,
+// consumos de tarjeta, combustible, etc.); cuentas/deudas/metas/tarjetas
+// (metadata) se mandan siempre completas porque son "estado actual", no
+// historial, y son pequeñas.
+function filtrarDatosPorPeriodo(datos, rango){
+  if(!rango || rango.todo) return datos;
+  const ini = rango.inicio, fin = rango.fin;
+  const enRango = fecha => !!fecha && fecha>=ini && fecha<=fin;
+  const mesEnRango = mk => { // mk formato "YYYY-MM" (tcMonthKey)
+    if(!mk || mk.length<7) return true;
+    const primerDia = mk.slice(0,7)+'-01';
+    const ultimoDia  = mk.slice(0,7)+'-31';
+    return primerDia<=fin && ultimoDia>=ini;
+  };
+
+  const out = { ...datos };
+
+  out.movimientos = (datos.movimientos||[]).filter(mv=>enRango(mv.date));
+
+  out.tarjetas = (datos.tarjetas||[]).map(t=>{
+    const movsFiltrados = {};
+    Object.entries(t.movs||{}).forEach(([mk,arr])=>{ if(mesEnRango(mk)) movsFiltrados[mk]=arr; });
+    return { ...t, movs: movsFiltrados };
+  });
+
+  out.combustibleGlp = (datos.combustibleGlp||[]).filter(r=>enRango(r.fFinal||r.fInicio));
+  out.combustibleGas = (datos.combustibleGas||[]).filter(r=>enRango(r.fFinal||r.fInicio));
+  out.kmManual = (datos.kmManual||[]).filter(r=>enRango((r.fechaHora||'').slice(0,10)));
+  out.calendarEvents = (datos.calendarEvents||[]).filter(e=>enRango(e.fecha));
+
+  if(datos.inversiones){
+    out.inversiones = {
+      compras: (datos.inversiones.compras||[]).filter(c=>enRango(c.fecha)),
+      ventas: (datos.inversiones.ventas||[]).filter(v=>enRango(v.fecha)),
+      valorizaciones: (datos.inversiones.valorizaciones||[]).filter(v=>enRango(v.fecha)),
+      efectivo: (datos.inversiones.efectivo||[]).filter(e=>enRango(e.fecha))
+    };
+  }
+
+  out.tcOperaciones = (datos.tcOperaciones||[]).filter(o=>enRango(o.fecha));
+  out.tcTracker = (datos.tcTracker||[]).filter(o=>enRango(o.fecha));
+
+  const snapshotsFiltrados = {};
+  Object.entries(datos.snapshots||{}).forEach(([mk,val])=>{ if(mesEnRango(mk)) snapshotsFiltrados[mk]=val; });
+  out.snapshots = snapshotsFiltrados;
+
+  return out;
+}
+
 function construirContextoParaIA(){
   try{
     const rate = (state.tc && state.tc.venta) || 3.45;
     const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth();
 
-    const cuentas = Object.entries(state.cuentas||{})
-      .filter(([,v])=>typeof v==='number')
-      .map(([nombre,saldo])=>({nombre, saldo:Math.round(saldo*100)/100}));
+    // El usuario pidió que el chat tenga acceso a TODA su data, de TODO el
+    // tiempo (movimientos, consumos de tarjeta, combustible, deudas, deudas
+    // mayores, metas, kilometraje, calendario, inversiones, etc.) para poder
+    // responder cualquier pregunta, no solo un resumen curado de unos meses.
+    // Por eso se manda el objeto `state` completo tal cual — es exactamente
+    // la misma data que ya ves en la app, nada se recalcula ni se inventa.
+    // Se excluyen solo campos puramente visuales/de navegación que no
+    // aportan nada a una pregunta sobre datos (colores, tab abierta, id de
+    // algo que estás editando en ese momento).
+    const { cuentaColors, customCategorias, currentTab, editId, ...datosCompletos } = state;
 
-    const movsMes = (state.movimientos||[]).filter(mv=>{
-      if(!mv.date) return false;
-      const partes = mv.date.split('-').map(Number);
-      return partes[0]===y && (partes[1]-1)===m;
-    });
-    let ingresosMes=0, gastosMes=0;
-    const gastosPorCategoria={};
-    movsMes.forEach(mv=>{
-      const monto = ((mv.currency==='USD') ? mv.amount*rate : mv.amount) || 0;
-      if(mv.type==='income') ingresosMes += monto;
-      else if(mv.type==='expense'){
-        gastosMes += monto;
-        const cat = mv.cat || 'Otros';
-        gastosPorCategoria[cat] = (gastosPorCategoria[cat]||0) + monto;
-      }
-    });
-    const topCategoriasMes = Object.entries(gastosPorCategoria)
-      .sort((a,b)=>b[1]-a[1]).slice(0,8)
-      .map(([cat,monto])=>({categoria:cat, monto:Math.round(monto*100)/100}));
-
-    const ultimosMovimientos = [...(state.movimientos||[])]
-      .sort((a,b)=>((b.date||'')+(b.hora||'')).localeCompare((a.date||'')+(a.hora||'')))
-      .slice(0,15)
-      .map(mv=>({fecha:mv.date, tipo:mv.type, descripcion:mv.desc, monto:mv.amount, moneda:mv.currency, categoria:mv.cat, cuenta:mv.account}));
-
-    const tarjetasCredito = (state.tarjetas||[]).map(t=>{
-      let deuda=0;
-      try{
-        const movs = (typeof getAllTCMovs==='function') ? (getAllTCMovs(t.id)||[]) : [];
-        movs.forEach(mv=>{ if(!mv.pagado) deuda += ((mv.currency||t.currency)==='USD') ? mv.monto*rate : mv.monto; });
-      }catch(e){}
-      return {banco:t.banco, lineaCredito:t.linea, diaPago:t.pago, deudaActualEnSoles:Math.round(deuda*100)/100};
-    });
-
-    const deudasActivas = (state.deudas||[])
-      .filter(d=>d.status!=='pagado')
-      .map(d=>({nombre:d.nombre, monto:d.monto, moneda:d.currency, direccion:d.direccion||'me_deben', vencimiento:d.fechaPago||null}));
-
-    const metasAhorro = (state.metasAhorro||[]).map(meta=>({nombre:meta.nombre, montoActual:meta.montoActual, montoObjetivo:meta.montoObjetivo}));
-
-    const pagosFrecuentes = (state.pagosFrecuentes||[]).map(pf=>({nombre:pf.nombre, monto:pf.montoFijo, moneda:pf.currency, diaPago:pf.diaPago, tipo:pf.tipo}));
-
-    const kilometraje = (typeof getKmActualVehiculo==='function') ? getKmActualVehiculo() : null;
+    // Un par de cálculos ya resueltos para evitar que la IA se equivoque
+    // haciendo aritmética sobre kilometraje o deuda de tarjetas (que tienen
+    // lógica particular) — el resto de preguntas las resuelve directo sobre
+    // `datosCompletos`.
+    let resumenRapido = {};
+    try{
+      resumenRapido.kilometrajeActual = (typeof getKmActualVehiculo==='function') ? getKmActualVehiculo() : null;
+      let deudaTCTotal = 0;
+      (state.tarjetas||[]).forEach(t=>{
+        try{
+          const movs = (typeof getAllTCMovs==='function') ? (getAllTCMovs(t.id)||[]) : [];
+          movs.forEach(mv=>{ if(!mv.pagado) deudaTCTotal += ((mv.currency||t.currency)==='USD') ? mv.monto*rate : mv.monto; });
+        }catch(e){}
+      });
+      resumenRapido.deudaTotalTarjetasEnSoles = Math.round(deudaTCTotal*100)/100;
+    }catch(e){}
 
     return {
       fechaHoy: (typeof todayLocalISO==='function') ? todayLocalISO() : now.toISOString().slice(0,10),
       tipoCambioVenta: rate,
-      cuentas,
-      resumenMesActual: { ingresos:Math.round(ingresosMes*100)/100, gastos:Math.round(gastosMes*100)/100, balance:Math.round((ingresosMes-gastosMes)*100)/100, gastosPorCategoria:topCategoriasMes },
-      ultimosMovimientos,
-      tarjetasCredito,
-      deudasActivas,
-      metasAhorro,
-      pagosFrecuentes,
-      kilometrajeVehiculo: kilometraje
+      resumenRapido,
+      datosCompletos
     };
   }catch(err){
     console.error('Error armando contexto para chat IA:', err);
@@ -21910,21 +22000,79 @@ async function enviarMensajeChatIA(){
   const texto=(input.value||'').trim();
   if(!texto) return;
   input.value='';
+
+  // Si había una pregunta esperando periodo y el usuario escribió otra cosa
+  // en vez de tocar un botón, abandonamos ese flujo pendiente.
+  if(chatIAPreguntaPendiente){
+    const oldSel=document.getElementById('chatia-periodo-selector');
+    if(oldSel) oldSel.remove();
+    chatIAPreguntaPendiente=null;
+  }
+
+  const rango = detectarPeriodoPregunta(texto);
   chatIAHistorial.push({rol:'user', texto});
   renderChatIAMensajes();
   guardarHistorialChatIA();
 
+  if(!rango){
+    chatIAPreguntaPendiente = texto;
+    mostrarSelectorPeriodoChatIA();
+    return;
+  }
+  await procesarPreguntaChatIA(texto, rango);
+}
+
+function mostrarSelectorPeriodoChatIA(){
+  const cont=document.getElementById('chatia-msgs');
+  const wrap=document.createElement('div');
+  wrap.className='chatia-msg bot';
+  wrap.id='chatia-periodo-selector';
+  const opciones=['Hoy','Este mes','Últimos 3 meses','Este año','Todo el historial'];
+  wrap.innerHTML = '¿De qué periodo? Así reviso solo lo necesario en vez de todo tu historial.' +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
+    opciones.map(op=>`<button class="btn" style="font-size:11px;padding:4px 9px" onclick="elegirPeriodoChatIA('${op}')">${op}</button>`).join('') +
+    '</div>';
+  cont.appendChild(wrap);
+  cont.scrollTop=cont.scrollHeight;
+}
+
+function elegirPeriodoChatIA(opcion){
+  const sel=document.getElementById('chatia-periodo-selector');
+  if(sel) sel.remove();
+  if(!chatIAPreguntaPendiente) return;
+  const mapaTextos = {
+    'Hoy':'hoy', 'Este mes':'este mes', 'Últimos 3 meses':'últimos 3 meses',
+    'Este año':'este año', 'Todo el historial':'todo el historial'
+  };
+  const rango = detectarPeriodoPregunta(mapaTextos[opcion] || opcion) || { todo:true, etiqueta:'todo el historial' };
+  const preguntaOriginal = chatIAPreguntaPendiente;
+  chatIAPreguntaPendiente = null;
+  procesarPreguntaChatIA(preguntaOriginal, rango, true);
+}
+
+async function procesarPreguntaChatIA(texto, rango, yaEnHistorial){
+  if(!yaEnHistorial){
+    chatIAHistorial.push({rol:'user', texto});
+    renderChatIAMensajes();
+    guardarHistorialChatIA();
+  }
+
   const cont=document.getElementById('chatia-msgs');
   const loadingEl=document.createElement('div');
   loadingEl.className='chatia-msg bot loading';
-  loadingEl.textContent='Pensando...';
+  loadingEl.textContent='Pensando' + (rango && rango.etiqueta ? ' ('+rango.etiqueta+')' : '') + '...';
   cont.appendChild(loadingEl);
   cont.scrollTop=cont.scrollHeight;
 
   const sendBtn=document.getElementById('chatia-send');
   sendBtn.disabled=true;
   try{
-    const contexto=construirContextoParaIA();
+    const contextoBase=construirContextoParaIA();
+    const contexto = {
+      ...contextoBase,
+      datosCompletos: filtrarDatosPorPeriodo(contextoBase.datosCompletos, rango),
+      periodoConsultado: (rango && rango.etiqueta) || 'todo el historial'
+    };
     const res=await fetch(CHAT_FUNCTION_URL, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Chat-Key':CHAT_WIDGET_KEY_VALUE},
