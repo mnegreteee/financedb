@@ -3248,8 +3248,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '20/09/26 - 11:24'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Seguridad del Chat IA: se reemplazó la clave fija (X-Chat-Key, visible en el código fuente público) por autenticación real — el chat ahora manda tu ID token de Firebase Auth (Authorization: Bearer), que nadie puede fabricar sin loguearse con tu contraseña real. El backend (chatFinanzas en index.js) lo verifica contra Firebase antes de responder, y solo acepta los emails de Miguel y Nathy. Se quitó del HTML la constante CHAT_WIDGET_KEY_VALUE, ya no se usa. También se agregó maxInstances: 3 a chatFinanzas (tope de instancias en paralelo, corta en seco cualquier intento de abuso de la cuota gratis de Gemini — no afecta el uso normal). index_nathi.html todavía usa el método viejo (clave fija) hasta que se valide este cambio aquí y se replique allá; el backend acepta ambos métodos mientras tanto. REQUIERE volver a desplegar el bot (firebase deploy --only functions) para que la verificación por token funcione. Validado con node --check y conteo de <div>/</div> balanceado.';
+const APP_VERSION_DATE = '20/09/26 - 17:56'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pagos/Ingresos Frecuentes (tipo "Base con descuentos", ej. Préstamo Ripley): cada descuento ahora guarda y muestra la fecha en que se generó — se ve junto al monto en la tarjeta principal, en el modal de "Registrar pago", y en el desglose del historial (📅) de meses ya registrados. Los descuentos que ya tenías guardados desde antes (con "+ Descuento") ya tenían la fecha internamente, solo no se mostraba — ahora sí aparece. Los que agregues directo dentro del modal de "Registrar" (en vez de con "+ Descuento") toman la fecha del día en que los agregas ahí. No afecta cálculos ni requiere redesplegar el bot.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -15812,7 +15812,7 @@ function renderPagosFrecuentes(){
     const descuentosDetalle = (esBaseDesc && pendientes.length)
       ? `<div style="font-size:10px;color:var(--text3);margin-top:3px">
            <div style="color:var(--accent);margin-bottom:2px">→ Se aplicará al registrar: <strong>${proximoPeriodoLabel}</strong></div>
-           ${pendientes.map((d,i)=>`${escapeHtml(d.concepto)} (${sym} ${d.monto.toFixed(2)})<span onclick="removePFDescuentoPendiente('${pf.id}',${i})" style="cursor:pointer;color:var(--red);margin-left:3px" title="Quitar">✕</span>`).join(', ')}
+           ${pendientes.map((d,i)=>`${escapeHtml(d.concepto)} (${sym} ${d.monto.toFixed(2)}${d.fecha?' · '+fmtFechaCorta(d.fecha):''})<span onclick="removePFDescuentoPendiente('${pf.id}',${i})" style="cursor:pointer;color:var(--red);margin-left:3px" title="Quitar">✕</span>`).join(', ')}
          </div>`
       : '';
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
@@ -15913,7 +15913,7 @@ function registrarPagoFrecuente(id){
   if(esBaseDesc){
     // Se precarga con lo que ya se fue guardando durante el mes (con "+
     // Descuento" en la lista) — no hace falta volver a escribirlo todo aquí.
-    pfDescuentosActuales=(pf.descuentosPendientes||[]).map(d=>({concepto:d.concepto, monto:d.monto}));
+    pfDescuentosActuales=(pf.descuentosPendientes||[]).map(d=>({concepto:d.concepto, monto:d.monto, fecha:d.fecha||todayISO()}));
     const sym=pf.currency==='USD'?'$':'S/';
     document.getElementById('pf-registrar-base-monto').textContent=sym+' '+pf.montoFijo.toFixed(2);
     document.getElementById('pf-desc-concepto').value='';
@@ -15971,7 +15971,7 @@ function addPFDescuento(){
   const monto=parseFloat(document.getElementById('pf-desc-monto').value)||0;
   if(!concepto){alert('Escribe un concepto (ej. "Zapatos").');return;}
   if(monto<=0){alert('Ingresa un monto válido.');return;}
-  pfDescuentosActuales.push({concepto,monto});
+  pfDescuentosActuales.push({concepto,monto,fecha:todayISO()});
   document.getElementById('pf-desc-concepto').value='';
   document.getElementById('pf-desc-monto').value='';
   document.getElementById('pf-desc-concepto').focus();
@@ -15988,7 +15988,7 @@ function renderPFDescuentosList(){
   const el=document.getElementById('pf-registrar-descuentos-list');
   el.innerHTML=pfDescuentosActuales.length
     ? pfDescuentosActuales.map((d,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px">
-        <span style="color:var(--text2)">${escapeHtml(d.concepto)}</span>
+        <span style="color:var(--text2)">${escapeHtml(d.concepto)}${d.fecha?` <span style="color:var(--text3);font-size:10px">· ${fmtFechaCorta(d.fecha)}</span>`:''}</span>
         <span style="display:flex;align-items:center;gap:8px"><span style="color:var(--red)">- ${symReal} ${d.monto.toFixed(2)}</span><span onclick="removePFDescuento(${i})" style="cursor:pointer;color:var(--text3)">✕</span></span>
       </div>`).join('')
     : `<div style="font-size:11px;color:var(--text3)">Sin descuentos agregados todavía.</div>`;
@@ -16231,7 +16231,7 @@ function openPFHistorial(id){
       pagadosCount++; aplicablesCount++;
       const desglose = (reg.deducciones && reg.deducciones.length)
         ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;padding-left:2px">
-            Base ${sym} ${reg.montoBase.toFixed(2)} − ${reg.deducciones.map(d=>`${escapeHtml(d.concepto)} (${sym} ${d.monto.toFixed(2)})`).join(', ')}
+            Base ${sym} ${reg.montoBase.toFixed(2)} − ${reg.deducciones.map(d=>`${escapeHtml(d.concepto)} (${sym} ${d.monto.toFixed(2)}${d.fecha?' · '+fmtFechaCorta(d.fecha):''})`).join(', ')}
           </div>`
         : '';
       return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
