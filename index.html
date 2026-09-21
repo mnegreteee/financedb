@@ -1032,6 +1032,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             </div>
           </div>
           <div class="config-row">
+            <div class="config-row-label">Ícono del chat IA<small>El emoji del botón flotante abajo a la izquierda — pega el que quieras</small></div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="text" id="cfg-chatia-icono" maxlength="4" placeholder="🤖" style="width:52px;height:34px;text-align:center;font-size:18px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)" onchange="setChatIAIcono(this.value)">
+              <button class="config-action-btn neutral" onclick="resetChatIAIcono()">↺ Restablecer</button>
+            </div>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Números en tarjetas<small>Toca cualquier número para ver el otro formato al instante</small></div>
             <button class="config-action-btn neutral" id="cfg-numeros-compactos-btn" onclick="toggleNumerosCompactosDefault()">🔢 Mostrando compactos (15.4K)</button>
           </div>
@@ -3248,8 +3255,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '20/09/26 - 19:23'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Cambio de nombre del chat IA: "💬 Asistente de Finanzas" ahora se llama "🤖AsisBot🚀" en el encabezado del panel del chat. Solo cosmético, no afecta nada de la lógica ni requiere redesplegar el bot.';
+const APP_VERSION_DATE = '20/09/26 - 19:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: Config → Apariencia → "Ícono del chat IA" — ahora puedes elegir tú mismo el emoji del botón flotante del chat (pega el que quieras, ej. 🐷🔥📊) en vez de estar fijo. Se guarda en este dispositivo (localStorage), igual que el color de acento, y tiene botón "↺ Restablecer" para volver al 🤖 por defecto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4847,6 +4854,33 @@ function resetAccentColor(){
   const patronActivo=localStorage.getItem('miguel_mf_fondo_patron');
   if(patronActivo) aplicarFondoPersonalizado(patronActivo, parseInt(localStorage.getItem('miguel_mf_fondo_opacidad')||'8',10));
 }
+
+// Ícono del botón flotante del chat IA — 100% cosmético, guardado en
+// localStorage (por dispositivo, no se sincroniza por Firestore, igual que
+// el color de acento). Si el usuario pega algo raro/vacío, se ignora y se
+// mantiene el ícono anterior en vez de dejar el botón sin nada.
+function getChatIAIcono(){
+  try{ return localStorage.getItem('miguel_mf_chatia_icono') || '🤖'; }catch(e){ return '🤖'; }
+}
+function aplicarChatIAIcono(){
+  const btn=document.getElementById('chatia-btn');
+  if(btn) btn.textContent = getChatIAIcono();
+  const input=document.getElementById('cfg-chatia-icono');
+  if(input && document.activeElement!==input) input.value = getChatIAIcono();
+}
+function setChatIAIcono(valor){
+  const v=(valor||'').trim();
+  if(!v){ aplicarChatIAIcono(); return; }
+  try{ localStorage.setItem('miguel_mf_chatia_icono', v.slice(0,4)); }catch(e){}
+  aplicarChatIAIcono();
+  toast('Ícono del chat actualizado');
+}
+function resetChatIAIcono(){
+  try{ localStorage.removeItem('miguel_mf_chatia_icono'); }catch(e){}
+  aplicarChatIAIcono();
+  toast('Ícono restablecido');
+}
+
 function loadAccentColor(){
   const saved=localStorage.getItem('miguel_mf_accent');
   const picker=document.getElementById('cfg-accent-picker');
@@ -5893,6 +5927,7 @@ function isPageActive(name){ const e=document.getElementById('page-'+name); retu
 function render(){
   updateTitles();
   renderPaisConfigBtn();
+  aplicarChatIAIcono(); // sincroniza el ícono del botón flotante del chat con lo elegido en Config → Apariencia
   // Las siguientes son específicas de la página Finanzas — evita recalcularlas
   // (incl. la tabla anual, que reconstruye saldos de los 12 meses) cuando el
   // usuario está viendo otra página, donde ese trabajo sería invisible.
@@ -23810,7 +23845,7 @@ if(state.projGoals){
   </div>
   <div id="chatia-counter">0/2000</div>
 </div>
-<button id="chatia-btn" onclick="toggleChatIA()" title="Preguntar a la IA sobre tus finanzas">💬</button>
+<button id="chatia-btn" onclick="toggleChatIA()" title="Preguntar a la IA sobre tus finanzas">🤖</button>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
