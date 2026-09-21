@@ -3248,8 +3248,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '20/09/26 - 17:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos/Ingresos Frecuentes (tipo "Base con descuentos", ej. Préstamo Ripley): cada descuento ahora guarda y muestra la fecha en que se generó — se ve junto al monto en la tarjeta principal, en el modal de "Registrar pago", y en el desglose del historial (📅) de meses ya registrados. Los descuentos que ya tenías guardados desde antes (con "+ Descuento") ya tenían la fecha internamente, solo no se mostraba — ahora sí aparece. Los que agregues directo dentro del modal de "Registrar" (en vez de con "+ Descuento") toman la fecha del día en que los agregas ahí. No afecta cálculos ni requiere redesplegar el bot.';
+const APP_VERSION_DATE = '20/09/26 - 18:29'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Fix del chat IA: preguntas como "cuánto gasté en Bembos este año" a veces daban un monto distinto cada vez que se preguntaba, porque se le pedía a Gemini que sumara él mismo todas las coincidencias del comercio recorriendo el JSON crudo — y una IA sumando a mano sobre un arreglo grande puede saltarse o duplicar alguna. Ahora el propio código (calcularTotalesPorDescripcionRepetida) suma UNA sola vez, de forma 100% determinística, el total real de cada comercio/concepto que se repite 2+ veces en el periodo consultado (agrupando por descripción sin importar mayúsculas/tildes), y se lo pasa listo a la IA en resumenRapido.totalesPorDescripcionRepetida — el prompt (index.js) ahora le exige usar ese total tal cual en vez de recalcularlo. REQUIERE volver a desplegar el bot (firebase deploy --only functions) para que el prompt actualizado tome efecto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22307,6 +22307,62 @@ const CHATIA_AYUDA_TEXTO = 'Esto es lo que puedo hacer 👋\n\n'+
   '- /borrar → borra el historial de esta conversación y empieza de cero\n'+
   '- /ayuda → este mensaje';
 
+// Por qué existe: cuando le preguntas al chat "cuánto gasté en Bembos este
+// año" (o cualquier comercio/concepto que se repite varias veces), antes se
+// le pedía a Gemini que recorriera TODO el JSON crudo (movimientos + cada
+// tarjeta) y sumara él mismo cada coincidencia — y una IA sumando a mano
+// sobre un arreglo grande a veces se salta una ocurrencia, cuenta una de
+// más, o simplemente varía la respuesta entre una pregunta y otra (aunque
+// sea la misma data). Acá se suma UNA sola vez, con código normal (100%
+// determinístico, siempre da el mismo resultado), y se le pasa el total ya
+// hecho — así la IA solo tiene que leerlo, no calcularlo.
+// Se agrupa por descripción normalizada (sin mayúsculas ni tildes, espacios
+// recortados) para que "Bembos", "BEMBOS" y "bembos " cuenten como el mismo
+// comercio. Si escribiste el mismo gasto con variaciones distintas cada vez
+// (ej. "Bembos" un día y "Bembos - combo" otro), esos quedan como grupos
+// separados — igual que le pasaría a un humano leyendo la lista, no hay
+// forma 100% automática de adivinar que son "lo mismo" sin arriesgarse a
+// mezclar comercios que en realidad son distintos.
+function calcularTotalesPorDescripcionRepetida(datosFiltrados){
+  try{
+    const rate = (state.tc && state.tc.venta) || 3.45;
+    const normalizar = s => (s||'').toString().trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const grupos = {};
+    const agregar = (descOriginal, monto, currency, fecha, fuente) => {
+      const desc = (descOriginal||'').toString().trim();
+      const key = normalizar(desc);
+      if(!key || !(monto>0)) return;
+      if(!grupos[key]) grupos[key] = { descripcionOriginal: desc, totalEnSoles:0, ocurrencias:[] };
+      const montoSoles = (currency==='USD') ? monto*rate : monto;
+      grupos[key].totalEnSoles += montoSoles;
+      grupos[key].ocurrencias.push({ fecha, monto, currency: currency||'PEN', fuente });
+    };
+    (datosFiltrados.movimientos||[]).forEach(mv=>{
+      if(mv.type==='expense') agregar(mv.desc, mv.amount, mv.currency, mv.date, 'movimiento de cuenta');
+    });
+    (datosFiltrados.tarjetas||[]).forEach(t=>{
+      Object.values(t.movs||{}).forEach(arr=>{
+        (arr||[]).forEach(c=>agregar(c.desc, c.monto, c.currency||t.currency, c.fecha, 'tarjeta '+(t.nombre||'')));
+      });
+    });
+    // Solo se devuelven los comercios/conceptos con 2+ ocurrencias — son los
+    // únicos donde sumar a mano puede salir mal; uno solo es una lectura
+    // directa que la IA no puede equivocar.
+    const resultado = {};
+    Object.values(grupos).forEach(g=>{
+      if(g.ocurrencias.length>=2){
+        resultado[g.descripcionOriginal] = {
+          totalEnSoles: Math.round(g.totalEnSoles*100)/100,
+          vecesQueAparece: g.ocurrencias.length,
+          detalle: g.ocurrencias
+        };
+      }
+    });
+    return resultado;
+  }catch(e){ console.error('Error en calcularTotalesPorDescripcionRepetida:', e); return {}; }
+}
+
 async function enviarMensajeChatIA(){
   const input=document.getElementById('chatia-input');
   const texto=(input.value||'').trim();
@@ -22529,9 +22585,20 @@ async function procesarPreguntaChatIA(texto, rango, yaEnHistorial){
   sendBtn.disabled=true;
   try{
     const contextoBase=construirContextoParaIA();
+    const datosFiltradosParaIA = filtrarDatosPorPeriodo(contextoBase.datosCompletos, rango);
     const contexto = {
       ...contextoBase,
-      datosCompletos: filtrarDatosPorPeriodo(contextoBase.datosCompletos, rango),
+      datosCompletos: datosFiltradosParaIA,
+      resumenRapido: {
+        ...contextoBase.resumenRapido,
+        // Ver calcularTotalesPorDescripcionRepetida() más abajo — resuelve
+        // el bug de "cuánto gasté en Bembos" dando montos distintos cada vez
+        // que se pregunta: en vez de dejar que la IA sume manualmente sobre
+        // el JSON crudo (donde a veces se salta o duplica alguna ocurrencia),
+        // el propio código ya suma cada comercio/concepto repetido antes de
+        // mandárselo, para el periodo que se está consultando.
+        totalesPorDescripcionRepetida: calcularTotalesPorDescripcionRepetida(datosFiltradosParaIA)
+      },
       periodoConsultado: (rango && rango.etiqueta) || 'todo el historial'
     };
     // Autenticación real en vez de la clave fija: se manda el ID token de
