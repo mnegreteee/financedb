@@ -3255,8 +3255,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '20/09/26 - 19:32'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: Config → Apariencia → "Ícono del chat IA" — ahora puedes elegir tú mismo el emoji del botón flotante del chat (pega el que quieras, ej. 🐷🔥📊) en vez de estar fijo. Se guarda en este dispositivo (localStorage), igual que el color de acento, y tiene botón "↺ Restablecer" para volver al 🤖 por defecto.';
+const APP_VERSION_DATE = '20/09/26 - 20:18'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Ajuste a la búsqueda del chat IA de la versión anterior: ahora también recorta plurales comunes antes de buscar (relojes→reloj, pichangas→pichanga), para que preguntar en plural SÍ encuentre descripciones guardadas en singular y viceversa — antes, preguntar "pichangas" no habría encontrado un movimiento guardado solo como "Pichanga" (el texto buscado era más largo que el real). Sin esto la búsqueda solo funcionaba en un sentido.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22398,6 +22398,80 @@ function calcularTotalesPorDescripcionRepetida(datosFiltrados){
   }catch(e){ console.error('Error en calcularTotalesPorDescripcionRepetida:', e); return {}; }
 }
 
+// Palabras muy comunes en preguntas financieras que NO sirven como palabra
+// de búsqueda (si las dejáramos pasar, "buscaría" texto que no tiene nada
+// que ver con ningún comercio real). Todo lo que NO esté en esta lista se
+// prueba como posible palabra de búsqueda contra tus descripciones reales.
+const CHATIA_STOPWORDS = new Set(['cuanto','cuánto','cuanta','cuánta','cuantos','cuántos','cuantas','cuántas',
+  'gaste','gasté','gasto','gastos','gastando','gasta','gastamos','voy','llevo','va','van',
+  'en','el','la','los','las','un','una','unos','unas','de','del','al','a',
+  'este','esta','estos','estas','ese','esa','esos','esas',
+  'ano','anio','anios','anos','mes','meses','dia','dias',
+  'total','totales','suma','sumado','sumo','me','mi','mis','tu','tus','su','sus',
+  'con','para','por','que','cual','cuales','como','dame','dime','dile',
+  'muestrame','sobre','tengo','tuve','tenido','hay','habia','si','no','y','o','u',
+  'es','fue','son','ha','he','han','pague','pago','pagos','pagado','ingreso','ingresos',
+  'egreso','egresos','todo','toda','todos','todas','desde','hasta','entre','durante',
+  'actual','actualmente','ultimo','ultima','pasado','pasada','proximo','proxima',
+  'soles','dolares','plata','dinero','cuenta','tarjeta','tarjetas','ver','decir']);
+// Recorta un plural común en español a su raíz (relojes→reloj, pichangas→
+// pichanga) para que buscar en plural SÍ encuentre descripciones guardadas
+// en singular, y viceversa — con solo ".includes()" a secas, "pichangas"
+// (la pregunta) nunca sería "parte de" una descripción guardada como
+// "Pichanga" (el texto buscado es más largo que el texto real), así que sin
+// este recorte se perdían justo los casos donde preguntas en plural.
+function raizSingular(palabra){
+  if(palabra.length>4 && palabra.endsWith('es')) return palabra.slice(0,-2); // relojes→reloj, camiones→camion
+  if(palabra.length>4 && palabra.endsWith('s')) return palabra.slice(0,-1);  // pichangas→pichanga, tacos→taco
+  return palabra;
+}
+function extraerPalabrasClaveDeMensaje(texto){
+  const normalizado = normalizarBusqueda(texto||'');
+  const palabras = normalizado.split(/[^a-z0-9]+/).filter(p=>p && p.length>=3 && !CHATIA_STOPWORDS.has(p));
+  const raices = palabras.map(raizSingular);
+  return [...new Set(raices)].slice(0,6); // máximo 6 candidatas, para no inflar el contexto
+}
+// Por qué existe: la app ya tiene una forma de buscar en la que confiamos
+// 100% — el botón 🔍 "Buscar en toda la app" (buscarGlobal/normalizarBusqueda
+// más arriba), que encuentra cualquier descripción que CONTENGA el texto
+// buscado, sin importar mayúsculas/tildes ni palabras extra alrededor (así
+// encontró "Pichanga Yango" al buscar "pichanga"). Esta función usa EXACTAMENTE
+// la misma normalización y el mismo ".includes()" — pero en vez de esperar a
+// que tú escribas algo en la lupa, la aplica sola a las palabras de tu propia
+// pregunta del chat, y le pasa a la IA el total YA sumado por código, no por
+// ella. Así "cuánto gasté en pichanga" usa el mismo motor de búsqueda que ya
+// usas todos los días en la app, en vez de que la IA intente adivinar.
+function calcularCoincidenciasPorPalabrasDelMensaje(datosFiltrados, texto){
+  try{
+    const rate = (state.tc && state.tc.venta) || 3.45;
+    const palabras = extraerPalabrasClaveDeMensaje(texto);
+    if(!palabras.length) return {};
+    const resultado = {};
+    palabras.forEach(palabra=>{
+      const items=[];
+      (datosFiltrados.movimientos||[]).forEach(mv=>{
+        if(mv.type==='expense' && normalizarBusqueda(mv.desc||'').includes(palabra)){
+          items.push({ descripcionOriginal:mv.desc, fecha:mv.date, monto:mv.amount, currency:mv.currency||'PEN', fuente:'movimiento de cuenta' });
+        }
+      });
+      (datosFiltrados.tarjetas||[]).forEach(t=>{
+        Object.values(t.movs||{}).forEach(arr=>{
+          (arr||[]).forEach(c=>{
+            if(normalizarBusqueda(c.desc||'').includes(palabra)){
+              items.push({ descripcionOriginal:c.desc, fecha:c.fecha, monto:c.monto, currency:c.currency||t.currency||'PEN', fuente:'tarjeta '+(t.nombre||'') });
+            }
+          });
+        });
+      });
+      if(items.length){
+        const totalEnSoles = items.reduce((s,it)=>s+((it.currency==='USD')?it.monto*rate:it.monto),0);
+        resultado[palabra] = { totalEnSoles: Math.round(totalEnSoles*100)/100, vecesQueAparece: items.length, detalle: items };
+      }
+    });
+    return resultado;
+  }catch(e){ console.error('Error en calcularCoincidenciasPorPalabrasDelMensaje:', e); return {}; }
+}
+
 async function enviarMensajeChatIA(){
   const input=document.getElementById('chatia-input');
   const texto=(input.value||'').trim();
@@ -22632,7 +22706,14 @@ async function procesarPreguntaChatIA(texto, rango, yaEnHistorial){
         // el JSON crudo (donde a veces se salta o duplica alguna ocurrencia),
         // el propio código ya suma cada comercio/concepto repetido antes de
         // mandárselo, para el periodo que se está consultando.
-        totalesPorDescripcionRepetida: calcularTotalesPorDescripcionRepetida(datosFiltradosParaIA)
+        totalesPorDescripcionRepetida: calcularTotalesPorDescripcionRepetida(datosFiltradosParaIA),
+        // Ver calcularCoincidenciasPorPalabrasDelMensaje() más abajo — busca
+        // en tus movimientos y consumos con el MISMO motor que usa el botón
+        // 🔍 "Buscar en toda la app" (contiene, sin tildes/mayúsculas),
+        // aplicado directo a las palabras de ESTA pregunta. Es la fuente más
+        // confiable para "cuánto gasté en X" porque no depende de que la IA
+        // adivine qué claves de arriba corresponden a X.
+        coincidenciasPorPalabraDelMensaje: calcularCoincidenciasPorPalabrasDelMensaje(datosFiltradosParaIA, texto)
       },
       periodoConsultado: (rango && rango.etiqueta) || 'todo el historial'
     };
