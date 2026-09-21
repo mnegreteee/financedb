@@ -3248,8 +3248,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '20/09/26 - 18:29'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Fix del chat IA: preguntas como "cuánto gasté en Bembos este año" a veces daban un monto distinto cada vez que se preguntaba, porque se le pedía a Gemini que sumara él mismo todas las coincidencias del comercio recorriendo el JSON crudo — y una IA sumando a mano sobre un arreglo grande puede saltarse o duplicar alguna. Ahora el propio código (calcularTotalesPorDescripcionRepetida) suma UNA sola vez, de forma 100% determinística, el total real de cada comercio/concepto que se repite 2+ veces en el periodo consultado (agrupando por descripción sin importar mayúsculas/tildes), y se lo pasa listo a la IA en resumenRapido.totalesPorDescripcionRepetida — el prompt (index.js) ahora le exige usar ese total tal cual en vez de recalcularlo. REQUIERE volver a desplegar el bot (firebase deploy --only functions) para que el prompt actualizado tome efecto.';
+const APP_VERSION_DATE = '20/09/26 - 19:23'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Cambio de nombre del chat IA: "💬 Asistente de Finanzas" ahora se llama "🤖AsisBot🚀" en el encabezado del panel del chat. Solo cosmético, no afecta nada de la lógica ni requiere redesplegar el bot.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -23796,7 +23796,7 @@ if(state.projGoals){
 <!-- Chat IA: preguntas sobre tus propias finanzas, respondidas con Gemini -->
 <div id="chatia-panel">
   <div id="chatia-header">
-    <div><b>💬 Asistente de Finanzas</b><small>Pregúntame sobre tus datos</small></div>
+    <div><b>🤖AsisBot🚀</b><small>Pregúntame sobre tus datos</small></div>
     <div id="chatia-header-actions">
       <button id="chatia-export" onclick="exportarConversacionChatIA()" title="Exportar esta conversación (.txt)">⬇</button>
       <button id="chatia-close" onclick="cerrarChatIA()">✕</button>
