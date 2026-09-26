@@ -3255,8 +3255,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '20/09/26 - 20:18'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Ajuste a la búsqueda del chat IA de la versión anterior: ahora también recorta plurales comunes antes de buscar (relojes→reloj, pichangas→pichanga), para que preguntar en plural SÍ encuentre descripciones guardadas en singular y viceversa — antes, preguntar "pichangas" no habría encontrado un movimiento guardado solo como "Pichanga" (el texto buscado era más largo que el real). Sin esto la búsqueda solo funcionaba en un sentido.';
+const APP_VERSION_DATE = '26/09/26 - 13:10'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Se agregó separador de miles (formato 1,300.50) a montos que antes se mostraban sin comas en tablas, tarjetas, gráficos (tooltips y ejes), reportes PDF y el historial de actividad — donde antes se veía "1300.50" ahora se ve "1,300.50". No afecta campos editables ni exportaciones a Excel/CSV, que siguen guardando el número puro.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4379,7 +4379,7 @@ function usarSaldoCompletoTransfer(){
   const hoy=new Date();
   const saldoActual=(reconstructSaldoAt(hoy.getFullYear(), hoy.getMonth())||{})[origen]||0;
   const symTodo=getAccountCurrency(origen)==='USD'?'$':'S/';
-  if(saldoActual<=0){ alert(`"${origen}" no tiene saldo positivo para transferir (${symTodo} ${saldoActual.toFixed(2)}).`); return; }
+  if(saldoActual<=0){ alert(`"${origen}" no tiene saldo positivo para transferir (${symTodo} ${numFmtSigned(saldoActual,2)}).`); return; }
   document.getElementById('tr-monto').value=saldoActual.toFixed(2);
 }
 // Lógica central de una transferencia — extraída para poder usarse tanto
@@ -4398,7 +4398,7 @@ function ejecutarTransferencia({origen, destino, monto, fecha, hora, cat, nota})
   state.cuentas[origen]=(state.cuentas[origen]||0)-monto;
   state.cuentas[destino]=(state.cuentas[destino]||0)+monto;
   const symTr=currency==='USD'?'$':'S/';
-  logActividad('transferencia', `${origen} → ${destino} — ${symTr} ${monto.toFixed(2)}`, {movIdA:idBase+'a', movIdB:idBase+'b'});
+  logActividad('transferencia', `${origen} → ${destino} — ${symTr} ${numFmtSigned(monto,2)}`, {movIdA:idBase+'a', movIdB:idBase+'b'});
   return true;
 }
 function saveTransfer(){
@@ -5088,6 +5088,11 @@ function showPage(name){
 
 // ── HELPERS ───────────────────────────────────────────
 function fmtS(n){return 'S/ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+// Igual que fmtS/fmtD pero SIN símbolo de moneda y CONSERVANDO el signo — para
+// formatear con separador de miles cualquier número que ya se muestra con su
+// propio signo +/- puesto aparte (tablas, KPIs, logs de actividad, tooltips
+// de gráficos, etc.), sin tener que pasar por Math.abs().
+function numFmtSigned(n,dec){ dec=(dec===undefined?2:dec); n=Number(n); if(isNaN(n)) return String(n); const neg=n<0; const abs=Math.abs(n).toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g,','); return (neg?'-':'')+abs; }
 // Mini-gráfico de línea (sparkline) dibujado a mano con SVG — no depende de
 // Chart.js, así que sirve para vistas rápidas dentro de un widget KPI chico
 // sin pagar el costo de crear una instancia de Chart por cada uno. Los
@@ -5998,7 +6003,7 @@ function updateTCDisplay(){
   }
   document.getElementById('tc-compra-disp').textContent=state.tc.compra.toFixed(4);
   document.getElementById('tc-venta-disp').textContent=state.tc.venta.toFixed(4);
-  document.getElementById('equiv-1000-soles').textContent=M('$ '+(1000/state.tc.venta).toFixed(2));
+  document.getElementById('equiv-1000-soles').textContent=M('$ '+numFmtSigned((1000/state.tc.venta),2));
   document.getElementById('equiv-100-dolar').textContent=M(fmtS(100*state.tc.compra));
 
   const modeEl=document.getElementById('tc-mode-info');
@@ -6082,7 +6087,7 @@ function checkBrowserNotifications(forzar){
   const cuentasOperativas=getCuentasOperativasUnicas();
   cuentasOperativas.forEach(k=>{
     const saldo=(state.cuentas||{})[k];
-    if(saldo!==undefined && saldo<threshold) mensajes.push(`⚠️ Saldo bajo en ${k}: S/ ${saldo.toFixed(2)}`);
+    if(saldo!==undefined && saldo<threshold) mensajes.push(`⚠️ Saldo bajo en ${k}: S/ ${numFmtSigned(saldo,2)}`);
   });
 
   // 3. Tarjetas: cierre o pago dentro de 3 días
@@ -6226,7 +6231,7 @@ function renderListaReparacion(){
     const inputId='reparar-fecha-'+idx;
     return `<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;margin-bottom:2px">${escapeHtml(c.desc||'Sin descripción')}</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${escapeHtml(item.tarjetaLabel)} · ${sym} ${(c.monto||0).toFixed(2)}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${escapeHtml(item.tarjetaLabel)} · ${sym} ${numFmtSigned((c.monto||0),2)}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <input id="${inputId}" type="date" style="flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12px">
         <button class="btn btn-primary" style="font-size:11px;padding:6px 10px" onclick="guardarFechaReparada('${item.tarjetaId}','${item.monthKeyViejo}','${c.id}','${inputId}')">Guardar fecha</button>
@@ -6838,19 +6843,19 @@ function openTCHeatmapDayModal(dia){
   const porTarjetaHtml=Object.entries(det.porTarjeta).map(([banco,d])=>`
     <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 0">
       <span style="color:var(--text2)">💳 ${escapeHtml(banco)}</span>
-      <span>${d.count} ${d.count===1?'operación':'operaciones'} · S/ ${d.total.toFixed(2)}</span>
+      <span>${d.count} ${d.count===1?'operación':'operaciones'} · S/ ${numFmtSigned(d.total,2)}</span>
     </div>`).join('');
 
   const itemsHtml=det.items.slice().sort((a,b)=>b.monto-a.monto).map(it=>`
     <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 0;border-top:1px solid var(--border)">
       <span>${escapeHtml(it.desc)} <span style="color:var(--text3);font-size:10px">· ${escapeHtml(it.banco)}</span></span>
-      <span style="color:var(--text2);flex-shrink:0;margin-left:8px">S/ ${it.monto.toFixed(2)}</span>
+      <span style="color:var(--text2);flex-shrink:0;margin-left:8px">S/ ${numFmtSigned(it.monto,2)}</span>
     </div>`).join('');
 
   document.getElementById('tc-heatmap-day-content').innerHTML=`
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
       <span style="font-size:12px;color:var(--text3)">${det.items.length} ${det.items.length===1?'operación':'operaciones'}</span>
-      <span style="font-size:16px;font-weight:700">S/ ${total.toFixed(2)}</span>
+      <span style="font-size:16px;font-weight:700">S/ ${numFmtSigned(total,2)}</span>
     </div>
     <div style="margin-bottom:10px">${porTarjetaHtml}</div>
     <div>${itemsHtml}</div>
@@ -6919,7 +6924,7 @@ function renderTCHeatmap(){
     const intensidad=gasto>0?Math.min(1,0.15+(gasto/max)*0.85):0;
     const bg=gasto>0?`rgba(240,92,92,${intensidad.toFixed(2)})`:'var(--bg3)';
     const esHoy=esMesActual && hoy.getDate()===dia;
-    const title=gasto>0?`${dia}: S/ ${gasto.toFixed(2)} en tarjeta — clic para ver el detalle`:`${dia}: sin consumos`;
+    const title=gasto>0?`${dia}: S/ ${numFmtSigned(gasto,2)} en tarjeta — clic para ver el detalle`:`${dia}: sin consumos`;
     const clickAttr=gasto>0?`onclick="openTCHeatmapDayModal(${dia})" style="cursor:pointer;` :'style="';
     html+=`<div title="${title}" ${clickAttr}height:52px;border-radius:8px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:${intensidad>0.5?'#fff':'var(--text2)'};${esHoy?'box-shadow:0 0 0 2px var(--accent) inset':''}">${dia}</div>`;
   }
@@ -6955,7 +6960,7 @@ function renderHeatmap(){
     const intensidad=gasto>0?Math.min(1,0.15+(gasto/max)*0.85):0;
     const bg=gasto>0?`rgba(240,92,92,${intensidad.toFixed(2)})`:'var(--bg3)';
     const esHoy=esMesActual && hoy.getDate()===dia;
-    const title=gasto>0?`${dia}: S/ ${gasto.toFixed(2)}`:`${dia}: sin gastos`;
+    const title=gasto>0?`${dia}: S/ ${numFmtSigned(gasto,2)}`:`${dia}: sin gastos`;
     html+=`<div title="${title}" onclick="verDiaEnMovimientos(${dia})" style="height:52px;border-radius:8px;background:${bg};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:${intensidad>0.5?'#fff':'var(--text2)'};${esHoy?'box-shadow:0 0 0 2px var(--accent) inset':''}">${dia}</div>`;
   }
   grid.innerHTML=html;
@@ -7363,7 +7368,7 @@ function renderChart(){
       } else data.push(null);
     }
     const lbl=isS?'Ahorro S/':isD?'Ahorro $':isT?'Total Soles':'Saldo disp.';
-    mainChart=new Chart(ctx,{data:{labels:lb,datasets:[{type:'line',label:lbl,data,borderColor:col,borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:col+'22'}}]},options:chartOpts(v=>isD?'$'+v.toFixed(0):'S/'+(v/1000).toFixed(1)+'k')});
+    mainChart=new Chart(ctx,{data:{labels:lb,datasets:[{type:'line',label:lbl,data,borderColor:col,borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:col+'22'}}]},options:chartOpts(v=>isD?'$'+numFmtSigned(v,0):'S/'+(v/1000).toFixed(1)+'k')});
     document.getElementById('chart-legend').innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:${col};display:inline-block"></span>${lbl}</span>`;
   } else if(currentChartTab===5){
     // Categorías — donut del mes actual (movimientos de cuenta + consumos de tarjeta)
@@ -8018,7 +8023,7 @@ function renderInvDonut(canvasId, legendId, prevChart, items){
   const chart=new Chart(canvasEl.getContext('2d'),{
     type:'doughnut',
     data:{labels:items.map(i=>i.label),datasets:[{data:items.map(i=>+i.value.toFixed(2)),backgroundColor:items.map(i=>i.color),borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>ctx.label+': $'+ctx.parsed.toFixed(2)}}}}
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>ctx.label+': $'+numFmtSigned(ctx.parsed,2)}}}}
   });
   if(legendEl){
     legendEl.innerHTML=items.map(i=>{
@@ -8552,7 +8557,7 @@ function deleteMovimiento(id,e){
   const m=state.movimientos.find(x=>x.id===id);
   if(!m||!confirm('¿Eliminar "'+m.desc+'"?'))return;
   revertAccount(m);_movimientosBorradosExplicitamente.push(id);state.movimientos=state.movimientos.filter(x=>x.id!==id);
-  logActividad('movimiento_eliminado', `${m.desc} — ${m.currency==='USD'?'$':'S/'} ${Number(m.amount).toFixed(2)} (${m.account})`, {movimientoSnapshot:m});
+  logActividad('movimiento_eliminado', `${m.desc} — ${m.currency==='USD'?'$':'S/'} ${numFmtSigned(Number(m.amount),2)} (${m.account})`, {movimientoSnapshot:m});
   saveState();render();
 }
 // ── DETECCIÓN DE DUPLICADOS ───────────────────────────
@@ -8880,7 +8885,7 @@ function saveMovimiento(){
     const dup=detectarDuplicadoMovimiento(desc,amount,date,currentType);
     if(dup){
       const sym=currency==='USD'?'$':'S/';
-      if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${amount.toFixed(2)} ese mismo día${dup.hora?' a las '+dup.hora:''}. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
+      if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${numFmtSigned(amount,2)} ese mismo día${dup.hora?' a las '+dup.hora:''}. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
     }
   }
   if(state.editId){const old=state.movimientos.find(x=>x.id===state.editId);if(old)revertAccount(old);state.movimientos=state.movimientos.filter(x=>x.id!==state.editId);}
@@ -8912,7 +8917,7 @@ function saveMovimiento(){
   pushMovimiento(mov);
   if(esNuevoMov){
     const sym=currency==='USD'?'$':'S/';
-    logActividad('movimiento', `${desc} — ${sym} ${amount.toFixed(2)} (${account})`, {movId:mov.id});
+    logActividad('movimiento', `${desc} — ${sym} ${numFmtSigned(amount,2)} (${account})`, {movId:mov.id});
   }
   saveState();closeModal();render();toast(esNuevoMov?'Movimiento guardado':'Movimiento actualizado');
 }
@@ -8934,7 +8939,7 @@ function saveBudget(){
   if(!state.budgets)state.budgets={};
   const antes=state.budgets[cat]?state.budgets[cat].limit:null;
   state.budgets[cat]={limit};
-  logActividad('presupuesto', `Presupuesto ${cat}: S/ ${limit.toFixed(2)}`, {presupuestoCat:cat, presupuestoLimitAntes:antes});
+  logActividad('presupuesto', `Presupuesto ${cat}: S/ ${numFmtSigned(limit,2)}`, {presupuestoCat:cat, presupuestoLimitAntes:antes});
   saveState();closeBudgetModal();renderPresupuesto();
 }
 function deleteBudget(cat){
@@ -9013,7 +9018,7 @@ function openCategoryDetailModal(cat){
             <div class="catdetail-desc">${escapeHtml(it.desc)}</div>
             <div class="catdetail-sub">${fechaFmt} · cuenta ${it.account}</div>
           </div>
-          <div class="catdetail-amt">${M(sym+' '+it.monto.toFixed(2))}</div>
+          <div class="catdetail-amt">${M(sym+' '+numFmtSigned(it.monto,2))}</div>
         </div>`;
       }
       const badge=it.pagado
@@ -9025,7 +9030,7 @@ function openCategoryDetailModal(cat){
           <div class="catdetail-desc">${escapeHtml(it.desc)}</div>
           <div class="catdetail-sub">${fechaFmt} · ${it.tarjetaBanco}${it.tarjetaCat?' '+it.tarjetaCat:''} · ${badge}</div>
         </div>
-        <div class="catdetail-amt">${M(sym+' '+it.monto.toFixed(2))}</div>
+        <div class="catdetail-amt">${M(sym+' '+numFmtSigned(it.monto,2))}</div>
       </div>`;
     }).join('');
   }
@@ -9396,7 +9401,7 @@ function aportarEsteMes(id){
     });
     if(!ok) return;
     saveState(); render();
-    toast(`💸 Aporte de ${sym} ${proy.montoMensual.toFixed(2)} registrado en ${m.cuentaVinculada}`);
+    toast(`💸 Aporte de ${sym} ${numFmtSigned(proy.montoMensual,2)} registrado en ${m.cuentaVinculada}`);
   } else {
     openTransferModal(m.cuentaVinculada, proy.montoMensual, null, m.categoriaHabitual);
   }
@@ -9470,7 +9475,7 @@ function buildMetaCardHtml(m){
       <span>🏦 ${escapeHtml(m.cuentaVinculada||'—')}</span>
       <span>📋 ${modoLabel}</span>
       ${proy.completada?'<span style="color:var(--green);font-weight:600">🎉 ¡Meta lograda!</span>':
-        `<span>💰 ${sym} ${proy.montoMensual.toFixed(2)}/mes${proy.esEstimado?' (estimado)':''}</span>
+        `<span>💰 ${sym} ${numFmtSigned(proy.montoMensual,2)}/mes${proy.esEstimado?' (estimado)':''}</span>
          <span>⏳ ${proy.mesesRestantes!=null?proy.mesesRestantes+' meses restantes':'—'}</span>`}
       ${vencimientoHtml}
     </div>
@@ -9484,7 +9489,7 @@ function buildMetaCardHtml(m){
   <div class="card" style="padding:14px 16px;margin-bottom:10px">
     <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openMetaModal('${m.id}')">
       <div style="font-weight:600;font-size:13px">${escapeHtml(m.nombre)}${m.esMetaGrande?' 🏠':''}</div>
-      <div style="font-size:12px;color:var(--text3)">${sym} ${montoActual.toFixed(2)} / ${sym} ${m.montoObjetivo.toFixed(2)}</div>
+      <div style="font-size:12px;color:var(--text3)">${sym} ${numFmtSigned(montoActual,2)} / ${sym} ${numFmtSigned(m.montoObjetivo,2)}</div>
     </div>
     <div style="background:var(--bg3);border-radius:8px;height:8px;margin-top:8px;overflow:hidden">
       <div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div>
@@ -9676,7 +9681,7 @@ function renderProyeccion(){
       borderWidth:1}},scales:{
     x:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:document.documentElement.getAttribute('data-theme')==='dark'?'#e0e0e2':'#3a3b44',font:{size:10},maxTicksLimit:10}},
     yS:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:'#a78bfa',font:{size:10},callback:v=>'S/'+(v/1000).toFixed(1)+'k'},position:'left',id:'yS'},
-    yD:{grid:{display:false},ticks:{color:'#f0a53c',font:{size:10},callback:v=>'$'+v.toFixed(0)},position:'right'}
+    yD:{grid:{display:false},ticks:{color:'#f0a53c',font:{size:10},callback:v=>'$'+numFmtSigned(v,0)},position:'right'}
   }}});
 }
 
@@ -9739,8 +9744,8 @@ function renderAnioCompleto(){
       const bg=esPositivo?`rgba(62,201,110,${(0.08+intensidad*0.25).toFixed(2)})`:`rgba(240,92,92,${(0.08+intensidad*0.25).toFixed(2)})`;
       return `<div class="card" style="padding:14px;cursor:pointer;background:${bg};${esMesActual?'box-shadow:0 0 0 2px var(--accent) inset':''}" onclick="irAMesDesdeAnio(${anioVistaYear},${x.m})">
         <div style="font-size:12px;font-weight:600">${nombresMes[x.m]}</div>
-        <div style="font-size:15px;font-family:var(--mono);font-weight:700;color:${esPositivo?'var(--green)':'var(--red)'};margin-top:6px">${esPositivo?'+':'-'}S/ ${Math.abs(x.balance).toFixed(2)}</div>
-        <div style="font-size:9px;color:var(--text3);margin-top:4px">↑S/${x.ing.toFixed(0)} · ↓S/${x.gas.toFixed(0)}</div>
+        <div style="font-size:15px;font-family:var(--mono);font-weight:700;color:${esPositivo?'var(--green)':'var(--red)'};margin-top:6px">${esPositivo?'+':'-'}S/ ${numFmtSigned(Math.abs(x.balance),2)}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:4px">↑S/${numFmtSigned(x.ing,0)} · ↓S/${numFmtSigned(x.gas,0)}</div>
       </div>`;
     }).join('');
   }
@@ -9748,9 +9753,9 @@ function renderAnioCompleto(){
   const totEl=document.getElementById('anio-totales');
   if(totEl){
     totEl.innerHTML=`
-      <div><div style="font-size:10px;color:var(--text3)">Ingresos del año</div><div style="font-size:16px;font-family:var(--mono);color:var(--green)">S/ ${totIng.toFixed(2)}</div></div>
-      <div><div style="font-size:10px;color:var(--text3)">Gastos del año</div><div style="font-size:16px;font-family:var(--mono);color:var(--red)">S/ ${totGas.toFixed(2)}</div></div>
-      <div><div style="font-size:10px;color:var(--text3)">Balance del año</div><div style="font-size:16px;font-family:var(--mono);color:${balanceAnual>=0?'var(--green)':'var(--red)'}">${balanceAnual>=0?'+':'-'}S/ ${Math.abs(balanceAnual).toFixed(2)}</div></div>
+      <div><div style="font-size:10px;color:var(--text3)">Ingresos del año</div><div style="font-size:16px;font-family:var(--mono);color:var(--green)">S/ ${numFmtSigned(totIng,2)}</div></div>
+      <div><div style="font-size:10px;color:var(--text3)">Gastos del año</div><div style="font-size:16px;font-family:var(--mono);color:var(--red)">S/ ${numFmtSigned(totGas,2)}</div></div>
+      <div><div style="font-size:10px;color:var(--text3)">Balance del año</div><div style="font-size:16px;font-family:var(--mono);color:${balanceAnual>=0?'var(--green)':'var(--red)'}">${balanceAnual>=0?'+':'-'}S/ ${numFmtSigned(Math.abs(balanceAnual),2)}</div></div>
     `;
   }
 }
@@ -10119,9 +10124,9 @@ function generarReporteMensualPDF(y,m){
   // ── Resumen del mes ──────────────────────────────
   const calc=calcMonth(y,m);
   sectionTitle('Resumen del mes');
-  row('Ingresos','S/ '+calc.ingresos.toFixed(2));
-  row('Gastos','S/ '+calc.gastos.toFixed(2));
-  row('Resultado','S/ '+calc.resultado.toFixed(2), true);
+  row('Ingresos','S/ '+numFmtSigned(calc.ingresos,2));
+  row('Gastos','S/ '+numFmtSigned(calc.gastos,2));
+  row('Resultado','S/ '+numFmtSigned(calc.resultado,2), true);
   yy+=4;
 
   // ── Gráfico: Ingresos vs Gastos ───────────────────
@@ -10145,7 +10150,7 @@ function generarReporteMensualPDF(y,m){
     // símbolo de soles por error. getAccountCurrency() ya sabe reconocer
     // las cuentas personalizadas correctamente.
     const sym=getAccountCurrency(cuenta)==='USD'?'$':'S/';
-    row(cuenta, sym+' '+(saldo||0).toFixed(2));
+    row(cuenta, sym+' '+numFmtSigned((saldo||0),2));
   });
   yy+=4;
 
@@ -10154,7 +10159,7 @@ function generarReporteMensualPDF(y,m){
   const catEntries=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
   if(catEntries.length){
     sectionTitle('Gasto por categoría');
-    catEntries.forEach(([cat,total])=>row(stripEmojiPrefix(cat),'S/ '+total.toFixed(2)));
+    catEntries.forEach(([cat,total])=>row(stripEmojiPrefix(cat),'S/ '+numFmtSigned(total,2)));
     yy+=4;
     checkPage(75);
     try{
@@ -10181,8 +10186,8 @@ function generarReporteMensualPDF(y,m){
     tarjetasResumen.forEach(t=>{
       checkPage(7);
       doc.text(t.nombre,14,yy);
-      doc.text('S/ '+t.gastoCorte.toFixed(2),120,yy,{align:'right'});
-      doc.text('S/ '+t.pagado.toFixed(2),pw-14,yy,{align:'right'});
+      doc.text('S/ '+numFmtSigned(t.gastoCorte,2),120,yy,{align:'right'});
+      doc.text('S/ '+numFmtSigned(t.pagado,2),pw-14,yy,{align:'right'});
       yy+=6;
     });
     doc.setFontSize(8); doc.setTextColor(130);
@@ -10210,7 +10215,7 @@ function generarReporteMensualPDF(y,m){
       const sym=pf.currency==='USD'?'$':'S/';
       const mkOrAnio=(pf.frecuencia==='anual')?Object.keys(pf.pagosRegistrados).find(k=>{const r=pf.pagosRegistrados[k];return r&&r.fecha&&r.fecha.slice(0,7)===mk;}):mk;
       const reg=(pf.pagosRegistrados||{})[mkOrAnio];
-      if(reg) row(stripEmojiPrefix(pf.nombre)+(esIngreso?' (ingreso)':''), sym+' '+reg.monto.toFixed(2));
+      if(reg) row(stripEmojiPrefix(pf.nombre)+(esIngreso?' (ingreso)':''), sym+' '+numFmtSigned(reg.monto,2));
     });
     yy+=4;
   }
@@ -10230,8 +10235,8 @@ function generarReporteMensualPDF(y,m){
     });
     if(totalCobrado>0.004||totalPendiente>0.004){
       sectionTitle('Servicios compartidos');
-      row('Cobrado este mes','S/ '+totalCobrado.toFixed(2));
-      row('Pendiente de cobro','S/ '+totalPendiente.toFixed(2));
+      row('Cobrado este mes','S/ '+numFmtSigned(totalCobrado,2));
+      row('Pendiente de cobro','S/ '+numFmtSigned(totalPendiente,2));
       yy+=4;
     }
   }
@@ -10248,7 +10253,7 @@ function generarReporteMensualPDF(y,m){
   });
   if(gastoCombustible>0.004){
     sectionTitle('Combustible');
-    row('Total gastado en combustible','S/ '+gastoCombustible.toFixed(2));
+    row('Total gastado en combustible','S/ '+numFmtSigned(gastoCombustible,2));
     yy+=4;
   }
 
@@ -10258,7 +10263,7 @@ function generarReporteMensualPDF(y,m){
     const rate=state.tc?.venta||3.45;
     const totalPend=deudasPend.reduce((s,d)=>s+(d.currency==='USD'?d.monto*rate:d.monto),0);
     sectionTitle('Préstamos por cobrar (estado actual)');
-    row('Total pendiente de cobro','S/ '+totalPend.toFixed(2));
+    row('Total pendiente de cobro','S/ '+numFmtSigned(totalPend,2));
     doc.setFontSize(8); doc.setTextColor(130);
     checkPage(8);
     doc.text('Este total refleja el estado actual, no se guarda un histórico de deudas por mes.',14,yy,{maxWidth:pw-28});
@@ -10289,10 +10294,10 @@ function generarResumenAnualPDF(y){
   doc.setFontSize(11); doc.text('Total del año', 14, yy); yy+=2;
   doc.setLineWidth(0.2); doc.line(14,yy,pw-14,yy); yy+=7;
   doc.setFontSize(10);
-  doc.text('Total ingresado', 14, yy); doc.text('S/ '+totalIng.toFixed(2), pw-14, yy, {align:'right'}); yy+=6;
-  doc.text('Total gastado', 14, yy); doc.text('S/ '+totalGas.toFixed(2), pw-14, yy, {align:'right'}); yy+=6;
+  doc.text('Total ingresado', 14, yy); doc.text('S/ '+numFmtSigned(totalIng,2), pw-14, yy, {align:'right'}); yy+=6;
+  doc.text('Total gastado', 14, yy); doc.text('S/ '+numFmtSigned(totalGas,2), pw-14, yy, {align:'right'}); yy+=6;
   doc.setFont(undefined,'bold');
-  doc.text('Resultado del año', 14, yy); doc.text('S/ '+(totalIng-totalGas).toFixed(2), pw-14, yy, {align:'right'}); yy+=10;
+  doc.text('Resultado del año', 14, yy); doc.text('S/ '+numFmtSigned((totalIng-totalGas),2), pw-14, yy, {align:'right'}); yy+=10;
   doc.setFont(undefined,'normal');
 
   let totalGasPrev=0;
@@ -10317,7 +10322,7 @@ function generarResumenAnualPDF(y){
     doc.setFontSize(10);
     catEntries.forEach(([cat,total])=>{
       if(yy>270){ doc.addPage(); yy=20; }
-      doc.text(stripEmojiPrefix(cat), 14, yy); doc.text('S/ '+total.toFixed(2), pw-14, yy, {align:'right'}); yy+=6;
+      doc.text(stripEmojiPrefix(cat), 14, yy); doc.text('S/ '+numFmtSigned(total,2), pw-14, yy, {align:'right'}); yy+=6;
     });
     yy+=4;
   }
@@ -10332,9 +10337,9 @@ function generarResumenAnualPDF(y){
   porMes.forEach((c,i)=>{
     if(yy>280){ doc.addPage(); yy=20; }
     doc.text(MONTHS[i], 14, yy);
-    doc.text(c.ingresos.toFixed(2), 90, yy);
-    doc.text(c.gastos.toFixed(2), 130, yy);
-    doc.text(c.resultado.toFixed(2), pw-14, yy, {align:'right'});
+    doc.text(numFmtSigned(c.ingresos,2), 90, yy);
+    doc.text(numFmtSigned(c.gastos,2), 130, yy);
+    doc.text(numFmtSigned(c.resultado,2), pw-14, yy, {align:'right'});
     yy+=6;
   });
 
@@ -10589,10 +10594,10 @@ function togglePayment(sid,pid){
     // Desmarcar un pago ya hecho no tiene un "deshacer" simple y seguro (no
     // hay forma confiable de re-crear el movimiento original exacto) — se
     // registra solo como informativo, igual que en el bot.
-    logActividad('servicio_pago_info', `Pago desmarcado: ${svc.name} - ${person.name} — S/ ${Number(svc.pricePerPerson).toFixed(2)}`, {});
+    logActividad('servicio_pago_info', `Pago desmarcado: ${svc.name} - ${person.name} — S/ ${numFmtSigned(Number(svc.pricePerPerson),2)}`, {});
   } else {
     state.payments[key]=true;addSrvPayment(sid,pid,svc,person);
-    logActividad('servicio_pago', `Pago marcado: ${svc.name} - ${person.name} — S/ ${Number(svc.pricePerPerson).toFixed(2)}`, {movId, paymentsKey:key});
+    logActividad('servicio_pago', `Pago marcado: ${svc.name} - ${person.name} — S/ ${numFmtSigned(Number(svc.pricePerPerson),2)}`, {movId, paymentsKey:key});
   }
   saveState();renderServicios();render();
 }
@@ -11174,7 +11179,7 @@ function openReconciliarModal(key){
   const currency=(state.customCuentas&&state.customCuentas[key]&&state.customCuentas[key].currency) || (key==='Ahorro Dólares'?'USD':'PEN');
   const sym=currency==='USD'?'$':'S/';
   const appEl=document.getElementById('recon-saldo-app');
-  appEl.textContent=sym+' '+saldoApp.toFixed(2);
+  appEl.textContent=sym+' '+numFmtSigned(saldoApp,2);
   appEl.dataset.value=saldoApp;
   appEl.dataset.sym=sym;
   appEl.dataset.currency=currency;
@@ -11201,7 +11206,7 @@ function onReconInput(){
   const diff=saldoReal-saldoApp;
   document.getElementById('recon-diff-wrap').style.display='block';
   const diffEl=document.getElementById('recon-diff');
-  diffEl.textContent=(diff>=0?'+':'-')+sym+' '+Math.abs(diff).toFixed(2);
+  diffEl.textContent=(diff>=0?'+':'-')+sym+' '+numFmtSigned(Math.abs(diff),2);
   diffEl.style.color=Math.abs(diff)<0.01?'var(--green)':'var(--amber)';
   const msgEl=document.getElementById('recon-diff-msg');
   const confirmBtn=document.getElementById('recon-confirm-btn');
@@ -11255,7 +11260,7 @@ function renderCuentasList(){
   function rowHTML(k,t,cur){
     const bal=saldosReales[k]||0;
     const sym=cur==='USD'?'$':'S/';
-    const balStr=(bal>=0?'':'-')+sym+' '+Math.abs(bal).toFixed(2);
+    const balStr=(bal>=0?'':'-')+sym+' '+numFmtSigned(Math.abs(bal),2);
     const editBtn=`<button class="config-action-btn neutral" onclick="editCuenta('${k}')" style="font-size:10px;padding:3px 8px">✏ Editar saldo</button>`;
     const renameBtn=`<button class="config-action-btn neutral" onclick="renombrarCuentaUI('${k}')" title="Cambiar el nombre de esta cuenta en toda la app" style="font-size:10px;padding:3px 8px">🏷️</button>`;
     const reconBtn=`<button class="config-action-btn neutral" onclick="openReconciliarModal('${k}')" title="Comparar con el saldo real del banco" style="font-size:10px;padding:3px 8px">🔍</button>`;
@@ -11532,7 +11537,7 @@ function saveNewCuenta(){
   document.getElementById('nc-name').value='';
   document.getElementById('nc-balance').value='';
   document.getElementById('nc-color').value='#5b8def';
-  logActividad('cuenta_nueva', `Cuenta nueva: ${name} — S/ ${balance.toFixed(2)}`, {cuentaNombre:name});
+  logActividad('cuenta_nueva', `Cuenta nueva: ${name} — S/ ${numFmtSigned(balance,2)}`, {cuentaNombre:name});
   saveState(); renderCuentasList(); render();
 }
 
@@ -11931,7 +11936,7 @@ function renderConsumosFrecuentesSugerencias(){
     ${sugerencias.map(s=>{
       const sym=s.currency==='USD'?'$':'S/';
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg3);border:1px dashed var(--accent);border-radius:8px;padding:8px 10px">
-        <div style="font-size:12px">${escapeHtml(s.nombre)} — ${sym} ${s.monto.toFixed(2)} <span style="color:var(--text3)">(${s.veces} veces en los últimos 2 meses)</span></div>
+        <div style="font-size:12px">${escapeHtml(s.nombre)} — ${sym} ${numFmtSigned(s.monto,2)} <span style="color:var(--text3)">(${s.veces} veces en los últimos 2 meses)</span></div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" onclick="cfIgnorarSugerencia('${s.key}')">Ignorar</button>
           <button class="btn btn-primary" style="font-size:10px;padding:3px 8px" onclick="cfAceptarSugerencia('${s.key}')">+ Agregar</button>
@@ -11970,7 +11975,7 @@ function renderConsumosFrecuentes(){
     return `<div style="position:relative;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer" onclick="registrarConsumoFrecuente('${cf.id}')">
       <span onclick="event.stopPropagation();abrirConsumoFrecuenteModal('${cf.id}')" title="Editar" style="position:absolute;top:3px;right:5px;font-size:10px;color:var(--text3);cursor:pointer">✏</span>
       <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(cf.nombre)}</div>
-      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);margin-top:2px">${sym} ${cf.monto.toFixed(2)}</div>
+      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);margin-top:2px">${sym} ${numFmtSigned(cf.monto,2)}</div>
       <div style="font-size:9px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t?t.banco+(t.cat?' '+t.cat:''):'⚠️ sin tarjeta'}</div>
     </div>`;
   }).join('');
@@ -12043,11 +12048,11 @@ function registrarConsumoFrecuente(id){
   if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
   t.movs[mk].push(nuevoMov);
   const sym=nuevoMov.currency==='USD'?'$':'S/';
-  logActividad('tc_consumo', `${cf.nombre} — ${sym} ${cf.monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:t.id, monthKey:mk, consumoId:nuevoMov.id});
+  logActividad('tc_consumo', `${cf.nombre} — ${sym} ${numFmtSigned(cf.monto,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:t.id, monthKey:mk, consumoId:nuevoMov.id});
   saveState();
   renderTarjetas();
   if(t.id===currentTCId && document.getElementById('tc-detail-view').style.display!=='none') renderTCDetail();
-  toast(`✅ ${cf.nombre} — ${sym}${cf.monto.toFixed(2)} registrado (${hora})`);
+  toast(`✅ ${cf.nombre} — ${sym}${numFmtSigned(cf.monto,2)} registrado (${hora})`);
 }
 
 // Suma un arreglo de consumos separando soles y dólares — cada consumo puede
@@ -12943,7 +12948,7 @@ function ejecutarBusquedaGlobal(){
             <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(it.titulo)}</div>
             <div style="font-size:10.5px;color:var(--text3)">${escapeHtml(it.subtitulo||'')}</div>
           </div>
-          ${it.monto!=null?`<div style="font-family:var(--mono);font-size:12.5px;font-weight:600;flex-shrink:0;margin-left:10px">${M(sym+' '+Math.abs(it.monto).toFixed(2))}</div>`:''}
+          ${it.monto!=null?`<div style="font-family:var(--mono);font-size:12.5px;font-weight:600;flex-shrink:0;margin-left:10px">${M(sym+' '+numFmtSigned(Math.abs(it.monto),2))}</div>`:''}
         </div>`;
       }).join('')}
       ${sobran>0?`<div style="text-align:center;font-size:10.5px;color:var(--text3);padding-top:6px">+ ${sobran} más — escribe algo más específico para acotar</div>`:''}
@@ -13010,10 +13015,10 @@ function renderMisCuotasActivas(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
         <div>
           <div style="font-weight:600;font-size:13px">${escapeHtml(g.nombreBase)}${g.conIntereses?` <span style="font-size:10px;color:var(--text3);font-weight:400">(TEA ${g.tea}%)</span>`:''}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${escapeHtml(g.tarjetaNombre)} · cuota ${g.pagadas}/${g.totalCuotas} · ${sym} ${montoCuota.toFixed(2)} c/u</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${escapeHtml(g.tarjetaNombre)} · cuota ${g.pagadas}/${g.totalCuotas} · ${sym} ${numFmtSigned(montoCuota,2)} c/u</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:15px;font-weight:700;color:var(--amber)">${sym} ${g.totalPendiente.toFixed(2)}</div>
+          <div style="font-size:15px;font-weight:700;color:var(--amber)">${sym} ${numFmtSigned(g.totalPendiente,2)}</div>
           <div style="font-size:10px;color:var(--text3)">${g.pendientesCount} cuota(s) pendiente(s)</div>
         </div>
       </div>
@@ -13072,7 +13077,7 @@ function abrirCancelacionAnticipada(grupoCuotaId){
     const cuotaFija=g.proxima?Number(g.proxima.monto):0;
     const estimado=calcularSaldoPendienteEstimado(cuotaFija, g.tea, g.totalCuotas, g.pagadas);
     estimadoWrap.style.display='block';
-    estimadoWrap.innerHTML=`📐 Estimado por sistema francés si cancelas ahora: <b>${sym} ${estimado.toFixed(2)}</b><br>`+
+    estimadoWrap.innerHTML=`📐 Estimado por sistema francés si cancelas ahora: <b>${sym} ${numFmtSigned(estimado,2)}</b><br>`+
       `(cálculo aproximado — no incluye comisiones ni redondeos del banco. Confirma el monto exacto en tu app o banca por internet antes de guardar.)`;
     montoLabel.innerHTML='Monto EXACTO que te cobra el banco <span style="font-size:10px;color:var(--text3)">(revísalo en tu app o banca por internet)</span>';
     montoInput.value='';
@@ -13096,7 +13101,7 @@ function confirmarCancelacionAnticipada(){
   if(!monto||monto<=0){alert('Ingresa un monto válido.');return;}
   if(!fecha){alert('Ingresa una fecha.');return;}
   const sym=g.currency==='USD'?'$':'S/';
-  if(!confirm(`¿Confirmar que pagaste ${sym} ${monto.toFixed(2)} para cancelar las ${g.pendientesCount} cuotas restantes de "${g.nombreBase}"?\n\nEsto reemplaza esas cuotas pendientes por un solo pago — no se puede deshacer con un clic, quedaría que volver a crearlas a mano.`)) return;
+  if(!confirm(`¿Confirmar que pagaste ${sym} ${numFmtSigned(monto,2)} para cancelar las ${g.pendientesCount} cuotas restantes de "${g.nombreBase}"?\n\nEsto reemplaza esas cuotas pendientes por un solo pago — no se puede deshacer con un clic, quedaría que volver a crearlas a mano.`)) return;
 
   const t=getTarjeta(g.tarjetaId);
   if(!t) return;
@@ -13114,7 +13119,7 @@ function confirmarCancelacionAnticipada(){
     fecha, monto, pagado:true, currency:g.currency,
   };
   t.movs[mk].push(nuevoMov);
-  logActividad('tc_consumo', `Cancelación anticipada: ${g.nombreBase} — ${sym} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:g.tarjetaId, monthKey:mk, consumoId:nuevoMov.id});
+  logActividad('tc_consumo', `Cancelación anticipada: ${g.nombreBase} — ${sym} ${numFmtSigned(monto,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:g.tarjetaId, monthKey:mk, consumoId:nuevoMov.id});
   saveState();
   cerrarCancelacionAnticipada();
   renderTarjetas();
@@ -13173,8 +13178,8 @@ function actualizarPreviewCuota(){
   const cuota=conInteres?calcularCuotaFrances(monto,tea,n):monto/n;
   const total=cuota*n;
   const extra=total-monto;
-  let texto=`≈ ${sym} ${cuota.toFixed(2)} × ${n} cuotas`;
-  if(conInteres&&extra>0.01) texto+=` (total ≈ ${sym} ${total.toFixed(2)}, +${sym} ${extra.toFixed(2)} de interés — aproximado)`;
+  let texto=`≈ ${sym} ${numFmtSigned(cuota,2)} × ${n} cuotas`;
+  if(conInteres&&extra>0.01) texto+=` (total ≈ ${sym} ${numFmtSigned(total,2)}, +${sym} ${numFmtSigned(extra,2)} de interés — aproximado)`;
   prev.textContent=texto;
 }
 function onConsumoTarjetaChange(){
@@ -13305,7 +13310,7 @@ function saveTCMov(){
       t.movs[mk].push(nuevoMov);
     }
     const symTCc=currency==='USD'?'$':'S/';
-    logActividad('tc_consumo', `${desc} a ${numCuotas} cuotas de ${symTCc} ${cuotaRedondeada.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, grupoCuotaId});
+    logActividad('tc_consumo', `${desc} a ${numCuotas} cuotas de ${symTCc} ${numFmtSigned(cuotaRedondeada,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, grupoCuotaId});
     if(tarjetaId===currentTCId && ultimoMk!==currentTCMonth){
       // se queda viendo el mes de la PRIMERA cuota (más relevante que la última)
       currentTCMonth=getBillingMonthKey(fecha,t);
@@ -13322,7 +13327,7 @@ function saveTCMov(){
     const dup=detectarDuplicadoConsumoTC(tarjetaId,desc,monto,fecha);
     if(dup){
       const sym=currency==='USD'?'$':'S/';
-      if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${monto.toFixed(2)} ese mismo día${dup.hora?' a las '+dup.hora:''} en esta tarjeta. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
+      if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${numFmtSigned(monto,2)} ese mismo día${dup.hora?' a las '+dup.hora:''} en esta tarjeta. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
     }
   }
 
@@ -13350,7 +13355,7 @@ function saveTCMov(){
         renderTCMonthSelector(t);
       }
       const symTCe=currency==='USD'?'$':'S/';
-      logActividad('tc_consumo_editado', `Consumo editado: ${desc} — ${symTCe} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKeyAntes:foundInMonth, monthKeyDespues:newMk, consumoId:editingTCMovId, snapshotAntes:antes});
+      logActividad('tc_consumo_editado', `Consumo editado: ${desc} — ${symTCe} ${numFmtSigned(monto,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKeyAntes:foundInMonth, monthKeyDespues:newMk, consumoId:editingTCMovId, snapshotAntes:antes});
     }
   } else {
     // New mov: calculate billing month from date
@@ -13362,7 +13367,7 @@ function saveTCMov(){
     if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
     t.movs[newMk].push(nuevoMov);
     const symTC=currency==='USD'?'$':'S/';
-    logActividad('tc_consumo', `${desc} — ${symTC} ${monto.toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:newMk, consumoId:nuevoMov.id});
+    logActividad('tc_consumo', `${desc} — ${symTC} ${numFmtSigned(monto,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:newMk, consumoId:nuevoMov.id});
     // If adding to a different month than currently viewing, switch to it
     // (solo aplica si estamos viendo el detalle de esta misma tarjeta)
     if(tarjetaId===currentTCId && newMk!==currentTCMonth){
@@ -13409,7 +13414,7 @@ function eliminarUnConsumoDeTarjeta(t, monthKey, movId){
   t.movs[monthKey]=t.movs[monthKey].filter(m=>m.id!==movId);
   if(consumoBorrado){
     const symTC=consumoBorrado.currency==='USD'?'$':'S/';
-    logActividad('tc_consumo_eliminado', `${consumoBorrado.desc} — ${symTC} ${Number(consumoBorrado.monto).toFixed(2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey, consumoSnapshot:consumoBorrado});
+    logActividad('tc_consumo_eliminado', `${consumoBorrado.desc} — ${symTC} ${numFmtSigned(Number(consumoBorrado.monto),2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey, consumoSnapshot:consumoBorrado});
   }
 }
 // Elimina TODAS las cuotas de una compra (todos los meses), no solo la que
@@ -13425,7 +13430,7 @@ function eliminarGrupoCuotas(t, grupoCuotaId, nombreBase){
   const sumaPendiente=pendientes.reduce((s,m)=>s+Number(m.monto),0);
   let mensaje=`¿Eliminar TODA la compra "${nombreBase}" — ${todasLasCuotas.length} cuotas en total`;
   if(pagadas>0) mensaje+=` (${pagadas} ya pagada(s), no se pueden deshacer los pagos ya hechos)`;
-  mensaje+=`?\n\nQuedan ${pendientes.length} cuota(s) pendiente(s) por ${sym} ${sumaPendiente.toFixed(2)} que se borrarían.\n\nEsta acción no se puede deshacer.`;
+  mensaje+=`?\n\nQuedan ${pendientes.length} cuota(s) pendiente(s) por ${sym} ${numFmtSigned(sumaPendiente,2)} que se borrarían.\n\nEsta acción no se puede deshacer.`;
   if(!confirm(mensaje)) return;
   todasLasCuotas.forEach(m=>{ eliminarUnConsumoDeTarjeta(t, m.mk, m.id); });
   logActividad('tc_consumo_eliminado', `Compra a cuotas eliminada completa: ${nombreBase} — ${todasLasCuotas.length} cuotas (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, snapshotsGrupo:todasLasCuotas});
@@ -13599,7 +13604,7 @@ function tcxDonut(canvasId, legendId, prevChart, items){
   const chart=new Chart(canvasEl.getContext('2d'),{
     type:'doughnut',
     data:{labels:items.map(i=>i.label),datasets:[{data:items.map(i=>+i.value.toFixed(2)),backgroundColor:items.map(i=>i.color),borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>ctx.label+': S/ '+ctx.parsed.toFixed(2)}}}}
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>ctx.label+': S/ '+numFmtSigned(ctx.parsed,2)}}}}
   });
   if(legendEl){
     legendEl.innerHTML=items.map(i=>{
@@ -13764,7 +13769,7 @@ function tcxRenderBarTop10(movsFiltrados){
   tcxBarTop10=new Chart(canvasEl.getContext('2d'),{
     type:'bar',
     data:{labels,datasets:[{data,backgroundColor:'#5b8def',borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>'S/ '+ctx.parsed.x.toFixed(2)}}},scales:{x:{ticks:{color:'#9899a6',callback:v=>'S/'+(v/1000).toFixed(1)+'k'}},y:{ticks:{color:'#9899a6'}}}}
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>'S/ '+numFmtSigned(ctx.parsed.x,2)}}},scales:{x:{ticks:{color:'#9899a6',callback:v=>'S/'+(v/1000).toFixed(1)+'k'}},y:{ticks:{color:'#9899a6'}}}}
   });
 }
 function renderTCChartsExtra(){
@@ -15154,7 +15159,7 @@ function renderDashDebts(){
               <div style="font-size:10px;color:${dias>30?'var(--red)':'var(--text3)'}">${diasLabel}</div>
             </div>
           </div>
-          <div style="font-family:var(--mono);font-size:12px;color:${esYoDebo?'var(--red)':'var(--amber)'};flex-shrink:0;margin-left:8px">${M(sym+' '+Math.abs(d.monto).toFixed(2))}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:${esYoDebo?'var(--red)':'var(--amber)'};flex-shrink:0;margin-left:8px">${M(sym+' '+numFmtSigned(Math.abs(d.monto),2))}</div>
         </div>`;
       }).join('') + (dpPend.length>5 ? `<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${dpPend.length-5} más</div>` : '');
     })();
@@ -15177,7 +15182,7 @@ function renderNuevosWidgetsDashboard(){
       const montoActual=m.esMetaGrande ? (montoActualMetaGrande(m.cuentaVinculada)) : (m.montoActual||0);
       const pct=m.montoObjetivo>0 ? Math.min(100,(montoActual/m.montoObjetivo)*100) : 0;
       return `<div style="padding:7px 0;cursor:pointer" onclick="showPage('proyeccion')">
-        <div style="display:flex;justify-content:space-between;font-size:12px"><span>${escapeHtml(m.nombre)}</span><span>${M(sym+' '+montoActual.toFixed(2))} / ${sym} ${m.montoObjetivo.toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px"><span>${escapeHtml(m.nombre)}</span><span>${M(sym+' '+numFmtSigned(montoActual,2))} / ${sym} ${numFmtSigned(m.montoObjetivo,2)}</span></div>
         <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:4px"><div style="height:4px;border-radius:2px;width:${pct}%;background:var(--purple)"></div></div>
       </div>`;
     }).join('');
@@ -15383,7 +15388,7 @@ function renderNuevosWidgetsDashboard(){
           <div style="font-size:12.5px;font-weight:500">${escapeHtml(b.nombre)}</div>
           <div style="text-align:right">
             <div style="font-size:11px;color:${color}">${label}</div>
-            ${aMano?'':`<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${M(sym+' '+Math.abs(b.neto).toFixed(2))}</div>`}
+            ${aMano?'':`<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${M(sym+' '+numFmtSigned(Math.abs(b.neto),2))}</div>`}
           </div>
         </div>`;
       }).join('') + (balances.length>6?`<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${balances.length-6} más</div>`:'');
@@ -15764,8 +15769,8 @@ function renderPagosFrecuentes(){
     const pendientes=pf.descuentosPendientes||[];
     const totalPendiente=pendientes.reduce((s,d)=>s+d.monto,0);
     let montoLabel;
-    if(pf.tipoMonto==='fijo') montoLabel=sym+' '+pf.montoFijo.toFixed(2);
-    else if(esBaseDesc) montoLabel='Base '+sym+' '+pf.montoFijo.toFixed(2)+(pendientes.length?' − '+sym+' '+totalPendiente.toFixed(2)+' acumulado = '+sym+' '+Math.max(0,pf.montoFijo-totalPendiente).toFixed(2):' (sin descuentos todavía)');
+    if(pf.tipoMonto==='fijo') montoLabel=sym+' '+numFmtSigned(pf.montoFijo,2);
+    else if(esBaseDesc) montoLabel='Base '+sym+' '+numFmtSigned(pf.montoFijo,2)+(pendientes.length?' − '+sym+' '+numFmtSigned(totalPendiente,2)+' acumulado = '+sym+' '+numFmtSigned(Math.max(0,pf.montoFijo-totalPendiente),2):' (sin descuentos todavía)');
     else montoLabel='Variable';
     let destinoLabel;
     if(pf.metodoPago==='cuenta'){
@@ -15847,7 +15852,7 @@ function renderPagosFrecuentes(){
     const descuentosDetalle = (esBaseDesc && pendientes.length)
       ? `<div style="font-size:10px;color:var(--text3);margin-top:3px">
            <div style="color:var(--accent);margin-bottom:2px">→ Se aplicará al registrar: <strong>${proximoPeriodoLabel}</strong></div>
-           ${pendientes.map((d,i)=>`${escapeHtml(d.concepto)} (${sym} ${d.monto.toFixed(2)}${d.fecha?' · '+fmtFechaCorta(d.fecha):''})<span onclick="removePFDescuentoPendiente('${pf.id}',${i})" style="cursor:pointer;color:var(--red);margin-left:3px" title="Quitar">✕</span>`).join(', ')}
+           ${pendientes.map((d,i)=>`${escapeHtml(d.concepto)} (${sym} ${numFmtSigned(d.monto,2)}${d.fecha?' · '+fmtFechaCorta(d.fecha):''})<span onclick="removePFDescuentoPendiente('${pf.id}',${i})" style="cursor:pointer;color:var(--red);margin-left:3px" title="Quitar">✕</span>`).join(', ')}
          </div>`
       : '';
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
@@ -15950,7 +15955,7 @@ function registrarPagoFrecuente(id){
     // Descuento" en la lista) — no hace falta volver a escribirlo todo aquí.
     pfDescuentosActuales=(pf.descuentosPendientes||[]).map(d=>({concepto:d.concepto, monto:d.monto, fecha:d.fecha||todayISO()}));
     const sym=pf.currency==='USD'?'$':'S/';
-    document.getElementById('pf-registrar-base-monto').textContent=sym+' '+pf.montoFijo.toFixed(2);
+    document.getElementById('pf-registrar-base-monto').textContent=sym+' '+numFmtSigned(pf.montoFijo,2);
     document.getElementById('pf-desc-concepto').value='';
     document.getElementById('pf-desc-monto').value='';
     renderPFDescuentosList();
@@ -16024,12 +16029,12 @@ function renderPFDescuentosList(){
   el.innerHTML=pfDescuentosActuales.length
     ? pfDescuentosActuales.map((d,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px">
         <span style="color:var(--text2)">${escapeHtml(d.concepto)}${d.fecha?` <span style="color:var(--text3);font-size:10px">· ${fmtFechaCorta(d.fecha)}</span>`:''}</span>
-        <span style="display:flex;align-items:center;gap:8px"><span style="color:var(--red)">- ${symReal} ${d.monto.toFixed(2)}</span><span onclick="removePFDescuento(${i})" style="cursor:pointer;color:var(--text3)">✕</span></span>
+        <span style="display:flex;align-items:center;gap:8px"><span style="color:var(--red)">- ${symReal} ${numFmtSigned(d.monto,2)}</span><span onclick="removePFDescuento(${i})" style="cursor:pointer;color:var(--text3)">✕</span></span>
       </div>`).join('')
     : `<div style="font-size:11px;color:var(--text3)">Sin descuentos agregados todavía.</div>`;
   const totalDescuentos=pfDescuentosActuales.reduce((s,d)=>s+d.monto,0);
   const totalFinal=Math.max(0, pf.montoFijo-totalDescuentos);
-  document.getElementById('pf-registrar-total').textContent=symReal+' '+totalFinal.toFixed(2);
+  document.getElementById('pf-registrar-total').textContent=symReal+' '+numFmtSigned(totalFinal,2);
 }
 
 // Recalcula el mes objetivo (este, próximo, o +2) cada vez que el usuario
@@ -16136,7 +16141,7 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
     }
     if(refActividad){
       const symPf=pf.currency==='USD'?'$':'S/';
-      logActividad('pago_frecuente', `${pf.nombre} — ${symPf} ${monto.toFixed(2)}`, {...refActividad, pfId:pf.id, periodoKey:mk});
+      logActividad('pago_frecuente', `${pf.nombre} — ${symPf} ${numFmtSigned(monto,2)}`, {...refActividad, pfId:pf.id, periodoKey:mk});
     }
   }
   if(!pf.pagosRegistrados) pf.pagosRegistrados={};
@@ -16178,7 +16183,7 @@ function openPFHistorial(id){
         pagadosCount++; aplicablesCount++;
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:12px">${label}</span>
-          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${reg.monto.toFixed(2)}${reg.fecha?' ('+reg.fecha+')':''}</span>
+          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${numFmtSigned(reg.monto,2)}${reg.fecha?' ('+reg.fecha+')':''}</span>
         </div>`;
       } else if(esAntesDeCrear){
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -16222,7 +16227,7 @@ function openPFHistorial(id){
         pagadosCount++;
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:12px">${label}</span>
-          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${reg.monto.toFixed(2)}${reg.fecha?' ('+reg.fecha+')':''}</span>
+          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${numFmtSigned(reg.monto,2)}${reg.fecha?' ('+reg.fecha+')':''}</span>
         </div>`;
       }
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -16266,13 +16271,13 @@ function openPFHistorial(id){
       pagadosCount++; aplicablesCount++;
       const desglose = (reg.deducciones && reg.deducciones.length)
         ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;padding-left:2px">
-            Base ${sym} ${reg.montoBase.toFixed(2)} − ${reg.deducciones.map(d=>`${escapeHtml(d.concepto)} (${sym} ${d.monto.toFixed(2)}${d.fecha?' · '+fmtFechaCorta(d.fecha):''})`).join(', ')}
+            Base ${sym} ${numFmtSigned(reg.montoBase,2)} − ${reg.deducciones.map(d=>`${escapeHtml(d.concepto)} (${sym} ${numFmtSigned(d.monto,2)}${d.fecha?' · '+fmtFechaCorta(d.fecha):''})`).join(', ')}
           </div>`
         : '';
       return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span style="font-size:12px">${label}</span>
-          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${reg.monto.toFixed(2)}</span>
+          <span style="font-size:12px;color:var(--green)">✅ ${sym} ${numFmtSigned(reg.monto,2)}</span>
         </div>
         ${desglose}
       </div>`;
@@ -16323,7 +16328,7 @@ function openMetaHistorial(id){
       pagadosCount++;
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
         <span style="font-size:12px">${label}</span>
-        <span style="font-size:12px;color:var(--green)">✅ ${sym} ${total.toFixed(2)}</span>
+        <span style="font-size:12px;color:var(--green)">✅ ${sym} ${numFmtSigned(total,2)}</span>
       </div>`;
     }
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -16563,7 +16568,7 @@ function saveDeuda(){
         status:'pendiente', fechaPago:null, cuentaPago:null,
       };
       state.deudas.push(nuevaDeuda);
-      logActividad('deuda', `${esYoDebo?'Deuda':'Préstamo'}: ${nombre} — ${symD} ${monto.toFixed(2)}`, {deudaId:nuevaDeuda.id});
+      logActividad('deuda', `${esYoDebo?'Deuda':'Préstamo'}: ${nombre} — ${symD} ${numFmtSigned(monto,2)}`, {deudaId:nuevaDeuda.id});
     }
   }
   saveState(); closeDeudaModal(); renderDeudas(); toast(esYoDebo?'Deuda guardada':'Préstamo guardado');
@@ -16614,13 +16619,13 @@ function saveDeudaItem(){
     const antes={...it};
     it.desc=desc; it.monto=monto; it.fecha=fecha;
     recalcDeudaMonto(d);
-    logActividad('deuda_item_editado', `Editado: ${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:it.id, snapshotAntes:antes});
+    logActividad('deuda_item_editado', `Editado: ${desc} — ${symDi} ${numFmtSigned(monto,2)} (${d.nombre})`, {deudaId:d.id, itemId:it.id, snapshotAntes:antes});
     saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto actualizado');
   } else {
     const nuevoItem={id:'di'+Date.now(), desc, monto, fecha};
     d.items.push(nuevoItem);
     recalcDeudaMonto(d);
-    logActividad('deuda_item', `${desc} — ${symDi} ${monto.toFixed(2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
+    logActividad('deuda_item', `${desc} — ${symDi} ${numFmtSigned(monto,2)} (${d.nombre})`, {deudaId:d.id, itemId:nuevoItem.id});
     saveState(); closeDeudaItemModal(); renderDeudas(); toast('Gasto agregado a la deuda');
   }
 }
@@ -16742,7 +16747,7 @@ function abrirCompensacion(id){
   const esYoDebo=d.direccion==='yo_debo';
   const sym=d.currency==='USD'?'$':'S/';
   document.getElementById('comp-resumen').innerHTML=
-    `Vas a compensar tu deuda con <b>${escapeHtml(d.nombre)}</b>: actualmente ${esYoDebo?'le debes tú a él/ella':'te debe él/ella a ti'} <b>${sym} ${d.monto.toFixed(2)}</b>.`;
+    `Vas a compensar tu deuda con <b>${escapeHtml(d.nombre)}</b>: actualmente ${esYoDebo?'le debes tú a él/ella':'te debe él/ella a ti'} <b>${sym} ${numFmtSigned(d.monto,2)}</b>.`;
   const candidatos=hayCandidatosCompensacion(d);
   const sel=document.getElementById('comp-otra-deuda');
   const selectWrap=document.getElementById('comp-select-wrap');
@@ -16757,7 +16762,7 @@ function abrirCompensacion(id){
     selectWrap.style.display='block';
     sinOpciones.style.display='none';
     confirmarBtn.style.display='inline-flex';
-    sel.innerHTML=candidatos.map(c=>`<option value="${c.id}">${escapeHtml(c.nombre)} — ${c.direccion==='yo_debo'?'le debes tú':'te debe'} ${sym} ${c.monto.toFixed(2)}</option>`).join('');
+    sel.innerHTML=candidatos.map(c=>`<option value="${c.id}">${escapeHtml(c.nombre)} — ${c.direccion==='yo_debo'?'le debes tú':'te debe'} ${sym} ${numFmtSigned(c.monto,2)}</option>`).join('');
     actualizarPreviewCompensacion();
   }
   document.getElementById('compensacion-overlay').classList.add('open');
@@ -16778,9 +16783,9 @@ function actualizarPreviewCompensacion(){
   const restanteB=Math.max(0,dB.monto-montoCompensado);
   const esAYoDebo=dA.direccion==='yo_debo';
   preview.style.display='block';
-  preview.innerHTML=`Se descuentan <b>${sym} ${montoCompensado.toFixed(2)}</b> de ambas deudas.<br>`+
+  preview.innerHTML=`Se descuentan <b>${sym} ${numFmtSigned(montoCompensado,2)}</b> de ambas deudas.<br>`+
     `Resultado: ${restanteA>0.005
-      ? `${esAYoDebo?'le sigues debiendo':'te sigue debiendo'} <b>${sym} ${restanteA.toFixed(2)}</b>`
+      ? `${esAYoDebo?'le sigues debiendo':'te sigue debiendo'} <b>${sym} ${numFmtSigned(restanteA,2)}</b>`
       : `<span style="color:var(--green)">esta deuda queda saldada ✅</span>`}`+
     (restanteB>0.005 ? `` : `<br><span style="color:var(--green)">la otra deuda también queda saldada ✅</span>`);
 }
@@ -16800,7 +16805,7 @@ function confirmarCompensacion(){
   // Reciente, BORRA la deuda entera (piensa que se creó de cero), lo cual
   // sería incorrecto acá: deshacer una compensación debe devolver el monto
   // descontado a ambas deudas, no borrarlas.
-  logActividad('deuda_compensacion', `Compensación entre ${dA.nombre} y ${dB.nombre}: se descontaron ${sym} ${montoCompensado.toFixed(2)} de ambas deudas`, {deudaIdA:dA.id, deudaIdB:dB.id, montoCompensado, aQuedoSaldada, bQuedoSaldada});
+  logActividad('deuda_compensacion', `Compensación entre ${dA.nombre} y ${dB.nombre}: se descontaron ${sym} ${numFmtSigned(montoCompensado,2)} de ambas deudas`, {deudaIdA:dA.id, deudaIdB:dB.id, montoCompensado, aQuedoSaldada, bQuedoSaldada});
   saveState(); cerrarCompensacion(); renderDeudas();
   toast('Deudas compensadas');
 }
@@ -16973,14 +16978,14 @@ function saveFuelGasto(){
     const consumoId='tcm-fuel-'+Date.now();
     t.movs[mk].push({id:consumoId, desc, fecha, monto, pagado:false, cat, currency:'PEN', hora:horaLimaActual()});
     fila.gastoRegistrado={tipo:'tarjeta', id:consumoId, tarjetaId};
-    logActividad('combustible_gasto', `${desc} — ${symFuel} ${monto.toFixed(2)}`, {tarjetaId, monthKey:mk, consumoId, fuelTipo:type, fuelRowId:rowId});
+    logActividad('combustible_gasto', `${desc} — ${symFuel} ${numFmtSigned(monto,2)}`, {tarjetaId, monthKey:mk, consumoId, fuelTipo:type, fuelRowId:rowId});
   } else {
     const cuenta=document.getElementById('fuel-gasto-cuenta').value;
     const movId='mov-fuel-'+Date.now();
     pushMovimiento({id:movId, type:'expense', desc, amount:monto, account:cuenta, date:fecha, currency:'PEN', cat});
     state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-monto;
     fila.gastoRegistrado={tipo:'cuenta', id:movId, cuenta};
-    logActividad('combustible_gasto', `${desc} — ${symFuel} ${monto.toFixed(2)}`, {movId, fuelTipo:type, fuelRowId:rowId});
+    logActividad('combustible_gasto', `${desc} — ${symFuel} ${numFmtSigned(monto,2)}`, {movId, fuelTipo:type, fuelRowId:rowId});
   }
   saveState();
   closeFuelGastoModal();
@@ -18084,19 +18089,19 @@ function renderTcOperaciones(){
       <td style="border-left:2px solid var(--bg)">${tieneVenta
           ? `<div>${fmtFechaCorta(op.fechaVenta)}</div><div style="font-size:9px;color:var(--text3)">${op.cuentaVenta}</div>`
           : `<button class="config-action-btn neutral" style="font-size:9px;padding:2px 6px" onclick="openTcOpVentaModal('${op.id}')">💰 Vender</button>`}</td>
-      <td style="font-family:var(--mono);color:${tieneVenta?'inherit':'var(--text3)'}">${tilde}${dolares.toFixed(2)}</td>
+      <td style="font-family:var(--mono);color:${tieneVenta?'inherit':'var(--text3)'}">${tilde}${numFmtSigned(dolares,2)}</td>
       <td style="font-family:var(--mono);color:${tieneVenta?'inherit':'var(--amber)'}" title="${tieneVenta?'':'Mejor TC actual del comparador'}">${tilde}${tc.toFixed(4)}</td>
-      <td style="font-family:var(--mono);color:${tieneVenta?'inherit':'var(--amber)'}">${tilde}${soles.toFixed(2)}</td>`;
+      <td style="font-family:var(--mono);color:${tieneVenta?'inherit':'var(--amber)'}">${tilde}${numFmtSigned(soles,2)}</td>`;
 
     const utilCell = `
-      <td style="font-family:var(--mono);color:${liveColor};font-weight:600;border-left:2px solid var(--bg)">${tilde}${utilidad>=0?'+':'-'}S/ ${Math.abs(utilidad).toFixed(2)}</td>
+      <td style="font-family:var(--mono);color:${liveColor};font-weight:600;border-left:2px solid var(--bg)">${tilde}${utilidad>=0?'+':'-'}S/ ${numFmtSigned(Math.abs(utilidad),2)}</td>
       <td style="font-family:var(--mono);color:${liveColor}">${tilde}${spread>=0?'+':'-'}${Math.abs(spread).toFixed(3)}</td>`;
 
     return `<tr>
       <td><div>${fmtFechaCorta(op.fechaCompra)}</div><div style="font-size:9px;color:var(--text3)">${op.cuentaCompra}</div></td>
-      <td style="font-family:var(--mono)">${op.montoSolesCompra.toFixed(2)}</td>
+      <td style="font-family:var(--mono)">${numFmtSigned(op.montoSolesCompra,2)}</td>
       <td style="font-family:var(--mono)">${op.tcCompra.toFixed(4)}</td>
-      <td style="font-family:var(--mono)">${op.montoDolaresCompra.toFixed(2)}</td>
+      <td style="font-family:var(--mono)">${numFmtSigned(op.montoDolaresCompra,2)}</td>
       ${ventaCells}
       ${utilCell}
       <td style="white-space:nowrap">${tieneVenta?`<span onclick="openTcOpVentaModal('${op.id}')" style="cursor:pointer;color:var(--text3);margin-right:8px">✏️</span>`:''}<span onclick="deleteTcOperacion('${op.id}')" style="cursor:pointer;color:var(--text3)">🗑</span></td>
@@ -19315,7 +19320,7 @@ function renderSueldos(){
     const tieneReal=b.retencion5taReal!==null&&b.retencion5taReal!==undefined;
     const diff=tieneReal?b.retencion5taReal-b.retencion5taEstimada:null;
     const diffTxt=tieneReal?`<span style="color:${Math.abs(diff)<2?'var(--green)':'var(--red)'}">${diff>=0?'+':'-'}${fmtS(Math.abs(diff))}</span>`:'—';
-    const utilTxt=b.utilidades?` <span title="Incluye S/${b.utilidades.toFixed(2)} de utilidades" style="cursor:help">💰</span>`:'';
+    const utilTxt=b.utilidades?` <span title="Incluye S/${numFmtSigned(b.utilidades,2)} de utilidades" style="cursor:help">💰</span>`:'';
     return `<tr>
       <td>${MONTHS[b.mes]}</td>
       <td style="text-align:right">${fmtS(ingreso)}${utilTxt}</td>
@@ -19399,7 +19404,7 @@ function renderSueldoChart(){
     ]},options:{...baseOpts,scales:{
       x:baseOpts.scales.x,
       y:{position:'left',grid:baseOpts.scales.y.grid,ticks:baseOpts.scales.y.ticks},
-      y1:{position:'right',grid:{display:false},ticks:{...baseOpts.scales.y.ticks,callback:v=>'S/'+v.toFixed(0)}},
+      y1:{position:'right',grid:{display:false},ticks:{...baseOpts.scales.y.ticks,callback:v=>'S/'+numFmtSigned(v,0)}},
     }}});
     legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#5b8def;display:inline-block"></span>Ingreso</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f0a53c;display:inline-block"></span>5ta estimada</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f05c5c;display:inline-block"></span>5ta real</span>`;
   } else if(currentSueldoChartTab===1){
@@ -19580,7 +19585,7 @@ function guardarAFPAporte(){
   if(editingAFPAporteKey && editingAFPAporteKey!==key) delete state.afp.aportes[editingAFPAporteKey];
   const montoAnterior=state.afp.aportes[key];
   state.afp.aportes[key]=monto;
-  logActividad('afp_aporte', `Aporte AFP ${key}: S/ ${monto.toFixed(2)}`, {afpAporteKey:key, afpMontoAnterior: montoAnterior===undefined?null:montoAnterior});
+  logActividad('afp_aporte', `Aporte AFP ${key}: S/ ${numFmtSigned(monto,2)}`, {afpAporteKey:key, afpMontoAnterior: montoAnterior===undefined?null:montoAnterior});
   saveState();
   cerrarAFPAporteModal();
   renderAFP();
@@ -19592,7 +19597,7 @@ function eliminarAFPAporte(key){
   migrarAFPSiNecesario();
   const montoBorrado=state.afp.aportes[k];
   delete state.afp.aportes[k];
-  if(montoBorrado!==undefined) logActividad('afp_aporte_eliminado', `Aporte AFP eliminado: ${k} — S/ ${Number(montoBorrado).toFixed(2)}`, {afpAporteKey:k, afpMontoBorrado:montoBorrado});
+  if(montoBorrado!==undefined) logActividad('afp_aporte_eliminado', `Aporte AFP eliminado: ${k} — S/ ${numFmtSigned(Number(montoBorrado),2)}`, {afpAporteKey:k, afpMontoBorrado:montoBorrado});
   saveState();
   cerrarAFPAporteModal();
   renderAFP();
@@ -19691,12 +19696,12 @@ function guardarAFPSaldo(){
     if(s){
       const antes={...s};
       s.fecha=fecha; s.saldoTotal=saldoTotal;
-      logActividad('afp_saldo_editado', `Saldo AFP editado: ${fecha} — S/ ${saldoTotal.toFixed(2)}`, {afpSaldoId:s.id, snapshotAntes:antes});
+      logActividad('afp_saldo_editado', `Saldo AFP editado: ${fecha} — S/ ${numFmtSigned(saldoTotal,2)}`, {afpSaldoId:s.id, snapshotAntes:antes});
     }
   } else {
     const nuevoSaldo={id:'afp-saldo-'+Date.now(), fecha, saldoTotal};
     state.afp.saldos.push(nuevoSaldo);
-    logActividad('afp_saldo_nuevo', `Saldo AFP: ${fecha} — S/ ${saldoTotal.toFixed(2)}`, {afpSaldoId:nuevoSaldo.id});
+    logActividad('afp_saldo_nuevo', `Saldo AFP: ${fecha} — S/ ${numFmtSigned(saldoTotal,2)}`, {afpSaldoId:nuevoSaldo.id});
   }
   saveState();
   cerrarAFPSaldoModal();
@@ -19962,7 +19967,7 @@ function guardarCompra(){
       historialPrecio:[{precio, fecha:todayLocalISO()}],
     };
     state.listaCompras.push(nuevaCompra);
-    logActividad('compra_nueva', `Artículo nuevo: ${nombre} — ${moneda==='USD'?'$':'S/'} ${precio.toFixed(2)}`, {compraId:nuevaCompra.id});
+    logActividad('compra_nueva', `Artículo nuevo: ${nombre} — ${moneda==='USD'?'$':'S/'} ${numFmtSigned(precio,2)}`, {compraId:nuevaCompra.id});
   }
   saveState();
   cerrarCompraModal();
@@ -22291,7 +22296,7 @@ function generarResumenLocalChatIA(){
     const partes = ['📊 Resumen rápido — '+(ctx.fechaHoy||'')];
 
     if(typeof r.deudaTotalTarjetasEnSoles==='number'){
-      partes.push('💳 Deuda pendiente en tarjetas: S/ '+r.deudaTotalTarjetasEnSoles.toFixed(2));
+      partes.push('💳 Deuda pendiente en tarjetas: S/ '+numFmtSigned(r.deudaTotalTarjetasEnSoles,2));
     }
     if(Array.isArray(r.pagosFrecuentesEstado) && r.pagosFrecuentesEstado.length){
       const pendientes=r.pagosFrecuentesEstado.filter(p=>p.tipo==='gasto' && !p.yaPagadoEstePeriodo);
@@ -22311,13 +22316,13 @@ function generarResumenLocalChatIA(){
     }
     if(Array.isArray(r.deudasMayoresEstado) && r.deudasMayoresEstado.length){
       const totalPend=r.deudasMayoresEstado.reduce((s,d)=>s+(d.saldoPendiente||0),0);
-      partes.push('🏛️ Deudas mayores pendientes: S/ '+totalPend.toFixed(2));
+      partes.push('🏛️ Deudas mayores pendientes: S/ '+numFmtSigned(totalPend,2));
     }
     if(r.inversionesResumen){
       const pen=(r.inversionesResumen.PEN&&r.inversionesResumen.PEN.totalValorizado)||0;
       const usd=(r.inversionesResumen.USD&&r.inversionesResumen.USD.totalValorizado)||0;
       if(pen>0.004||usd>0.004){
-        partes.push('📈 Inversiones valorizadas: '+[pen>0.004?'S/ '+pen.toFixed(2):null, usd>0.004?'$ '+usd.toFixed(2):null].filter(Boolean).join(' + '));
+        partes.push('📈 Inversiones valorizadas: '+[pen>0.004?'S/ '+numFmtSigned(pen,2):null, usd>0.004?'$ '+numFmtSigned(usd,2):null].filter(Boolean).join(' + '));
       }
     }
     if(Array.isArray(r.proximosEventosCalendario) && r.proximosEventosCalendario.length){
