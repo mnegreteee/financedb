@@ -3255,8 +3255,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '26/09/26 - 13:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Todas las fechas ahora se muestran en formato dd/mm/aa (ej. 26/09/26), incluyendo historial de actividad, mantenimientos, lista de compras y saldos AFP que antes mostraban la fecha cruda (2026-09-26). Se corrigió también la tabla y gráficos de combustible (KxG, precio/galón, total) para usar separador de miles, y se agregó el espacio faltante después del símbolo S/ o $ en varios gráficos donde quedaba pegado al monto (ej. "S/1234" → "S/ 1,234").';
+const APP_VERSION_DATE = '26/09/26 - 14:07'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Revisión completa del formato de números: se corrigieron 3 gráficos más que dependían del locale del navegador (Cierre del Mes/Tendencia, Proyección de Ahorro, y AFP), y 3 lugares del Historial de Operaciones TC (compra/venta de dólares) que mostraban el monto sin separador de miles (ej. "1234.56" en vez de "1,234.56"). Ya no debería quedar ningún número sin el formato estándar de la app (coma de miles, punto decimal).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7234,6 +7234,11 @@ function chartOpts(cb){
   return{
     responsive:true,
     maintainAspectRatio:false,
+    // Sin esto, Chart.js formatea los números del tooltip con el locale del
+    // NAVEGADOR (no del sitio) — en un navegador en español eso da "18.659,15"
+    // (punto de miles, coma decimal), al revés del formato que usa el resto
+    // de la app (coma de miles, punto decimal, ej. 18,659.15).
+    locale:'en-US',
     plugins:{
       legend:{display:false},
       tooltip:{backgroundColor:tooltipBg,borderColor:tooltipBord,borderWidth:1,titleColor:tooltipTitle,bodyColor:tooltipBody}
@@ -9604,7 +9609,7 @@ function renderCierreProyeccion(){
     data:{labels:labelsT,datasets:[{data:dataT,backgroundColor:coloresT,borderRadius:4}]},
     options:{
       responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'S/ '+numFmtSigned(ctx.parsed.y,2)}}},
       scales:{
         y:{ticks:{color:tickColor,callback:v=>'S/ '+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
         x:{ticks:{color:tickColor},grid:{display:false}},
@@ -9678,7 +9683,8 @@ function renderProyeccion(){
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{
       backgroundColor:document.documentElement.getAttribute('data-theme')==='dark'?'#1e2028':'#ffffff',
       borderColor:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)',
-      borderWidth:1}},scales:{
+      borderWidth:1,
+      callbacks:{label:ctx=>{const sym=ctx.dataset.yAxisID==='yD'?'$ ':'S/ ';return (ctx.dataset.label?ctx.dataset.label+': ':'')+sym+numFmtSigned(ctx.parsed.y,2);}}}},scales:{
     x:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:document.documentElement.getAttribute('data-theme')==='dark'?'#e0e0e2':'#3a3b44',font:{size:10},maxTicksLimit:10}},
     yS:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:'#a78bfa',font:{size:10},callback:v=>'S/ '+(v/1000).toFixed(1)+'k'},position:'left',id:'yS'},
     yD:{grid:{display:false},ticks:{color:'#f0a53c',font:{size:10},callback:v=>'$ '+numFmtSigned(v,0)},position:'right'}
@@ -17975,7 +17981,7 @@ function saveTcOpCompra(){
     movVentaUsdId:null, movVentaSolId:null,
   });
   const opIdCompra=state.tcOperaciones[state.tcOperaciones.length-1].id;
-  logActividad('tc_operacion', `Compra USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:opIdCompra, accion:'compra'});
+  logActividad('tc_operacion', `Compra USD: $ ${numFmtSigned(dolares,2)} por S/ ${numFmtSigned(soles,2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:opIdCompra, accion:'compra'});
   saveState(); closeTcOpCompraModal(); render(); toast('Compra de dólares registrada');
 }
 
@@ -17987,7 +17993,7 @@ function openTcOpVentaModal(opId){
   const sel=document.getElementById('tcopv-cuenta');
   sel.innerHTML=tcOpCuentasSoles().map(k=>`<option value="${k}">${k}</option>`).join('');
   document.getElementById('tcopv-title').textContent = op.fechaVenta ? 'Editar Venta' : 'Registrar Venta';
-  document.getElementById('tcopv-contexto').innerHTML = `Compraste <b>$ ${op.montoDolaresCompra.toFixed(2)}</b> el ${fmtFechaCorta(op.fechaCompra)} a TC ${op.tcCompra.toFixed(4)} (S/ ${op.montoSolesCompra.toFixed(2)})`;
+  document.getElementById('tcopv-contexto').innerHTML = `Compraste <b>$ ${numFmtSigned(op.montoDolaresCompra,2)}</b> el ${fmtFechaCorta(op.fechaCompra)} a TC ${op.tcCompra.toFixed(4)} (S/ ${numFmtSigned(op.montoSolesCompra,2)})`;
   document.getElementById('tcopv-fecha').value = op.fechaVenta || todayLocalISO();
   if(op.cuentaVenta && [...sel.options].some(o=>o.value===op.cuentaVenta)) sel.value=op.cuentaVenta; else sel.value=op.cuentaCompra;
   document.getElementById('tcopv-dolares').value = op.montoDolaresVenta!==null ? op.montoDolaresVenta : op.montoDolaresCompra;
@@ -18043,7 +18049,7 @@ function saveTcOpVenta(){
 
   op.fechaVenta=fecha; op.cuentaVenta=cuenta; op.montoDolaresVenta=dolares; op.tcVenta=tcEfectivo; op.montoSolesVenta=soles; op.catVenta=cat;
   op.movVentaUsdId=usdId; op.movVentaSolId=solId;
-  logActividad('tc_operacion', `Venta USD: $ ${dolares.toFixed(2)} por S/ ${soles.toFixed(2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:op.id, accion:'venta'});
+  logActividad('tc_operacion', `Venta USD: $ ${numFmtSigned(dolares,2)} por S/ ${numFmtSigned(soles,2)} (TC ${tcEfectivo.toFixed(4)})`, {opId:op.id, accion:'venta'});
   saveState(); closeTcOpVentaModal(); render(); toast('Venta de dólares registrada');
 }
 function deleteTcOpVenta(){
@@ -19866,10 +19872,10 @@ function renderAFP(){
       ]},
       options:{ responsive:true, maintainAspectRatio:false,
         scales:{
-          y1:{position:'left', ticks:{color:'#a78bfa'}},
-          y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#94a3b8'}},
+          y1:{position:'left', ticks:{color:'#a78bfa', callback:v=>'S/ '+(v/1000).toFixed(1)+'k'}},
+          y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#94a3b8', callback:v=>'S/ '+(v/1000).toFixed(1)+'k'}},
         },
-        plugins:{legend:{display:false}}
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': S/ '+numFmtSigned(ctx.parsed.y,2)}}}
       }
     });
     document.getElementById('afp-chart-legend').innerHTML=`<span style="color:#a78bfa">● Saldo total</span><span style="color:#94a3b8">▮ Rentabilidad</span>`;
