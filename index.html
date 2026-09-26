@@ -3255,8 +3255,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '26/09/26 - 13:10'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Se agregó separador de miles (formato 1,300.50) a montos que antes se mostraban sin comas en tablas, tarjetas, gráficos (tooltips y ejes), reportes PDF y el historial de actividad — donde antes se veía "1300.50" ahora se ve "1,300.50". No afecta campos editables ni exportaciones a Excel/CSV, que siguen guardando el número puro.';
+const APP_VERSION_DATE = '26/09/26 - 13:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Todas las fechas ahora se muestran en formato dd/mm/aa (ej. 26/09/26), incluyendo historial de actividad, mantenimientos, lista de compras y saldos AFP que antes mostraban la fecha cruda (2026-09-26). Se corrigió también la tabla y gráficos de combustible (KxG, precio/galón, total) para usar separador de miles, y se agregó el espacio faltante después del símbolo S/ o $ en varios gráficos donde quedaba pegado al monto (ej. "S/1234" → "S/ 1,234").';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3683,7 +3683,7 @@ function tiempoRelativo(ts){
   const dias=Math.floor(hrs/24);
   if(dias<7) return 'hace '+dias+' día'+(dias===1?'':'s');
   const d=new Date(ts);
-  return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
 }
 const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',km_manual_editado:'✏️',km_manual_eliminado:'🗑️',
   tarjeta_nueva:'💳',tarjeta_editada:'💳',tarjeta_eliminada:'💳',
@@ -6009,7 +6009,7 @@ function updateTCDisplay(){
   const modeEl=document.getElementById('tc-mode-info');
   if(modeEl){
     if(state.tc.mode!=='manual' && ref){
-      const fechaFmt=new Date(ref.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+      const fechaFmt=new Date(ref.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
       modeEl.innerHTML=`🔄 Automático · datos del ${fechaFmt}<br>`+
         `<span style="color:${ref.compraEmpresa.color}">${ref.compraEmpresa.nombre}</span> mejor compra · `+
         `<span style="color:${ref.ventaEmpresa.color}">${ref.ventaEmpresa.nombre}</span> mejor venta`;
@@ -6134,7 +6134,7 @@ function checkBrowserNotifications(forzar){
     const diffDias=Math.round((proximaFecha-hoy)/(1000*60*60*24));
     const yaRegistrado=p.pagosRegistrados && p.pagosRegistrados[String(proximaFecha.getFullYear())];
     if(!yaRegistrado && diffDias<=15){
-      const fechaLabel=proximaFecha.getDate()+'/'+(proximaFecha.getMonth()+1)+'/'+proximaFecha.getFullYear();
+      const fechaLabel=String(proximaFecha.getDate()).padStart(2,'0')+'/'+String(proximaFecha.getMonth()+1).padStart(2,'0')+'/'+String(proximaFecha.getFullYear()).slice(-2);
       if(diffDias<0) mensajes.push(`🔴 ${p.nombre} venció el ${fechaLabel} y no lo has registrado`);
       else if(diffDias===0) mensajes.push(`🟡 ${p.nombre} vence HOY (${fechaLabel})`);
       else mensajes.push(`📅 ${p.nombre} vence en ${diffDias} días (${fechaLabel})`);
@@ -6163,7 +6163,7 @@ function checkBrowserNotifications(forzar){
     const cercaPorKm = proyMant.kmFaltan<=1000;
     const cercaPorDias = proyMant.diasFaltan!==null && proyMant.diasFaltan<=15;
     if(cercaPorKm || cercaPorDias){
-      const fechaTxt=proyMant.fechaEstimada?(' — estimado '+proyMant.fechaEstimada.getDate()+'/'+(proyMant.fechaEstimada.getMonth()+1)):'';
+      const fechaTxt=proyMant.fechaEstimada?(' — estimado '+String(proyMant.fechaEstimada.getDate()).padStart(2,'0')+'/'+String(proyMant.fechaEstimada.getMonth()+1).padStart(2,'0')):'';
       mensajes.push(`🔧 ${item.nombre} en ~${Math.round(proyMant.kmFaltan)} km${fechaTxt}`);
     }
   });
@@ -7148,7 +7148,7 @@ function renderMovimientos(){
     const cls=m.type==='income'?'income':m.type==='expense'?'expense':'ahorro';
     const sign=m.type==='expense'?'-':'+';
     const amtStr=sign+(m.currency==='USD'?fmtD(m.amount):fmtS(m.amount));
-    const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})+(m.hora?' · '+m.hora:'');
+    const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})+(m.hora?' · '+m.hora:'');
     const paisHtml=m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:'';
     const catHtml=m.cat?`<span class="cat-pill" style="background:${allColors[m.cat]||'#666'}22;color:${allColors[m.cat]||'#999'}">${m.cat}</span>`:'';
     const noteHtml=m.note?`<div class="mov-note">📝 ${escapeHtml(m.note)}</div>`:'';
@@ -7352,7 +7352,7 @@ function renderChart(){
       {type:'bar',label:'Ingresos',data:ing,backgroundColor:'rgba(62,201,110,.25)',borderColor:'#3ec96e',borderWidth:1.5,borderRadius:3},
       {type:'bar',label:'Gastos',data:gst,backgroundColor:'rgba(240,92,92,.25)',borderColor:'#f05c5c',borderWidth:1.5,borderRadius:3},
       {type:'line',label:'Resultado',data:res,borderColor:'#5b8def',borderWidth:2,pointRadius:3,tension:.3,fill:false}
-    ]},options:chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k')});
+    ]},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
     document.getElementById('chart-legend').innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#3ec96e;display:inline-block"></span>Ingresos</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#f05c5c;display:inline-block"></span>Gastos</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#5b8def;display:inline-block"></span>Resultado</span>`;
   } else if(currentChartTab===1||currentChartTab===2||currentChartTab===3||currentChartTab===4){
     const isS=currentChartTab===1,isD=currentChartTab===2,isT=currentChartTab===4;
@@ -7368,7 +7368,7 @@ function renderChart(){
       } else data.push(null);
     }
     const lbl=isS?'Ahorro S/':isD?'Ahorro $':isT?'Total Soles':'Saldo disp.';
-    mainChart=new Chart(ctx,{data:{labels:lb,datasets:[{type:'line',label:lbl,data,borderColor:col,borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:col+'22'}}]},options:chartOpts(v=>isD?'$'+numFmtSigned(v,0):'S/'+(v/1000).toFixed(1)+'k')});
+    mainChart=new Chart(ctx,{data:{labels:lb,datasets:[{type:'line',label:lbl,data,borderColor:col,borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:col+'22'}}]},options:chartOpts(v=>isD?'$ '+numFmtSigned(v,0):'S/ '+(v/1000).toFixed(1)+'k')});
     document.getElementById('chart-legend').innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:${col};display:inline-block"></span>${lbl}</span>`;
   } else if(currentChartTab===5){
     // Categorías — donut del mes actual (movimientos de cuenta + consumos de tarjeta)
@@ -7435,7 +7435,7 @@ function renderChart(){
       borderColor:allColors[c]||'#666', backgroundColor:(allColors[c]||'#666')+'22',
       borderWidth:2, pointRadius:3, tension:.3, fill:false,
     }));
-    mainChart=new Chart(ctx,{data:{labels,datasets},options:chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k')});
+    mainChart=new Chart(ctx,{data:{labels,datasets},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
     document.getElementById('chart-legend').innerHTML=topCats.map(c=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:${allColors[c]||'#666'};display:inline-block"></span>${escapeHtml(c)}</span>`).join('');
   } else {
     // Patrimonio Neto histórico — Disponible + Ahorros (reconstruido mes a
@@ -7480,7 +7480,7 @@ function renderChart(){
     if(chartEl) chartEl.style.display='block';
     const labels=meses.map(({y,m})=>MONTHS_SHORT[m]+' '+String(y).slice(2));
     const col='#5b8def';
-    mainChart=new Chart(ctx,{data:{labels,datasets:[{type:'line',label:'Patrimonio Neto',data,borderColor:col,borderWidth:2,pointRadius:3,tension:.3,fill:{target:'origin',above:col+'22'}}]},options:chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k')});
+    mainChart=new Chart(ctx,{data:{labels,datasets:[{type:'line',label:'Patrimonio Neto',data,borderColor:col,borderWidth:2,pointRadius:3,tension:.3,fill:{target:'origin',above:col+'22'}}]},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
     document.getElementById('chart-legend').innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:${col};display:inline-block"></span>Patrimonio Neto (últimos 12 meses) <span style="color:var(--text3);margin-left:6px">— la deuda de tarjeta y el valor de inversiones usan los valores actuales como aproximación en todos los meses</span></span>`;
   }
   }catch(err){
@@ -8002,7 +8002,7 @@ function renderInvChart(){
   }
 
   try{
-    invChart=new Chart(canvasEl.getContext('2d'),{data:{labels,datasets},options:chartOpts(v=>'$'+(v/1000).toFixed(1)+'k')});
+    invChart=new Chart(canvasEl.getContext('2d'),{data:{labels,datasets},options:chartOpts(v=>'$ '+(v/1000).toFixed(1)+'k')});
   }catch(err){ console.error('Error renderizando gráfico de inversiones:',err); }
 }
 
@@ -8402,18 +8402,18 @@ function saveInvValor(){
     if(val){
       const antes={...val};
       val.fecha=fecha;val.precios=precios;
-      logActividad('inversion_editada', `Valorización editada: ${fecha}`, {invKind:'valorizaciones', invId:val.id, snapshotAntes:antes});
+      logActividad('inversion_editada', `Valorización editada: ${fmtFechaCorta(fecha)}`, {invKind:'valorizaciones', invId:val.id, snapshotAntes:antes});
     }
   } else {
     const existente=state.inversiones.valorizaciones.find(x=>x.fecha===fecha);
     if(existente){
       const preciosAntes={...existente.precios};
       existente.precios={...existente.precios,...precios};
-      logActividad('inversion', `Valorización: ${fecha}`, {invKind:'valorizaciones', invId:existente.id, valorizacionEraNueva:false, valorizacionPreciosAntes:preciosAntes});
+      logActividad('inversion', `Valorización: ${fmtFechaCorta(fecha)}`, {invKind:'valorizaciones', invId:existente.id, valorizacionEraNueva:false, valorizacionPreciosAntes:preciosAntes});
     } else {
       const nuevaVal={id:'ival'+Date.now(),fecha,precios};
       state.inversiones.valorizaciones.push(nuevaVal);
-      logActividad('inversion', `Valorización: ${fecha}`, {invKind:'valorizaciones', invId:nuevaVal.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
+      logActividad('inversion', `Valorización: ${fmtFechaCorta(fecha)}`, {invKind:'valorizaciones', invId:nuevaVal.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
     }
   }
   saveState(); closeInvValorModal(); renderInversiones();
@@ -8423,7 +8423,7 @@ function deleteInvValor(id){
   if(!targetId||!confirm('¿Eliminar esta valorización?')) return;
   const valBorrada=(state.inversiones.valorizaciones||[]).find(x=>x.id===targetId);
   state.inversiones.valorizaciones=(state.inversiones.valorizaciones||[]).filter(x=>x.id!==targetId);
-  if(valBorrada) logActividad('inversion_eliminada', `Valorización eliminada: ${valBorrada.fecha}`, {invKind:'valorizaciones', itemSnapshot:valBorrada});
+  if(valBorrada) logActividad('inversion_eliminada', `Valorización eliminada: ${fmtFechaCorta(valBorrada.fecha)}`, {invKind:'valorizaciones', itemSnapshot:valBorrada});
   saveState(); closeInvValorModal(); renderInversiones();
 }
 
@@ -8858,7 +8858,7 @@ function renderHistorialSesiones(){
   `;
   listaEl.innerHTML=sesiones.map(s=>{
     const fechaIn=new Date(s.inicio);
-    const fechaLabel=fechaIn.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+    const fechaLabel=fechaIn.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
     const horaLabel=fechaIn.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
     const ubic=s.ipCiudad?`${s.ipCiudad}, ${s.ipPais}`:(s.ipPais||s.gpsPais||'—');
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
@@ -9010,7 +9010,7 @@ function openCategoryDetailModal(cat){
   } else {
     listEl.innerHTML=items.map(it=>{
       const sym=it.currency==='USD'?'$':'S/';
-      const fechaFmt=new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'});
+      const fechaFmt=new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'});
       if(it.source==='cuenta'){
         return `<div class="catdetail-row">
           <div class="catdetail-icon">🏦</div>
@@ -9562,7 +9562,7 @@ function renderCierreProyeccion(){
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{const[a,b]=ctx.raw;return 'S/ '+fmtN(Math.abs(b-a));}}}},
       scales:{
-        y:{ticks:{color:tickColor,callback:v=>'S/'+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
+        y:{ticks:{color:tickColor,callback:v=>'S/ '+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
         x:{ticks:{color:tickColor,font:{size:10}},grid:{display:false}},
       }
     }
@@ -9606,7 +9606,7 @@ function renderCierreProyeccion(){
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{
-        y:{ticks:{color:tickColor,callback:v=>'S/'+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
+        y:{ticks:{color:tickColor,callback:v=>'S/ '+(v/1000).toFixed(1)+'k'},grid:{color:gridColor}},
         x:{ticks:{color:tickColor},grid:{display:false}},
       }
     }
@@ -9680,8 +9680,8 @@ function renderProyeccion(){
       borderColor:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)',
       borderWidth:1}},scales:{
     x:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:document.documentElement.getAttribute('data-theme')==='dark'?'#e0e0e2':'#3a3b44',font:{size:10},maxTicksLimit:10}},
-    yS:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:'#a78bfa',font:{size:10},callback:v=>'S/'+(v/1000).toFixed(1)+'k'},position:'left',id:'yS'},
-    yD:{grid:{display:false},ticks:{color:'#f0a53c',font:{size:10},callback:v=>'$'+numFmtSigned(v,0)},position:'right'}
+    yS:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:'#a78bfa',font:{size:10},callback:v=>'S/ '+(v/1000).toFixed(1)+'k'},position:'left',id:'yS'},
+    yD:{grid:{display:false},ticks:{color:'#f0a53c',font:{size:10},callback:v=>'$ '+numFmtSigned(v,0)},position:'right'}
   }}});
 }
 
@@ -12530,7 +12530,7 @@ function confirmarPago(){
 
   const cuenta=document.getElementById('tc-pago-cuenta').value;
   const hoy=todayISO();
-  const fechaLabel=new Date(hoy+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const fechaLabel=new Date(hoy+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
   if(!state.movimientos) state.movimientos=[];
 
   if(tipo==='total'){
@@ -13726,7 +13726,7 @@ function tcxRenderLineCategorias(){
     datasetsVisibles.push({type:'line',label:'Σ Total (todas)',data:totalArr.map(v=>+v.toFixed(2)),borderColor:isDark?'#f0f0f2':'#1a1b1e',backgroundColor:'transparent',borderWidth:3,borderDash:[6,4],pointRadius:4,tension:.3,fill:false});
   }
   if(datasetsVisibles.length){
-    tcxLineCategorias=new Chart(canvasEl.getContext('2d'),{data:{labels,datasets:datasetsVisibles},options:chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k')});
+    tcxLineCategorias=new Chart(canvasEl.getContext('2d'),{data:{labels,datasets:datasetsVisibles},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
   }
   if(legendEl){
     const todosPrendidos=todasCats.every(cat=>!tcxLineCatHidden.has(cat));
@@ -13769,7 +13769,7 @@ function tcxRenderBarTop10(movsFiltrados){
   tcxBarTop10=new Chart(canvasEl.getContext('2d'),{
     type:'bar',
     data:{labels,datasets:[{data,backgroundColor:'#5b8def',borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>'S/ '+numFmtSigned(ctx.parsed.x,2)}}},scales:{x:{ticks:{color:'#9899a6',callback:v=>'S/'+(v/1000).toFixed(1)+'k'}},y:{ticks:{color:'#9899a6'}}}}
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>'S/ '+numFmtSigned(ctx.parsed.x,2)}}},scales:{x:{ticks:{color:'#9899a6',callback:v=>'S/ '+(v/1000).toFixed(1)+'k'}},y:{ticks:{color:'#9899a6'}}}}
   });
 }
 function renderTCChartsExtra(){
@@ -13912,7 +13912,7 @@ function renderTCEvolutionChart(chartData, tarjetas){
       },
       scales: {
         x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10}} },
-        y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10},callback:v=>'S/'+(v/1000).toFixed(1)+'k'} }
+        y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10},callback:v=>'S/ '+(v/1000).toFixed(1)+'k'} }
       }
     }
   });
@@ -15056,7 +15056,7 @@ function renderDashboard(){
         const col=isInc?'var(--green)':isAho?'var(--purple)':'var(--red)';
         const sign=isInc||isAho?'+':'-';
         const amt=(m.currency==='USD'?fmtD:fmtS)(m.amount);
-        const date=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'});
+        const date=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'});
         return`<div class="dash-mov-row">
           <div style="display:flex;align-items:center;gap:8px;min-width:0">
             <div class="dash-mov-dot" style="background:${col}"></div>
@@ -15123,7 +15123,7 @@ function renderDashDebts(){
     dmList.innerHTML = !dmActivas.length ? '<div class="dash-empty"><div class="dash-empty-icon">🏛️</div>Sin deudas mayores activas.</div>' : dmActivas.map(({d,r})=>{
       const pct = r.total>0 ? (r.pagadas/r.total)*100 : 0;
       const proxLabel = r.proximaFecha
-        ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})
+        ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})
         : '—';
       return `<div class="dash-tc-row" onclick="showPage('deudas')" style="cursor:pointer">
         <div style="flex:1;min-width:0">
@@ -15783,7 +15783,7 @@ function renderPagosFrecuentes(){
     if(esAnual && proximaFecha){
       const hoy=new Date(); hoy.setHours(0,0,0,0);
       const diffDias=Math.round((proximaFecha-hoy)/(1000*60*60*24));
-      const fechaLabel=proximaFecha.getDate()+' '+MONTHS[proximaFecha.getMonth()]+' '+proximaFecha.getFullYear();
+      const fechaLabel=String(proximaFecha.getDate()).padStart(2,'0')+'/'+String(proximaFecha.getMonth()+1).padStart(2,'0')+'/'+String(proximaFecha.getFullYear()).slice(-2);
       if(!yaPagado && diffDias<0) inicioLabel=' · 🔴 Vencido: '+fechaLabel;
       else if(!yaPagado && diffDias===0) inicioLabel=' · 🟡 Vence hoy';
       else if(!yaPagado) inicioLabel=' · Vence '+fechaLabel+' (en '+diffDias+' días)';
@@ -15965,7 +15965,7 @@ function registrarPagoFrecuente(id){
   if(esAnual){
     const proximaFecha=getPFProximaFechaAnual(pf);
     pfRegistrarAnualTargetYear=proximaFecha?proximaFecha.getFullYear():new Date().getFullYear();
-    const fechaLabel=proximaFecha?proximaFecha.getDate()+' de '+MONTHS[proximaFecha.getMonth()]+' '+proximaFecha.getFullYear():'—';
+    const fechaLabel=proximaFecha?String(proximaFecha.getDate()).padStart(2,'0')+'/'+String(proximaFecha.getMonth()+1).padStart(2,'0')+'/'+String(proximaFecha.getFullYear()).slice(-2):'—';
     document.getElementById('pf-registrar-mes').textContent=fechaLabel;
     const yaRegistrado=pf.pagosRegistrados && pf.pagosRegistrados[String(pfRegistrarAnualTargetYear)];
     document.getElementById('pf-registrar-warn').style.display=yaRegistrado?'block':'none';
@@ -16407,12 +16407,12 @@ function renderDeudas(){
     const esYoDebo = d.direccion==='yo_debo';
     const sym    = d.currency==='USD'?'$':'S/';
     const fmtAmt = v => sym+' '+Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-    const fechaLabel = new Date(d.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+    const fechaLabel = new Date(d.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
     const diasTransc = Math.floor((new Date()-new Date(d.fecha+'T12:00:00'))/(1000*60*60*24));
     const diasLabel  = isPaid ? '' : diasTransc===0?'hoy':diasTransc===1?'hace 1 día':`hace ${diasTransc} días`;
     const pagoInfo   = isPaid
       ? `<div style="font-size:11px;color:var(--green);margin-top:4px">
-           ✅ ${esYoDebo?'Pagado':'Cobrado'} el ${new Date(d.fechaPago+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})}
+           ✅ ${esYoDebo?'Pagado':'Cobrado'} el ${new Date(d.fechaPago+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'})}
            → <strong>${d.cuentaPago||'—'}</strong>
          </div>` : '';
 
@@ -16421,7 +16421,7 @@ function renderDeudas(){
       <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border2);display:flex;flex-direction:column;gap:4px">
         ${d.items.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).map(it=>`
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2)">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(it.desc)} <span style="color:var(--text3)">· ${new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'})}</span></span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(it.desc)} <span style="color:var(--text3)">· ${new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})}</span></span>
             <span style="font-family:var(--mono);margin-left:8px">${fmtAmt(it.monto)}</span>
             ${!isPaid?`<span onclick="openDeudaItemModal('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Editar gasto">✏</span>`:''}
             ${!isPaid?`<span onclick="deleteDeudaItem('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Quitar gasto">✕</span>`:''}
@@ -16905,7 +16905,7 @@ function openFuelGastoModal(type, rowId){
   fuelGastoCtx={type,rowId,total,fecha};
 
   const label=type==='glp'?'GLP':'GASOLINA';
-  const fechaLabel=fecha? new Date(fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+  const fechaLabel=fecha? new Date(fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '';
   document.getElementById('fuel-gasto-title').textContent=`⛽ Registrar gasto — ${label}`;
   document.getElementById('fuel-gasto-calc').innerHTML=`${fuelFmt(r.galones,2)} galones × S/ ${fuelFmt(r.pxg,2)} = <b>S/ ${fuelFmt(total,2)}</b>`;
   document.getElementById('fuel-gasto-monto').value=total.toFixed(2);
@@ -17043,7 +17043,7 @@ function renderKmManualUltimo(){
   if(!arr.length){ el.textContent='Aún no has registrado ninguna lectura manual.'; return; }
   const ult=arr[0];
   const d=new Date(ult.fechaHora);
-  const fechaTxt=d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+  const fechaTxt=d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
   // La alerta de "cuánto tiempo sin actualizar" usa la lectura MÁS RECIENTE
   // de cualquier fuente (getKmActualVehiculo, que también cuenta recargas de
   // combustible) — si acabas de cargar gasolina esa semana, ya hay un dato
@@ -17185,7 +17185,7 @@ function renderHistorialKm(){
     const conTramo=historial.filter(l=>l.kmRecorridos!=null && l.kmRecorridos>0);
     if(conTramo.length){
       const record=conTramo.reduce((a,b)=>b.kmRecorridos>a.kmRecorridos?b:a);
-      const fechaRecord=new Date(record.ts).toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+      const fechaRecord=new Date(record.ts).toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
       const diasRecord=record.diasTranscurridos;
       const diasRecordTxt=diasRecord<1 ? Math.round(diasRecord*24)+'h' : Math.round(diasRecord)+' día'+(Math.round(diasRecord)===1?'':'s');
       recordEl.innerHTML=`🏆 Tu tramo más largo: +${Math.round(record.kmRecorridos).toLocaleString('es-PE')} km en ${diasRecordTxt} — ${fechaRecord}${record.motivo?' · '+escapeHtml(record.motivo):''}`;
@@ -17212,7 +17212,7 @@ function renderHistorialKm(){
   const filas=[...historialFiltrado].reverse().map(l=>{
     const meta=iconoLecturaKm(l);
     const fecha=new Date(l.ts);
-    const fechaTxt=fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'});
+    const fechaTxt=fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
     const horaTxt=l.tipo==='manual' ? fecha.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}) : '';
     let deltaHtml='';
     if(l.kmRecorridos!=null){
@@ -17257,7 +17257,7 @@ function renderGraficoHistorialKm(historial){
   historialKmChart=new Chart(ctx,{
     type:'line',
     data:{
-      labels:historial.map(l=>new Date(l.ts).toLocaleDateString('es-PE',{day:'2-digit',month:'short'})),
+      labels:historial.map(l=>new Date(l.ts).toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})),
       datasets:[{ data:historial.map(l=>l.km), borderColor:col, backgroundColor:col+'22', borderWidth:2, pointRadius:2, tension:.25, fill:true }],
     },
     options:{
@@ -17469,7 +17469,7 @@ function renderMantenimiento(){
       const faltEl=node.querySelector('[data-role="km-faltan"]');
       faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
       faltEl.style.color=colorUrgencia;
-      node.querySelector('[data-role="fecha-est"]').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+      node.querySelector('[data-role="fecha-est"]').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
       const barra=node.querySelector('[data-role="barra"]');
       barra.style.width=proy.avance.toFixed(0)+'%';
       barra.style.background=colorUrgencia;
@@ -17483,7 +17483,7 @@ function renderMantenimiento(){
     histEl.innerHTML = hist.length ? ('<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Historial</div>'+
       hist.map(h=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-top:1px solid var(--border)">
         <span>${escapeHtml(h.nota||'Realizado')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
-        <span style="color:var(--text3)">${h.fecha}</span>
+        <span style="color:var(--text3)">${fmtFechaCorta(h.fecha)}</span>
       </div>`).join('')) : '';
     listaEl.appendChild(node);
   });
@@ -17725,10 +17725,10 @@ function renderFuelChart(type, rows){
   const glpColor='#5b8def', gasColor='#f0a53c';
   const baseColor=type==='glp'?glpColor:gasColor;
   const configs=[
-    {key:'kxg',     label:'KM por Galón (KxG)', color:baseColor,           fmt:v=>v.toFixed(2)},
-    {key:'pxg',     label:'Precio por Galón (S/)',color:type==='glp'?'#a78bfa':'#f05c5c',fmt:v=>'S/'+v.toFixed(2)},
-    {key:'totalGlp',label:type==='glp'?'Total GLP':'Total Gas', color:'#2dd4bf',fmt:v=>'S/'+v.toFixed(2)},
-    {key:'kmDiarios',label:'KM Diarios',          color:'#3ec96e',           fmt:v=>v.toFixed(1)+' km'},
+    {key:'kxg',     label:'KM por Galón (KxG)', color:baseColor,           fmt:v=>fuelFmt(v,2)},
+    {key:'pxg',     label:'Precio por Galón (S/)',color:type==='glp'?'#a78bfa':'#f05c5c',fmt:v=>'S/ '+fuelFmt(v,2)},
+    {key:'totalGlp',label:type==='glp'?'Total GLP':'Total Gas', color:'#2dd4bf',fmt:v=>'S/ '+fuelFmt(v,2)},
+    {key:'kmDiarios',label:'KM Diarios',          color:'#3ec96e',           fmt:v=>fuelFmt(v,1)+' km'},
   ];
   const cfg=configs[fuelChartIdx[type]||0];
   const valid=rows.filter(r=>{
@@ -17849,7 +17849,7 @@ function editOwnerName(){
 const TCT_PALETTE = ['#2f6fd1','#f0a53c','#8bc34a','#6b7280','#7fa8d9','#a78bfa','#f05c5c','#2dd4bf','#ec4899','#eab308'];
 
 function tctFmtSoles(v){ return (v===null||v===undefined||isNaN(v)) ? '—' : 'S/ '+fuelFmt(v,2); }
-function tctFmtUSD(v){   return (v===null||v===undefined||isNaN(v)) ? '—' : '$'+fuelFmt(v,2); }
+function tctFmtUSD(v){   return (v===null||v===undefined||isNaN(v)) ? '—' : '$ '+fuelFmt(v,2); }
 function tctFmtTC(v){    return (v===null||v===undefined||isNaN(v)) ? '—' : 'S/ '+fuelFmt(v,4); }
 
 // ── CÁLCULO POR FILA ───────────────────────────────────
@@ -18579,7 +18579,7 @@ function renderDeudasMayores(){
     const r = getDMResumen(d);
     const pct = r.total>0 ? (r.pagadas/r.total)*100 : 0;
     const proxLabel = r.proximaFecha
-      ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})
+      ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'})
       : '✅ Completado';
     return `<div class="dm-card dm-${d.tipo}" onclick="openDMDetail('${d.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -18632,7 +18632,7 @@ function renderDMDetail(){
   document.getElementById('dm-sum-pagadas').textContent = r.pagadas+' / '+r.total;
   document.getElementById('dm-sum-restantes').textContent = r.restantes;
   document.getElementById('dm-sum-proximo').textContent = r.proximaFecha
-    ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})
+    ? new Date(r.proximaFecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'})
     : '✅ Completado';
 
   const thead = document.getElementById('dm-detail-thead');
@@ -18808,7 +18808,7 @@ function renderFechasImportantes(){
   if(!items.length){ grid.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">📅</div>Sin fechas próximas.</div>'; return; }
   grid.innerHTML = items.map(it=>{
     const t = CAL_TIPOS[it.event.tipo] || CAL_TIPOS.otro;
-    const dateLabel = it.fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'short'});
+    const dateLabel = it.fecha.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit',weekday:'short'});
     const countColor = it.isPast ? 'var(--text2)' : (it.diffDays<=7 ? 'var(--red)' : t.color);
     const clickAccion = it.event.auto ? `showPage('${it.event.origenPage}')` : `showPage('calendario')`;
     return `<div class="fecha-imp-card" onclick="${clickAccion}">
@@ -19396,7 +19396,7 @@ function renderSueldoChart(){
     const ingresos=boletas.map(b=>+(b.basica+b.bono+b.otros+(b.utilidades||0)).toFixed(2));
     const retEst=boletas.map(b=>+b.retencion5taEstimada.toFixed(2));
     const retReal=boletas.map(b=>b.retencion5taReal!==null&&b.retencion5taReal!==undefined?+b.retencion5taReal.toFixed(2):null);
-    const baseOpts=chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k');
+    const baseOpts=chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k');
     sueldoChart=new Chart(ctx,{data:{labels,datasets:[
       {type:'bar',label:'Ingreso',data:ingresos,backgroundColor:'rgba(91,141,239,.25)',borderColor:'#5b8def',borderWidth:1.5,borderRadius:3,yAxisID:'y'},
       {type:'line',label:'5ta estimada',data:retEst,borderColor:'#f0a53c',borderWidth:2,pointRadius:3,tension:.3,yAxisID:'y1'},
@@ -19404,7 +19404,7 @@ function renderSueldoChart(){
     ]},options:{...baseOpts,scales:{
       x:baseOpts.scales.x,
       y:{position:'left',grid:baseOpts.scales.y.grid,ticks:baseOpts.scales.y.ticks},
-      y1:{position:'right',grid:{display:false},ticks:{...baseOpts.scales.y.ticks,callback:v=>'S/'+numFmtSigned(v,0)}},
+      y1:{position:'right',grid:{display:false},ticks:{...baseOpts.scales.y.ticks,callback:v=>'S/ '+numFmtSigned(v,0)}},
     }}});
     legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#5b8def;display:inline-block"></span>Ingreso</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f0a53c;display:inline-block"></span>5ta estimada</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f05c5c;display:inline-block"></span>5ta real</span>`;
   } else if(currentSueldoChartTab===1){
@@ -19415,7 +19415,7 @@ function renderSueldoChart(){
     });
     sueldoChart=new Chart(ctx,{data:{labels,datasets:[
       {type:'line',label:'Neto estimado',data:netos,borderColor:'#2dd4bf',borderWidth:2,pointRadius:4,tension:.3,fill:{target:'origin',above:'#2dd4bf22'}},
-    ]},options:chartOpts(v=>'S/'+(v/1000).toFixed(1)+'k')});
+    ]},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
     legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#2dd4bf;display:inline-block"></span>Neto mensual estimado</span>`;
   } else {
     const tasas=boletas.map(b=>{
@@ -19696,12 +19696,12 @@ function guardarAFPSaldo(){
     if(s){
       const antes={...s};
       s.fecha=fecha; s.saldoTotal=saldoTotal;
-      logActividad('afp_saldo_editado', `Saldo AFP editado: ${fecha} — S/ ${numFmtSigned(saldoTotal,2)}`, {afpSaldoId:s.id, snapshotAntes:antes});
+      logActividad('afp_saldo_editado', `Saldo AFP editado: ${fmtFechaCorta(fecha)} — S/ ${numFmtSigned(saldoTotal,2)}`, {afpSaldoId:s.id, snapshotAntes:antes});
     }
   } else {
     const nuevoSaldo={id:'afp-saldo-'+Date.now(), fecha, saldoTotal};
     state.afp.saldos.push(nuevoSaldo);
-    logActividad('afp_saldo_nuevo', `Saldo AFP: ${fecha} — S/ ${numFmtSigned(saldoTotal,2)}`, {afpSaldoId:nuevoSaldo.id});
+    logActividad('afp_saldo_nuevo', `Saldo AFP: ${fmtFechaCorta(fecha)} — S/ ${numFmtSigned(saldoTotal,2)}`, {afpSaldoId:nuevoSaldo.id});
   }
   saveState();
   cerrarAFPSaldoModal();
@@ -19714,7 +19714,7 @@ function eliminarAFPSaldo(id){
   migrarAFPSiNecesario();
   const saldoBorrado=state.afp.saldos.find(x=>x.id===sid);
   state.afp.saldos=state.afp.saldos.filter(x=>x.id!==sid);
-  if(saldoBorrado) logActividad('afp_saldo_eliminado', `Saldo AFP eliminado: ${saldoBorrado.fecha}`, {afpSaldoSnapshot:saldoBorrado});
+  if(saldoBorrado) logActividad('afp_saldo_eliminado', `Saldo AFP eliminado: ${fmtFechaCorta(saldoBorrado.fecha)}`, {afpSaldoSnapshot:saldoBorrado});
   saveState();
   cerrarAFPSaldoModal();
   renderAFP();
@@ -19831,7 +19831,7 @@ function renderAFP(){
       const rentTxt = r.rentabilidad===null ? '—' : (r.rentabilidad>=0?'+':'-')+sym+numFmt(r.rentabilidad);
       const pctTxt = r.pct===null ? '—' : (r.pct>=0?'+':'')+r.pct.toFixed(2)+'%';
       return `<tr>
-        <td style="padding-left:24px">${r.fecha}</td>
+        <td style="padding-left:24px">${fmtFechaCorta(r.fecha)}</td>
         <td style="text-align:right;font-weight:600">${sym}${numFmt(r.saldoTotal)}</td>
         <td style="text-align:right;color:${rentColor}">${rentTxt}</td>
         <td style="text-align:right;color:${rentColor}">${pctTxt}</td>
@@ -20025,7 +20025,7 @@ function abrirHistorialPrecioCompra(id){
       if(diff!==0) cambio=`<span style="color:${diff>0?'var(--red)':'var(--green)'};font-size:10px;margin-left:6px">${diff>0?'▲':'▼'} ${sym}${numFmt(diff)}</span>`;
     }
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:12px;color:var(--text3)">${h.fecha}</span>
+      <span style="font-size:12px;color:var(--text3)">${fmtFechaCorta(h.fecha)}</span>
       <span style="font-size:13px;font-weight:600">${sym}${numFmt(h.precio)}${cambio}</span>
     </div>`;
   }).join('') : '<div style="font-size:11px;color:var(--text3)">Sin historial.</div>';
@@ -20212,7 +20212,7 @@ function renderListaCompras(){
       ${cambioTxt}
       ${item.notas?`<div style="font-size:11px;color:var(--text3)">${escapeHtml(item.notas)}</div>`:''}
       ${esComprado?`
-        <div style="font-size:10px;color:var(--text3)">Comprado el ${item.fechaComprado}${yaLlego?` · Llegó el ${item.fechaLlegada}`:''}</div>
+        <div style="font-size:10px;color:var(--text3)">Comprado el ${fmtFechaCorta(item.fechaComprado)}${yaLlego?` · Llegó el ${fmtFechaCorta(item.fechaLlegada)}`:''}</div>
         <div style="font-size:10px;color:${diasColor};font-weight:600">${yaLlego?`⏱ Tardó ${dias} día(s) en total`:`⏱ Lleva ${dias} día(s) en camino`}</div>
         ${item.linkSeguimiento?`<a href="${escapeHtml(item.linkSeguimiento)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent)">📍 Ver seguimiento ↗</a>`:''}
       `:''}
@@ -21608,7 +21608,7 @@ function saveCalEvent(){
   } else {
     const nuevoEv={id:'cal-'+Date.now(), titulo, fecha, tipo, recurrente, recurrenteAnual, fijado, icono, notas};
     state.calendarEvents.push(nuevoEv);
-    logActividad('evento', `Evento: ${titulo} — ${fecha}`, {eventoId:nuevoEv.id});
+    logActividad('evento', `Evento: ${titulo} — ${fmtFechaCorta(fecha)}`, {eventoId:nuevoEv.id});
   }
   saveState();
   closeCalEventModal();
