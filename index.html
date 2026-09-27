@@ -1016,7 +1016,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="nav-center">
     <button class="nav-tab active" id="nav-dashboard" onclick="showPage('dashboard')">🏠 Resumen</button>
     <button class="nav-tab" id="nav-finanzas" onclick="showPage('finanzas')">📊 Finanzas</button>
-    <button class="nav-tab" id="nav-aprobaciones" onclick="showPage('aprobaciones')" style="position:relative">🔔 Aprobaciones<span id="nav-aprobaciones-badge" class="nav-badge" style="display:none">0</span></button>
 
     <div class="nav-dropdown" id="navdrop-analisis">
       <button class="nav-tab nav-dropdown-trigger" onclick="toggleNavDropdown('analisis',event)">📊 Análisis ▾</button>
@@ -1057,6 +1056,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-minijuegos" onclick="showPage('minijuegos')">🎮 Minijuegos</button>
       </div>
     </div>
+
+    <button class="nav-tab" id="nav-aprobaciones" onclick="showPage('aprobaciones')" style="position:relative">🔔 Aprobaciones<span id="nav-aprobaciones-badge" class="nav-badge" style="display:none">0</span></button>
   </div>
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
@@ -3386,8 +3387,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '27/09/26 - 15:35'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '"🔔 Aprobaciones" ahora cubre BBVA, BCP, Interbank y Falabella: cualquier correo de un banco reconocido que no se pueda interpretar cae igual a la lista, marcado "no reconocido", en vez de perderse. Cada pendiente muestra el detalle completo antes de decidir (a qué cuenta/tarjeta va, si es ingreso o gasto, categoría sugerida) y tiene 3 acciones: ✅ Aprobar (rápido, con resumen de confirmación), ✏ Editar (corrige o completa todo a mano) y 🗑 Eliminar. Requiere desplegar el bot actualizado y configurar el Apps Script de Gmail con las nuevas reglas (ver instrucciones aparte) — reemplaza la versión anterior (solo BBVA) si aún no la habías desplegado.';
+const APP_VERSION_DATE = '27/09/26 - 16:13'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '"🔔 Aprobaciones" ahora se ubica al final del menú (después de "Otros") y tiene un botón "🗑 Vaciar todos" para borrar de golpe todos los pendientes (útil si el Apps Script del correo procesó de más). El resto sigue igual: cubre BBVA, BCP, Interbank y Falabella, cualquier correo no interpretable cae como "no reconocido" en vez de perderse, y cada pendiente muestra el detalle completo (cuenta/tarjeta, ingreso o gasto, categoría) con las 3 acciones Aprobar / Editar / Eliminar.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20700,6 +20701,26 @@ function eliminarPendiente(id){
   const quien = p.descripcion || (p.noReconocido?('correo sin reconocer de '+(p.banco||'?')):'este movimiento');
   if(!confirm(`¿Eliminar "${quien}"? No se va a registrar ningún movimiento (útil si ya lo cargaste a mano, si no corresponde a un gasto real, o si el correo no trae nada usable).`)) return;
   DOC_REF.collection('pendientesBanco').doc(id).delete().catch(e=>console.warn('No se pudo borrar el pendiente eliminado:', e));
+}
+// Borra TODOS los pendientes de una sola vez (útil tras un mal arranque del
+// Apps Script que procesó correos viejos de golpe) — nunca toca movimientos
+// reales, solo la cola de "🔔 Aprobaciones". Firestore permite máx. 500
+// operaciones por batch, así que se agrupan en lotes de 450 por seguridad.
+function vaciarTodosPendientes(){
+  if(!pendientesBanco.length) return;
+  if(!confirm(`¿Eliminar los ${pendientesBanco.length} pendientes de "🔔 Aprobaciones"? No se va a registrar ningún movimiento por ninguno de ellos — es solo para vaciar la lista.`)) return;
+  if(!DOC_REF){ alert('No se pudo conectar con la base de datos — intenta de nuevo en un momento.'); return; }
+  const coleccion = DOC_REF.collection('pendientesBanco');
+  const ids = pendientesBanco.map(p=>p.id);
+  const chunks = [];
+  for(let i=0;i<ids.length;i+=450) chunks.push(ids.slice(i,i+450));
+  chunks.reduce((chain, chunk)=>chain.then(()=>{
+    const batch = db.batch();
+    chunk.forEach(id=>batch.delete(coleccion.doc(id)));
+    return batch.commit();
+  }), Promise.resolve())
+  .then(()=>toast(`✅ ${ids.length} pendiente(s) eliminado(s)`))
+  .catch(e=>{ console.warn('Error al vaciar pendientes:', e); alert('Hubo un error al vaciar los pendientes — revisa la consola o intenta de nuevo.'); });
 }
 
 // ══════════════════════════════════════════════════════
