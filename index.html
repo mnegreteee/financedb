@@ -859,6 +859,19 @@ body.compact-mode .anual-table{font-size:11px;}
 .cp-row-actions{display:flex;gap:4px;flex-shrink:0;}
 @media(max-width:600px){.cp-row{flex-wrap:wrap;}.cp-row-dias{min-width:0;}}
 
+/* Aprobaciones bancarias — badge de pendientes en el nav, y tarjetas de la
+   lista (una por correo detectado, con Aprobar/Rechazar). */
+.nav-badge{position:absolute;top:2px;right:2px;background:var(--red);color:#fff;font-size:9px;font-weight:700;line-height:1;padding:2px 5px;border-radius:9px;min-width:14px;text-align:center;}
+.pb-card{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;box-shadow:var(--card-shadow);}
+.pb-icon{width:38px;height:38px;border-radius:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.pb-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.pb-info-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.pb-monto{font-size:16px;font-weight:700;font-family:var(--mono);}
+.pb-quien{font-size:12px;font-weight:600;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pb-meta{font-size:10px;color:var(--text3);}
+.pb-actions{display:flex;gap:6px;flex-shrink:0;}
+@media(max-width:600px){.pb-card{flex-wrap:wrap;}.pb-actions{width:100%;justify-content:flex-end;}}
+
 
 /* ══ CALENDARIO ══ */
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
@@ -1003,6 +1016,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="nav-center">
     <button class="nav-tab active" id="nav-dashboard" onclick="showPage('dashboard')">🏠 Resumen</button>
     <button class="nav-tab" id="nav-finanzas" onclick="showPage('finanzas')">📊 Finanzas</button>
+    <button class="nav-tab" id="nav-aprobaciones" onclick="showPage('aprobaciones')" style="position:relative">🔔 Aprobaciones<span id="nav-aprobaciones-badge" class="nav-badge" style="display:none">0</span></button>
 
     <div class="nav-dropdown" id="navdrop-analisis">
       <button class="nav-tab nav-dropdown-trigger" onclick="toggleNavDropdown('analisis',event)">📊 Análisis ▾</button>
@@ -2325,6 +2339,69 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 </div>
 
+<!-- ══════════ PÁGINA: APROBACIONES BANCARIAS ══════════ -->
+<!-- Consumos/transferencias detectados automáticamente desde los correos del
+     banco (ver bankEmailWebhook en el bot) llegan aquí como "pendientes" —
+     nunca se registran solos, porque puede que ya se hayan cargado a mano
+     o que sean un movimiento entre cuentas propias que no es un gasto real. -->
+<div class="page" id="page-aprobaciones">
+<div class="container">
+
+  <div class="section-header" style="margin-bottom:16px">
+    <div class="section-title">🔔 Aprobaciones</div>
+  </div>
+
+  <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Consumos y transferencias detectados en tu correo del banco. Revisa cada uno antes de que se registre — puede que ya lo hayas cargado a mano.</div>
+
+  <div id="aprobaciones-list" style="display:flex;flex-direction:column;gap:10px"></div>
+  <div id="aprobaciones-empty" class="dash-empty" style="display:none">No tienes pendientes por aprobar. 🎉</div>
+
+</div>
+</div>
+
+<!-- MODAL: EDITAR/APROBAR PENDIENTE BANCARIO (crea el movimiento real) -->
+<div class="modal-overlay" id="pbm-overlay" onclick="if(event.target===this)cerrarAprobarPendienteModal()">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span id="pbm-title">Aprobar movimiento</span><button class="modal-close" onclick="cerrarAprobarPendienteModal()">✕</button></div>
+    <div id="pbm-noreconocido-info" style="display:none;font-size:11px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-weight:600;color:var(--text2);margin-bottom:4px">⚠ No se pudo interpretar este correo automáticamente</div>
+      <div>Asunto: <span id="pbm-nr-asunto"></span></div>
+      <div>De: <span id="pbm-nr-remitente"></span></div>
+      <div id="pbm-nr-fragmento" style="margin-top:4px;color:var(--text3);white-space:pre-wrap;max-height:120px;overflow-y:auto"></div>
+    </div>
+    <div id="pbm-duplicado-aviso" style="display:none;font-size:11px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px">⚠ Ya existe un movimiento parecido — revisa que no sea el mismo antes de aprobar.</div>
+    <div class="field"><label>Descripción</label><input id="pbm-desc" type="text"></div>
+    <div class="field-row">
+      <div class="field"><label>Tipo</label>
+        <select id="pbm-tipo-mov" onchange="onAprobarPendienteMetodoChange()">
+          <option value="gasto">Gasto</option>
+          <option value="ingreso">Ingreso</option>
+        </select>
+      </div>
+      <div class="field"><label>Método de pago</label>
+        <select id="pbm-metodo" onchange="onAprobarPendienteMetodoChange()">
+          <option value="cuenta">Cuenta (débito / efectivo)</option>
+          <option value="tarjeta">Tarjeta de crédito</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="pbm-cuenta-wrap"><label>Cuenta</label><select id="pbm-cuenta"></select></div>
+    <div class="field" id="pbm-tarjeta-wrap" style="display:none"><label>Tarjeta</label><select id="pbm-tarjeta"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Monto</label><input id="pbm-monto" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Moneda</label>
+        <select id="pbm-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Fecha</label><input id="pbm-fecha" type="date"></div>
+    <div class="field"><label>Categoría <small>(opcional)</small></label><select id="pbm-cat"></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarAprobarPendienteModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarAprobarPendiente()">✅ Registrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ PÁGINA: AHORROS E INTERESES ══════════ -->
 <div class="page" id="page-ahorros-intereses">
 <div class="container">
@@ -3308,8 +3385,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '27/09/26 - 11:32'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Lista de Compras: tarjeta rediseñada con bloque de días transcurridos destacado (con aviso si va más lento de lo usual), mini línea de tiempo Agregado→Comprado→Entregado, y bloque de seguimiento más visible. Se agregó también un botón para alternar entre vista de tarjetas y vista en filas (para escanear la lista completa más rápido); se recuerda con qué vista te quedaste.';
+const APP_VERSION_DATE = '27/09/26 - 15:35'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '"🔔 Aprobaciones" ahora cubre BBVA, BCP, Interbank y Falabella: cualquier correo de un banco reconocido que no se pueda interpretar cae igual a la lista, marcado "no reconocido", en vez de perderse. Cada pendiente muestra el detalle completo antes de decidir (a qué cuenta/tarjeta va, si es ingreso o gasto, categoría sugerida) y tiene 3 acciones: ✅ Aprobar (rápido, con resumen de confirmación), ✏ Editar (corrige o completa todo a mano) y 🗑 Eliminar. Requiere desplegar el bot actualizado y configurar el Apps Script de Gmail con las nuevas reglas (ver instrucciones aparte) — reemplaza la versión anterior (solo BBVA) si aún no la habías desplegado.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3368,6 +3445,14 @@ let editingBudgetCat=null;
 // Firebase initialized lazily after DOM+scripts load (see initFirebase below)
 let db = null;
 let DOC_REF = null;
+
+// Pendientes de aprobación bancaria (users/{uid}/pendientesBanco) — viven
+// SOLO en memoria, poblados en vivo por su propio listener de Firestore
+// (ver iniciarListenerTiempoReal). No forman parte de `state`: nunca pasan
+// por saveState()/_doFirestoreWrite, así que aprobar/rechazar uno es
+// siempre una escritura/borrado puntual a SU documento, nunca una
+// reescritura de nada más.
+let pendientesBanco = [];
 
 // ══════════════════════════════════════════════════════
 //  SINCRONIZACIÓN MULTI-DISPOSITIVO — antes, cada guardado sobreescribía
@@ -5135,6 +5220,7 @@ function showPage(name){
   if(name==='sueldos')     renderSueldos();
   if(name==='afp')         renderAFP();
   if(name==='compras')     renderListaCompras();
+  if(name==='aprobaciones') renderAprobacionesBanco();
   if(name==='ahorros-intereses') renderAhorrosIntereses();
   if(name==='minijuegos')  initMinijuegos();
 }
@@ -11753,7 +11839,7 @@ function getAllCategorias(){
 function updateCategorySelects(){
   const cats = Object.keys(getAllCategorias());
   // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
-  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat','srv-edit-cat','tcopc-cat','tcopv-cat'].forEach(id=>{
+  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat','srv-edit-cat','tcopc-cat','tcopv-cat','pbm-cat'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -20368,6 +20454,252 @@ function renderListaCompras(){
 }
 
 // ══════════════════════════════════════════════════════
+//  APROBACIONES BANCARIAS — consumos/transferencias detectados por el
+//  webhook (bankEmailWebhook, desde Apps Script leyendo Gmail, para BBVA,
+//  BCP, Interbank y Falabella) quedan en users/{uid}/pendientesBanco hasta
+//  que se aprueban, editan o eliminan acá. Nunca se registran solos: puede
+//  que ya estén cargados a mano, ser una transferencia entre cuentas
+//  propias que no es un gasto real, o venir "sin reconocer" (el banco
+//  cambió el formato del correo y el Apps Script no pudo interpretarlo) —
+//  para esos últimos, la única acción útil es "✏ Editar" y completar todo
+//  a mano con el asunto/remitente/fragmento como contexto.
+// ══════════════════════════════════════════════════════
+function updateAprobacionesBadge(){
+  const badge=document.getElementById('nav-aprobaciones-badge');
+  if(!badge) return;
+  const n=pendientesBanco.length;
+  badge.style.display = n ? 'block' : 'none';
+  badge.textContent = n>9 ? '9+' : String(n);
+}
+// Intenta hacer calzar el "hint" que mandó el Apps Script (ej. 'BBVA',
+// 'Amex Platinum', 'CMR,Falabella') contra las cuentas/tarjetas REALES que
+// el usuario tiene configuradas ahora mismo en el app — nunca contra una
+// lista fija, así que si agrega o renombra una tarjeta, la próxima vez que
+// entre a Aprobaciones ya calza sin tocar nada del bot/script. Un hint
+// puede traer varias alternativas separadas por coma (se prueba cada una).
+function _normTexto(s){ return (s||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+function resolverCuentaOTarjeta(p){
+  if(p.tarjetaHint){
+    const alternativas=p.tarjetaHint.split(',').map(_normTexto).filter(Boolean);
+    const t=(state.tarjetas||[]).find(t=>{
+      const label=_normTexto(t.banco+(t.cat?' '+t.cat:''));
+      const soloBanco=_normTexto(t.banco);
+      return alternativas.some(h=>label.includes(h)||h.includes(soloBanco));
+    });
+    if(t) return {tipo:'tarjeta', id:t.id, label:t.banco+(t.cat?' '+t.cat:'')};
+  }
+  if(p.cuentaHint){
+    const alternativas=p.cuentaHint.split(',').map(_normTexto).filter(Boolean);
+    const key=getAllAccountKeys().find(k=>{
+      const nk=_normTexto(k);
+      return alternativas.some(h=>nk.includes(h)||h.includes(nk));
+    });
+    if(key) return {tipo:'cuenta', id:key, label:key};
+  }
+  return null;
+}
+function renderAprobacionesBanco(){
+  const list=document.getElementById('aprobaciones-list');
+  if(!list) return;
+  document.getElementById('aprobaciones-empty').style.display = pendientesBanco.length ? 'none' : 'block';
+  list.innerHTML = pendientesBanco.map(p=>{
+    if(p.noReconocido){
+      return `<div class="pb-card" id="pb-card-${p.id}" style="align-items:flex-start">
+        <div class="pb-icon">❓</div>
+        <div class="pb-info">
+          <div class="pb-info-top"><span class="pb-quien">${escapeHtml(p.banco||'Desconocido')} — no reconocido</span></div>
+          <div class="pb-meta">Asunto: "${escapeHtml(p.asunto||'')}"${p.remitente?' · De: '+escapeHtml(p.remitente):''}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">Completa los datos a mano con "Editar".</div>
+        </div>
+        <div class="pb-actions">
+          <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
+          <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar</button>
+        </div>
+      </div>`;
+    }
+    const sym = p.moneda==='USD' ? '$' : 'S/';
+    const esIngreso = p.tipoMovimiento==='ingreso';
+    const resuelto = resolverCuentaOTarjeta(p);
+    const catSugerida = suggestCategoriaForDesc(p.descripcion);
+    const iconoTipo = esIngreso ? '⬆️' : '⬇️';
+    return `<div class="pb-card" id="pb-card-${p.id}" style="align-items:flex-start">
+      <div class="pb-icon">${iconoTipo}</div>
+      <div class="pb-info">
+        <div class="pb-info-top">
+          <span class="pb-monto" style="color:${esIngreso?'var(--green)':'var(--text)'}">${sym} ${numFmt(p.monto)}</span>
+          <span class="pb-quien">${escapeHtml(p.descripcion||'Sin nombre')}</span>
+          <span class="cp-badge ${esIngreso?'entregado':'en-camino'}">${esIngreso?'Ingreso':'Gasto'}</span>
+        </div>
+        <div class="pb-meta">${escapeHtml(p.banco||'')} · ${escapeHtml(p.tipoLabel||'')} · ${fmtFechaCorta(p.fecha)}${p.hora?' '+p.hora.slice(0,5):''}</div>
+        <div class="pb-meta" style="margin-top:2px">
+          ${resuelto ? `Va a: <b>${escapeHtml(resuelto.label)}</b> ${resuelto.tipo==='tarjeta'?'(tarjeta)':'(cuenta)'}` : `<span style="color:var(--amber)">⚠ No se detectó a qué cuenta/tarjeta va — usa Editar</span>`}
+          ${catSugerida?` · Categoría sugerida: <b>${escapeHtml(catSugerida)}</b>`:' · Sin categoría sugerida'}
+        </div>
+      </div>
+      <div class="pb-actions">
+        <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
+        <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar</button>
+        <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="aprobarRapido('${p.id}')" ${resuelto?'':'disabled title="Primero usa Editar para elegir cuenta/tarjeta"'}>✅ Aprobar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+// Compara fecha+monto contra el historial ya cargado (movimientos de
+// cuenta + consumos de tarjeta) — la descripción casi nunca va a calzar
+// exacto (el banco manda "PLUZ ENERGIA APP", uno a mano quizás puso "Luz"),
+// así que solo avisa, nunca bloquea.
+function buscarPosibleDuplicado(fecha, monto){
+  if(!(monto>0)) return null;
+  const objetivo = Math.round(Number(monto)*100);
+  const enMovs = (state.movimientos||[]).find(m=>m.date===fecha && Math.round(Number(m.amount)*100)===objetivo);
+  if(enMovs) return enMovs.desc||'un movimiento';
+  for(const t of (state.tarjetas||[])){
+    for(const arr of Object.values(t.movs||{})){
+      const found=(arr||[]).find(m=>m.fecha===fecha && Math.round(Number(m.monto)*100)===objetivo);
+      if(found) return found.desc||'un consumo de tarjeta';
+    }
+  }
+  return null;
+}
+// Registra el movimiento real a partir de un pendiente + los valores ya
+// decididos (a mano en el modal, o auto-resueltos en el camino rápido) —
+// un solo lugar para las dos rutas, así no se puede desincronizar.
+function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat}){
+  if(tipoMov==='ingreso' && destino.tipo==='tarjeta'){ alert('No se puede registrar un ingreso a una tarjeta de crédito — elige una cuenta.'); return false; }
+  if(destino.tipo==='cuenta'){
+    pushMovimiento({
+      id:'pb-mov-'+Date.now(), type: tipoMov==='ingreso'?'income':'expense', desc, amount:monto,
+      account:destino.id, date:fecha, currency, cat,
+    });
+  } else {
+    const t=getTarjeta(destino.id);
+    if(!t){ alert('Esa tarjeta ya no existe — selecciona otra.'); return false; }
+    const monthKey=getBillingMonthKey(fecha, t);
+    if(!t.movs) t.movs={};
+    if(!t.movs[monthKey]) t.movs[monthKey]=[];
+    t.movs[monthKey].push({ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency });
+  }
+  logActividad('pendiente_banco_aprobado', `Aprobado desde correo del banco: ${desc} — ${currency==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`, {pendienteId:p.id});
+  saveState();
+  DOC_REF.collection('pendientesBanco').doc(p.id).delete().catch(e=>console.warn('No se pudo borrar el pendiente aprobado:', e));
+  toast('✅ Movimiento registrado');
+  return true;
+}
+// Camino rápido: usa tal cual lo que se detectó/sugirió, pero SIEMPRE
+// muestra un resumen completo antes de registrar (lo que pediste: poder
+// ver a qué cuenta/tarjeta va, si es ingreso o gasto, categoría, etc. antes
+// de confirmar) — si algo no calza, se cancela y se usa "Editar" en su lugar.
+function aprobarRapido(id){
+  const p=pendientesBanco.find(x=>x.id===id);
+  if(!p) return;
+  const resuelto=resolverCuentaOTarjeta(p);
+  if(!resuelto){ alert('No se detectó a qué cuenta/tarjeta va este movimiento — usa "Editar" para elegirla a mano.'); return; }
+  const cat=suggestCategoriaForDesc(p.descripcion);
+  const sym=p.moneda==='USD'?'$':'S/';
+  const dup=buscarPosibleDuplicado(p.fecha, p.monto);
+  const resumen = `¿Registrar este movimiento?\n\n`+
+    `Tipo: ${p.tipoMovimiento==='ingreso'?'Ingreso':'Gasto'}\n`+
+    `Descripción: ${p.descripcion}\n`+
+    `Monto: ${sym} ${numFmt(p.monto)}\n`+
+    `Va a: ${resuelto.label} (${resuelto.tipo==='tarjeta'?'tarjeta':'cuenta'})\n`+
+    `Categoría: ${cat||'(sin categoría)'}\n`+
+    `Fecha: ${fmtFechaCorta(p.fecha)}`+
+    (dup?`\n\n⚠ Ya existe "${dup}" el ${fmtFechaCorta(p.fecha)} por el mismo monto — revisa que no sea el mismo.`:'');
+  if(!confirm(resumen)) return;
+  _registrarDesdePendiente(p, {desc:p.descripcion, tipoMov:p.tipoMovimiento||'gasto', destino:resuelto, monto:p.monto, currency:p.moneda, fecha:p.fecha, cat});
+}
+let aprobarPendienteId=null;
+function abrirAprobarPendienteModal(id){
+  const p=pendientesBanco.find(x=>x.id===id);
+  if(!p) return;
+  aprobarPendienteId=id;
+  document.getElementById('pbm-title').textContent = (p.noReconocido?'✏ Completar movimiento':'✏ Editar movimiento')+' — '+(p.banco||'');
+  document.getElementById('pbm-noreconocido-info').style.display = p.noReconocido ? 'block' : 'none';
+  if(p.noReconocido){
+    document.getElementById('pbm-nr-asunto').textContent = p.asunto||'(sin asunto)';
+    document.getElementById('pbm-nr-remitente').textContent = p.remitente||'(desconocido)';
+    document.getElementById('pbm-nr-fragmento').textContent = p.fragmentoCuerpo||'';
+  }
+  document.getElementById('pbm-desc').value = p.descripcion||'';
+  document.getElementById('pbm-tipo-mov').value = p.tipoMovimiento==='ingreso' ? 'ingreso' : 'gasto';
+  const resuelto = resolverCuentaOTarjeta(p);
+  const cuentas=getAllAccountKeys();
+  document.getElementById('pbm-cuenta').innerHTML=cuentas.map(k=>`<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join('');
+  const tarjetas=state.tarjetas||[];
+  document.getElementById('pbm-tarjeta').innerHTML=tarjetas.map(t=>`<option value="${t.id}">${escapeHtml(t.banco)}${t.cat?' '+escapeHtml(t.cat):''}</option>`).join('');
+  document.getElementById('pbm-metodo').value = (resuelto&&resuelto.tipo==='tarjeta') ? 'tarjeta' : 'cuenta';
+  if(resuelto){
+    if(resuelto.tipo==='cuenta') document.getElementById('pbm-cuenta').value=resuelto.id;
+    else document.getElementById('pbm-tarjeta').value=resuelto.id;
+  }
+  document.getElementById('pbm-monto').value = p.monto||'';
+  document.getElementById('pbm-currency').value = p.moneda||'PEN';
+  document.getElementById('pbm-fecha').value = p.fecha||todayLocalISO();
+  onAprobarPendienteMetodoChange();
+  updateCategorySelects();
+  const sugerida = suggestCategoriaForDesc(p.descripcion);
+  document.getElementById('pbm-cat').value = sugerida || '';
+  const dup = p.monto>0 ? buscarPosibleDuplicado(p.fecha, p.monto) : null;
+  const avisoEl = document.getElementById('pbm-duplicado-aviso');
+  avisoEl.style.display = dup ? 'block' : 'none';
+  if(dup) avisoEl.textContent = `⚠ Ya existe "${dup}" el ${fmtFechaCorta(p.fecha)} por el mismo monto — revisa que no sea el mismo antes de aprobar.`;
+  document.getElementById('pbm-overlay').classList.add('open');
+}
+function cerrarAprobarPendienteModal(){
+  document.getElementById('pbm-overlay').classList.remove('open');
+  aprobarPendienteId=null;
+}
+function onAprobarPendienteMetodoChange(){
+  const esIngreso=document.getElementById('pbm-tipo-mov').value==='ingreso';
+  const metodoSel=document.getElementById('pbm-metodo');
+  // Este app no tiene el concepto de "ingreso a una tarjeta de crédito" —
+  // si se elige Ingreso, se fuerza el método a Cuenta.
+  if(esIngreso) metodoSel.value='cuenta';
+  [...metodoSel.options].forEach(o=>{ if(o.value==='tarjeta') o.disabled=esIngreso; });
+  const esTarjeta=metodoSel.value==='tarjeta';
+  document.getElementById('pbm-cuenta-wrap').style.display=esTarjeta?'none':'block';
+  document.getElementById('pbm-tarjeta-wrap').style.display=esTarjeta?'block':'none';
+  if(esTarjeta){
+    const t=getTarjeta(document.getElementById('pbm-tarjeta').value);
+    if(t) document.getElementById('pbm-currency').value=t.currency||'PEN';
+  }
+}
+function confirmarAprobarPendiente(){
+  const p=pendientesBanco.find(x=>x.id===aprobarPendienteId);
+  if(!p) return;
+  const desc=document.getElementById('pbm-desc').value.trim();
+  const tipoMov=document.getElementById('pbm-tipo-mov').value;
+  const metodo=document.getElementById('pbm-metodo').value;
+  const monto=parseFloat(document.getElementById('pbm-monto').value);
+  const currency=document.getElementById('pbm-currency').value;
+  const fecha=document.getElementById('pbm-fecha').value;
+  const cat=document.getElementById('pbm-cat').value||undefined;
+  if(!desc){ alert('Ingresa una descripción.'); return; }
+  if(isNaN(monto)||monto<=0){ alert('Ingresa un monto válido.'); return; }
+  if(!fecha){ alert('Ingresa una fecha.'); return; }
+  let destino;
+  if(metodo==='cuenta'){
+    const cuenta=document.getElementById('pbm-cuenta').value;
+    if(!cuenta){ alert('Selecciona una cuenta.'); return; }
+    destino={tipo:'cuenta', id:cuenta};
+  } else {
+    const tarjetaId=document.getElementById('pbm-tarjeta').value;
+    if(!tarjetaId){ alert('Selecciona una tarjeta.'); return; }
+    destino={tipo:'tarjeta', id:tarjetaId};
+  }
+  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat})){
+    cerrarAprobarPendienteModal();
+  }
+}
+function eliminarPendiente(id){
+  const p=pendientesBanco.find(x=>x.id===id);
+  if(!p) return;
+  const quien = p.descripcion || (p.noReconocido?('correo sin reconocer de '+(p.banco||'?')):'este movimiento');
+  if(!confirm(`¿Eliminar "${quien}"? No se va a registrar ningún movimiento (útil si ya lo cargaste a mano, si no corresponde a un gasto real, o si el correo no trae nada usable).`)) return;
+  DOC_REF.collection('pendientesBanco').doc(id).delete().catch(e=>console.warn('No se pudo borrar el pendiente eliminado:', e));
+}
+
+// ══════════════════════════════════════════════════════
 //  MINIJUEGOS — 14 clásicos hechos con Canvas 2D / HTML nativo, sin
 //  librerías externas. Los mejores puntajes se guardan en Firestore
 //  (state.minijuegosHighScores). Los de física/animación continua (Dino,
@@ -21912,6 +22244,7 @@ function initFirebase(){
 // ══════════════════════════════════════════════════════
 let _tcUnsubscribeListener = null;
 let _movsUnsubscribeListener = null;
+let _pendientesBancoUnsub = null;
 function iniciarListenerTiempoReal(){
   detenerListenerTiempoReal(); // por si quedó uno de una sesión anterior
   if(!DOC_REF) return;
@@ -21977,10 +22310,24 @@ function iniciarListenerTiempoReal(){
       toast('🔄 Nuevo movimiento de otro dispositivo');
     }
   }, err=>console.warn('Listener de movimientos desconectado:', err));
+
+  // Pendientes de aprobación bancaria — colección chica (unos pocos a la
+  // vez), así que simplemente se reconstruye completa en cada cambio en vez
+  // de diffear como con movimientos (no vale la pena la complejidad extra).
+  _pendientesBancoUnsub = DOC_REF.collection('pendientesBanco').onSnapshot(snap=>{
+    if(demoMode) return;
+    pendientesBanco = snap.docs.map(d=>d.data());
+    // Más nuevo primero, para que lo recién detectado se vea arriba.
+    pendientesBanco.sort((a,b)=>(b.creadoEn&&b.creadoEn.seconds||0)-(a.creadoEn&&a.creadoEn.seconds||0));
+    updateAprobacionesBadge();
+    const pageEl=document.getElementById('page-aprobaciones');
+    if(pageEl && pageEl.classList.contains('active')) renderAprobacionesBanco();
+  }, err=>console.warn('Listener de pendientes bancarios desconectado:', err));
 }
 function detenerListenerTiempoReal(){
   if(_tcUnsubscribeListener){ _tcUnsubscribeListener(); _tcUnsubscribeListener=null; }
   if(_movsUnsubscribeListener){ _movsUnsubscribeListener(); _movsUnsubscribeListener=null; }
+  if(_pendientesBancoUnsub){ _pendientesBancoUnsub(); _pendientesBancoUnsub=null; }
 }
 
 // ══════════════════════════════════════════════════════
