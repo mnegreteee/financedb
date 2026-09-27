@@ -811,6 +811,53 @@ body.compact-mode .anual-table{font-size:11px;}
 .compras-summary-grid{grid-template-columns:repeat(4,1fr);}
 @media(max-width:900px){.compras-summary-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:600px){.compras-summary-grid{grid-template-columns:1fr;}}
+/* Lista de Compras — tarjeta con más detalle de días transcurridos y del
+   estado del envío (antes solo había una línea de texto con los días y el
+   link de seguimiento suelto). Se agrega un bloque de días destacado, una
+   mini línea de tiempo Agregado→Comprado→Entregado, y una vista alterna en
+   filas para revisar la lista completa sin tanto scroll. */
+.cp-card{display:flex;flex-direction:column;gap:10px;}
+.cp-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.cp-badge{font-size:9px;padding:2px 7px;border-radius:10px;white-space:nowrap;font-weight:600;flex-shrink:0;}
+.cp-badge.deseado{background:var(--bg3);color:var(--text3);}
+.cp-badge.en-camino{background:var(--amber);color:#fff;}
+.cp-badge.entregado{background:var(--green);color:#fff;}
+.cp-days-box{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:9px 12px;}
+.cp-days-box.warn{border-color:var(--amber);}
+.cp-days-box.alert{border-color:var(--red);}
+.cp-days-num{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1;flex-shrink:0;color:var(--text3);}
+.cp-days-box.warn .cp-days-num{color:var(--amber);}
+.cp-days-box.alert .cp-days-num{color:var(--red);}
+.cp-days-txt{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.cp-days-label{font-size:11px;font-weight:600;color:var(--text2);}
+.cp-days-sub{font-size:9.5px;color:var(--text3);}
+.cp-days-warn{margin-left:auto;font-size:9px;font-weight:700;color:var(--amber);background:var(--amber-bg);padding:3px 7px;border-radius:8px;white-space:nowrap;flex-shrink:0;}
+.cp-timeline{display:flex;align-items:flex-start;gap:2px;padding:2px 4px;}
+.cp-step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;min-width:0;}
+.cp-step-line{position:absolute;top:7px;left:-50%;width:100%;height:2px;background:var(--border2);z-index:0;}
+.cp-step:first-child .cp-step-line{display:none;}
+.cp-step.done .cp-step-line,.cp-step.current .cp-step-line{background:var(--green);}
+.cp-dot{width:15px;height:15px;border-radius:50%;background:var(--bg4);border:2px solid var(--border2);z-index:1;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;}
+.cp-step.done .cp-dot{background:var(--green);border-color:var(--green);}
+.cp-step.current .cp-dot{background:var(--amber);border-color:var(--amber);box-shadow:0 0 0 3px var(--amber-bg);}
+.cp-step-label{font-size:9px;font-weight:600;color:var(--text3);margin-top:4px;text-align:center;}
+.cp-step.done .cp-step-label,.cp-step.current .cp-step-label{color:var(--text2);}
+.cp-step-date{font-size:8.5px;color:var(--text3);margin-top:1px;font-family:var(--mono);text-align:center;}
+.cp-track-box{display:flex;align-items:center;gap:7px;background:rgba(91,141,239,0.1);border-radius:var(--radius-sm);padding:7px 10px;}
+.cp-track-box a{font-size:11px;color:var(--accent);text-decoration:none;font-family:var(--mono);}
+.cp-track-box a:hover{text-decoration:underline;}
+.cp-view-toggle{display:flex;gap:2px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:2px;flex-shrink:0;}
+.cp-view-toggle button{border:none;background:none;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;color:var(--text3);cursor:pointer;font-family:var(--font);}
+.cp-view-toggle button.active{background:var(--bg2);color:var(--text);}
+/* Vista en filas: una línea compacta por artículo — para escanear la lista
+   completa rápido en vez del detalle expandido de las tarjetas. */
+.compras-list-vista{display:flex;flex-direction:column;gap:6px;}
+.cp-row{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;}
+.cp-row-name{flex:1;min-width:0;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
+.cp-row-precio{font-size:12px;font-weight:700;font-family:var(--mono);flex-shrink:0;white-space:nowrap;}
+.cp-row-dias{font-size:10px;font-weight:600;flex-shrink:0;white-space:nowrap;min-width:64px;text-align:center;}
+.cp-row-actions{display:flex;gap:4px;flex-shrink:0;}
+@media(max-width:600px){.cp-row{flex-wrap:wrap;}.cp-row-dias{min-width:0;}}
 
 
 /* ══ CALENDARIO ══ */
@@ -2173,14 +2220,20 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="dash-split compras-summary-grid" id="compras-summary" style="margin-bottom:16px"></div>
 
-  <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px">
-    <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px;flex-shrink:0">Todos</button>
-    <button class="config-action-btn neutral" id="cp-filter-deseado" onclick="setComprasFilter('deseado')" style="font-size:11px;flex-shrink:0">🎯 Deseados</button>
-    <button class="config-action-btn neutral" id="cp-filter-en_camino" onclick="setComprasFilter('en_camino')" style="font-size:11px;flex-shrink:0">🚚 En camino</button>
-    <button class="config-action-btn neutral" id="cp-filter-entregado" onclick="setComprasFilter('entregado')" style="font-size:11px;flex-shrink:0">📦 Entregados</button>
+  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;flex:1;min-width:0">
+      <button class="config-action-btn neutral" id="cp-filter-all" onclick="setComprasFilter('all')" style="font-size:11px;flex-shrink:0">Todos</button>
+      <button class="config-action-btn neutral" id="cp-filter-deseado" onclick="setComprasFilter('deseado')" style="font-size:11px;flex-shrink:0">🎯 Deseados</button>
+      <button class="config-action-btn neutral" id="cp-filter-en_camino" onclick="setComprasFilter('en_camino')" style="font-size:11px;flex-shrink:0">🚚 En camino</button>
+      <button class="config-action-btn neutral" id="cp-filter-entregado" onclick="setComprasFilter('entregado')" style="font-size:11px;flex-shrink:0">📦 Entregados</button>
+    </div>
+    <div class="cp-view-toggle" id="cp-view-toggle">
+      <button id="cp-view-grid" onclick="setComprasVista('grid')" title="Vista de tarjetas">▦ Tarjetas</button>
+      <button id="cp-view-filas" onclick="setComprasVista('filas')" title="Vista en filas">☰ Filas</button>
+    </div>
   </div>
 
-  <div id="compras-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px"></div>
+  <div id="compras-grid"></div>
   <div id="compras-empty" class="dash-empty" style="display:none">Sin artículos en tu lista todavía. Agrega el primero con "+ Nuevo".</div>
 
 </div>
@@ -3255,8 +3308,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '26/09/26 - 14:07'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Revisión completa del formato de números: se corrigieron 3 gráficos más que dependían del locale del navegador (Cierre del Mes/Tendencia, Proyección de Ahorro, y AFP), y 3 lugares del Historial de Operaciones TC (compra/venta de dólares) que mostraban el monto sin separador de miles (ej. "1234.56" en vez de "1,234.56"). Ya no debería quedar ningún número sin el formato estándar de la app (coma de miles, punto decimal).';
+const APP_VERSION_DATE = '27/09/26 - 11:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Lista de Compras: tarjeta rediseñada con bloque de días transcurridos destacado (con aviso si va más lento de lo usual), mini línea de tiempo Agregado→Comprado→Entregado, y bloque de seguimiento más visible. Se agregó también un botón para alternar entre vista de tarjetas y vista en filas (para escanear la lista completa más rápido); se recuerda con qué vista te quedaste.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -19892,6 +19945,11 @@ function renderAFP(){
 //  cuenta, o un consumo dentro de t.movs[monthKey] para tarjeta).
 // ══════════════════════════════════════════════════════
 let comprasFilter='all';
+// Vista de tarjetas (con todo el detalle de días/timeline/tracking) o en
+// filas (una línea compacta por artículo, para escanear la lista completa
+// rápido) — se recuerda en localStorage porque es una preferencia de cómo
+// ver la pantalla, no un dato de la lista en sí.
+let comprasVista=localStorage.getItem('cp_vista')||'grid';
 let editingCompraId=null;
 function getUltimoPrecio(item){
   const h=item.historialPrecio||[];
@@ -19899,6 +19957,11 @@ function getUltimoPrecio(item){
 }
 function setComprasFilter(f){
   comprasFilter=f;
+  renderListaCompras();
+}
+function setComprasVista(v){
+  comprasVista=v;
+  localStorage.setItem('cp_vista', v);
   renderListaCompras();
 }
 function abrirCompraModal(id){
@@ -20184,6 +20247,10 @@ function renderListaCompras(){
     btn.style.color      = comprasFilter===f?'#fff':'';
     btn.style.borderColor= comprasFilter===f?'var(--accent)':'';
   });
+  ['grid','filas'].forEach(v=>{
+    const btn=document.getElementById('cp-view-'+v);
+    if(btn) btn.classList.toggle('active', comprasVista===v);
+  });
   let visibles;
   if(comprasFilter==='all') visibles=items;
   else if(comprasFilter==='en_camino') visibles=enCamino;
@@ -20191,6 +20258,8 @@ function renderListaCompras(){
   else visibles=items.filter(x=>x.estado===comprasFilter);
   const grid=document.getElementById('compras-grid');
   document.getElementById('compras-empty').style.display = visibles.length ? 'none' : 'block';
+  grid.className = comprasVista==='filas' ? 'compras-list-vista' : '';
+  grid.style.cssText = comprasVista==='filas' ? '' : 'display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px';
   grid.innerHTML=visibles.slice().reverse().map(item=>{
     const sym=item.moneda==='USD'?'$':'S/';
     const precio=getUltimoPrecio(item);
@@ -20203,25 +20272,90 @@ function renderListaCompras(){
     // Mientras está en camino, se resalta en naranja/rojo pasados ciertos
     // días — puede ser señal de que algo se demoró más de lo normal.
     const diasColor = !esComprado||yaLlego ? 'var(--text3)' : (dias>=25?'var(--red)':dias>=15?'var(--amber)':'var(--text3)');
-    let badge;
-    if(!esComprado) badge=`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:var(--bg3);color:var(--text3);white-space:nowrap">🎯 Deseado</span>`;
-    else if(yaLlego) badge=`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:var(--green);color:#fff;white-space:nowrap">📦 Entregado</span>`;
-    else badge=`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:var(--amber);color:#fff;white-space:nowrap">🚚 En camino</span>`;
-    return `<div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px${yaLlego?';opacity:.75':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+    let badgeTxt, badgeClass;
+    if(!esComprado){ badgeTxt='🎯 Deseado'; badgeClass='deseado'; }
+    else if(yaLlego){ badgeTxt='📦 Entregado'; badgeClass='entregado'; }
+    else { badgeTxt='🚚 En camino'; badgeClass='en-camino'; }
+    const badgeHtml=`<span class="cp-badge ${badgeClass}">${badgeTxt}</span>`;
+
+    // ── Vista en filas: una línea compacta, sin timeline ni bloque de
+    // días grande (esos van solo en la vista de tarjetas, donde hay
+    // espacio para el detalle). ──
+    if(comprasVista==='filas'){
+      return `<div class="cp-row" style="${yaLlego?'opacity:.7':''}">
+        ${item.link
+          ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" class="cp-row-name" title="Abrir enlace del producto">${escapeHtml(item.nombre)} <span style="font-size:9px;color:var(--accent)">↗</span></a>`
+          : `<div class="cp-row-name" title="${escapeHtml(item.nombre)}">${escapeHtml(item.nombre)}</div>`}
+        ${badgeHtml}
+        <div class="cp-row-precio">${sym} ${numFmt(precio)}</div>
+        <div class="cp-row-dias" style="color:${diasColor}">${esComprado?(yaLlego?`📦 ${dias}d total`:`⏱ ${dias}d`):'—'}</div>
+        ${item.linkSeguimiento?`<a href="${escapeHtml(item.linkSeguimiento)}" target="_blank" rel="noopener" title="Ver seguimiento" style="font-size:13px;flex-shrink:0;text-decoration:none">📍</a>`:''}
+        <div class="cp-row-actions">
+          ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirActualizarPrecioModal('${item.id}')" title="Actualizar precio">💲</button>`:''}
+          <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirHistorialPrecioCompra('${item.id}')" title="Historial (${hist.length})">📈</button>
+          ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirMarcarCompradoModal('${item.id}')" title="Marcar comprado">✅</button>`:''}
+          ${esComprado&&!yaLlego?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirMarcarLlegadoModal('${item.id}')" title="Marcar llegado">📦</button>`:''}
+          <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirCompraModal('${item.id}')" title="Editar">✏</button>
+        </div>
+      </div>`;
+    }
+
+    // ── Vista de tarjetas: bloque de días destacado + mini timeline
+    // Agregado→Comprado→Entregado + bloque de seguimiento. ──
+    const fechaAgregado = hist.length ? hist[0].fecha : null;
+    const enCaminoActivo = esComprado && !yaLlego;
+    const timelineHtml = `
+      <div class="cp-timeline">
+        <div class="cp-step done">
+          <div class="cp-step-line"></div>
+          <div class="cp-dot">✓</div>
+          <div class="cp-step-label">Agregado</div>
+          <div class="cp-step-date">${fechaAgregado?fmtFechaCorta(fechaAgregado):''}</div>
+        </div>
+        <div class="cp-step ${esComprado?'done':''}${enCaminoActivo?' current':''}">
+          <div class="cp-step-line"></div>
+          <div class="cp-dot">${esComprado?'✓':''}</div>
+          <div class="cp-step-label">Comprado</div>
+          <div class="cp-step-date">${esComprado?fmtFechaCorta(item.fechaComprado):''}</div>
+        </div>
+        <div class="cp-step ${yaLlego?'done':''}">
+          <div class="cp-step-line"></div>
+          <div class="cp-dot">${yaLlego?'✓':''}</div>
+          <div class="cp-step-label">Entregado</div>
+          <div class="cp-step-date">${yaLlego?fmtFechaCorta(item.fechaLlegada):''}</div>
+        </div>
+      </div>`;
+    const diasBoxClass = (!yaLlego && esComprado && dias>=25) ? 'alert' : ((!yaLlego && esComprado && dias>=15) ? 'warn' : '');
+    const diasBoxHtml = esComprado ? `
+      <div class="cp-days-box ${diasBoxClass}">
+        <div class="cp-days-num">${dias}<span style="font-size:11px;font-weight:500;margin-left:2px">d</span></div>
+        <div class="cp-days-txt">
+          <span class="cp-days-label">${yaLlego?'días en total':'días en camino'}</span>
+          <span class="cp-days-sub">Comprado el ${fmtFechaCorta(item.fechaComprado)}${yaLlego?` · Llegó el ${fmtFechaCorta(item.fechaLlegada)}`:''}</span>
+        </div>
+        ${(!yaLlego && dias>=15)?`<span class="cp-days-warn">⚠ Más lento que lo usual</span>`:''}
+      </div>` : '';
+    const trackHtml = esComprado ? (
+      item.linkSeguimiento
+        ? `<div class="cp-track-box"><span style="font-size:12px">📍</span><a href="${escapeHtml(item.linkSeguimiento)}" target="_blank" rel="noopener">${yaLlego?'Ver seguimiento':'Ver seguimiento en vivo'} ↗</a></div>`
+        : (!yaLlego ? `<div style="font-size:10px;color:var(--text3)">Sin número de seguimiento — agrégalo con "✏ Editar" para ver más detalle aquí.</div>` : '')
+    ) : '';
+
+    return `<div class="card cp-card" style="padding:14px 16px${yaLlego?';opacity:.75':''}">
+      <div class="cp-card-top">
         ${item.link
           ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-bottom:1px dashed var(--accent)" title="Abrir enlace del producto">${escapeHtml(item.nombre)} <span style="font-size:10px;color:var(--accent)">↗</span></a>`
           : `<div style="font-size:13px;font-weight:600">${escapeHtml(item.nombre)}</div>`}
-        ${badge}
+        ${badgeHtml}
       </div>
-      <div style="font-size:20px;font-weight:700">${sym} ${numFmt(precio)}</div>
-      ${cambioTxt}
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <div style="font-size:20px;font-weight:700">${sym} ${numFmt(precio)}</div>
+        ${cambioTxt}
+      </div>
       ${item.notas?`<div style="font-size:11px;color:var(--text3)">${escapeHtml(item.notas)}</div>`:''}
-      ${esComprado?`
-        <div style="font-size:10px;color:var(--text3)">Comprado el ${fmtFechaCorta(item.fechaComprado)}${yaLlego?` · Llegó el ${fmtFechaCorta(item.fechaLlegada)}`:''}</div>
-        <div style="font-size:10px;color:${diasColor};font-weight:600">${yaLlego?`⏱ Tardó ${dias} día(s) en total`:`⏱ Lleva ${dias} día(s) en camino`}</div>
-        ${item.linkSeguimiento?`<a href="${escapeHtml(item.linkSeguimiento)}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent)">📍 Ver seguimiento ↗</a>`:''}
-      `:''}
+      ${diasBoxHtml}
+      ${timelineHtml}
+      ${trackHtml}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
         ${!esComprado?`<button class="config-action-btn neutral" style="font-size:10px" onclick="abrirActualizarPrecioModal('${item.id}')">💲 Actualizar precio</button>`:''}
         <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirHistorialPrecioCompra('${item.id}')">📈 Historial (${hist.length})</button>
