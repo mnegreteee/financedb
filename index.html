@@ -2347,8 +2347,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="page" id="page-aprobaciones">
 <div class="container">
 
-  <div class="section-header" style="margin-bottom:16px">
+  <div class="section-header" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:8px">
     <div class="section-title">🔔 Aprobaciones</div>
+    <button id="btn-vaciar-pendientes" class="config-action-btn danger" style="font-size:10px;display:none" onclick="vaciarTodosPendientes()">🗑 Vaciar todos</button>
   </div>
 
   <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Consumos y transferencias detectados en tu correo del banco. Revisa cada uno antes de que se registre — puede que ya lo hayas cargado a mano.</div>
@@ -20502,6 +20503,8 @@ function renderAprobacionesBanco(){
   const list=document.getElementById('aprobaciones-list');
   if(!list) return;
   document.getElementById('aprobaciones-empty').style.display = pendientesBanco.length ? 'none' : 'block';
+  const btnVaciar=document.getElementById('btn-vaciar-pendientes');
+  if(btnVaciar) btnVaciar.style.display = pendientesBanco.length ? 'inline-block' : 'none';
   list.innerHTML = pendientesBanco.map(p=>{
     if(p.noReconocido){
       return `<div class="pb-card" id="pb-card-${p.id}" style="align-items:flex-start">
