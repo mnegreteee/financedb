@@ -3398,8 +3398,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '27/09/26 - 16:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '"🔔 Aprobaciones" ahora tiene un selector de orden (fecha reciente/antigua, banco A-Z, reconocidos primero / no reconocidos primero), se ubica al final del menú (después de "Otros"), y tiene un botón "🗑 Vaciar todos" para borrar de golpe todos los pendientes. El resto sigue igual: cubre BBVA, BCP, Interbank y Falabella, cualquier correo no interpretable cae como "no reconocido" en vez de perderse, y cada pendiente muestra el detalle completo (cuenta/tarjeta, ingreso o gasto, categoría) con las 3 acciones Aprobar / Editar / Eliminar.';
+const APP_VERSION_DATE = '27/09/26 - 19:12'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Optimizaciones internas de rendimiento, sin cambios visibles: los reportes por mes (Finanzas, Presupuesto, Proyección anual, Excel, comparativo con el año anterior) ahora usan un índice de movimientos cacheado por mes en vez de recorrer todo el historial cada vez que se calcula un mes — más notorio mientras más años de historial acumules. También se unificó el borrado en lotes de Firestore (antes duplicado entre movimientos y "Vaciar todos" de Aprobaciones) y el reloj mundial del Dashboard ya no se recalcula cada segundo si no estás viendo esa pestaña.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3669,6 +3669,24 @@ let _movimientosBorradosExplicitamente = [];
 // Sincroniza state.movimientos con la subcolección users/{uid}/movimientos/{movId}.
 // Cada movimiento es su propio documento — así un bot/atajo externo puede
 // agregar UNO sin tener que leer y reescribir todo el historial.
+// Aplica una lista de items a Firestore en lotes de máx. `tam` operaciones
+// (Firestore permite hasta 500 por batch; 450 deja margen de seguridad).
+// `aplicarOp(batch, item)` decide qué hacer con cada item dentro del batch
+// (ej. batch.set(ref,data) o batch.delete(ref)). Devuelve una promesa que
+// resuelve cuando TODOS los lotes ya se confirmaron, en orden. Reutilizado
+// por syncMovimientosSubcollection() y vaciarTodosPendientes() — antes cada
+// una tenía su propia copia idéntica de este chunking.
+function _commitEnChunks(items, aplicarOp, tam){
+  tam = tam || 450;
+  const chunks = [];
+  for(let i=0;i<items.length;i+=tam) chunks.push(items.slice(i,i+tam));
+  return chunks.reduce((chain, chunk)=>chain.then(()=>{
+    const batch = db.batch();
+    chunk.forEach(item=>aplicarOp(batch, item));
+    return batch.commit();
+  }), Promise.resolve());
+}
+
 function syncMovimientosSubcollection(){
   if(!DOC_REF) return Promise.resolve(null);
   const movsRef = DOC_REF.collection('movimientos');
@@ -3692,19 +3710,11 @@ function syncMovimientosSubcollection(){
 
   if(!ops.length){ _movimientosBorradosExplicitamente=[]; return Promise.resolve(null); }
 
-  // Firestore permite máx. 500 operaciones por batch — se agrupan en lotes por seguridad.
-  const chunks = [];
-  for(let i=0;i<ops.length;i+=450) chunks.push(ops.slice(i,i+450));
-
-  return chunks.reduce((chain, chunk)=>chain.then(()=>{
-    const batch = db.batch();
-    chunk.forEach(op=>{
-      const ref = movsRef.doc(op.id);
-      if(op.type==='set') batch.set(ref, op.data);
-      else batch.delete(ref);
-    });
-    return batch.commit();
-  }), Promise.resolve()).then(()=>{
+  return _commitEnChunks(ops, (batch, op)=>{
+    const ref = movsRef.doc(op.id);
+    if(op.type==='set') batch.set(ref, op.data);
+    else batch.delete(ref);
+  }).then(()=>{
     const snap={};
     state.movimientos.forEach(mv=>{ if(mv.id) snap[mv.id]=JSON.stringify(mv); });
     _lastSyncedMovs = snap;
@@ -5349,7 +5359,29 @@ function fmtFechaDDMMYYYY(f){
 }
 function snapKey(y,m){return y+'-'+String(m+1).padStart(2,'0');}
 function prevMY(y,m){return m===0?{year:y-1,month:11}:{year:y,month:m-1};}
-function getMovs(y,m){return state.movimientos.filter(mv=>{const d=new Date(mv.date+'T12:00:00');return d.getFullYear()===y&&d.getMonth()===m;});}
+// Índice de movimientos agrupados por mes ("AÑO-MES" → array), para que
+// getMovs() no tenga que recorrer TODO state.movimientos ni reparsear la
+// fecha de cada uno cada vez que se llama — se llama decenas de veces en
+// reportes/proyecciones que repasan varios meses seguidos. Se arma una sola
+// vez (perezoso, la primera vez que se necesita) y se invalida junto con
+// _saldoCache — en clearSaldoCache(), que ya se llama en TODOS los puntos
+// donde state.movimientos puede cambiar (saveState, loadState, modo demo,
+// fusión de datos en tiempo real) — así que queda con la misma cobertura
+// de invalidación que el cache de saldos, ya probado.
+let _movsPorMesCache = null;
+function _indiceMovsPorMes(){
+  if(_movsPorMesCache) return _movsPorMesCache;
+  const idx=new Map();
+  state.movimientos.forEach(mv=>{
+    const d=new Date(mv.date+'T12:00:00');
+    const key=d.getFullYear()+'-'+d.getMonth();
+    if(!idx.has(key)) idx.set(key,[]);
+    idx.get(key).push(mv);
+  });
+  _movsPorMesCache=idx;
+  return idx;
+}
+function getMovs(y,m){return _indiceMovsPorMes().get(y+'-'+m)||[];}
 function calcMonth(y,m){
   let ing=0,gas=0;
   getMovs(y,m).forEach(mv=>{
@@ -6610,7 +6642,7 @@ function applyMovsToSaldo(saldo, movs){
 
 // Cache for reconstructSaldoAt — cleared on saveState/loadState
 let _saldoCache = {};
-function clearSaldoCache(){ _saldoCache = {}; }
+function clearSaldoCache(){ _saldoCache = {}; _movsPorMesCache = null; }
 
 // Devuelve el saldo actual TOTAL de Ahorro en Soles (cuenta default + custom tipo ahorro en PEN)
 // Usa el mes/año actuales del sistema (hoy), no el mes seleccionado en el nav.
@@ -14523,6 +14555,15 @@ function renderRelojesMundiales(){
   const cont=document.getElementById('relojes-mundiales');
   if(!cont) return;
   const relojes=relojesActuales();
+  // El contador de Config se mantiene siempre al día (es barato) — lo caro
+  // es rehacer la hora de cada ciudad con Intl, que sí se salta más abajo.
+  const cfgCount=document.getElementById('cfg-relojes-count');
+  if(cfgCount) cfgCount.textContent=relojes.length+' ciudad'+(relojes.length===1?'':'es');
+  // Los relojes viven en el Dashboard — si esa página no está visible ahora
+  // (el usuario está en otra pestaña), no tiene sentido recalcular la hora
+  // de cada ciudad cada segundo en segundo plano. offsetParent es null
+  // cuando el elemento (o algún padre) tiene display:none.
+  if(!cont.offsetParent) return;
   const ahora=new Date();
   // Arma "Dom, 9 ago" a mano (sin puntos, día de la semana con mayúscula) —
   // el formato que da Intl directo en es-PE trae puntos y minúsculas
@@ -14544,8 +14585,6 @@ function renderRelojesMundiales(){
     </div>`;
   };
   cont.innerHTML=relojes.length?relojes.map(chip).join(''):'<div style="font-size:10px;color:var(--text3)">Sin relojes — agrégalos desde ⚙ Config → Relojes Mundiales</div>';
-  const cfgCount=document.getElementById('cfg-relojes-count');
-  if(cfgCount) cfgCount.textContent=relojes.length+' ciudad'+(relojes.length===1?'':'es');
 }
 setInterval(renderRelojesMundiales,1000);
 function abrirGestionRelojes(){
@@ -20742,13 +20781,7 @@ function vaciarTodosPendientes(){
   if(!DOC_REF){ alert('No se pudo conectar con la base de datos — intenta de nuevo en un momento.'); return; }
   const coleccion = DOC_REF.collection('pendientesBanco');
   const ids = pendientesBanco.map(p=>p.id);
-  const chunks = [];
-  for(let i=0;i<ids.length;i+=450) chunks.push(ids.slice(i,i+450));
-  chunks.reduce((chain, chunk)=>chain.then(()=>{
-    const batch = db.batch();
-    chunk.forEach(id=>batch.delete(coleccion.doc(id)));
-    return batch.commit();
-  }), Promise.resolve())
+  _commitEnChunks(ids, (batch, id)=>batch.delete(coleccion.doc(id)))
   .then(()=>toast(`✅ ${ids.length} pendiente(s) eliminado(s)`))
   .catch(e=>{ console.warn('Error al vaciar pendientes:', e); alert('Hubo un error al vaciar los pendientes — revisa la consola o intenta de nuevo.'); });
 }
