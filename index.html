@@ -1101,6 +1101,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             </div>
           </div>
           <div class="config-row">
+            <div class="config-row-label">Color del chat IA<small>El fondo del círculo del botón flotante — elige el que quieras</small></div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="color" id="cfg-chatia-color" value="#25d366" style="width:34px;height:30px;padding:2px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer" onchange="setChatIAColor(this.value)" title="Elegir color del botón de chat">
+              <button class="config-action-btn neutral" onclick="resetChatIAColor()">↺ Restablecer</button>
+            </div>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Números en tarjetas<small>Toca cualquier número para ver el otro formato al instante</small></div>
             <button class="config-action-btn neutral" id="cfg-numeros-compactos-btn" onclick="toggleNumerosCompactosDefault()">🔢 Mostrando compactos (15.4K)</button>
           </div>
@@ -3398,8 +3405,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '27/09/26 - 19:12'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Optimizaciones internas de rendimiento, sin cambios visibles: los reportes por mes (Finanzas, Presupuesto, Proyección anual, Excel, comparativo con el año anterior) ahora usan un índice de movimientos cacheado por mes en vez de recorrer todo el historial cada vez que se calcula un mes — más notorio mientras más años de historial acumules. También se unificó el borrado en lotes de Firestore (antes duplicado entre movimientos y "Vaciar todos" de Aprobaciones) y el reloj mundial del Dashboard ya no se recalcula cada segundo si no estás viendo esa pestaña.';
+const APP_VERSION_DATE = '28/09/26 - 20:43'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Config → Apariencia: nuevo selector de color para el botón flotante del chat IA (junto al del ícono/emoji) — elige cualquier color para el círculo, con su propio "↺ Restablecer" al verde de WhatsApp original.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5042,6 +5049,31 @@ function resetChatIAIcono(){
   toast('Ícono restablecido');
 }
 
+// Color de fondo del círculo del botón flotante del chat IA — mismo patrón
+// que el ícono de arriba: 100% cosmético, guardado en localStorage (por
+// dispositivo, no se sincroniza por Firestore). Verde WhatsApp (#25d366) es
+// el valor por defecto, igual que ya estaba fijo en el CSS.
+function getChatIAColor(){
+  try{ return localStorage.getItem('miguel_mf_chatia_color') || '#25d366'; }catch(e){ return '#25d366'; }
+}
+function aplicarChatIAColor(){
+  const btn=document.getElementById('chatia-btn');
+  if(btn) btn.style.background = getChatIAColor();
+  const picker=document.getElementById('cfg-chatia-color');
+  if(picker) picker.value = getChatIAColor();
+}
+function setChatIAColor(hex){
+  if(!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  try{ localStorage.setItem('miguel_mf_chatia_color', hex); }catch(e){}
+  aplicarChatIAColor();
+  toast('Color del chat actualizado');
+}
+function resetChatIAColor(){
+  try{ localStorage.removeItem('miguel_mf_chatia_color'); }catch(e){}
+  aplicarChatIAColor();
+  toast('Color restablecido');
+}
+
 function loadAccentColor(){
   const saved=localStorage.getItem('miguel_mf_accent');
   const picker=document.getElementById('cfg-accent-picker');
@@ -6117,6 +6149,7 @@ function render(){
   updateTitles();
   renderPaisConfigBtn();
   aplicarChatIAIcono(); // sincroniza el ícono del botón flotante del chat con lo elegido en Config → Apariencia
+  aplicarChatIAColor(); // sincroniza el color del botón flotante del chat con lo elegido en Config → Apariencia
   // Las siguientes son específicas de la página Finanzas — evita recalcularlas
   // (incl. la tabla anual, que reconstruye saldos de los 12 meses) cuando el
   // usuario está viendo otra página, donde ese trabajo sería invisible.
