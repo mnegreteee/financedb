@@ -3405,8 +3405,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '28/09/26 - 20:43'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Config → Apariencia: nuevo selector de color para el botón flotante del chat IA (junto al del ícono/emoji) — elige cualquier color para el círculo, con su propio "↺ Restablecer" al verde de WhatsApp original.';
+const APP_VERSION_DATE = '02/10/26 - 08:38'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Fix: Salud Financiera calculaba el "Ahorro total" con el saldo base del último Excel importado en vez del saldo real a hoy — ahora usa reconstructSaldoAt() como el resto de la app.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12955,8 +12955,14 @@ function calcularSaludFinanciera(){
   const ingresoMes=getMovs(y,m).filter(mv=>mv.type==='income').reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*rate:mv.amount),0);
   const ratioDeudaIngreso=ingresoMes>0?(deudaTCTotal/ingresoMes):(deudaTCTotal>0?2:0);
 
-  const ahorroPEN=sumaAhorroDe(state.cuentas,'PEN');
-  const ahorroUSD=sumaAhorroDe(state.cuentas,'USD');
+  // OJO: state.cuentas es solo el saldo BASE del último Excel importado —
+  // para el saldo real a hoy hay que reconstruirlo con reconstructSaldoAt()
+  // (misma función que usa la tabla de Ahorros en Finanzas), si no, cualquier
+  // depósito/movimiento registrado después del import se queda afuera del
+  // puntaje y el "Ahorro total" sale más bajo de lo real.
+  const saldoAhorroActual=reconstructSaldoAt(state.currentYear, state.currentMonth);
+  const ahorroPEN=sumaAhorroDe(saldoAhorroActual,'PEN');
+  const ahorroUSD=sumaAhorroDe(saldoAhorroActual,'USD');
   const ahorroTotalPEN=ahorroPEN+ahorroUSD*rate;
 
   let score=100;
