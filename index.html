@@ -3050,6 +3050,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="section-header" style="flex-wrap:wrap;gap:8px">
         <div class="section-title" id="tc-mov-title">Consumos</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto">
+          <div style="position:relative;display:flex;align-items:center">
+            <span style="position:absolute;left:8px;font-size:11px;color:var(--text3);pointer-events:none">🔍</span>
+            <input type="text" id="tc-search-input" placeholder="Buscar por monto o descripción..." oninput="onTCSearchInput(this.value)"
+              style="width:200px;padding:5px 24px 5px 24px;font-size:11px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text1)">
+            <span id="tc-search-clear" onclick="clearTCSearch()" title="Limpiar búsqueda"
+              style="display:none;position:absolute;right:7px;font-size:12px;color:var(--text3);cursor:pointer">✕</span>
+          </div>
           <div class="tc-view-switch" id="tc-view-switch">
             <button class="tc-view-btn" data-view="tabla" onclick="setTCConsumosView('tabla')" title="Vista de tabla">☰ Tabla</button>
             <button class="tc-view-btn" data-view="tarjetas" onclick="setTCConsumosView('tarjetas')" title="Vista de tarjetas">▤ Tarjetas</button>
@@ -3405,8 +3412,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '02/10/26 - 08:38'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Fix: Salud Financiera calculaba el "Ahorro total" con el saldo base del último Excel importado en vez del saldo real a hoy — ahora usa reconstructSaldoAt() como el resto de la app.';
+const APP_VERSION_DATE = '02/10/26 - 09:33'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Tarjetas → Consumos: nuevo buscador por monto o descripción (junto al selector de vista), para encontrar un consumo puntual y pagarlo sin scrollear entre todos los pendientes.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12017,6 +12024,7 @@ let currentTCId=null;       // ID of card being viewed
 let currentTCMonth=null;    // "YYYY-MM" string for detail view
 let editingTCMovId=null;    // ID of mov being edited
 let pendingPayMovIds=[];    // mov IDs pending payment
+let tcSearchQuery='';       // texto/monto escrito en el buscador de Consumos — solo UI, no se persiste
 
 // ── HELPERS ──────────────────────────────────────────
 function tcMesesLong(){ return ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']; }
@@ -12366,6 +12374,7 @@ function getAllTCMovs(tid){
 // ── DETAIL VIEW ──────────────────────────────────────
 function openTCDetail(tid, forceMonthKey){
   currentTCId=tid;
+  tcSearchQuery=''; // nueva tarjeta → el buscador de Consumos arranca limpio
   const t=getTarjeta(tid); if(!t) return;
   document.getElementById('tc-list-view').style.display='none';
   document.getElementById('tc-detail-view').style.display='block';
@@ -12426,6 +12435,7 @@ function renderTCMonthSelector(t){
 
 function switchTCMonth(key){
   currentTCMonth=key;
+  tcSearchQuery=''; // otro mes → el buscador de Consumos arranca limpio (si no, parecería que el mes "no tiene" el consumo)
   const t=getTarjeta(currentTCId);
   renderTCMonthSelector(t);
   renderTCDetail();
@@ -12579,6 +12589,42 @@ function buildTCMovGroupedHtml(movs, cardCur){
     ${tcGroupBlockHtml('Pagados', pagados, cardCur)}`;
 }
 
+// ── Buscador de Consumos (funciona en las 3 vistas, igual que el orden) ──
+// Un solo campo para monto O descripción, para no obligar a pensar cuál usar:
+// - Si lo escrito es puramente numérico (ej. "20"), filtra por MONTO,
+//   redondeado a soles enteros (20 encuentra S/20.00, S/20.50, S/20.99 — no
+//   hace falta acordarse los centavos). Si se escriben decimales explícitos
+//   (ej. "20.50"), se vuelve exacto a los centavos.
+// - Si no, filtra por DESCRIPCIÓN (contiene, sin importar mayúsculas/tildes
+//   — reusa normalizarBusqueda(), la misma que usa la Búsqueda Global).
+function filterTCMovs(movs, queryRaw){
+  const query=(queryRaw||'').trim();
+  if(!query) return movs;
+  const esNumerico=/^\d+([.,]\d+)?$/.test(query);
+  if(esNumerico){
+    const num=parseFloat(query.replace(',','.'));
+    const tieneDecimales=/[.,]/.test(query);
+    return movs.filter(m=>{
+      const abs=Math.abs(m.monto);
+      return tieneDecimales ? Math.abs(abs-num)<0.005 : Math.floor(abs)===Math.floor(num);
+    });
+  }
+  const q=normalizarBusqueda(query);
+  return movs.filter(m=>normalizarBusqueda(m.desc||'').includes(q));
+}
+function onTCSearchInput(val){
+  tcSearchQuery=val;
+  document.getElementById('tc-search-clear').style.display=val?'inline':'none';
+  renderTCDetail();
+}
+function clearTCSearch(){
+  tcSearchQuery='';
+  const input=document.getElementById('tc-search-input');
+  if(input) input.value='';
+  document.getElementById('tc-search-clear').style.display='none';
+  renderTCDetail();
+}
+
 // ── Control de orden universal (funciona en las 3 vistas de Consumos,
 // no solo tocando encabezados de la tabla) ──
 function onTCSortColChange(col){
@@ -12607,6 +12653,14 @@ function renderTCDetail(){
   const t=getTarjeta(currentTCId);
   const cardCur=(t&&t.currency)||'PEN';
 
+  // Mantiene el input y el botón "✕" sincronizados con tcSearchQuery sin
+  // importar desde dónde se haya cambiado (escribiendo, o reseteado al
+  // cambiar de mes/tarjeta) — un solo lugar, no se puede desincronizar.
+  const searchInputEl=document.getElementById('tc-search-input');
+  if(searchInputEl && searchInputEl.value!==tcSearchQuery) searchInputEl.value=tcSearchQuery;
+  const searchClearEl=document.getElementById('tc-search-clear');
+  if(searchClearEl) searchClearEl.style.display=tcSearchQuery?'inline':'none';
+
   const deudaByCur=sumTCByCurrency(movs,cardCur);
   const pagadoByCur=sumTCByCurrency(movs.filter(m=>m.pagado),cardCur);
   const pendienteByCur={pen:deudaByCur.pen-pagadoByCur.pen, usd:deudaByCur.usd-pagadoByCur.usd};
@@ -12626,7 +12680,9 @@ function renderTCDetail(){
   if(barLinea){ barLinea.style.width=usadoPct+'%'; barLinea.style.background=colorLinea; }
 
   const parts=currentTCMonth.split('-');
-  document.getElementById('tc-mov-title').textContent='Consumos — '+tcMesesLong()[parseInt(parts[1])-1]+' '+parts[0];
+  const filteredMovs=filterTCMovs(movs, tcSearchQuery);
+  const tituloConteo = tcSearchQuery ? ` (${filteredMovs.length} de ${movs.length})` : '';
+  document.getElementById('tc-mov-title').textContent='Consumos — '+tcMesesLong()[parseInt(parts[1])-1]+' '+parts[0]+tituloConteo;
 
   // ── Selector de vista: tabla (clasica) / tarjetas / agrupado por estado.
   // Se guarda en state.tcConsumosView para que quede igual la proxima vez
@@ -12644,12 +12700,17 @@ function renderTCDetail(){
     updateTCSelectionTotal();
     return;
   }
+  if(tcSearchQuery && !filteredMovs.length){
+    cont.innerHTML=`<div style="text-align:center;color:var(--text3);padding:20px;font-size:12px">Ningún consumo coincide con "${escapeHtml(tcSearchQuery)}". <span onclick="clearTCSearch()" style="color:var(--accent);cursor:pointer">Limpiar búsqueda</span></div>`;
+    updateTCSelectionTotal();
+    return;
+  }
   if(viewMode==='tarjetas'){
-    cont.innerHTML=buildTCMovCardsHtml(movs,cardCur);
+    cont.innerHTML=buildTCMovCardsHtml(filteredMovs,cardCur);
   } else if(viewMode==='agrupado'){
-    cont.innerHTML=buildTCMovGroupedHtml(movs,cardCur);
+    cont.innerHTML=buildTCMovGroupedHtml(filteredMovs,cardCur);
   } else {
-    cont.innerHTML=buildTCMovTableHtml(movs,cardCur);
+    cont.innerHTML=buildTCMovTableHtml(filteredMovs,cardCur);
     updateTCSortIndicators();
   }
   const allCb=document.getElementById('tc-check-all');
