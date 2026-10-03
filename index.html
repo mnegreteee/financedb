@@ -1830,6 +1830,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div id="inv-avisos"></div>
 
+  <div class="card" style="padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div style="font-size:12px;color:var(--text2)">Incluir el valor de Inversiones en el <b>Patrimonio Neto</b> del Resumen <span style="color:var(--text3);font-size:10px">(activado por defecto)</span></div>
+    <button class="config-action-btn" id="inv-patrimonio-toggle-btn" onclick="toggleInvEnPatrimonio()" style="font-size:11px"></button>
+  </div>
+
   <!-- Resumen -->
   <div class="deuda-summary inv-summary-grid">
     <div class="deuda-sum-card" style="border-top:2px solid var(--accent)">
@@ -3412,8 +3417,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '02/10/26 - 09:33'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas → Consumos: nuevo buscador por monto o descripción (junto al selector de vista), para encontrar un consumo puntual y pagarlo sin scrollear entre todos los pendientes.';
+const APP_VERSION_DATE = '03/10/26 - 18:38'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Inversiones: nuevo toggle para incluir o excluir el valor de Inversiones del Patrimonio Neto del Resumen (activado por defecto), igual que ya existía para AFP.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7917,6 +7922,7 @@ function invFmtGananciaDual(pen, usd){
 
 // ── RENDER ────────────────────────────────────────────
 function renderInversiones(){
+  renderInvPatrimonioToggleBtn();
   const r=invGetResumen();
   document.getElementById('inv-sum-invertido').textContent=M(invFmtDual(r.detalle.PEN.totalInvertido, r.detalle.USD.totalInvertido));
   document.getElementById('inv-sum-valorizado').textContent=M(invFmtDual(r.detalle.PEN.totalValorizado, r.detalle.USD.totalValorizado));
@@ -15224,6 +15230,13 @@ function renderDashboard(){
   const invValorUSDNativo = invResumenFull.detalle.USD.totalValorizado;
   const invValorActualUSD = invValorUSDNativo + invToUSD(invValorPEN,'PEN');
   const invValorActual = invValorActualUSD * (state.tc?.venta||3.45);
+  // Incluir (o no) Inversiones en el Patrimonio Neto — toggle configurable
+  // en la página de Inversiones, ACTIVADO por defecto (es el comportamiento
+  // que ya existía, así que a nadie le cambia el número sin decidirlo).
+  const invEnPatrimonio = state.incluirInvEnPatrimonio !== false;
+  const invAporte = invEnPatrimonio ? invValorActual : 0;
+  const invAportePEN = invEnPatrimonio ? invValorPEN : 0;
+  const invAporteUSDNativo = invEnPatrimonio ? invValorUSDNativo : 0;
 
   // ── AFP (opcional en Patrimonio Neto — toggle configurable en la página
   //    de AFP, apagado por defecto para no alterarle el número a nadie sin
@@ -15234,9 +15247,9 @@ function renderDashboard(){
   const afpAporte = afpEnPatrimonio ? afpSaldoDash : 0;
 
   // ── Patrimonio neto ───────────────────────────────
-  const patrimonioCur  = dispCur  + ahorroTotalCur  + invValorActual - deudaTCTotal + afpAporte;
+  const patrimonioCur  = dispCur  + ahorroTotalCur  + invAporte - deudaTCTotal + afpAporte;
   // For prev: use same TC debt (we don't have historic TC data) so variation reflects disponible+ahorro changes only
-  const patrimonioPrev = dispPrev + ahorroTotalPrev + invValorActual - deudaTCTotal + afpAporte;
+  const patrimonioPrev = dispPrev + ahorroTotalPrev + invAporte - deudaTCTotal + afpAporte;
   const patrimonioVar  = patrimonioCur - patrimonioPrev;
   const patrimonioVarPct = patrimonioPrev!==0 ? (patrimonioVar/Math.abs(patrimonioPrev)*100) : 0;
 
@@ -15244,8 +15257,8 @@ function renderDashboard(){
   // en dólares, netos de su propia deuda de tarjeta. dispCur (BCP/BBVA/Efectivo)
   // siempre es en soles, por eso no aparece en el lado de dólares. AFP en Perú
   // siempre es en soles, así que si está activado se suma al lado PEN.
-  const patrimonioPEN = dispCur + aS + invValorPEN - deudaTCPen + afpAporte;
-  const patrimonioUSD = aD + invValorUSDNativo - deudaTCUsd;
+  const patrimonioPEN = dispCur + aS + invAportePEN - deudaTCPen + afpAporte;
+  const patrimonioUSD = aD + invAporteUSDNativo - deudaTCUsd;
 
   // ── Render patrimonio ─────────────────────────────
   const pEl = document.getElementById('dash-patrimonio');
@@ -15260,7 +15273,7 @@ function renderDashboard(){
     pEl.style.color = patrimonioCur >= 0 ? 'var(--green)' : 'var(--red)';
   }
   const pFormulaEl = document.getElementById('dash-patrimonio-formula');
-  if(pFormulaEl) pFormulaEl.textContent = 'Disponible + Ahorros + Inversiones − Deuda tarjetas' + (afpEnPatrimonio?' + AFP':'');
+  if(pFormulaEl) pFormulaEl.textContent = 'Disponible + Ahorros' + (invEnPatrimonio?' + Inversiones':'') + ' − Deuda tarjetas' + (afpEnPatrimonio?' + AFP':'');
   const pPenEl = document.getElementById('dash-patrimonio-pen');
   if(pPenEl){ pPenEl.textContent = M((patrimonioPEN<0?'-':'')+fmtS(patrimonioPEN)); pPenEl.style.color = patrimonioPEN>=0?'var(--text)':'var(--red)'; }
   const pUsdEl = document.getElementById('dash-patrimonio-usd');
@@ -20028,6 +20041,22 @@ function toggleAFPEnPatrimonio(){
   // Si el Resumen ya está renderizado (o se abre después), que refleje el
   // cambio de inmediato sin tener que navegar de ida y vuelta.
   if(document.getElementById('page-dashboard')) renderDashboard();
+}
+// Toggle para sumar (o no) el valor de Inversiones al Patrimonio Neto del
+// Resumen. ACTIVADO por defecto — es el comportamiento que ya existía, así
+// que a nadie le cambia el número sin decidirlo explícitamente; a diferencia
+// de AFP, acá "desactivar" es lo que excluye el valor.
+function toggleInvEnPatrimonio(){
+  state.incluirInvEnPatrimonio = state.incluirInvEnPatrimonio===false ? true : false;
+  saveState();
+  renderInvPatrimonioToggleBtn();
+  if(document.getElementById('page-dashboard')) renderDashboard();
+}
+function renderInvPatrimonioToggleBtn(){
+  const btn=document.getElementById('inv-patrimonio-toggle-btn');
+  if(!btn) return;
+  const activo=state.incluirInvEnPatrimonio!==false;
+  btn.textContent=activo?'🟢 Activado':'⚪ Desactivado';
 }
 function renderAFPPatrimonioToggleBtn(){
   const btn=document.getElementById('afp-patrimonio-toggle-btn');
