@@ -1015,6 +1015,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .gs-filters input,.gs-filters select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);padding:6px 10px;font-family:var(--font);font-size:12px;min-width:0}
 .gs-filters input[type=search]{flex:1 1 180px}
+@media(max-width:600px){
+  /* móvil: todos los filtros en UNA fila que se desliza hacia los lados (igual que la barra de pestañas) */
+  .gs-fscroll{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .gs-fscroll::-webkit-scrollbar{display:none}
+  .gs-fscroll .gs-filters,.gs-fscroll .gs-frow2{display:contents!important}
+  .gs-fscroll .gs-filters>*,.gs-fscroll .gs-frow2>*{flex:0 0 auto!important}
+  .gs-fscroll .gs-filters input[type=search]{width:190px;flex:0 0 190px!important}
+  .gs-fscroll .gs-seg{flex-wrap:nowrap}
+  .gs-fscroll .gs-seg button,.gs-fscroll .gs-frow2 span{white-space:nowrap}
+}
 .gs-gh{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.4px;text-transform:uppercase}
 .gs-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer}
 .gs-row:hover{background:var(--bg3)}
@@ -1740,6 +1750,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="card gs-trend" style="padding:14px 16px;margin-bottom:16px" id="gs-trend"></div>
 
   <div class="card" style="padding:14px;margin-bottom:16px">
+    <div class="gs-fscroll">
     <div class="gs-filters">
       <input type="search" id="gs-q" placeholder="🔍 Buscar concepto o monto…" oninput="gsSet('q',this.value)">
       <div class="gs-seg" id="gs-seg-tipo"></div>
@@ -1748,10 +1759,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <select id="gs-f-cur" onchange="gsSet('cur',this.value)"><option value="">Todas las monedas</option><option value="PEN">S/ Soles</option><option value="USD">$ Dólares</option></select>
       <select id="gs-f-estado" onchange="gsSet('estado',this.value)"><option value="">Todos los estados</option><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente (tarjeta)</option></select>
     </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;align-items:center">
+    <div class="gs-frow2" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;align-items:center">
       <div class="gs-seg" id="gs-seg-rango"></div>
       <span style="font-size:11px;color:var(--text3)">Agrupar por</span>
       <div class="gs-seg" id="gs-seg-group"></div>
+    </div>
     </div>
   </div>
 
@@ -3550,8 +3562,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 21:20'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Todas las tarjetas de insights con IA (Gastos, Resumen, Presupuesto, Tarjetas, Deudas, Año completo) ahora se pueden contraer/expandir: arrancan contraídas y recuerdan lo último que elegiste. Insights y análisis por moneda, sin convertir.';
+const APP_VERSION_DATE = '05/10/26 - 21:35'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos (celular): los filtros ahora van en una sola fila que se desliza hacia los lados, como la barra de pestañas. En PC se ven igual que antes.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
