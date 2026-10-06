@@ -993,6 +993,44 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 #chatia-counter.over{color:#e5484d;font-weight:600;}
 @media(max-width:600px){ #chatia-panel{left:8px;right:8px;width:auto;bottom:74px;} }
 
+/* ── GASTOS ── */
+.gs-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;margin-bottom:16px;align-items:start}
+.gs-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.gs-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--card-shadow)}
+.gs-kpi-l{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+.gs-kpi-v{font-family:var(--mono);font-size:22px;font-weight:700;margin-top:4px}
+.gs-kpi-s{font-size:11px;color:var(--text3);margin-top:2px}
+.gs-seg{display:inline-flex;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:2px;gap:2px;flex-wrap:wrap}
+.gs-seg button{background:none;border:none;color:var(--text2);font-family:var(--font);font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer}
+.gs-seg button.on{background:var(--accent);color:#fff}
+.gs-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.gs-filters input,.gs-filters select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);padding:6px 10px;font-family:var(--font);font-size:12px;min-width:0}
+.gs-filters input[type=search]{flex:1 1 180px}
+.gs-gh{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.4px;text-transform:uppercase}
+.gs-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer}
+.gs-row:hover{background:var(--bg3)}
+.gs-ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.gs-main{flex:1;min-width:0}
+.gs-desc{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-sub{font-size:11px;color:var(--text3);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.gs-pill{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+.gs-pill.t{background:var(--purple-bg);color:var(--purple)}
+.gs-pill.c{background:var(--teal-bg);color:var(--teal)}
+.gs-pill.p{background:var(--amber-bg);color:var(--amber)}
+.gs-pill.ok{background:var(--green-bg);color:var(--green)}
+.gs-pill.cu{background:var(--bg4);color:var(--text2)}
+.gs-amt{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--red);text-align:right;white-space:nowrap}
+.gs-amt small{display:block;font-size:10px;color:var(--text3);font-weight:500}
+.gs-bar{height:6px;background:var(--bg4);border-radius:4px;overflow:hidden;margin-top:4px}
+.gs-bar>div{height:100%;border-radius:4px}
+.gs-line{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:4px 0;color:var(--text2)}
+.gs-line b{font-family:var(--mono);color:var(--text)}
+.gs-tc{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-top:8px;background:var(--bg3)}
+.gs-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.gs-stats div{background:var(--bg3);border-radius:8px;padding:8px 10px;font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600}
+.gs-stats b{display:block;font-family:var(--mono);font-size:13px;color:var(--text);margin-top:2px;text-transform:none}
+@media(max-width:1000px){.gs-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:560px){.gs-kpi-v{font-size:17px}.gs-stats{grid-template-columns:1fr}.gs-row{gap:9px;padding:9px 8px}}
 </style>
 </head>
 <body>
@@ -1016,6 +1054,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="nav-center">
     <button class="nav-tab active" id="nav-dashboard" onclick="showPage('dashboard')">🏠 Resumen</button>
     <button class="nav-tab" id="nav-finanzas" onclick="showPage('finanzas')">📊 Finanzas</button>
+    <button class="nav-tab" id="nav-gastos" onclick="showPage('gastos')">💸 Gastos</button>
 
     <div class="nav-dropdown" id="navdrop-analisis">
       <button class="nav-tab nav-dropdown-trigger" onclick="toggleNavDropdown('analisis',event)">📊 Análisis ▾</button>
@@ -1633,6 +1672,54 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="dash-section-title">🎯 Presupuestos</div>
   <div class="budget-grid" id="budget-grid"></div>
   <div id="budget-empty" class="empty" style="display:none"><div class="empty-icon">🎯</div>Sin categorías de presupuesto.<br>Crea una con el botón de arriba.</div>
+</div>
+</div>
+
+<!-- ══ PAGE: GASTOS ══ -->
+<div class="page" id="page-gastos">
+<div class="container">
+  <div class="month-nav" style="flex-wrap:wrap">
+    <button class="month-btn" onclick="gsMes(-1)">‹</button>
+    <h1 id="gs-title">Gastos</h1>
+    <button class="month-btn" onclick="gsMes(1)">›</button>
+    <button class="btn" style="font-size:11px;padding:5px 12px" onclick="gsHoy()">Hoy</button>
+    <div style="flex:1"></div>
+    <button class="btn" style="font-size:11px;padding:5px 12px" onclick="gsExportar()">⬇ Exportar Excel</button>
+    <button class="btn" style="font-size:11px;padding:5px 12px" onclick="gsNuevoTC()">+ Consumo tarjeta</button>
+    <button class="btn btn-primary" style="font-size:11px;padding:5px 12px" onclick="gsNuevoCuenta()">+ Gasto de cuenta</button>
+  </div>
+
+  <div class="gs-grid">
+    <div>
+      <div class="gs-kpis" id="gs-kpis"></div>
+      <div class="card" style="padding:16px" id="gs-trend"></div>
+    </div>
+    <div class="card" style="padding:16px" id="gs-disp"></div>
+  </div>
+
+  <div class="card" style="padding:14px;margin-bottom:16px">
+    <div class="gs-filters">
+      <input type="search" id="gs-q" placeholder="🔍 Buscar concepto o monto…" oninput="gsSet('q',this.value)">
+      <div class="gs-seg" id="gs-seg-tipo"></div>
+      <select id="gs-f-origen" onchange="gsSet('origen',this.value)"></select>
+      <select id="gs-f-cat" onchange="gsSet('cat',this.value)"></select>
+      <select id="gs-f-cur" onchange="gsSet('cur',this.value)"><option value="">Todas las monedas</option><option value="PEN">S/ Soles</option><option value="USD">$ Dólares</option></select>
+      <select id="gs-f-estado" onchange="gsSet('estado',this.value)"><option value="">Todos los estados</option><option value="Pagado">Pagado</option><option value="Pendiente">Pendiente (tarjeta)</option></select>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;align-items:center">
+      <div class="gs-seg" id="gs-seg-rango"></div>
+      <span style="font-size:11px;color:var(--text3)">Agrupar por</span>
+      <div class="gs-seg" id="gs-seg-group"></div>
+    </div>
+  </div>
+
+  <div class="gs-grid">
+    <div class="card" style="padding:0" id="gs-list"></div>
+    <div>
+      <div class="card" style="padding:16px;margin-bottom:16px" id="gs-origen"></div>
+      <div class="card" style="padding:16px" id="gs-cats"></div>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -3417,8 +3504,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '03/10/26 - 18:38'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Inversiones: nuevo toggle para incluir o excluir el valor de Inversiones del Patrimonio Neto del Resumen (activado por defecto), igual que ya existía para AFP.';
+const APP_VERSION_DATE = '05/10/26 - 19:29'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva sección 💸 Gastos: todos tus gastos de cuentas y tarjetas (por fecha de consumo) con filtros, tendencia diaria con proyección de cierre de mes y disponible para gastar según el corte de cada tarjeta.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5250,6 +5337,311 @@ document.addEventListener('DOMContentLoaded', function(){
   if(navCenter) navCenter.addEventListener('scroll', closeAllNavDropdowns);
 });
 
+// ══════════════════════════════════════════════════════
+//  💸 GASTOS — todos los gastos (cuentas + tarjetas) en un solo lugar.
+//  · Tarjetas: se listan por FECHA DE CONSUMO (mov.fecha), no por mes de pago.
+//  · "Disponible para gastar": cuentas operativas − estados de tarjeta que
+//    vencen este mes (según el corte) + línea libre de cada tarjeta.
+//  · Proyección: ritmo diario (sin el gasto único más grande) + pagos conocidos
+//    que aún faltan del mes. Los estados de tarjeta NO se suman (ya son gasto).
+//  Solo lectura de datos: no modifica ni guarda nada en state.
+// ══════════════════════════════════════════════════════
+const GS={y:null,m:null,q:'',tipo:'all',origen:'',cat:'',cur:'',estado:'',rango:'all',group:'fecha'};
+function gsInit(){ if(GS.y===null){const h=new Date();GS.y=h.getFullYear();GS.m=h.getMonth();} }
+function gsRate(){ return (state.tc&&state.tc.venta)||3.45; }
+function gsPen(a,cur){ return cur==='USD'?a*gsRate():a; }
+function gsFmt(a,cur){ return cur==='USD'?fmtD(a):fmtS(a); }
+function gsEsMesActual(){ const h=new Date(); return GS.y===h.getFullYear()&&GS.m===h.getMonth(); }
+function gsMes(d){ gsInit(); GS.m+=d; if(GS.m<0){GS.m=11;GS.y--;} if(GS.m>11){GS.m=0;GS.y++;} renderGastos(); }
+function gsHoy(){ const h=new Date(); GS.y=h.getFullYear(); GS.m=h.getMonth(); renderGastos(); }
+function gsSet(k,v){ GS[k]=v; gsRefrescarLista(); }
+function gsCatColor(c){ return getAllCategorias()[c]||'#9ca3af'; }
+function gsCatEmoji(c){ const p=(c||'').split(' ')[0]; return (p&&/[^\x00-\x7F]/.test(p))?p:'💸'; }
+
+// Todos los gastos del mes (y,m): cuentas (type expense, sin "Pago de tarjeta") + consumos de tarjeta por fecha
+function gsItems(y,m){
+  const out=[];
+  getMovs(y,m).forEach(mv=>{
+    if(mv.type!=='expense') return;
+    if(String(mv.id||'').startsWith('pagoTC') || /^Pago de tarjeta/i.test(mv.desc||'')) return; // el pago del estado ya está en los consumos de la tarjeta
+    const cur=mv.currency||'PEN';
+    out.push({id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.amount,cur,pen:gsPen(mv.amount,cur),fecha:mv.date,hora:mv.hora||'',cat:mv.cat||'',tipo:'cuenta',origen:mv.account||'—',estado:'Pagado',cuota:null,color:'var(--teal)'});
+  });
+  const pref=y+'-'+String(m+1).padStart(2,'0');
+  (state.tarjetas||[]).forEach(t=>{
+    Object.entries(t.movs||{}).forEach(([mk,arr])=>{
+      (arr||[]).forEach(mv=>{
+        if(!mv||typeof mv.fecha!=='string'||mv.fecha.slice(0,7)!==pref) return;
+        const cur=mv.currency||t.currency||'PEN';
+        out.push({id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.monto,cur,pen:gsPen(mv.monto,cur),fecha:mv.fecha,hora:mv.hora||'',cat:mv.cat||'',tipo:'tarjeta',origen:((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta',estado:mv.pagado?'Pagado':'Pendiente',cuota:mv.cuotaNumero?(mv.cuotaNumero+'/'+mv.cuotaTotal):null,color:t.color||'var(--purple)',tid:t.id,mk});
+      });
+    });
+  });
+  return out;
+}
+function gsFiltrar(items){
+  const hoy=new Date(); const hoyStr=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+  const q=(GS.q||'').trim().toLowerCase();
+  const nd=GS.rango==='hoy'?0:GS.rango==='7'?6:GS.rango==='15'?14:null;
+  let desde=null;
+  if(nd!==null&&gsEsMesActual()){ const d=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()-nd); desde=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  return items.filter(i=>{
+    if(GS.tipo!=='all'&&i.tipo!==GS.tipo) return false;
+    if(GS.origen&&i.origen!==GS.origen) return false;
+    if(GS.cat&&(i.cat||'')!==GS.cat) return false;
+    if(GS.cur&&i.cur!==GS.cur) return false;
+    if(GS.estado&&i.estado!==GS.estado) return false;
+    if(desde&&(i.fecha<desde||i.fecha>hoyStr)) return false;
+    if(q){ const hay=(i.desc+' '+i.origen+' '+(i.cat||'')+' '+String(i.amount)).toLowerCase(); if(!hay.includes(q)) return false; }
+    return true;
+  });
+}
+
+// ── DISPONIBLE PARA GASTAR ──
+function gsDisponible(){
+  const hoy=new Date(), rate=gsRate();
+  const thisMk=tcMonthKey(hoy.getFullYear(),hoy.getMonth());
+  const saldos=reconstructSaldoAt(hoy.getFullYear(),hoy.getMonth());
+  const cuentas=getCuentasOperativasUnicas().map(k=>{
+    const cur=((state.customCuentas||{})[k]||{}).currency||'PEN';
+    const v=saldos[k]||0; return {k,v,cur,pen:gsPen(v,cur)};
+  });
+  const enCuentas=cuentas.reduce((s,c)=>s+c.pen,0);
+  const tarjetas=(state.tarjetas||[]).map(t=>{
+    const cur=t.currency||'PEN', linea=parseFloat(t.linea)||0;
+    let cerrado=0, enCurso=0;
+    Object.entries(t.movs||{}).forEach(([mk,arr])=>(arr||[]).forEach(mv=>{
+      if(mv.pagado) return;
+      const p=gsPen(mv.monto,mv.currency||cur);
+      if(mk<=thisMk) cerrado+=p; else enCurso+=p;   // mk<=este mes: el estado ya cerró y se paga este mes (o está vencido)
+    }));
+    const deudaTotalPen=cerrado+enCurso;
+    const deudaCur=cur==='USD'?deudaTotalPen/rate:deudaTotalPen;
+    const libre=linea>0?Math.max(0,linea-deudaCur):0;
+    return {t,cur,linea,cerrado,enCurso,libre,librePen:gsPen(libre,cur),usadoPct:linea>0?Math.min(100,deudaCur/linea*100):0};
+  });
+  const aPagarMes=tarjetas.reduce((s,x)=>s+x.cerrado,0);
+  const libreCuentas=enCuentas-aPagarMes;
+  const lineas=tarjetas.reduce((s,x)=>s+x.librePen,0);
+  return {cuentas,enCuentas,tarjetas,aPagarMes,libreCuentas,lineas,total:libreCuentas+lineas};
+}
+
+// ── PAGOS CONOCIDOS que faltan este mes (pagos frecuentes + cuotas de deudas mayores) ──
+function gsPagosConocidos(y,m,diaHoy){
+  const D=new Date(y,m+1,0).getDate(), mk=tcMonthKey(y,m), out=[];
+  (state.pagosFrecuentes||[]).forEach(pf=>{
+    if(pf.oculto||pf.tipo==='ingreso') return;
+    const freq=pf.frecuencia||'mensual';
+    if(freq==='mensual'){ if(!pfActivoEnMes(pf,y,m)) return; }
+    else if(freq==='semestral'){ if(!(pf.meses||[]).includes(m+1)) return; }
+    else return;
+    if(pf.pagosRegistrados&&pf.pagosRegistrados[mk]) return;
+    if(pf.metodoPago==='cuenta'&&esCuentaDeAhorro(pf.destino)) return;
+    let monto;
+    if(pf.tipoMonto==='base_descuentos') monto=Math.max(0,(pf.montoFijo||0)-(pf.descuentosPendientes||[]).reduce((s,d)=>s+d.monto,0));
+    else { const u=ultimoMontoRegistradoPF(pf,y,m); monto=u!==null?u:(pf.montoFijo||0); }
+    if(!(monto>0)) return;
+    const dia=pf.diaPago?pfDiaLimite(pf.diaPago,D):D;
+    out.push({nombre:pf.nombre,dia:Math.max(dia,diaHoy),pen:gsPen(monto,pf.currency||'PEN')});
+  });
+  (state.deudasMayores||[]).forEach(d=>(d.cuotas||[]).forEach(c=>{
+    if(c.pagado||!c.fecha||c.fecha.slice(0,7)>mk) return;
+    const dia=c.fecha.slice(0,7)===mk?parseInt(c.fecha.slice(8,10)):diaHoy;
+    out.push({nombre:(d.nombre||'Deuda')+' (cuota)',dia:Math.max(dia,diaHoy),pen:gsPen(c.monto||0,d.currency||'PEN')});
+  }));
+  return out;
+}
+
+// ── PROYECCIÓN de cierre de mes ──
+function gsProyeccion(items){
+  const D=new Date(GS.y,GS.m+1,0).getDate(), hoy=new Date();
+  const esActual=gsEsMesActual();
+  const d=esActual?hoy.getDate():D;
+  const daily=Array(D+1).fill(0);
+  items.forEach(i=>{ const dia=parseInt(i.fecha.slice(8,10)); if(dia>=1&&dia<=D) daily[dia]+=i.pen; });
+  const cum=Array(D+1).fill(0); for(let k=1;k<=D;k++) cum[k]=cum[k-1]+daily[k];
+  const actual=cum[d];
+  let mayor=0; if(items.length>=3) items.forEach(i=>{ if(i.pen>mayor) mayor=i.pen; });
+  const pace=d>0?Math.max(0,(actual-mayor))/d:0;
+  let conocidos=[], proj=null, cierre=actual;
+  if(esActual){
+    conocidos=gsPagosConocidos(GS.y,GS.m,d);
+    proj=Array(D+1).fill(null);
+    for(let k=d;k<=D;k++){
+      proj[k]=actual+pace*(k-d)+conocidos.filter(c=>c.dia<=k).reduce((s,c)=>s+c.pen,0);
+    }
+    cierre=proj[D];
+  }
+  return {D,d,daily,cum,proj,actual,pace,mayor,conocidos,cierre,esActual,knownTotal:conocidos.reduce((s,c)=>s+c.pen,0)};
+}
+
+// ── RENDER ──
+function renderGastos(){
+  gsInit();
+  const t=document.getElementById('gs-title'); if(!t) return;
+  t.textContent='💸 Gastos — '+MONTHS[GS.m]+' '+GS.y;
+  gsSegmentos();
+  gsRenderDisp();
+  gsRefrescarLista();
+}
+function gsSegmentos(){
+  const seg=(id,key,opts)=>{ const el=document.getElementById(id); if(el) el.innerHTML=opts.map(([v,l])=>`<button class="${GS[key]===v?'on':''}" onclick="GS['${key}']='${v}';gsSegmentos();gsRefrescarLista()">${l}</button>`).join(''); };
+  seg('gs-seg-tipo','tipo',[['all','Todos'],['cuenta','Cuentas'],['tarjeta','Tarjetas']]);
+  seg('gs-seg-rango','rango',[['all','Todo el mes'],['hoy','Hoy'],['7','7 días'],['15','15 días']]);
+  seg('gs-seg-group','group',[['fecha','Fecha'],['origen','Origen'],['cat','Categoría']]);
+}
+function gsRenderDisp(){
+  const el=document.getElementById('gs-disp'); if(!el) return;
+  const dp=gsDisponible();
+  const f=v=>M(fmtS(v));
+  let h=`<div class="section-title" style="margin-bottom:6px">💰 Disponible para gastar este mes</div>
+    <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:${dp.total>=0?'var(--green)':'var(--red)'}">${dp.total<0?'-':''}${f(dp.total)}</div>
+    <div style="font-size:11px;color:var(--text3);margin:2px 0 10px">Libre en cuentas + línea libre de tarjetas</div>
+    <div class="gs-line"><span>🏦 En cuentas (operativas)</span><b>${f(dp.enCuentas)}</b></div>
+    <div class="gs-line"><span>− Tarjetas que vencen este mes (corte cerrado)</span><b style="color:var(--red)">${f(dp.aPagarMes)}</b></div>
+    <div class="gs-line" style="border-top:1px solid var(--border);padding-top:6px"><span><strong>= Libre en cuentas</strong></span><b>${dp.libreCuentas<0?'-':''}${f(dp.libreCuentas)}</b></div>
+    <div class="gs-line"><span>💳 Línea de crédito libre</span><b style="color:var(--purple)">${f(dp.lineas)}</b></div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin:14px 0 0;letter-spacing:.4px">DETALLE POR TARJETA</div>`;
+  if(!dp.tarjetas.length) h+='<div class="empty">Sin tarjetas registradas.</div>';
+  dp.tarjetas.forEach(x=>{
+    const col=x.t.color||'var(--purple)', sym=x.cur==='USD'?'$':'S/';
+    const barCol=x.usadoPct>=90?'var(--red)':x.usadoPct>=70?'var(--amber)':col;
+    h+=`<div class="gs-tc">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong style="font-size:12px">${escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim())}</strong>
+      <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green)">${x.linea>0?M(gsFmt(x.libre,x.cur)):'—'}</span></div>
+      ${x.linea>0?`<div class="gs-bar"><div style="width:${x.usadoPct}%;background:${barCol}"></div></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea ${M(sym+' '+x.linea.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))} · ${x.usadoPct.toFixed(0)}% usado</div>`:`<div style="font-size:10px;color:var(--amber);margin-top:3px">Sin línea de crédito configurada (edítala en Tarjetas)</div>`}
+      <div class="gs-line" style="margin-top:4px"><span>Corte cerrado (se paga día ${x.t.pago||'—'})</span><b>${M(fmtS(x.cerrado))}</b></div>
+      <div class="gs-line"><span>Ciclo en curso (próximo mes)</span><b>${M(fmtS(x.enCurso))}</b></div></div>`;
+  });
+  h+=`<div style="font-size:10px;color:var(--text3);margin-top:10px">Cuentas de ahorro no incluidas. Montos en USD convertidos a soles con TC ${gsRate().toFixed(2)}.</div>`;
+  el.innerHTML=h;
+}
+function gsRefrescarLista(){
+  const base=gsItems(GS.y,GS.m);
+  // opciones de origen y categoría del mes
+  const selO=document.getElementById('gs-f-origen'), selC=document.getElementById('gs-f-cat');
+  if(selO){ const os=[...new Set(base.map(i=>i.origen))].sort(); if(GS.origen&&!os.includes(GS.origen)) GS.origen='';
+    selO.innerHTML='<option value="">Todos los orígenes</option>'+os.map(o=>`<option value="${escapeHtml(o)}"${o===GS.origen?' selected':''}>${escapeHtml(o)}</option>`).join(''); }
+  if(selC){ const cs=[...new Set(base.map(i=>i.cat||''))].sort(); if(GS.cat&&!cs.includes(GS.cat)) GS.cat='';
+    selC.innerHTML='<option value="">Todas las categorías</option>'+cs.map(c=>`<option value="${escapeHtml(c)}"${c===GS.cat?' selected':''}>${escapeHtml(c||'Sin categoría')}</option>`).join(''); }
+  ['cur','estado'].forEach(k=>{ const e=document.getElementById('gs-f-'+k); if(e) e.value=GS[k]; });
+  const items=gsFiltrar(base).sort((a,b)=>(b.fecha+(b.hora||'')).localeCompare(a.fecha+(a.hora||'')));
+  gsRenderKpis(items);
+  gsRenderTrend(base);
+  gsRenderLista(items);
+  gsRenderLaterales(items);
+}
+function gsRenderKpis(items){
+  const el=document.getElementById('gs-kpis'); if(!el) return;
+  const tot=items.reduce((s,i)=>s+i.pen,0);
+  const tar=items.filter(i=>i.tipo==='tarjeta'), cue=items.filter(i=>i.tipo==='cuenta');
+  const sT=tar.reduce((s,i)=>s+i.pen,0), sC=cue.reduce((s,i)=>s+i.pen,0);
+  const D=new Date(GS.y,GS.m+1,0).getDate();
+  const dias=gsEsMesActual()?new Date().getDate():(new Date(GS.y,GS.m,1)>new Date()?0:D);
+  const prom=dias>0?tot/dias:0;
+  const pct=v=>tot>0?Math.round(v/tot*100):0;
+  el.innerHTML=`
+    <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div><div class="gs-kpi-v" style="color:var(--red)">${M(fmtS(tot))}</div><div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div><div class="gs-kpi-v">${M(fmtS(prom))}</div><div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div><div class="gs-kpi-v" style="color:var(--purple)">${M(fmtS(sT))}</div><div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div><div class="gs-kpi-v" style="color:var(--teal)">${M(fmtS(sC))}</div><div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div></div>`;
+}
+function gsRenderTrend(items){
+  const el=document.getElementById('gs-trend'); if(!el) return;
+  const P=gsProyeccion(items);
+  const W=560,H=190,pl=8,pr=8,pt=12,pb=22, iw=W-pl-pr, ih=H-pt-pb;
+  const maxY=Math.max(1,P.cum[P.D],P.proj?P.proj[P.D]:0)*1.08;
+  const X=k=>pl+(k-0.5)/P.D*iw, Y=v=>pt+ih-(v/maxY)*ih;
+  const maxDay=Math.max(1,...P.daily);
+  const bw=Math.max(2,iw/P.D*0.6);
+  let bars='',real='',proy='',lbl='';
+  for(let k=1;k<=P.D;k++){
+    const hb=P.daily[k]/maxDay*ih*0.45;
+    if(P.daily[k]>0) bars+=`<rect x="${(X(k)-bw/2).toFixed(1)}" y="${(pt+ih-hb).toFixed(1)}" width="${bw.toFixed(1)}" height="${hb.toFixed(1)}" rx="1.5" fill="var(--accent)" opacity=".28"><title>Día ${k}: ${M(fmtS(P.daily[k]))}</title></rect>`;
+    if(k<=P.d) real+=(real?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.cum[k]).toFixed(1);
+    if(P.proj&&k>=P.d&&P.proj[k]!==null) proy+=(proy?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.proj[k]).toFixed(1);
+    if(k===1||(k%5===0&&P.D-k>=3)||k===P.D) lbl+=`<text x="${X(k).toFixed(1)}" y="${H-6}" font-size="9" fill="var(--text3)" text-anchor="middle">${k}</text>`;
+  }
+  const hoyX=P.esActual?`<line x1="${X(P.d).toFixed(1)}" x2="${X(P.d).toFixed(1)}" y1="${pt}" y2="${pt+ih}" stroke="var(--text3)" stroke-dasharray="2 3" opacity=".6"/>`:'';
+  const f=v=>M(fmtS(v));
+  const nota=P.esActual?'':(new Date(GS.y,GS.m,1)>new Date()?'Mes futuro: aún sin datos.':'Mes cerrado: gasto real acumulado.');
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+      <div><div class="section-title">📈 Tendencia diaria acumulada</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros)</div></div>
+      <div style="font-size:10px;color:var(--text3)"><span style="color:var(--accent)">━</span> real &nbsp;<span style="color:var(--amber)">╍</span> proyección &nbsp;<span style="opacity:.6">▮</span> gasto del día</div></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:8px;display:block">
+      <line x1="${pl}" x2="${W-pr}" y1="${pt+ih}" y2="${pt+ih}" stroke="var(--border2)"/>
+      ${bars}${hoyX}
+      ${proy?`<path d="${proy}" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4"/>`:''}
+      ${real?`<path d="${real}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:''}
+      ${P.esActual?`<circle cx="${X(P.d).toFixed(1)}" cy="${Y(P.actual).toFixed(1)}" r="4" fill="var(--accent)"/>`:''}
+      ${lbl}</svg>
+    ${P.esActual?`<div class="gs-stats">
+      <div>Cierre proyectado<b style="color:var(--amber)">${f(P.cierre)}</b></div>
+      <div>Ritmo diario<b>${f(P.pace)}</b></div>
+      <div>Pagos conocidos por venir<b>${f(P.knownTotal)}</b></div></div>
+      <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">Proyección = gasto actual (${f(P.actual)}) + ritmo diario × días restantes${P.mayor>0?' (sin contar el gasto único más grande, '+f(P.mayor)+')':''} + pagos frecuentes y cuotas de deudas que faltan este mes${P.conocidos.length?': '+P.conocidos.map(c=>escapeHtml(c.nombre)).join(', '):''}. Los estados de tarjeta no se suman porque ya están en tus consumos.</div>`
+      :`<div style="font-size:11px;color:var(--text3);margin-top:8px">${nota}</div>`}`;
+}
+function gsRenderLista(items){
+  const el=document.getElementById('gs-list'); if(!el) return;
+  if(!items.length){ el.innerHTML='<div class="empty"><div class="empty-icon">💸</div>Sin gastos con estos filtros.</div>'; return; }
+  const row=i=>{
+    const col=gsCatColor(i.cat), d=new Date(i.fecha+'T12:00:00');
+    const fch=d.toLocaleDateString('es-PE',{day:'2-digit',month:'short'}).replace('.','');
+    const usd=i.cur==='USD';
+    return `<div class="gs-row" onclick="gsAbrir('${i.tipo}','${String(i.id).replace(/'/g,"\\'")}'${i.tid?`,'${i.tid}','${i.mk}'`:''})">
+      <div class="gs-ic" style="background:${col}22">${gsCatEmoji(i.cat)}</div>
+      <div class="gs-main"><div class="gs-desc">${escapeHtml(i.desc)}</div>
+        <div class="gs-sub"><span>${i.cat?escapeHtml(i.cat.replace(/^\S+\s/,'')):'Sin categoría'}</span><span>· ${fch}${i.hora?' '+escapeHtml(i.hora):''}</span>
+        <span class="gs-pill ${i.tipo==='tarjeta'?'t':'c'}">${i.tipo==='tarjeta'?'💳':'🏦'} ${escapeHtml(i.origen)}</span>
+        ${i.cuota?`<span class="gs-pill cu">cuota ${i.cuota}</span>`:''}
+        ${i.tipo==='tarjeta'?`<span class="gs-pill ${i.estado==='Pagado'?'ok':'p'}">${i.estado}</span>`:''}</div></div>
+      <div class="gs-amt">-${M(gsFmt(i.amount,i.cur))}${usd?`<small>≈ ${M(fmtS(i.pen))}</small>`:''}</div></div>`;
+  };
+  const grupos=new Map();
+  items.forEach(i=>{
+    const k=GS.group==='fecha'?i.fecha:GS.group==='origen'?i.origen:(i.cat||'Sin categoría');
+    if(!grupos.has(k)) grupos.set(k,[]); grupos.get(k).push(i);
+  });
+  let keys=[...grupos.keys()];
+  if(GS.group==='fecha') keys.sort().reverse();
+  else keys.sort((a,b)=>grupos.get(b).reduce((s,i)=>s+i.pen,0)-grupos.get(a).reduce((s,i)=>s+i.pen,0));
+  el.innerHTML=keys.map(k=>{
+    const arr=grupos.get(k), tot=arr.reduce((s,i)=>s+i.pen,0);
+    let titulo=escapeHtml(k);
+    if(GS.group==='fecha'){ const dd=new Date(k+'T12:00:00'); titulo=dd.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'}); titulo=titulo.charAt(0).toUpperCase()+titulo.slice(1); }
+    return `<div class="gs-gh"><span>${titulo} · ${arr.length}</span><span style="font-family:var(--mono)">-${M(fmtS(tot))}</span></div>`+arr.map(row).join('');
+  }).join('');
+}
+function gsRenderLaterales(items){
+  const eo=document.getElementById('gs-origen'), ec=document.getElementById('gs-cats'); if(!eo||!ec) return;
+  const tot=items.reduce((s,i)=>s+i.pen,0)||1;
+  const agr=(fn)=>{ const m=new Map(); items.forEach(i=>{const k=fn(i); const o=m.get(k)||{v:0,n:0,i}; o.v+=i.pen; o.n++; m.set(k,o);}); return [...m.entries()].sort((a,b)=>b[1].v-a[1].v); };
+  const so=agr(i=>i.origen);
+  eo.innerHTML=`<div class="section-title" style="margin-bottom:10px">Por origen</div>`+(so.length?so.map(([k,o])=>`<div style="margin-bottom:10px"><div class="gs-line" style="padding:0"><span>${o.i.tipo==='tarjeta'?'💳':'🏦'} ${escapeHtml(k)} <span style="color:var(--text3)">· ${o.n}</span></span><b>${M(fmtS(o.v))}</b></div><div class="gs-bar"><div style="width:${(o.v/tot*100).toFixed(1)}%;background:${o.i.tipo==='tarjeta'?(o.i.color||'var(--purple)'):'var(--teal)'}"></div></div></div>`).join(''):'<div class="empty">—</div>');
+  const sc=agr(i=>i.cat||'');
+  let acc=0, circ=2*Math.PI*40, segs='';
+  sc.forEach(([k,o])=>{ const frac=o.v/tot, len=frac*circ; segs+=`<circle cx="60" cy="60" r="40" fill="none" stroke="${gsCatColor(k)}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}" transform="rotate(-90 60 60)"><title>${escapeHtml(k||'Sin categoría')}: ${Math.round(frac*100)}%</title></circle>`; acc+=len; });
+  ec.innerHTML=`<div class="section-title" style="margin-bottom:10px">Por categoría</div>`+(sc.length?`<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <svg viewBox="0 0 120 120" style="width:120px;height:120px;flex-shrink:0"><circle cx="60" cy="60" r="40" fill="none" stroke="var(--bg4)" stroke-width="18"/>${segs}</svg>
+    <div style="flex:1;min-width:140px">${sc.slice(0,8).map(([k,o])=>`<div class="gs-line" style="padding:2px 0"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${gsCatColor(k)};margin-right:6px"></span>${escapeHtml(k?k.replace(/^\S+\s/,''):'Sin categoría')}</span><b>${Math.round(o.v/tot*100)}%</b></div>`).join('')}</div></div>`:'<div class="empty">—</div>');
+}
+// ── ACCIONES ──
+function gsAbrir(tipo,id,tid,mk){
+  if(tipo==='cuenta'){ editMovimiento(id); }
+  else { currentTCId=tid; currentTCMonth=mk; editTCMov(id); }
+}
+function gsNuevoCuenta(){ openModal(); setType('expense'); }
+function gsNuevoTC(){ openAddMovTCFromList(); }
+function gsExportar(){
+  const items=gsFiltrar(gsItems(GS.y,GS.m)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!items.length){ alert('No hay gastos para exportar con estos filtros.'); return; }
+  const rows=items.map(i=>({Fecha:i.fecha,Hora:i.hora,Concepto:i.desc,Categoría:i.cat||'Sin categoría',Origen:i.origen,Tipo:i.tipo==='tarjeta'?'Tarjeta':'Cuenta',Cuota:i.cuota||'',Estado:i.estado,Moneda:i.cur,Monto:i.amount,'Monto (S/)':Math.round(i.pen*100)/100}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Gastos');
+  XLSX.writeFile(wb,'gastos_'+GS.y+'-'+String(GS.m+1).padStart(2,'0')+'.xlsx');
+}
+
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
@@ -5273,6 +5665,7 @@ function showPage(name){
     checkNotifications();updateCatFilter();renderHeatmap();
   }
   if(name==='dashboard')  renderDashboard();
+  if(name==='gastos')     renderGastos();
   if(name==='servicios')  renderServicios();
   if(name==='presupuesto') renderPresupuesto();
   if(name==='proyeccion') renderProyeccion();
@@ -6173,6 +6566,7 @@ function render(){
   // Update whichever page is currently visible
   const active=isPageActive;
   if(active('dashboard'))  renderDashboard();
+  if(active('gastos'))     renderGastos();
   if(active('presupuesto')) renderPresupuesto();
   if(active('proyeccion')) renderProyeccion();
   if(active('servicios'))  renderServicios();
@@ -13673,6 +14067,7 @@ function saveTCMov(){
   }
   saveState(); closeTCMovModal();
   renderTarjetas();
+  if(isPageActive('gastos')) renderGastos();
   if(tarjetaId===currentTCId && document.getElementById('tc-detail-view').style.display!=='none') renderTCDetail();
   toast(editingTCMovId?'Consumo actualizado':'Consumo guardado');
 }
