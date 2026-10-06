@@ -1038,6 +1038,28 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 @media(max-width:1000px){.gs-grid{grid-template-columns:minmax(0,1fr)}.gs-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.gs-chartwrap{min-height:260px}}
 @media(max-width:560px){.gs-kpi-v{font-size:17px}.gs-stats{grid-template-columns:1fr}.gs-row{gap:9px;padding:9px 8px}}
 .gs-chartwrap>svg{position:absolute;left:0;top:0}
+
+.gs-kpi-v2{margin-top:0;font-size:18px}
+
+.gs-chartwrap{flex:none;height:190px;min-height:0;margin-top:6px}
+.gs-stats{display:flex;flex-wrap:wrap;gap:6px 28px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.gs-stats div{background:none;padding:0;border-radius:0;font-size:11px;color:var(--text2);text-transform:none;font-weight:500}
+.gs-stats b{display:inline;font-size:14px;margin-left:6px}
+.gs-eq{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.gs-eqb{flex:1 1 180px;min-width:0;background:var(--bg3);border-radius:10px;padding:12px 14px}
+.gs-eqb .l{font-size:11px;color:var(--text2)}
+.gs-eqb .v{font-family:var(--mono);font-size:17px;margin-top:2px;line-height:1.3}
+.gs-eqb .s{font-size:10px;color:var(--text3);margin-top:2px}
+.gs-eqb.tot{flex:1.2 1 210px;background:var(--green-bg);border:1px solid rgba(62,201,110,.35)}
+.gs-eqb.tot .v{font-size:22px;font-weight:600;color:var(--green)}
+.gs-eqb.rec{flex:1.4 1 250px;background:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--bg2));border:1px solid var(--accent)}
+.gs-eqb.rec .v{font-size:22px;font-weight:600;color:var(--accent)}
+.gs-tcs{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;border-top:1px solid var(--border);padding-top:14px}
+.gs-tcs .gs-tc{flex:1 1 320px;min-width:0;margin-top:0}
+.gs-det{background:var(--bg3);border-radius:10px;padding:10px 14px}
+.gs-det summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text2)}
+.gs-det .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 28px;margin-top:8px}
+@media(max-width:1000px){.gs-chartwrap{height:210px}}
 </style>
 </head>
 <body>
@@ -1697,10 +1719,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div class="gs-kpis" id="gs-kpis"></div>
-  <div class="gs-grid st">
-    <div class="card gs-trend" style="padding:16px" id="gs-trend"></div>
-    <div class="card" style="padding:16px" id="gs-disp"></div>
-  </div>
+  <div class="card" style="padding:16px;margin-bottom:16px" id="gs-disp"></div>
+  <div class="card gs-trend" style="padding:14px 16px;margin-bottom:16px" id="gs-trend"></div>
 
   <div class="card" style="padding:14px;margin-bottom:16px">
     <div class="gs-filters">
@@ -3509,8 +3529,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 19:41'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: gráfico interactivo (montos al pasar el mouse o tocar), fechas con día y mes, montos por tarjeta y cuenta, y gráfico alineado con el panel de Disponible.';
+const APP_VERSION_DATE = '05/10/26 - 20:19'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: nuevo diseño (Disponible para gastar en fila y tendencia compacta a todo el ancho) y nuevo recuadro Monto recomendado para gastar, calculado con tus ingresos, pagos programados e historial de los últimos meses.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5356,6 +5376,12 @@ function gsInit(){ if(GS.y===null){const h=new Date();GS.y=h.getFullYear();GS.m=
 function gsRate(){ return (state.tc&&state.tc.venta)||3.45; }
 function gsPen(a,cur){ return cur==='USD'?a*gsRate():a; }
 function gsFmt(a,cur){ return cur==='USD'?fmtD(a):fmtS(a); }
+// Sumas SEPARADAS por moneda (cada gasto respeta su moneda original)
+function gsSum(arr){ let pen=0,usd=0; arr.forEach(i=>{ if(i.cur==='USD') usd+=i.amount; else pen+=i.amount; }); return {pen,usd}; }
+function gsSgn(v,cur){ return (v<-0.004?'-':'')+(cur==='USD'?fmtD(v):fmtS(v)); }
+// "S/ 1,200.00 + $ 50.00" — solo muestra la moneda que tenga monto (si ambas son 0, muestra S/ 0.00)
+function gsMix(pen,usd){ const a=[]; if(Math.abs(pen)>0.004||Math.abs(usd)<=0.004) a.push(gsSgn(pen,'PEN')); if(Math.abs(usd)>0.004) a.push(gsSgn(usd,'USD')); return a.join(' + '); }
+function gsKV(col,pen,usd){ const c=col?` style="color:${col}"`:''; let h=''; if(Math.abs(pen)>0.004||Math.abs(usd)<=0.004) h+=`<div class="gs-kpi-v"${c}>${M(gsSgn(pen,'PEN'))}</div>`; if(Math.abs(usd)>0.004) h+=`<div class="gs-kpi-v${h?' gs-kpi-v2':''}"${c}>${M(gsSgn(usd,'USD'))}</div>`; return h; }
 function gsEsMesActual(){ const h=new Date(); return GS.y===h.getFullYear()&&GS.m===h.getMonth(); }
 function gsMes(d){ gsInit(); GS.m+=d; if(GS.m<0){GS.m=11;GS.y--;} if(GS.m>11){GS.m=0;GS.y++;} renderGastos(); }
 function gsHoy(){ const h=new Date(); GS.y=h.getFullYear(); GS.m=h.getMonth(); renderGastos(); }
@@ -5408,27 +5434,30 @@ function gsDisponible(){
   const thisMk=tcMonthKey(hoy.getFullYear(),hoy.getMonth());
   const saldos=reconstructSaldoAt(hoy.getFullYear(),hoy.getMonth());
   const cuentas=getCuentasOperativasUnicas().map(k=>{
-    const cur=((state.customCuentas||{})[k]||{}).currency||'PEN';
-    const v=saldos[k]||0; return {k,v,cur,pen:gsPen(v,cur)};
+    const cur=((state.customCuentas||{})[k]||{}).currency==='USD'?'USD':'PEN';
+    const v=saldos[k]||0; return {k,v,cur};
   });
-  const enCuentas=cuentas.reduce((s,c)=>s+c.pen,0);
+  const enCuentas={pen:0,usd:0}; cuentas.forEach(c=>{ if(c.cur==='USD') enCuentas.usd+=c.v; else enCuentas.pen+=c.v; });
+  const aPagar={pen:0,usd:0}, lineas={pen:0,usd:0};
   const tarjetas=(state.tarjetas||[]).map(t=>{
-    const cur=t.currency||'PEN', linea=parseFloat(t.linea)||0;
-    let cerrado=0, enCurso=0;
+    const cur=t.currency==='USD'?'USD':'PEN', linea=parseFloat(t.linea)||0;
+    const cerrado={pen:0,usd:0}, enCurso={pen:0,usd:0};
+    let deudaCur=0;
     Object.entries(t.movs||{}).forEach(([mk,arr])=>(arr||[]).forEach(mv=>{
       if(mv.pagado) return;
-      const p=gsPen(mv.monto,mv.currency||cur);
-      if(mk<=thisMk) cerrado+=p; else enCurso+=p;   // mk<=este mes: el estado ya cerró y se paga este mes (o está vencido)
+      const mc=(mv.currency||cur)==='USD'?'USD':'PEN';
+      const dest=(mk<=thisMk)?cerrado:enCurso;   // mk<=este mes: el estado ya cerró y se paga este mes (o está vencido)
+      if(mc==='USD') dest.usd+=mv.monto; else dest.pen+=mv.monto;
+      deudaCur+=(mc===cur)?mv.monto:(cur==='USD'?mv.monto/rate:mv.monto*rate); // deuda expresada en la moneda de la línea
     }));
-    const deudaTotalPen=cerrado+enCurso;
-    const deudaCur=cur==='USD'?deudaTotalPen/rate:deudaTotalPen;
     const libre=linea>0?Math.max(0,linea-deudaCur):0;
-    return {t,cur,linea,cerrado,enCurso,libre,librePen:gsPen(libre,cur),usadoPct:linea>0?Math.min(100,deudaCur/linea*100):0};
+    aPagar.pen+=cerrado.pen; aPagar.usd+=cerrado.usd;
+    if(cur==='USD') lineas.usd+=libre; else lineas.pen+=libre;
+    return {t,cur,linea,cerrado,enCurso,libre,usadoPct:linea>0?Math.min(100,deudaCur/linea*100):0};
   });
-  const aPagarMes=tarjetas.reduce((s,x)=>s+x.cerrado,0);
-  const libreCuentas=enCuentas-aPagarMes;
-  const lineas=tarjetas.reduce((s,x)=>s+x.librePen,0);
-  return {cuentas,enCuentas,tarjetas,aPagarMes,libreCuentas,lineas,total:libreCuentas+lineas};
+  const libreCuentas={pen:enCuentas.pen-aPagar.pen,usd:enCuentas.usd-aPagar.usd};
+  const total={pen:libreCuentas.pen+lineas.pen,usd:libreCuentas.usd+lineas.usd};
+  return {cuentas,enCuentas,tarjetas,aPagar,libreCuentas,lineas,total};
 }
 
 // ── PAGOS CONOCIDOS que faltan este mes (pagos frecuentes + cuotas de deudas mayores) ──
@@ -5447,23 +5476,24 @@ function gsPagosConocidos(y,m,diaHoy){
     else { const u=ultimoMontoRegistradoPF(pf,y,m); monto=u!==null?u:(pf.montoFijo||0); }
     if(!(monto>0)) return;
     const dia=pf.diaPago?pfDiaLimite(pf.diaPago,D):D;
-    out.push({nombre:pf.nombre,dia:Math.max(dia,diaHoy),pen:gsPen(monto,pf.currency||'PEN')});
+    out.push({nombre:pf.nombre,dia:Math.max(dia,diaHoy),pen:gsPen(monto,pf.currency||'PEN'),cur:pf.currency||'PEN',monto});
   });
   (state.deudasMayores||[]).forEach(d=>(d.cuotas||[]).forEach(c=>{
     if(c.pagado||!c.fecha||c.fecha.slice(0,7)>mk) return;
     const dia=c.fecha.slice(0,7)===mk?parseInt(c.fecha.slice(8,10)):diaHoy;
-    out.push({nombre:(d.nombre||'Deuda')+' (cuota)',dia:Math.max(dia,diaHoy),pen:gsPen(c.monto||0,d.currency||'PEN')});
+    out.push({nombre:(d.nombre||'Deuda')+' (cuota)',dia:Math.max(dia,diaHoy),pen:gsPen(c.monto||0,d.currency||'PEN'),cur:d.currency||'PEN',monto:c.monto||0});
   }));
   return out;
 }
 
 // ── PROYECCIÓN de cierre de mes ──
+function gsSumKn(arr){ let pen=0,usd=0; arr.forEach(q=>{ if(q.cur==='USD') usd+=q.monto; else pen+=q.monto; }); return {pen,usd}; }
 function gsProyeccion(items){
   const D=new Date(GS.y,GS.m+1,0).getDate(), hoy=new Date();
   const esActual=gsEsMesActual();
   const d=esActual?hoy.getDate():D;
-  const daily=Array(D+1).fill(0);
-  items.forEach(i=>{ const dia=parseInt(i.fecha.slice(8,10)); if(dia>=1&&dia<=D) daily[dia]+=i.pen; });
+  const daily=Array(D+1).fill(0), dailyUsd=Array(D+1).fill(0);
+  items.forEach(i=>{ const dia=parseInt(i.fecha.slice(8,10)); if(dia>=1&&dia<=D){ daily[dia]+=i.pen; if(i.cur==='USD') dailyUsd[dia]+=i.amount; } });
   const cum=Array(D+1).fill(0); for(let k=1;k<=D;k++) cum[k]=cum[k-1]+daily[k];
   const actual=cum[d];
   let mayor=0; if(items.length>=3) items.forEach(i=>{ if(i.pen>mayor) mayor=i.pen; });
@@ -5477,7 +5507,8 @@ function gsProyeccion(items){
     }
     cierre=proj[D];
   }
-  return {D,d,daily,cum,proj,actual,pace,mayor,conocidos,cierre,esActual,knownTotal:conocidos.reduce((s,c)=>s+c.pen,0)};
+  const kn=gsSumKn(conocidos);
+  return {D,d,daily,dailyUsd,cum,proj,knownNat:kn,actual,pace,mayor,conocidos,cierre,esActual,knownTotal:conocidos.reduce((s,c)=>s+c.pen,0)};
 }
 
 // ── RENDER ──
@@ -5495,33 +5526,107 @@ function gsSegmentos(){
   seg('gs-seg-rango','rango',[['all','Todo el mes'],['hoy','Hoy'],['7','7 días'],['15','15 días']]);
   seg('gs-seg-group','group',[['fecha','Fecha'],['origen','Origen'],['cat','Categoría']]);
 }
+
+// ── MONTO RECOMENDADO PARA GASTAR ──
+// Presupuesto del mes = ingreso esperado − ahorro objetivo (tu tasa de ahorro histórica, mín. 10 % y máx. 35 %).
+// Recomendado = presupuesto − lo ya gastado − pagos programados que faltan, sin pasar de tu saldo disponible.
+function gsRecomendado(dp){
+  const hoy=new Date(), y=hoy.getFullYear(), m=hoy.getMonth(), D=new Date(y,m+1,0).getDate(), d=hoy.getDate(), mk=tcMonthKey(y,m);
+  const incPen=arr=>arr.filter(x=>x.type==='income').reduce((s,x)=>s+gsPen(x.amount,x.currency||'PEN'),0);
+  const hist=[];
+  for(let i=1;i<=3;i++){ const dt=new Date(y,m-i,1), yy=dt.getFullYear(), mm=dt.getMonth();
+    const ing=incPen(getMovs(yy,mm)), gas=gsItems(yy,mm).reduce((s,x)=>s+x.pen,0);
+    if(ing>0||gas>0) hist.push({y:yy,m:mm,ing,gas}); }
+  const avgIng=hist.length?hist.reduce((s,h)=>s+h.ing,0)/hist.length:0;
+  const avgGas=hist.length?hist.reduce((s,h)=>s+h.gas,0)/hist.length:0;
+  const hs=hist.filter(h=>h.ing>0);
+  const tasaHist=hs.length?hs.reduce((s,h)=>s+(h.ing-h.gas)/h.ing,0)/hs.length:null;
+  const tasa=tasaHist===null?0.10:Math.min(0.35,Math.max(0.10,tasaHist));
+  const recibido=incPen(getMovs(y,m));
+  let pfPend=0, hayPF=false;
+  (state.pagosFrecuentes||[]).forEach(pf=>{
+    if(pf.tipo!=='ingreso'||pf.oculto) return;
+    const freq=pf.frecuencia||'mensual';
+    if(freq==='mensual'){ if(!pfActivoEnMes(pf,y,m)) return; } else if(freq==='semestral'){ if(!(pf.meses||[]).includes(m+1)) return; } else return;
+    hayPF=true;
+    if(pf.pagosRegistrados&&pf.pagosRegistrados[mk]) return;
+    const u=ultimoMontoRegistradoPF(pf,y,m), monto=u!==null?u:(pf.montoFijo||0);
+    // si ya registraste ese ingreso a mano este mes (mismo nombre o monto parecido), no se cuenta dos veces
+    const nom=(pf.nombre||'').trim().toLowerCase(), mp=gsPen(monto,pf.currency||'PEN');
+    const yaRec=getMovs(y,m).some(x=>x.type==='income'&&((nom&&(x.desc||'').toLowerCase().includes(nom))||(mp>0&&Math.abs(gsPen(x.amount,x.currency||'PEN')-mp)<=mp*0.05)));
+    if(monto>0&&!yaRec) pfPend+=mp;
+  });
+  let ingreso,fuente;
+  if(hayPF){ ingreso=recibido+pfPend; fuente='recibido este mes + ingresos programados'; }
+  else if(avgIng>0){ ingreso=Math.max(recibido,avgIng); fuente='promedio de tus últimos '+hist.length+' mes'+(hist.length===1?'':'es'); }
+  else { ingreso=recibido; fuente='solo lo recibido este mes'; }
+  const ahorro=ingreso*tasa, presupuesto=ingreso-ahorro;
+  const gastado=gsItems(y,m).reduce((s,x)=>s+x.pen,0);
+  const comprometido=gsPagosConocidos(y,m,d).reduce((s,q)=>s+q.pen,0);
+  const restante=Math.max(0,presupuesto-gastado-comprometido);
+  const diasRest=Math.max(1,D-d+1);
+  const dispTotal=dp.total.pen+dp.total.usd*gsRate();
+  const tope=Math.max(0,dispTotal), recomendado=Math.min(restante,tope), capado=restante>tope+0.004;
+  let cierre=null; if(gsEsMesActual()) cierre=gsProyeccion(gsItems(y,m)).cierre;
+  return {hist,avgIng,avgGas,tasaHist,tasa,recibido,pfPend,ingreso,fuente,ahorro,presupuesto,gastado,comprometido,restante,diasRest,dispTotal,recomendado,capado,porDia:recomendado/diasRest,cierre};
+}
+
 function gsRenderDisp(){
   const el=document.getElementById('gs-disp'); if(!el) return;
-  const dp=gsDisponible();
+  const dp=gsDisponible(), R=gsRecomendado(dp);
+  const hayUsd=[dp.enCuentas,dp.aPagar,dp.lineas].some(o=>Math.abs(o.usd)>0.004);
+  const mx=(o)=>M(gsMix(o.pen,hayUsd?o.usd:0));
   const f=v=>M(fmtS(v));
-  let h=`<div class="section-title" style="margin-bottom:6px">💰 Disponible para gastar este mes</div>
-    <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:${dp.total>=0?'var(--green)':'var(--red)'}">${dp.total<0?'-':''}${f(dp.total)}</div>
-    <div style="font-size:11px;color:var(--text3);margin:2px 0 10px">Libre en cuentas + línea libre de tarjetas</div>
-    <div class="gs-line"><span>🏦 En cuentas (operativas)</span><b>${f(dp.enCuentas)}</b></div>
-    <div class="gs-line"><span>− Tarjetas que vencen este mes (corte cerrado)</span><b style="color:var(--red)">${f(dp.aPagarMes)}</b></div>
-    <div class="gs-line" style="border-top:1px solid var(--border);padding-top:6px"><span><strong>= Libre en cuentas</strong></span><b>${dp.libreCuentas<0?'-':''}${f(dp.libreCuentas)}</b></div>
-    <div class="gs-line"><span>💳 Línea de crédito libre</span><b style="color:var(--purple)">${f(dp.lineas)}</b></div>
-    <div style="font-size:11px;font-weight:700;color:var(--text3);margin:14px 0 0;letter-spacing:.4px">DETALLE POR TARJETA</div>`;
-  if(!dp.tarjetas.length) h+='<div class="empty">Sin tarjetas registradas.</div>';
+  const colTot=(dp.total.pen>=-0.004&&dp.total.usd>=-0.004)?'var(--green)':'var(--red)';
+  const totTxt=M(gsSgn(dp.total.pen,'PEN'))+(hayUsd?' + '+M(gsSgn(dp.total.usd,'USD')):'');
+  const lineasTotal=dp.tarjetas.filter(x=>x.cur!=='USD').reduce((s,x)=>s+x.linea,0);
+  // estado del recomendado
+  let est='';
+  if(R.recomendado<=0.004) est=`<span style="color:var(--red)">Ya alcanzaste el presupuesto del mes</span>`;
+  else if(R.capado) est=`<span style="color:var(--amber)">Limitado por tu saldo disponible</span>`;
+  else if(R.cierre!==null) est=R.cierre<=R.presupuesto?`<span style="color:var(--green)">Vas dentro del presupuesto</span>`:`<span style="color:var(--amber)">A tu ritmo actual cerrarías ${f(R.cierre-R.presupuesto)} sobre el presupuesto</span>`;
+  const pct=v=>Math.round(v*100)+'%';
+  let h=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <div class="section-title">💰 Disponible para gastar este mes</div>
+      <div style="font-size:11px;color:var(--text3)">según el corte de cada tarjeta${hayUsd?' · soles y dólares por separado':''}</div></div>
+    <div class="gs-eq">
+      <div class="gs-eqb"><div class="l">🏦 En cuentas (operativas)</div><div class="v" style="color:var(--teal)">${mx(dp.enCuentas)}</div><div class="s">${dp.cuentas.map(c=>escapeHtml(c.k)+' '+M(gsFmt(c.v,c.cur).replace(/^(S\/|\$) /,''))).join(' · ')}</div></div>
+      <div class="gs-eqb"><div class="l">− Tarjetas que vencen este mes</div><div class="v" style="color:var(--amber)">${dp.aPagar.pen>0.004||dp.aPagar.usd>0.004?'− ':''}${mx(dp.aPagar)}</div><div class="s">cortes ya cerrados</div></div>
+      <div class="gs-eqb"><div class="l">= Libre en cuentas</div><div class="v">${mx(dp.libreCuentas)}</div><div class="s">&nbsp;</div></div>
+      <div class="gs-eqb"><div class="l">+ Líneas de crédito libres</div><div class="v" style="color:var(--purple)">${mx(dp.lineas)}</div><div class="s">${lineasTotal>0?'de '+f(lineasTotal)+' en total':'&nbsp;'}</div></div>
+      <div class="gs-eqb tot"><div class="l" style="font-weight:700;color:var(--text)">Total para gastar</div><div class="v" style="color:${colTot}">${totTxt}</div><div class="s">libre en cuentas + líneas libres</div></div>
+      <div class="gs-eqb rec"><div class="l" style="font-weight:700;color:var(--text)">⭐ Monto recomendado para gastar</div><div class="v">${f(R.recomendado)}</div><div class="s" style="color:var(--text2)">≈ ${f(R.porDia)} por día · ${R.diasRest} día${R.diasRest===1?'':'s'} restantes</div><div class="s">${est}</div></div>
+    </div>
+    <details class="gs-det" style="margin-top:12px"><summary>¿Cómo calculo el monto recomendado?</summary>
+      <div class="g">
+        <div class="gs-line"><span>Ingreso esperado del mes <span style="color:var(--text3)">(${R.fuente})</span></span><b>${f(R.ingreso)}</b></div>
+        <div class="gs-line"><span>− Ahorro objetivo <span style="color:var(--text3)">(${pct(R.tasa)}${R.tasaHist===null?', sin historial':' · tu ahorro de los últimos meses: '+pct(R.tasaHist)})</span></span><b>${f(R.ahorro)}</b></div>
+        <div class="gs-line" style="border-top:1px solid var(--border)"><span><strong>= Presupuesto del mes</strong></span><b>${f(R.presupuesto)}</b></div>
+        <div class="gs-line"><span>− Ya gastado este mes</span><b>${f(R.gastado)}</b></div>
+        <div class="gs-line"><span>− Pagos programados que faltan <span style="color:var(--text3)">(pagos frecuentes y cuotas de deudas)</span></span><b>${f(R.comprometido)}</b></div>
+        <div class="gs-line" style="border-top:1px solid var(--border)"><span><strong>= Te queda del presupuesto</strong></span><b>${f(R.restante)}</b></div>
+        <div class="gs-line"><span>Tope por tu saldo disponible</span><b>${f(R.dispTotal)}</b></div>
+        <div class="gs-line"><span>Referencia: tu gasto típico mensual${R.hist.length?' <span style="color:var(--text3)">(prom. '+R.hist.length+' mes'+(R.hist.length===1?'':'es')+')</span>':''}</span><b>${R.hist.length?f(R.avgGas):'—'}</b></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">Estimación orientativa. Usa tus ingresos reales y programados, tu historial de los últimos 3 meses cerrados y tus pagos programados. No cuenta cuentas de ahorro.</div>
+    </details>`;
+  h+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:14px 0 8px;letter-spacing:.4px">DETALLE POR TARJETA</div><div class="gs-tcs">`;
+  if(!dp.tarjetas.length) h+='<div class="empty" style="flex:1">Sin tarjetas registradas.</div>';
   dp.tarjetas.forEach(x=>{
-    const col=x.t.color||'var(--purple)', sym=x.cur==='USD'?'$':'S/';
-    const barCol=x.usadoPct>=90?'var(--red)':x.usadoPct>=70?'var(--amber)':col;
+    const c=x.t.color||'var(--purple)', sym=x.cur==='USD'?'$':'S/';
+    const barCol=x.usadoPct>=90?'var(--red)':x.usadoPct>=70?'var(--amber)':c;
     h+=`<div class="gs-tc">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong style="font-size:12px">${escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim())}</strong>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong style="font-size:12px">💳 ${escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim())}</strong>
       <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green)">${x.linea>0?M(gsFmt(x.libre,x.cur)):'—'}</span></div>
       ${x.linea>0?`<div class="gs-bar"><div style="width:${x.usadoPct}%;background:${barCol}"></div></div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea ${M(sym+' '+x.linea.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))} · ${x.usadoPct.toFixed(0)}% usado</div>`:`<div style="font-size:10px;color:var(--amber);margin-top:3px">Sin línea de crédito configurada (edítala en Tarjetas)</div>`}
-      <div class="gs-line" style="margin-top:4px"><span>Corte cerrado (se paga día ${x.t.pago||'—'})</span><b>${M(fmtS(x.cerrado))}</b></div>
-      <div class="gs-line"><span>Ciclo en curso (próximo mes)</span><b>${M(fmtS(x.enCurso))}</b></div></div>`;
+      <div class="gs-line" style="margin-top:4px"><span>Corte cerrado (se paga día ${x.t.pago||'—'})</span><b>${M(gsMix(x.cerrado.pen,x.cerrado.usd))}</b></div>
+      <div class="gs-line"><span>Ciclo en curso (próximo mes)</span><b>${M(gsMix(x.enCurso.pen,x.enCurso.usd))}</b></div></div>`;
   });
-  h+=`<div style="font-size:10px;color:var(--text3);margin-top:10px">Cuentas de ahorro no incluidas. Montos en USD convertidos a soles con TC ${gsRate().toFixed(2)}.</div>`;
+  h+=`</div><div style="font-size:10px;color:var(--text3);margin-top:10px">Cuentas de ahorro no incluidas. Soles y dólares se muestran por separado, sin convertir.</div>`;
   el.innerHTML=h;
 }
+
 function gsRefrescarLista(){
   const base=gsItems(GS.y,GS.m);
   // opciones de origen y categoría del mes
@@ -5541,18 +5646,19 @@ function gsRenderKpis(items){
   const el=document.getElementById('gs-kpis'); if(!el) return;
   const tot=items.reduce((s,i)=>s+i.pen,0);
   const tar=items.filter(i=>i.tipo==='tarjeta'), cue=items.filter(i=>i.tipo==='cuenta');
+  const nT=gsSum(tar), nC=gsSum(cue), nA=gsSum(items);
   const sT=tar.reduce((s,i)=>s+i.pen,0), sC=cue.reduce((s,i)=>s+i.pen,0);
   const D=new Date(GS.y,GS.m+1,0).getDate();
   const dias=gsEsMesActual()?new Date().getDate():(new Date(GS.y,GS.m,1)>new Date()?0:D);
-  const prom=dias>0?tot/dias:0;
   const pct=v=>tot>0?Math.round(v/tot*100):0;
-  const det=(arr,ic)=>{ const m=new Map(); arr.forEach(i=>m.set(i.origen,(m.get(i.origen)||0)+i.pen)); const l=[...m.entries()].sort((a,b)=>b[1]-a[1]);
-    return l.length?`<div class="gs-kdet">${l.map(([k,v])=>`<div class="gs-line" style="padding:2px 0;font-size:11px"><span>${ic} ${escapeHtml(k)}</span><b>${M(fmtS(v))}</b></div>`).join('')}</div>`:''; };
+  const det=(arr,ic)=>{ const m=new Map(); arr.forEach(i=>{ const o=m.get(i.origen)||{pen:0,usd:0,eq:0}; if(i.cur==='USD') o.usd+=i.amount; else o.pen+=i.amount; o.eq+=i.pen; m.set(i.origen,o); }); const l=[...m.entries()].sort((a,b)=>b[1].eq-a[1].eq);
+    return l.length?`<div class="gs-kdet">${l.map(([k,o])=>`<div class="gs-line" style="padding:2px 0;font-size:11px"><span>${ic} ${escapeHtml(k)}</span><b>${M(gsMix(o.pen,o.usd))}</b></div>`).join('')}</div>`:''; };
+  const hayUsd=Math.abs(nA.usd)>0.004;
   el.innerHTML=`
-    <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div><div class="gs-kpi-v" style="color:var(--red)">${M(fmtS(tot))}</div><div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}</div></div>
-    <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div><div class="gs-kpi-v">${M(fmtS(prom))}</div><div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
-    <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div><div class="gs-kpi-v" style="color:var(--purple)">${M(fmtS(sT))}</div><div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div>${det(tar,'💳')}</div>
-    <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div><div class="gs-kpi-v" style="color:var(--teal)">${M(fmtS(sC))}</div><div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div>${det(cue,'🏦')}</div>`;
+    <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div>${gsKV('var(--red)',nA.pen,nA.usd)}<div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}${hayUsd?` · ≈ ${M(fmtS(tot))} en total (TC ${gsRate().toFixed(2)})`:''}</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div>${gsKV('',dias>0?nA.pen/dias:0,dias>0?nA.usd/dias:0)}<div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div>${gsKV('var(--purple)',nT.pen,nT.usd)}<div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div>${det(tar,'💳')}</div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div>${gsKV('var(--teal)',nC.pen,nC.usd)}<div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div>${det(cue,'🏦')}</div>`;
 }
 
 const GS_MES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
@@ -5563,13 +5669,13 @@ function gsRenderTrend(items){
   const f=v=>M(fmtS(v));
   const nota=(new Date(GS.y,GS.m,1)>new Date())?'Mes futuro: aún sin datos.':'Mes cerrado: gasto real acumulado.';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-      <div><div class="section-title">📈 Tendencia diaria acumulada</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos</div></div>
+      <div><div class="section-title">📈 Tendencia diaria acumulada</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos${P.dailyUsd.some(v=>v>0)?` · en soles (USD convertidos a TC ${gsRate().toFixed(2)})`:''}</div></div>
       <div style="font-size:10px;color:var(--text3)"><span style="color:var(--accent)">━</span> real &nbsp;<span style="color:var(--amber)">╍</span> proyección &nbsp;<span style="opacity:.6">▮</span> gasto del día</div></div>
     <div class="gs-chartwrap" id="gs-chartwrap" onpointermove="gsHover(event)" onpointerdown="gsHover(event)" onpointerleave="gsHoverOff()"></div>
     ${P.esActual?`<div class="gs-stats">
       <div>Cierre proyectado<b style="color:var(--amber)">${f(P.cierre)}</b></div>
       <div>Ritmo diario<b>${f(P.pace)}</b></div>
-      <div>Pagos conocidos por venir<b>${f(P.knownTotal)}</b></div></div>
+      <div>Pagos conocidos por venir<b>${M(gsMix(P.knownNat.pen,P.knownNat.usd))}</b></div></div>
       <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">Proyección = gasto actual (${f(P.actual)}) + ritmo diario × días restantes${P.mayor>0?' (sin contar el gasto único más grande, '+f(P.mayor)+')':''} + pagos frecuentes y cuotas de deudas que faltan este mes${P.conocidos.length?': '+P.conocidos.map(c=>escapeHtml(c.nombre)).join(', '):''}. Los estados de tarjeta no se suman porque ya están en tus consumos.</div>`
       :`<div style="font-size:11px;color:var(--text3);margin-top:8px">${nota}</div>`}`;
   gsDibujarChart();
@@ -5628,12 +5734,12 @@ function gsHover(e){
   const dow=new Date(GS.y,GS.m,k).toLocaleDateString('es-PE',{weekday:'short'}).replace('.','');
   let h=`<div style="font-weight:700;margin-bottom:4px">${dow.charAt(0).toUpperCase()+dow.slice(1)} ${k}/${GS_MES[GS.m]}${futuro?' <span style="color:var(--amber);font-weight:600">· proyección</span>':''}</div>`;
   if(!futuro){
-    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto del día</span><b>${f(P.daily[k])}</b></div><div class="gs-line" style="padding:1px 0"><span>Acumulado real</span><b style="color:var(--accent)">${f(P.cum[k])}</b></div>`;
-    if(P.esActual&&k===P.d&&P.conocidos.some(q=>q.dia<=P.d)){ h+=`<div style="font-size:10px;color:var(--text3);margin-top:3px">Pendientes de hoy/vencidos: ${P.conocidos.filter(q=>q.dia<=P.d).map(q=>escapeHtml(q.nombre)+' '+f(q.pen)).join(', ')}</div>`; }
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto del día</span><b>${f(P.daily[k])}</b></div>${P.dailyUsd[k]>0?`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ incluye ${M(fmtD(P.dailyUsd[k]))} (USD)</div>`:''}<div class="gs-line" style="padding:1px 0"><span>Acumulado real</span><b style="color:var(--accent)">${f(P.cum[k])}</b></div>`;
+    if(P.esActual&&k===P.d&&P.conocidos.some(q=>q.dia<=P.d)){ h+=`<div style="font-size:10px;color:var(--text3);margin-top:3px">Pendientes de hoy/vencidos: ${P.conocidos.filter(q=>q.dia<=P.d).map(q=>escapeHtml(q.nombre)+' '+M(gsFmt(q.monto,q.cur))).join(', ')}</div>`; }
   } else {
     const kn=P.conocidos.filter(q=>q.dia===k), kt=kn.reduce((s,q)=>s+q.pen,0);
     h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto estimado del día</span><b>${f(P.pace+kt)}</b></div>`;
-    if(kn.length) h+=`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ ritmo ${f(P.pace)} + ${kn.map(q=>escapeHtml(q.nombre)+' '+f(q.pen)).join(', ')}</div>`;
+    if(kn.length) h+=`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ ritmo ${f(P.pace)} + ${kn.map(q=>escapeHtml(q.nombre)+' '+M(gsFmt(q.monto,q.cur))).join(', ')}</div>`;
     h+=`<div class="gs-line" style="padding:1px 0"><span>Acumulado proyectado</span><b style="color:var(--amber)">${f(P.proj[k])}</b></div>`;
   }
   tip.innerHTML=h; tip.style.display='block';
@@ -5670,18 +5776,18 @@ function gsRenderLista(items){
   if(GS.group==='fecha') keys.sort().reverse();
   else keys.sort((a,b)=>grupos.get(b).reduce((s,i)=>s+i.pen,0)-grupos.get(a).reduce((s,i)=>s+i.pen,0));
   el.innerHTML=keys.map(k=>{
-    const arr=grupos.get(k), tot=arr.reduce((s,i)=>s+i.pen,0);
+    const arr=grupos.get(k), sg=gsSum(arr);
     let titulo=escapeHtml(k);
     if(GS.group==='fecha'){ const dd=new Date(k+'T12:00:00'); titulo=dd.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'}); titulo=titulo.charAt(0).toUpperCase()+titulo.slice(1); }
-    return `<div class="gs-gh"><span>${titulo} · ${arr.length}</span><span style="font-family:var(--mono)">-${M(fmtS(tot))}</span></div>`+arr.map(row).join('');
+    return `<div class="gs-gh"><span>${titulo} · ${arr.length}</span><span style="font-family:var(--mono)">-${M(gsMix(sg.pen,sg.usd).replace(/ \+ /,' + -'))}</span></div>`+arr.map(row).join('');
   }).join('');
 }
 function gsRenderLaterales(items){
   const eo=document.getElementById('gs-origen'), ec=document.getElementById('gs-cats'); if(!eo||!ec) return;
   const tot=items.reduce((s,i)=>s+i.pen,0)||1;
-  const agr=(fn)=>{ const m=new Map(); items.forEach(i=>{const k=fn(i); const o=m.get(k)||{v:0,n:0,i}; o.v+=i.pen; o.n++; m.set(k,o);}); return [...m.entries()].sort((a,b)=>b[1].v-a[1].v); };
+  const agr=(fn)=>{ const m=new Map(); items.forEach(i=>{const k=fn(i); const o=m.get(k)||{v:0,n:0,i,pen:0,usd:0}; o.v+=i.pen; o.n++; if(i.cur==='USD') o.usd+=i.amount; else o.pen+=i.amount; m.set(k,o);}); return [...m.entries()].sort((a,b)=>b[1].v-a[1].v); };
   const so=agr(i=>i.origen);
-  eo.innerHTML=`<div class="section-title" style="margin-bottom:10px">Por origen</div>`+(so.length?so.map(([k,o])=>`<div style="margin-bottom:10px"><div class="gs-line" style="padding:0"><span>${o.i.tipo==='tarjeta'?'💳':'🏦'} ${escapeHtml(k)} <span style="color:var(--text3)">· ${o.n}</span></span><b>${M(fmtS(o.v))}</b></div><div class="gs-bar"><div style="width:${(o.v/tot*100).toFixed(1)}%;background:${o.i.tipo==='tarjeta'?(o.i.color||'var(--purple)'):'var(--teal)'}"></div></div></div>`).join(''):'<div class="empty">—</div>');
+  eo.innerHTML=`<div class="section-title" style="margin-bottom:10px">Por origen</div>`+(so.length?so.map(([k,o])=>`<div style="margin-bottom:10px"><div class="gs-line" style="padding:0"><span>${o.i.tipo==='tarjeta'?'💳':'🏦'} ${escapeHtml(k)} <span style="color:var(--text3)">· ${o.n}</span></span><b>${M(gsMix(o.pen,o.usd))}</b></div><div class="gs-bar"><div style="width:${(o.v/tot*100).toFixed(1)}%;background:${o.i.tipo==='tarjeta'?(o.i.color||'var(--purple)'):'var(--teal)'}"></div></div></div>`).join(''):'<div class="empty">—</div>');
   const sc=agr(i=>i.cat||'');
   let acc=0, circ=2*Math.PI*40, segs='';
   sc.forEach(([k,o])=>{ const frac=o.v/tot, len=frac*circ; segs+=`<circle cx="60" cy="60" r="40" fill="none" stroke="${gsCatColor(k)}" stroke-width="18" stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}" stroke-dashoffset="${(-acc).toFixed(2)}" transform="rotate(-90 60 60)"><title>${escapeHtml(k||'Sin categoría')}: ${Math.round(frac*100)}%</title></circle>`; acc+=len; });
