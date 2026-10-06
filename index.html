@@ -218,6 +218,9 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .mov-item.income{border-left:2px solid var(--green);}
 .mov-item.expense{border-left:2px solid var(--red);}
 .mov-item.ahorro{border-left:2px solid var(--purple);}
+.mov-item.transfer{border-left:2px solid var(--text3);}
+.mov-dot.transfer{background:var(--bg4);}
+.mov-amount.transfer{color:var(--text2);}
 .mov-left{display:flex;align-items:flex-start;gap:9px;}
 .mov-dot{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
 .mov-dot.income{background:var(--green-bg);}
@@ -3536,8 +3539,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 20:22'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: las secciones Disponible para gastar y Tendencia diaria ahora se pueden contraer y expandir (recuerda tu elección) y muestran un resumen cuando están contraídas.';
+const APP_VERSION_DATE = '05/10/26 - 20:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Las transferencias entre tus propias cuentas (también las antiguas, detectadas por pareja) ya no cuentan como ingreso ni gasto en totales, gráficos, presupuestos, Año completo, salud financiera, Gastos y reportes; siguen en la lista (🔄) y en los saldos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5410,6 +5413,7 @@ function gsItems(y,m){
   getMovs(y,m).forEach(mv=>{
     if(mv.type!=='expense') return;
     if(String(mv.id||'').startsWith('pagoTC') || /^Pago de tarjeta/i.test(mv.desc||'')) return; // el pago del estado ya está en los consumos de la tarjeta
+    if(esTransferenciaInterna(mv)) return; // transferencia entre tus cuentas (no es un gasto)
     const cur=mv.currency||'PEN';
     out.push({id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.amount,cur,pen:gsPen(mv.amount,cur),fecha:mv.date,hora:mv.hora||'',cat:mv.cat||'',tipo:'cuenta',origen:mv.account||'—',estado:'Pagado',cuota:null,color:'var(--teal)'});
   });
@@ -5547,7 +5551,7 @@ function gsSegmentos(){
 // Recomendado = presupuesto − lo ya gastado − pagos programados que faltan, sin pasar de tu saldo disponible.
 function gsRecomendado(dp){
   const hoy=new Date(), y=hoy.getFullYear(), m=hoy.getMonth(), D=new Date(y,m+1,0).getDate(), d=hoy.getDate(), mk=tcMonthKey(y,m);
-  const incPen=arr=>arr.filter(x=>x.type==='income').reduce((s,x)=>s+gsPen(x.amount,x.currency||'PEN'),0);
+  const incPen=arr=>arr.filter(x=>x.type==='income'&&!esTransferenciaInterna(x)).reduce((s,x)=>s+gsPen(x.amount,x.currency||'PEN'),0);
   const hist=[];
   for(let i=1;i<=3;i++){ const dt=new Date(y,m-i,1), yy=dt.getFullYear(), mm=dt.getMonth();
     const ing=incPen(getMovs(yy,mm)), gas=gsItems(yy,mm).reduce((s,x)=>s+x.pen,0);
@@ -5568,7 +5572,7 @@ function gsRecomendado(dp){
     const u=ultimoMontoRegistradoPF(pf,y,m), monto=u!==null?u:(pf.montoFijo||0);
     // si ya registraste ese ingreso a mano este mes (mismo nombre o monto parecido), no se cuenta dos veces
     const nom=(pf.nombre||'').trim().toLowerCase(), mp=gsPen(monto,pf.currency||'PEN');
-    const yaRec=getMovs(y,m).some(x=>x.type==='income'&&((nom&&(x.desc||'').toLowerCase().includes(nom))||(mp>0&&Math.abs(gsPen(x.amount,x.currency||'PEN')-mp)<=mp*0.05)));
+    const yaRec=getMovs(y,m).some(x=>x.type==='income'&&!esTransferenciaInterna(x)&&((nom&&(x.desc||'').toLowerCase().includes(nom))||(mp>0&&Math.abs(gsPen(x.amount,x.currency||'PEN')-mp)<=mp*0.05)));
     if(monto>0&&!yaRec) pfPend+=mp;
   });
   let ingreso,fuente;
@@ -6003,9 +6007,45 @@ function _indiceMovsPorMes(){
   return idx;
 }
 function getMovs(y,m){return _indiceMovsPorMes().get(y+'-'+m)||[];}
+
+// ── TRANSFERENCIAS ENTRE CUENTAS PROPIAS ─────────────
+// Una transferencia entre tus cuentas se guarda como 2 movimientos (salida +
+// entrada). Sirven para los SALDOS, pero NO son ni gasto ni ingreso: por eso
+// los totales, gráficos, presupuestos y reportes las saltan con esta función.
+// Se reconoce por (1) la marca linkId, (2) el id (transfer… / tg-transfer-…
+// del bot / traspaso de cuenta eliminada) o (3) las antiguas sin marca: una
+// salida y una entrada del MISMO día, MISMO monto y moneda, en cuentas
+// distintas, ambas con concepto que empieza con "Transferencia".
+let _transfLegacyIds = null;
+function _idsTransfLegado(){
+  if(_transfLegacyIds) return _transfLegacyIds;
+  const set=new Set(), grupos=new Map();
+  (state.movimientos||[]).forEach(mv=>{
+    if(mv.linkId || !/^Transferencia/i.test(mv.desc||'')) return;
+    if(mv.type!=='expense' && mv.type!=='income') return;
+    const k=mv.date+'|'+(mv.currency||'PEN')+'|'+Math.round((Number(mv.amount)||0)*100);
+    let g=grupos.get(k); if(!g){ g={e:[],i:[]}; grupos.set(k,g); }
+    (mv.type==='expense'?g.e:g.i).push(mv);
+  });
+  grupos.forEach(g=>{
+    const usados=new Set();
+    g.e.forEach(e=>{
+      const i=g.i.find(x=>!usados.has(x) && x.account!==e.account);
+      if(i){ usados.add(i); set.add(e.id); set.add(i.id); }
+    });
+  });
+  _transfLegacyIds=set; return set;
+}
+function esTransferenciaInterna(mv){
+  if(!mv) return false;
+  if(mv.linkId) return true;
+  if(/^(tg-)?transfer/i.test(String(mv.id||''))) return true;
+  return _idsTransfLegado().has(mv.id);
+}
 function calcMonth(y,m){
   let ing=0,gas=0;
   getMovs(y,m).forEach(mv=>{
+    if(esTransferenciaInterna(mv)) return; // transferencia entre cuentas propias: ni ingreso ni gasto
     const a=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount;
     if(mv.type==='income')ing+=a; else if(mv.type==='expense')gas+=a;
   });
@@ -7265,7 +7305,7 @@ function applyMovsToSaldo(saldo, movs){
 
 // Cache for reconstructSaldoAt — cleared on saveState/loadState
 let _saldoCache = {};
-function clearSaldoCache(){ _saldoCache = {}; _movsPorMesCache = null; }
+function clearSaldoCache(){ _saldoCache = {}; _movsPorMesCache = null; _transfLegacyIds = null; }
 
 // Devuelve el saldo actual TOTAL de Ahorro en Soles (cuenta default + custom tipo ahorro en PEN)
 // Usa el mes/año actuales del sistema (hoy), no el mes seleccionado en el nav.
@@ -7748,7 +7788,7 @@ function renderHeatmap(){
   const porDia=Array(daysInMonth+1).fill(0);
   const rate=state.tc?.venta||3.45;
   getMovs(y,m).forEach(mv=>{
-    if(mv.type!=='expense') return;
+    if(mv.type!=='expense' || esTransferenciaInterna(mv)) return;
     const dia=new Date(mv.date+'T12:00:00').getDate();
     const monto=mv.currency==='USD'?mv.amount*rate:mv.amount;
     porDia[dia]=(porDia[dia]||0)+monto;
@@ -7901,8 +7941,8 @@ function renderMovimientos(){
   const searchQ=(document.getElementById('mov-search').value||'').trim().toLowerCase();
   const allColors=getAllCategorias();
   let movs=getMovs(state.currentYear,state.currentMonth).filter(m=>{
-    if(state.currentTab==='ingresos') return m.type==='income';
-    if(state.currentTab==='gastos') return m.type==='expense';
+    if(state.currentTab==='ingresos') return m.type==='income' && !esTransferenciaInterna(m);
+    if(state.currentTab==='gastos') return m.type==='expense' && !esTransferenciaInterna(m);
     if(state.currentTab==='ahorro') return m.type==='ahorro';
     return true;
   });
@@ -7951,8 +7991,9 @@ function renderMovimientos(){
   const el=document.getElementById('mov-list');
   if(!movs.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos${searchQ?' que coincidan con la búsqueda':' este mes'}.</div>`;return;}
   el.innerHTML=movs.map(m=>{
-    const ic=m.type==='income'?'⬆':m.type==='expense'?'⬇':'🏦';
-    const cls=m.type==='income'?'income':m.type==='expense'?'expense':'ahorro';
+    const esTr=esTransferenciaInterna(m);
+    const ic=esTr?'🔄':m.type==='income'?'⬆':m.type==='expense'?'⬇':'🏦';
+    const cls=esTr?'transfer':m.type==='income'?'income':m.type==='expense'?'expense':'ahorro';
     const sign=m.type==='expense'?'-':'+';
     const amtStr=sign+(m.currency==='USD'?fmtD(m.amount):fmtS(m.amount));
     const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})+(m.hora?' · '+m.hora:'');
@@ -8058,7 +8099,7 @@ function chartOpts(cb){
 }
 // Helper: totales de gasto por categoría de un mes dado (cuentas + tarjetas de crédito)
 function catTotalsForMonth(y,m){
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat);
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv));
   const tcMovs=getCategorizedTCMovsForMonth(y,m);
   const totals={};
   movs.forEach(mv=>{const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount;totals[mv.cat]=(totals[mv.cat]||0)+amt;});
@@ -8184,7 +8225,7 @@ function renderChart(){
     document.getElementById('chart-legend').innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:${col};display:inline-block"></span>${lbl}</span>`;
   } else if(currentChartTab===5){
     // Categorías — donut del mes actual (movimientos de cuenta + consumos de tarjeta)
-    const movs=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense'&&m.cat);
+    const movs=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense'&&m.cat&&!esTransferenciaInterna(m));
     const tcMovsThisMonth=getCategorizedTCMovsForMonth(state.currentYear,state.currentMonth);
     const allColors=getAllCategorias();
     const catTotals={};
@@ -8224,7 +8265,7 @@ function renderChart(){
     }
     // Totales por categoría en cada mes, y un total general para elegir las top categorías
     const porMes=meses.map(({y,m})=>{
-      const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat);
+      const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv));
       const tcMovs=getCategorizedTCMovsForMonth(y,m);
       const tot={};
       movs.forEach(mv=>{ const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount; tot[mv.cat]=(tot[mv.cat]||0)+amt; });
@@ -9803,7 +9844,7 @@ function getMonthProjection(spent,y,m){
 // revisar si está todo correcto o falta incluir algo.
 function openCategoryDetailModal(cat){
   const y=state.currentYear, m=state.currentMonth;
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat===cat);
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat===cat&&!esTransferenciaInterna(mv));
   const tcMovs=getCategorizedTCMovsForMonth(y,m).filter(mv=>mv.cat===cat);
 
   const items=[
@@ -9858,7 +9899,7 @@ function renderPresupuesto(){
   const empty=document.getElementById('budget-empty');
   const spendListEl=document.getElementById('cat-spend-list');
   const y=state.currentYear, m=state.currentMonth;
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense');
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv));
   const tcMovsThisMonth=getCategorizedTCMovsForMonth(y,m);
   const allColors=getAllCategorias();
 
@@ -10536,6 +10577,7 @@ function renderAnioCompleto(){
     const movs=getMovs(anioVistaYear,m);
     let ing=0, gas=0;
     movs.forEach(mv=>{
+      if(esTransferenciaInterna(mv)) return;
       const monto=mv.currency==='USD'?mv.amount*rate:mv.amount;
       if(mv.type==='income') ing+=monto; else if(mv.type==='expense') gas+=monto;
     });
@@ -10803,9 +10845,9 @@ async function descargarPlantillaHistoricoTC(){
 function exportXLSX(){
   const wb=XLSX.utils.book_new();
   // Sheet 1: movimientos
-  const movData=[['Fecha','Descripcion','Monto','Tipo','Cuenta','Moneda','Categoria','Nota']];
+  const movData=[['Fecha','Descripcion','Monto','Tipo','Cuenta','Moneda','Categoria','Nota','Transferencia entre cuentas']];
   state.movimientos.sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(m=>{
-    movData.push([m.date,m.desc,(m.type==='expense'?-1:1)*m.amount,m.type,m.account,m.currency||'PEN',m.cat||'',m.note||'']);
+    movData.push([m.date,m.desc,(m.type==='expense'?-1:1)*m.amount,m.type,m.account,m.currency||'PEN',m.cat||'',m.note||'',esTransferenciaInterna(m)?'Sí':'']);
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(movData),'Movimientos');
   // Sheet 2: resumen anual
@@ -10873,7 +10915,7 @@ function generarReportePDF(){
 
 // Categoriza los gastos (movimientos + consumos de tarjeta) de un mes, en soles.
 function gastoPorCategoria(y,m){
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat);
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv));
   const tcMovs=getCategorizedTCMovsForMonth(y,m);
   const cat={};
   movs.forEach(mv=>{ const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount; cat[mv.cat]=(cat[mv.cat]||0)+amt; });
@@ -13546,7 +13588,7 @@ function renderTodoPendiente(){
 // en un widget del Dashboard sin duplicar la lógica de cálculo.
 function obtenerAlertasPresupuesto(umbralPct=70){
   const y=state.currentYear, m=state.currentMonth;
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense');
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv));
   const tcMovsThisMonth=getCategorizedTCMovsForMonth(y,m);
   const totals={};
   movs.forEach(mv=>{
@@ -13597,7 +13639,7 @@ function calcularSaludFinanciera(){
   const pctLineaProm=pctLineaCount>0?pctLineaSuma/pctLineaCount:0;
 
   const y=state.currentYear, m=state.currentMonth;
-  const ingresoMes=getMovs(y,m).filter(mv=>mv.type==='income').reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*rate:mv.amount),0);
+  const ingresoMes=getMovs(y,m).filter(mv=>mv.type==='income'&&!esTransferenciaInterna(mv)).reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*rate:mv.amount),0);
   const ratioDeudaIngreso=ingresoMes>0?(deudaTCTotal/ingresoMes):(deudaTCTotal>0?2:0);
 
   // OJO: state.cuentas es solo el saldo BASE del último Excel importado —
@@ -15942,7 +15984,8 @@ function renderDashboard(){
       movsList.innerHTML=last.map(m=>{
         const isInc=m.type==='income';
         const isAho=m.type==='ahorro';
-        const col=isInc?'var(--green)':isAho?'var(--purple)':'var(--red)';
+        const esTr=esTransferenciaInterna(m);
+        const col=esTr?'var(--text3)':isInc?'var(--green)':isAho?'var(--purple)':'var(--red)';
         const sign=isInc||isAho?'+':'-';
         const amt=(m.currency==='USD'?fmtD:fmtS)(m.amount);
         const date=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'});
@@ -16087,7 +16130,7 @@ function renderNuevosWidgetsDashboard(){
       const hoyP=new Date();
       const gastosPorCat={};
       (state.movimientos||[]).forEach(mv=>{
-        if(mv.type!=='expense') return;
+        if(mv.type!=='expense' || esTransferenciaInterna(mv)) return;
         const d=new Date(mv.date+'T12:00:00');
         if(d.getFullYear()!==hoyP.getFullYear()||d.getMonth()!==hoyP.getMonth()) return;
         const c=mv.cat||'Sin categoría';
@@ -16190,7 +16233,7 @@ function renderNuevosWidgetsDashboard(){
     const hoyC=new Date();
     const prevC=prevMY(hoyC.getFullYear(),hoyC.getMonth());
     const gastoMes=(y,m)=>(state.movimientos||[]).filter(mv=>{
-      if(mv.type!=='expense') return false;
+      if(mv.type!=='expense' || esTransferenciaInterna(mv)) return false;
       const d=new Date(mv.date+'T12:00:00');
       return d.getFullYear()===y && d.getMonth()===m;
     }).reduce((s,mv)=>s+mv.amount,0);
@@ -23449,7 +23492,7 @@ function construirContextoParaIA(){
     try{
       const hoyBud = new Date();
       const yBud=hoyBud.getFullYear(), mBud=hoyBud.getMonth();
-      const movsBud = (typeof getMovs==='function') ? getMovs(yBud,mBud).filter(mv=>mv.type==='expense') : [];
+      const movsBud = (typeof getMovs==='function') ? getMovs(yBud,mBud).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv)) : [];
       const tcMovsBud = (typeof getCategorizedTCMovsForMonth==='function') ? getCategorizedTCMovsForMonth(yBud,mBud) : [];
       resumenRapido.presupuestosEstado = Object.keys(state.budgets||{}).map(cat=>{
         const b = state.budgets[cat];
@@ -23661,7 +23704,7 @@ function calcularTotalesPorDescripcionRepetida(datosFiltrados){
       grupos[key].ocurrencias.push({ fecha, monto, currency: currency||'PEN', fuente });
     };
     (datosFiltrados.movimientos||[]).forEach(mv=>{
-      if(mv.type==='expense') agregar(mv.desc, mv.amount, mv.currency, mv.date, 'movimiento de cuenta');
+      if(mv.type==='expense' && !esTransferenciaInterna(mv)) agregar(mv.desc, mv.amount, mv.currency, mv.date, 'movimiento de cuenta');
     });
     (datosFiltrados.tarjetas||[]).forEach(t=>{
       Object.values(t.movs||{}).forEach(arr=>{
@@ -23737,7 +23780,7 @@ function calcularCoincidenciasPorPalabrasDelMensaje(datosFiltrados, texto){
     palabras.forEach(palabra=>{
       const items=[];
       (datosFiltrados.movimientos||[]).forEach(mv=>{
-        if(mv.type==='expense' && normalizarBusqueda(mv.desc||'').includes(palabra)){
+        if(mv.type==='expense' && !esTransferenciaInterna(mv) && normalizarBusqueda(mv.desc||'').includes(palabra)){
           items.push({ descripcionOriginal:mv.desc, fecha:mv.date, monto:mv.amount, currency:mv.currency||'PEN', fuente:'movimiento de cuenta' });
         }
       });
