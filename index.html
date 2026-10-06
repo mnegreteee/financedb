@@ -1060,6 +1060,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-det summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text2)}
 .gs-det .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 28px;margin-top:8px}
 @media(max-width:1000px){.gs-chartwrap{height:210px}}
+
+.gs-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;user-select:none;border-radius:8px}
+.gs-cab:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.gs-chev{display:inline-block;transition:transform .15s;color:var(--text3);margin-right:2px}
+.gs-chev.c{transform:rotate(-90deg)}
+.gs-res{font-size:11px;color:var(--text3)}
+.gs-res b{font-family:var(--mono);font-size:13px}
 </style>
 </head>
 <body>
@@ -3529,8 +3536,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 20:19'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: nuevo diseño (Disponible para gastar en fila y tendencia compacta a todo el ancho) y nuevo recuadro Monto recomendado para gastar, calculado con tus ingresos, pagos programados e historial de los últimos meses.';
+const APP_VERSION_DATE = '05/10/26 - 20:22'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: las secciones Disponible para gastar y Tendencia diaria ahora se pueden contraer y expandir (recuerda tu elección) y muestran un resumen cuando están contraídas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5372,6 +5379,14 @@ document.addEventListener('DOMContentLoaded', function(){
 //  Solo lectura de datos: no modifica ni guarda nada en state.
 // ══════════════════════════════════════════════════════
 const GS={y:null,m:null,q:'',tipo:'all',origen:'',cat:'',cur:'',estado:'',rango:'all',group:'fecha'};
+// Secciones contraíbles (se recuerda la elección en este navegador)
+GS.col={disp:false,trend:false};
+try{ const sv=JSON.parse(localStorage.getItem('gs_col_v1')||'null'); if(sv){ GS.col.disp=!!sv.disp; GS.col.trend=!!sv.trend; } else if(window.innerWidth<700){ GS.col.trend=true; } }catch(e){}
+function gsToggle(k){ GS.col[k]=!GS.col[k]; try{ localStorage.setItem('gs_col_v1',JSON.stringify(GS.col)); }catch(e){} if(k==='disp') gsRenderDisp(); else gsRefrescarLista(); }
+function gsCabecera(k,titulo,resumen,derecha){
+  const ab=!GS.col[k];
+  return `<div class="gs-cab" role="button" tabindex="0" aria-expanded="${ab}" title="${ab?'Contraer':'Expandir'}" onclick="gsToggle('${k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();gsToggle('${k}')}"><div class="section-title"><span class="gs-chev${ab?'':' c'}">▾</span> ${titulo}</div><div class="gs-res">${ab?(derecha||''):resumen}</div></div>`;
+}
 function gsInit(){ if(GS.y===null){const h=new Date();GS.y=h.getFullYear();GS.m=h.getMonth();} }
 function gsRate(){ return (state.tc&&state.tc.venta)||3.45; }
 function gsPen(a,cur){ return cur==='USD'?a*gsRate():a; }
@@ -5586,9 +5601,9 @@ function gsRenderDisp(){
   else if(R.capado) est=`<span style="color:var(--amber)">Limitado por tu saldo disponible</span>`;
   else if(R.cierre!==null) est=R.cierre<=R.presupuesto?`<span style="color:var(--green)">Vas dentro del presupuesto</span>`:`<span style="color:var(--amber)">A tu ritmo actual cerrarías ${f(R.cierre-R.presupuesto)} sobre el presupuesto</span>`;
   const pct=v=>Math.round(v*100)+'%';
-  let h=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-      <div class="section-title">💰 Disponible para gastar este mes</div>
-      <div style="font-size:11px;color:var(--text3)">según el corte de cada tarjeta${hayUsd?' · soles y dólares por separado':''}</div></div>
+  const cab=gsCabecera('disp','💰 Disponible para gastar este mes',`Total para gastar <b style="color:${colTot}">${totTxt}</b> · ⭐ Recomendado <b style="color:var(--accent)">${f(R.recomendado)}</b>`,`según el corte de cada tarjeta${hayUsd?' · soles y dólares por separado':''}`);
+  if(GS.col.disp){ el.innerHTML=cab; return; }
+  let h=`<div style="margin-bottom:12px">${cab}</div>
     <div class="gs-eq">
       <div class="gs-eqb"><div class="l">🏦 En cuentas (operativas)</div><div class="v" style="color:var(--teal)">${mx(dp.enCuentas)}</div><div class="s">${dp.cuentas.map(c=>escapeHtml(c.k)+' '+M(gsFmt(c.v,c.cur).replace(/^(S\/|\$) /,''))).join(' · ')}</div></div>
       <div class="gs-eqb"><div class="l">− Tarjetas que vencen este mes</div><div class="v" style="color:var(--amber)">${dp.aPagar.pen>0.004||dp.aPagar.usd>0.004?'− ':''}${mx(dp.aPagar)}</div><div class="s">cortes ya cerrados</div></div>
@@ -5668,8 +5683,9 @@ function gsRenderTrend(items){
   GS._ch={P};
   const f=v=>M(fmtS(v));
   const nota=(new Date(GS.y,GS.m,1)>new Date())?'Mes futuro: aún sin datos.':'Mes cerrado: gasto real acumulado.';
+  if(GS.col.trend){ el.innerHTML=gsCabecera('trend','📈 Tendencia diaria acumulada',P.esActual?`Cierre proyectado <b style="color:var(--amber)">${f(P.cierre)}</b> · Real hoy <b>${f(P.actual)}</b>`:`Gasto del mes <b>${f(P.actual)}</b>`,''); return; }
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-      <div><div class="section-title">📈 Tendencia diaria acumulada</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos${P.dailyUsd.some(v=>v>0)?` · en soles (USD convertidos a TC ${gsRate().toFixed(2)})`:''}</div></div>
+      <div>${gsCabecera('trend','📈 Tendencia diaria acumulada','','')}<div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos${P.dailyUsd.some(v=>v>0)?` · en soles (USD convertidos a TC ${gsRate().toFixed(2)})`:''}</div></div>
       <div style="font-size:10px;color:var(--text3)"><span style="color:var(--accent)">━</span> real &nbsp;<span style="color:var(--amber)">╍</span> proyección &nbsp;<span style="opacity:.6">▮</span> gasto del día</div></div>
     <div class="gs-chartwrap" id="gs-chartwrap" onpointermove="gsHover(event)" onpointerdown="gsHover(event)" onpointerleave="gsHoverOff()"></div>
     ${P.esActual?`<div class="gs-stats">
