@@ -1489,11 +1489,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
   </div>
 
+  <div class="card" style="padding:16px;margin-bottom:18px" id="ins-dashboard"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
     <div class="dash-section-title" style="margin:0">Mi Resumen</div>
     <button class="btn" style="font-size:11px" onclick="abrirEditorWidgets()">✏️ Editar</button>
   </div>
   <div class="dash-widgets-container" id="dash-widgets-container"></div>
+
 
   <div class="dash-section-title">Accesos rápidos</div>
   <div class="dash-shortcut-grid">
@@ -1709,6 +1711,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="month-label" id="budget-month-label">Jun-26</div>
     <button class="btn btn-primary" style="font-size:11px;padding:5px 12px" onclick="openBudgetModal()">+ Nueva Categoría</button>
   </div>
+  <div class="card" style="padding:16px;margin-bottom:18px" id="ins-presupuesto"></div>
   <div class="dash-section-title" style="margin-top:4px">📊 Gasto por categoría este mes<small style="display:block;font-weight:400;color:var(--text3);margin-top:2px">Cuentas + tarjetas de crédito</small></div>
   <div id="cat-spend-list" style="margin-bottom:22px"></div>
 
@@ -1859,6 +1862,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
   </div>
   <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Los 12 meses del año de un vistazo — más rojo = peor balance, más verde = mejor. Clic en un mes para ir directo a Finanzas.</div>
+  <div class="card" style="padding:16px;margin-bottom:18px" id="ins-anio"></div>
   <div id="anio-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
   <div class="card" style="padding:16px;margin-top:20px">
     <div class="section-title" style="margin-bottom:10px">Totales del año</div>
@@ -2918,6 +2922,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button id="btn-nueva-deuda" class="btn btn-primary" style="font-size:11px;padding:5px 14px" onclick="openDeudaModal()">+ Nueva deuda</button>
   </div>
 
+  <div class="card" style="padding:16px;margin-bottom:18px" id="ins-deudas"></div>
   <!-- Pagos Frecuentes -->
   <div class="card" style="padding:18px;margin-bottom:22px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -3040,6 +3045,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
     <!-- Cards grid -->
     <div class="tc-grid" id="tc-cards-grid"></div>
+    <div class="card" style="padding:16px;margin:18px 0" id="ins-tarjetas"></div>
 
     <!-- Consumos Frecuentes: acceso rápido de 1 toque -->
     <div class="card" style="padding:18px;margin-bottom:32px" id="tc-frecuentes-wrap">
@@ -3544,8 +3550,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 20:59'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo en Gastos: tarjeta 💡 Insights de tus gastos (observaciones automáticas gratis: ritmo vs presupuesto, comparación con el mes pasado, categorías que suben, gastos repetidos y hormiga, tarjetas y pagos próximos) + botón ✨ Análisis con IA (Gemini) con sugerencias.';
+const APP_VERSION_DATE = '05/10/26 - 21:12'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Todos los insights (Gastos, Resumen, Presupuesto, Tarjetas, Deudas, Año completo y el análisis con IA) ahora se calculan por moneda: soles y dólares por separado, sin convertir ni usar tipo de cambio. Gastos: tendencia diaria separada por moneda.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5531,8 +5537,19 @@ function gsProyeccion(items){
     }
     cierre=proj[D];
   }
+  const por={};
+  ['PEN','USD'].forEach(cu=>{
+    const its=items.filter(i=>(i.cur==='USD'?'USD':'PEN')===cu), dl=Array(D+1).fill(0);
+    its.forEach(i=>{ const dia=parseInt(i.fecha.slice(8,10)); if(dia>=1&&dia<=D) dl[dia]+=i.amount; });
+    const cm=Array(D+1).fill(0); for(let k=1;k<=D;k++) cm[k]=cm[k-1]+dl[k];
+    const ac=cm[d]; let my=0; if(its.length>=3) its.forEach(i=>{ if(i.amount>my) my=i.amount; });
+    const pc=d>0?Math.max(0,ac-my)/d:0, kc=conocidos.filter(q=>(q.cur==='USD'?'USD':'PEN')===cu);
+    let pj=null, ci=ac;
+    if(esActual){ pj=Array(D+1).fill(null); for(let k=d;k<=D;k++) pj[k]=ac+pc*(k-d)+kc.filter(q=>q.dia<=k).reduce((t,q)=>t+q.monto,0); ci=pj[D]; }
+    por[cu]={daily:dl,cum:cm,actual:ac,mayor:my,pace:pc,conocidos:kc,proj:pj,cierre:ci,knownTotal:kc.reduce((t,q)=>t+q.monto,0),hay:its.length>0||kc.length>0};
+  });
   const kn=gsSumKn(conocidos);
-  return {D,d,daily,dailyUsd,cum,proj,knownNat:kn,actual,pace,mayor,conocidos,cierre,esActual,knownTotal:conocidos.reduce((s,c)=>s+c.pen,0)};
+  return {por,D,d,daily,dailyUsd,cum,proj,knownNat:kn,actual,pace,mayor,conocidos,cierre,esActual,knownTotal:conocidos.reduce((s,c)=>s+c.pen,0)};
 }
 
 // ── RENDER ──
@@ -5680,93 +5697,102 @@ function gsRenderKpis(items){
     return l.length?`<div class="gs-kdet">${l.map(([k,o])=>`<div class="gs-line" style="padding:2px 0;font-size:11px"><span>${ic} ${escapeHtml(k)}</span><b>${M(gsMix(o.pen,o.usd))}</b></div>`).join('')}</div>`:''; };
   const hayUsd=Math.abs(nA.usd)>0.004;
   el.innerHTML=`
-    <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div>${gsKV('var(--red)',nA.pen,nA.usd)}<div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}${hayUsd?` · ≈ ${M(fmtS(tot))} en total (TC ${gsRate().toFixed(2)})`:''}</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div>${gsKV('var(--red)',nA.pen,nA.usd)}<div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}</div></div>
     <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div>${gsKV('',dias>0?nA.pen/dias:0,dias>0?nA.usd/dias:0)}<div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
     <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div>${gsKV('var(--purple)',nT.pen,nT.usd)}<div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div>${det(tar,'💳')}</div>
     <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div>${gsKV('var(--teal)',nC.pen,nC.usd)}<div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div>${det(cue,'🏦')}</div>`;
 }
 
 const GS_MES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
+function gsMon(v,cu){ return M(cu==='USD'?fmtD(v):fmtS(v)); }
+const GS_CUS=[['PEN','Soles'],['USD','Dólares']];
 function gsRenderTrend(items){
   const el=document.getElementById('gs-trend'); if(!el) return;
   const P=gsProyeccion(items);
-  GS._ch={P};
-  const f=v=>M(fmtS(v));
+  GS._ch={P,geo:{}};
+  const cus=GS_CUS.filter(([cu])=>cu==='PEN'||P.por[cu].hay);
+  const multi=cus.length>1;
   const nota=(new Date(GS.y,GS.m,1)>new Date())?'Mes futuro: aún sin datos.':'Mes cerrado: gasto real acumulado.';
-  if(GS.col.trend){ el.innerHTML=gsCabecera('trend','📈 Tendencia diaria acumulada',P.esActual?`Cierre proyectado <b style="color:var(--amber)">${f(P.cierre)}</b> · Real hoy <b>${f(P.actual)}</b>`:`Gasto del mes <b>${f(P.actual)}</b>`,''); return; }
+  if(GS.col.trend){
+    const res=cus.map(([cu])=>P.esActual?`${multi?cu+' ':''}Cierre proyectado <b style="color:var(--amber)">${gsMon(P.por[cu].cierre,cu)}</b> · Real hoy <b>${gsMon(P.por[cu].actual,cu)}</b>`:`${multi?cu+' ':''}Gasto del mes <b>${gsMon(P.por[cu].actual,cu)}</b>`).join(' &nbsp;|&nbsp; ');
+    el.innerHTML=gsCabecera('trend','📈 Tendencia diaria acumulada',res,''); return;
+  }
+  const bloque=([cu,nom])=>{ const Q=P.por[cu];
+    return `${multi?`<div style="font-size:11px;font-weight:700;color:var(--text2);margin-top:10px">${cu==='USD'?'$':'S/'} ${nom}</div>`:''}
+    <div class="gs-chartwrap" id="gs-chartwrap-${cu}" style="${multi?'height:150px;':''}" onpointermove="gsHover(event,'${cu}')" onpointerdown="gsHover(event,'${cu}')" onpointerleave="gsHoverOff('${cu}')"></div>
+    ${P.esActual?`<div class="gs-stats"><div>Cierre proyectado<b style="color:var(--amber)">${gsMon(Q.cierre,cu)}</b></div><div>Ritmo diario<b>${gsMon(Q.pace,cu)}</b></div><div>Pagos conocidos por venir<b>${gsMon(Q.knownTotal,cu)}</b></div></div>`:`<div style="font-size:11px;color:var(--text3);margin-top:8px">${nota} Total: <b>${gsMon(Q.actual,cu)}</b></div>`}`; };
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-      <div>${gsCabecera('trend','📈 Tendencia diaria acumulada','','')}<div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos${P.dailyUsd.some(v=>v>0)?` · en soles (USD convertidos a TC ${gsRate().toFixed(2)})`:''}</div></div>
+      <div>${gsCabecera('trend','📈 Tendencia diaria acumulada','','')}<div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos${multi?' · soles y dólares por separado, sin convertir':''}</div></div>
       <div style="font-size:10px;color:var(--text3)"><span style="color:var(--accent)">━</span> real &nbsp;<span style="color:var(--amber)">╍</span> proyección &nbsp;<span style="opacity:.6">▮</span> gasto del día</div></div>
-    <div class="gs-chartwrap" id="gs-chartwrap" onpointermove="gsHover(event)" onpointerdown="gsHover(event)" onpointerleave="gsHoverOff()"></div>
-    ${P.esActual?`<div class="gs-stats">
-      <div>Cierre proyectado<b style="color:var(--amber)">${f(P.cierre)}</b></div>
-      <div>Ritmo diario<b>${f(P.pace)}</b></div>
-      <div>Pagos conocidos por venir<b>${M(gsMix(P.knownNat.pen,P.knownNat.usd))}</b></div></div>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">Proyección = gasto actual (${f(P.actual)}) + ritmo diario × días restantes${P.mayor>0?' (sin contar el gasto único más grande, '+f(P.mayor)+')':''} + pagos frecuentes y cuotas de deudas que faltan este mes${P.conocidos.length?': '+P.conocidos.map(c=>escapeHtml(c.nombre)).join(', '):''}. Los estados de tarjeta no se suman porque ya están en tus consumos.</div>`
-      :`<div style="font-size:11px;color:var(--text3);margin-top:8px">${nota}</div>`}`;
+    ${cus.map(bloque).join('')}
+    ${P.esActual?`<div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">Proyección = gasto actual + ritmo diario × días restantes (sin contar el gasto único más grande de cada moneda) + pagos frecuentes y cuotas de deudas que faltan este mes${P.conocidos.length?': '+P.conocidos.map(c=>escapeHtml(c.nombre)).join(', '):''}. ${multi?'Cada moneda se proyecta por separado, sin convertir. ':''}Los estados de tarjeta no se suman porque ya están en tus consumos.</div>`:''}`;
   gsDibujarChart();
 }
 function gsDibujarChart(){
-  const c=GS._ch, wrap=document.getElementById('gs-chartwrap'); if(!c||!wrap) return;
-  const P=c.P, W=Math.max(260,wrap.clientWidth), H=Math.max(200,wrap.clientHeight);
-  const pl=10,pr=10,pt=18,pb=24, iw=W-pl-pr, ih=H-pt-pb;
-  const maxY=Math.max(1,P.cum[P.D],P.proj?P.proj[P.D]:0)*1.1;
-  const X=k=>pl+(k-0.5)/P.D*iw, Y=v=>pt+ih-(v/maxY)*ih;
-  c.geo={W,H,pl,pr,pt,pb,iw,ih,X,Y};
-  const maxDay=Math.max(1,...P.daily);
-  const bw=Math.max(2,iw/P.D*0.6);
-  const step=W<420?10:5, minGap=Math.ceil(step*0.6);
-  let bars='',real='',proy='',lbl='';
-  for(let k=1;k<=P.D;k++){
-    const hb=P.daily[k]/maxDay*ih*0.45;
-    if(P.daily[k]>0) bars+=`<rect x="${(X(k)-bw/2).toFixed(1)}" y="${(pt+ih-hb).toFixed(1)}" width="${bw.toFixed(1)}" height="${hb.toFixed(1)}" rx="1.5" fill="var(--accent)" opacity=".32"/>`;
-    if(k<=P.d) real+=(real?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.cum[k]).toFixed(1);
-    if(P.proj&&k>=P.d&&P.proj[k]!==null) proy+=(proy?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.proj[k]).toFixed(1);
-    if(k===1||(k%step===0&&P.D-k>=minGap)||k===P.D){
-      const anc=k===1?'start':k===P.D?'end':'middle', tx=k===1?pl:k===P.D?W-pr:X(k);
-      lbl+=`<text x="${tx.toFixed(1)}" y="${H-7}" font-size="10" fill="var(--text3)" text-anchor="${anc}">${k}/${GS_MES[GS.m]}</text>`;
+  const c=GS._ch; if(!c) return;
+  GS_CUS.forEach(([cu])=>{
+    const wrap=document.getElementById('gs-chartwrap-'+cu); if(!wrap) return;
+    const P=c.P, Q=P.por[cu], W=Math.max(260,wrap.clientWidth), H=Math.max(120,wrap.clientHeight);
+    const pl=10,pr=10,pt=18,pb=24, iw=W-pl-pr, ih=H-pt-pb;
+    const maxY=Math.max(1,Q.cum[P.D],Q.proj?Q.proj[P.D]:0)*1.1;
+    const X=k=>pl+(k-0.5)/P.D*iw, Y=v=>pt+ih-(v/maxY)*ih;
+    c.geo[cu]={W,H,pl,pr,pt,pb,iw,ih,X,Y};
+    const maxDay=Math.max(1,...Q.daily);
+    const bw=Math.max(2,iw/P.D*0.6);
+    const step=W<420?10:5, minGap=Math.ceil(step*0.6);
+    let bars='',real='',proy='',lbl='';
+    for(let k=1;k<=P.D;k++){
+      const hb=Q.daily[k]/maxDay*ih*0.45;
+      if(Q.daily[k]>0) bars+=`<rect x="${(X(k)-bw/2).toFixed(1)}" y="${(pt+ih-hb).toFixed(1)}" width="${bw.toFixed(1)}" height="${hb.toFixed(1)}" rx="1.5" fill="var(--accent)" opacity=".32"/>`;
+      if(k<=P.d) real+=(real?' L ':'M ')+X(k).toFixed(1)+' '+Y(Q.cum[k]).toFixed(1);
+      if(Q.proj&&k>=P.d&&Q.proj[k]!==null) proy+=(proy?' L ':'M ')+X(k).toFixed(1)+' '+Y(Q.proj[k]).toFixed(1);
+      if(k===1||(k%step===0&&P.D-k>=minGap)||k===P.D){
+        const anc=k===1?'start':k===P.D?'end':'middle', tx=k===1?pl:k===P.D?W-pr:X(k);
+        lbl+=`<text x="${tx.toFixed(1)}" y="${H-7}" font-size="10" fill="var(--text3)" text-anchor="${anc}">${k}/${GS_MES[GS.m]}</text>`;
+      }
     }
-  }
-  const hoyX=P.esActual?`<line x1="${X(P.d).toFixed(1)}" x2="${X(P.d).toFixed(1)}" y1="${pt}" y2="${pt+ih}" stroke="var(--text3)" stroke-dasharray="2 3" opacity=".6"/>`:'';
-  const tag=(x,y,txt,col,anc)=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="10" font-weight="700" fill="${col}" text-anchor="${anc}" style="paint-order:stroke;stroke:var(--bg2);stroke-width:3px">${txt}</text>`;
-  let tags='';
-  if(P.esActual){
-    tags+=tag(X(P.d)+(X(P.d)>W*0.75?-8:8),Math.max(pt+8,Y(P.actual)-9),M(fmtS(P.actual)),'var(--accent)',X(P.d)>W*0.75?'end':'start');
-    tags+=tag(W-pr,Math.max(pt+8,Y(P.cierre)-8),M(fmtS(P.cierre)),'var(--amber)','end');
-  } else if(P.actual>0) tags+=tag(W-pr,Math.max(pt+8,Y(P.actual)-8),M(fmtS(P.actual)),'var(--accent)','end');
-  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block">
-    <line x1="${pl}" x2="${W-pr}" y1="${pt+ih}" y2="${pt+ih}" stroke="var(--border2)"/>
-    ${bars}${hoyX}
-    ${proy?`<path d="${proy}" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4"/>`:''}
-    ${real?`<path d="${real}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:''}
-    ${P.esActual?`<circle cx="${X(P.d).toFixed(1)}" cy="${Y(P.actual).toFixed(1)}" r="4" fill="var(--accent)"/>`:''}
-    ${lbl}${tags}
-    <g id="gs-hov" style="display:none"><line id="gs-hl" y1="${pt}" y2="${pt+ih}" stroke="var(--text2)" stroke-width="1" opacity=".7"/><circle id="gs-hd" r="5" fill="var(--bg2)" stroke-width="2.5"/></g></svg>
-    <div class="gs-tip" id="gs-tip"></div>`;
+    const hoyX=P.esActual?`<line x1="${X(P.d).toFixed(1)}" x2="${X(P.d).toFixed(1)}" y1="${pt}" y2="${pt+ih}" stroke="var(--text3)" stroke-dasharray="2 3" opacity=".6"/>`:'';
+    const tag=(x,y,txt,col,anc)=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="10" font-weight="700" fill="${col}" text-anchor="${anc}" style="paint-order:stroke;stroke:var(--bg2);stroke-width:3px">${txt}</text>`;
+    let tags='';
+    if(P.esActual){
+      tags+=tag(X(P.d)+(X(P.d)>W*0.75?-8:8),Math.max(pt+8,Y(Q.actual)-9),gsMon(Q.actual,cu),'var(--accent)',X(P.d)>W*0.75?'end':'start');
+      tags+=tag(W-pr,Math.max(pt+8,Y(Q.cierre)-8),gsMon(Q.cierre,cu),'var(--amber)','end');
+    } else if(Q.actual>0) tags+=tag(W-pr,Math.max(pt+8,Y(Q.actual)-8),gsMon(Q.actual,cu),'var(--accent)','end');
+    wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block">
+      <line x1="${pl}" x2="${W-pr}" y1="${pt+ih}" y2="${pt+ih}" stroke="var(--border2)"/>
+      ${bars}${hoyX}
+      ${proy?`<path d="${proy}" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4"/>`:''}
+      ${real?`<path d="${real}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:''}
+      ${P.esActual?`<circle cx="${X(P.d).toFixed(1)}" cy="${Y(Q.actual).toFixed(1)}" r="4" fill="var(--accent)"/>`:''}
+      ${lbl}${tags}
+      <g id="gs-hov-${cu}" style="display:none"><line id="gs-hl-${cu}" y1="${pt}" y2="${pt+ih}" stroke="var(--text2)" stroke-width="1" opacity=".7"/><circle id="gs-hd-${cu}" r="5" fill="var(--bg2)" stroke-width="2.5"/></g></svg>
+      <div class="gs-tip" id="gs-tip-${cu}"></div>`;
+  });
 }
-function gsHoverOff(){ const g=document.getElementById('gs-hov'), t=document.getElementById('gs-tip'); if(g) g.style.display='none'; if(t) t.style.display='none'; }
-function gsHover(e){
-  const c=GS._ch, wrap=document.getElementById('gs-chartwrap'); if(!c||!c.geo||!wrap) return;
-  const P=c.P, g=c.geo, r=wrap.getBoundingClientRect(), x=e.clientX-r.left;
+function gsHoverOff(cu){ GS_CUS.forEach(([k])=>{ if(cu&&k!==cu) return; const g=document.getElementById('gs-hov-'+k), t=document.getElementById('gs-tip-'+k); if(g) g.style.display='none'; if(t) t.style.display='none'; }); }
+function gsHover(e,cu){
+  cu=cu||'PEN';
+  const c=GS._ch, wrap=document.getElementById('gs-chartwrap-'+cu); if(!c||!c.geo||!c.geo[cu]||!wrap) return;
+  const P=c.P, Q=P.por[cu], g=c.geo[cu], r=wrap.getBoundingClientRect(), x=e.clientX-r.left;
   let k=Math.round((x-g.pl)/g.iw*P.D+0.5); k=Math.max(1,Math.min(P.D,k));
   const futuro=P.esActual&&k>P.d;
-  const val=futuro?P.proj[k]:P.cum[k];
+  const val=futuro?Q.proj[k]:Q.cum[k];
   const cx=g.X(k), cy=g.Y(val);
-  const hov=document.getElementById('gs-hov'), hl=document.getElementById('gs-hl'), hd=document.getElementById('gs-hd'), tip=document.getElementById('gs-tip');
+  const hov=document.getElementById('gs-hov-'+cu), hl=document.getElementById('gs-hl-'+cu), hd=document.getElementById('gs-hd-'+cu), tip=document.getElementById('gs-tip-'+cu);
   if(!hov||!tip) return;
   hov.style.display=''; hl.setAttribute('x1',cx); hl.setAttribute('x2',cx); hd.setAttribute('cx',cx); hd.setAttribute('cy',cy);
   hd.setAttribute('stroke',futuro?'var(--amber)':'var(--accent)');
-  const f=v=>M(fmtS(v));
+  const f=v=>gsMon(v,cu);
   const dow=new Date(GS.y,GS.m,k).toLocaleDateString('es-PE',{weekday:'short'}).replace('.','');
   let h=`<div style="font-weight:700;margin-bottom:4px">${dow.charAt(0).toUpperCase()+dow.slice(1)} ${k}/${GS_MES[GS.m]}${futuro?' <span style="color:var(--amber);font-weight:600">· proyección</span>':''}</div>`;
   if(!futuro){
-    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto del día</span><b>${f(P.daily[k])}</b></div>${P.dailyUsd[k]>0?`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ incluye ${M(fmtD(P.dailyUsd[k]))} (USD)</div>`:''}<div class="gs-line" style="padding:1px 0"><span>Acumulado real</span><b style="color:var(--accent)">${f(P.cum[k])}</b></div>`;
-    if(P.esActual&&k===P.d&&P.conocidos.some(q=>q.dia<=P.d)){ h+=`<div style="font-size:10px;color:var(--text3);margin-top:3px">Pendientes de hoy/vencidos: ${P.conocidos.filter(q=>q.dia<=P.d).map(q=>escapeHtml(q.nombre)+' '+M(gsFmt(q.monto,q.cur))).join(', ')}</div>`; }
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto del día</span><b>${f(Q.daily[k])}</b></div><div class="gs-line" style="padding:1px 0"><span>Acumulado real</span><b style="color:var(--accent)">${f(Q.cum[k])}</b></div>`;
+    if(P.esActual&&k===P.d&&Q.conocidos.some(q=>q.dia<=P.d)){ h+=`<div style="font-size:10px;color:var(--text3);margin-top:3px">Pendientes de hoy/vencidos: ${Q.conocidos.filter(q=>q.dia<=P.d).map(q=>escapeHtml(q.nombre)+' '+f(q.monto)).join(', ')}</div>`; }
   } else {
-    const kn=P.conocidos.filter(q=>q.dia===k), kt=kn.reduce((s,q)=>s+q.pen,0);
-    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto estimado del día</span><b>${f(P.pace+kt)}</b></div>`;
-    if(kn.length) h+=`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ ritmo ${f(P.pace)} + ${kn.map(q=>escapeHtml(q.nombre)+' '+M(gsFmt(q.monto,q.cur))).join(', ')}</div>`;
-    h+=`<div class="gs-line" style="padding:1px 0"><span>Acumulado proyectado</span><b style="color:var(--amber)">${f(P.proj[k])}</b></div>`;
+    const kn=Q.conocidos.filter(q=>q.dia===k), kt=kn.reduce((s,q)=>s+q.monto,0);
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto estimado del día</span><b>${f(Q.pace+kt)}</b></div>`;
+    if(kn.length) h+=`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ ritmo ${f(Q.pace)} + ${kn.map(q=>escapeHtml(q.nombre)+' '+f(q.monto)).join(', ')}</div>`;
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Acumulado proyectado</span><b style="color:var(--amber)">${f(Q.proj[k])}</b></div>`;
   }
   tip.innerHTML=h; tip.style.display='block';
   const tw=tip.offsetWidth, th=tip.offsetHeight;
@@ -5791,7 +5817,7 @@ function gsRenderLista(items){
         <span class="gs-pill ${i.tipo==='tarjeta'?'t':'c'}">${i.tipo==='tarjeta'?'💳':'🏦'} ${escapeHtml(i.origen)}</span>
         ${i.cuota?`<span class="gs-pill cu">cuota ${i.cuota}</span>`:''}
         ${i.tipo==='tarjeta'?`<span class="gs-pill ${i.estado==='Pagado'?'ok':'p'}">${i.estado}</span>`:''}</div></div>
-      <div class="gs-amt">-${M(gsFmt(i.amount,i.cur))}${usd?`<small>≈ ${M(fmtS(i.pen))}</small>`:''}</div></div>`;
+      <div class="gs-amt">-${M(gsFmt(i.amount,i.cur))}</div></div>`;
   };
   const grupos=new Map();
   items.forEach(i=>{
@@ -5829,81 +5855,97 @@ function gsIASet(v){ try{ const r=JSON.parse(localStorage.getItem(GS_IA_KEY)||'{
 function gsPrevYM(){ let y=GS.y, m=GS.m-1; if(m<0){ m=11; y--; } return {y,m}; }
 function gsAgrupar(items,fn){ const mp=new Map(); items.forEach(i=>{ const k=fn(i); const o=mp.get(k)||{k,pen:0,n:0,usd:0,sol:0,items:[]}; o.pen+=i.pen; o.n++; if(i.cur==='USD') o.usd+=i.amount; else o.sol+=i.amount; o.items.push(i); mp.set(k,o); }); return [...mp.values()].sort((a,b)=>b.pen-a.pen); }
 
-function gsInsights(base){
-  const out=[]; const f=v=>M(fmtS(v)); const b=t=>`<b>${t}</b>`;
-  const tot=base.reduce((s,i)=>s+i.pen,0);
-  if(!base.length||tot<=0.004){ return [{ico:'🫥',tono:'neu',txt:'Todavía no hay gastos registrados en este mes.'}]; }
-  const hoy=new Date(), esActual=gsEsMesActual(), d=esActual?hoy.getDate():new Date(GS.y,GS.m+1,0).getDate();
-  const pv=gsPrevYM(), prev=gsItems(pv.y,pv.m), prevTot=prev.reduce((s,i)=>s+i.pen,0);
-  const prevHasta=prev.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.pen,0);
-  // 1) ritmo vs presupuesto / cierre proyectado
-  if(esActual){
-    try{
-      const P=gsProyeccion(base), R=gsRecomendado(gsDisponible());
-      if(R.presupuesto>0){
-        if(P.cierre<=R.presupuesto) out.push({ico:'✅',tono:'ok',txt:`A tu ritmo cerrarías el mes en ${b(f(P.cierre))}, dentro de tu presupuesto de ${f(R.presupuesto)} (te sobrarían ${f(R.presupuesto-P.cierre)}).`});
-        else out.push({ico:'⚠️',tono:'warn',txt:`A tu ritmo cerrarías en ${b(f(P.cierre))}, ${b(f(P.cierre-R.presupuesto))} por encima de tu presupuesto de ${f(R.presupuesto)}. Intenta no pasar de ${b(f(R.porDia))} por día.`});
-      } else if(P.cierre>0) out.push({ico:'📈',tono:'neu',txt:`Proyección de cierre de mes: ${b(f(P.cierre))} (incluye ${f(P.knownTotal)} de pagos ya programados).`});
-    }catch(e){}
-  }
-  // 2) vs mes anterior
-  if(prevTot>0){
-    const ref=esActual?prevHasta:prevTot;
-    if(ref>0){ const dif=(tot-ref)/ref*100, abs=Math.abs(dif);
-      const et=esActual?`al mismo día del mes pasado (${f(ref)})`:`al mes anterior (${f(ref)})`;
-      if(abs<5) out.push({ico:'⚖️',tono:'neu',txt:`Tu gasto va casi igual que ${et}.`});
-      else if(dif>0) out.push({ico:'📈',tono:abs>=25?'warn':'neu',txt:`Llevas ${b(f(tot))}: ${b(abs.toFixed(0)+'% más')} que ${et}.`});
-      else out.push({ico:'📉',tono:'ok',txt:`Llevas ${b(f(tot))}: ${b(abs.toFixed(0)+'% menos')} que ${et}. ¡Buen control!`});
-    }
-  }
-  // 3) categorías
-  const cats=gsAgrupar(base,i=>i.cat||''), catsPrev=gsAgrupar(prev,i=>i.cat||'');
-  if(cats.length){
-    const c0=cats[0], nom=c0.k?c0.k.replace(/^\S+\s/,''):'Sin categoría', pct=Math.round(c0.pen/tot*100);
-    out.push({ico:gsCatEmoji(c0.k),tono:pct>=45?'warn':'neu',txt:`${b(escapeHtml(nom))} es tu mayor categoría: ${b(pct+'%')} del gasto (${f(c0.pen)}).${pct>=45?' Está muy concentrada.':''}`});
-    let mejor=null;
-    cats.forEach(c=>{ const p=catsPrev.find(x=>x.k===c.k); if(!p||p.pen<=0) return; const ref=esActual?p.items.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.pen,0):p.pen; if(ref<=0) return; const dif=c.pen-ref, pc=dif/ref*100; if(dif>=50&&pc>=30&&(!mejor||dif>mejor.dif)) mejor={c,dif,pc}; });
-    if(mejor){ const nm=mejor.c.k?mejor.c.k.replace(/^\S+\s/,''):'Sin categoría'; out.push({ico:'🔺',tono:'warn',txt:`${b(escapeHtml(nm))} subió ${b(mejor.pc.toFixed(0)+'%')} (+${f(mejor.dif)}) frente a ${esActual?'este punto del mes pasado':'el mes anterior'}.`}); }
-  }
-  // 4) mayor gasto
-  const may=base.reduce((a,i)=>(!a||i.pen>a.pen)?i:a,null);
-  if(may&&base.length>=3){ const pc=Math.round(may.pen/tot*100); if(pc>=15) out.push({ico:'💥',tono:'neu',txt:`Tu mayor gasto fue ${b(escapeHtml(may.desc))} por ${b(M(gsFmt(may.amount,may.cur)))} (${pc}% del mes).`}); }
-  // 5) comercios repetidos
-  const rep=gsAgrupar(base,i=>(i.desc||'').trim().toLowerCase()).filter(g=>g.n>=3&&g.k);
-  if(rep.length){ const g=rep[0]; out.push({ico:'🔁',tono:'neu',txt:`${b(escapeHtml(g.items[0].desc))} se repite ${b(g.n+' veces')} y suma ${b(M(gsMix(g.sol,g.usd)))}.`}); }
-  // 6) gastos hormiga
-  const ch=base.filter(i=>i.pen<=30);
-  if(ch.length>=8){ const s=ch.reduce((a,i)=>a+i.pen,0); out.push({ico:'🐜',tono:'neu',txt:`Tienes ${b(ch.length+' gastos pequeños')} (≤ S/ 30) que suman ${b(f(s))} (${Math.round(s/tot*100)}% del mes).`}); }
-  // 7) tarjetas con línea muy usada
-  try{ gsDisponible().tarjetas.filter(x=>x.linea>0&&x.usadoPct>=70).forEach(x=>{ out.push({ico:'💳',tono:x.usadoPct>=90?'bad':'warn',txt:`${b(escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim()))} usa el ${b(x.usadoPct.toFixed(0)+'%')} de su línea; te quedan ${M(gsFmt(x.libre,x.cur))}.`}); }); }catch(e){}
-  // 8) pagos próximos (7 días)
-  if(esActual){ try{ const pr=gsPagosConocidos(GS.y,GS.m,d).filter(q=>q.dia<=d+7); if(pr.length){ const s=pr.reduce((a,q)=>a+q.pen,0); out.push({ico:'📅',tono:'neu',txt:`En los próximos 7 días vencen ${b(pr.length+' pago'+(pr.length===1?'':'s'))} programados por ${b(f(s))}: ${pr.slice(0,3).map(q=>escapeHtml(q.nombre)).join(', ')}${pr.length>3?'…':''}.`}); } }catch(e){} }
-  // 9) cuotas
-  const cu=base.filter(i=>i.cuota);
-  if(cu.length){ const s=cu.reduce((a,i)=>a+i.pen,0); out.push({ico:'🧾',tono:'neu',txt:`${b(cu.length+' consumo'+(cu.length===1?'':'s'))} en cuotas ${cu.length===1?'pesa':'pesan'} ${b(f(s))} este mes (${Math.round(s/tot*100)}%).`}); }
-  // 10) sin categoría
-  const sc=base.filter(i=>!i.cat);
-  if(sc.length>=3) out.push({ico:'🏷️',tono:'neu',txt:`${b(sc.length+' gastos')} no tienen categoría (${f(sc.reduce((a,i)=>a+i.pen,0))}). Categorizarlos mejora estos análisis.`});
-  return out.slice(0,8);
+// ── helpers por moneda (NO convierten nada) ──
+const insCu=c=>c==='USD'?'USD':'PEN';
+const insMon=(v,cu)=>M(cu==='USD'?fmtD(v):fmtS(v));
+const insB=t=>`<b>${t}</b>`;
+const insNomCu=cu=>cu==='USD'?'dólares':'soles';
+const insIng=(y,m,cu)=>getMovs(y,m).filter(x=>x.type==='income'&&!esTransferenciaInterna(x)&&insCu(x.currency)===cu).reduce((s,x)=>s+x.amount,0);
+function insAgr(items,fn){ const mp=new Map(); items.forEach(i=>{ const k=fn(i); const o=mp.get(k)||{k,v:0,n:0,items:[]}; o.v+=i.amount; o.n++; o.items.push(i); mp.set(k,o); }); return [...mp.values()].sort((a,b)=>b.v-a.v); }
+function insRitmo(P,cu,y,m){
+  const Q=P.por[cu]; if(!P.esActual||!Q||!(Q.actual>0)) return null;
+  const ing=insIng(y,m,cu), f=v=>insMon(v,cu), b=insB;
+  if(ing>0&&new Date().getDate()<7) return {ico:'📈',tono:'neu',cu,txt:`Proyección de cierre en ${insNomCu(cu)}: ${b(f(Q.cierre))} (estimación temprana, aún pocos días del mes). Ingresado hasta hoy: ${f(ing)}.`};
+  if(ing>0){ const rest=ing-Q.cierre;
+    return rest>=0?{ico:'✅',tono:'ok',cu,txt:`A tu ritmo cerrarías gastando ${b(f(Q.cierre))} de lo que has ingresado hasta hoy (${f(ing)}): te quedarían ${b(f(rest))}.`}
+      :{ico:'⚠️',tono:'warn',cu,txt:`A tu ritmo cerrarías gastando ${b(f(Q.cierre))}, ${b(f(-rest))} más de lo que has ingresado hasta hoy (${f(ing)}).`}; }
+  return {ico:'📈',tono:'neu',cu,txt:`Proyección de cierre: ${b(f(Q.cierre))} (incluye ${f(Q.knownTotal)} de pagos programados). Aún no registras ingresos en ${insNomCu(cu)} este mes.`};
+}
+// renderiza una lista de insights agrupada por moneda
+function insListaHtml(ins){
+  const col={ok:'var(--green)',warn:'var(--amber)',bad:'var(--red)',neu:'var(--accent)'};
+  const it=x=>`<div class="gs-ins" style="border-left-color:${col[x.tono]||col.neu}"><span class="gs-ins-i">${x.ico}</span><span>${x.txt}</span></div>`;
+  const gen=ins.filter(x=>!x.cu), pen=ins.filter(x=>x.cu==='PEN'), usd=ins.filter(x=>x.cu==='USD');
+  const hd=t=>`<div style="font-size:11px;font-weight:700;color:var(--text2);margin:12px 0 6px">${t}</div>`;
+  const multi=pen.length&&usd.length;
+  return gen.map(it).join('')+(pen.length?(multi?hd('S/ Soles'):'')+pen.map(it).join(''):'')+(usd.length?(multi||!pen.length?hd('$ Dólares'):'')+usd.map(it).join(''):'');
 }
 
+function gsInsCu(base,cu){
+  const its=base.filter(i=>i.cur===cu), out=[], f=v=>insMon(v,cu), b=insB;
+  if(!its.length) return cu==='PEN'?[{ico:'🫥',tono:'neu',cu,txt:'Todavía no hay gastos en soles este mes.'}]:[];
+  const tot=its.reduce((s,i)=>s+i.amount,0);
+  const esActual=gsEsMesActual(), d=esActual?new Date().getDate():new Date(GS.y,GS.m+1,0).getDate();
+  const pv=gsPrevYM(), prev=gsItems(pv.y,pv.m).filter(i=>i.cur===cu), prevTot=prev.reduce((s,i)=>s+i.amount,0);
+  const prevHasta=prev.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.amount,0);
+  // 1) ritmo vs ingresos de esa moneda
+  if(esActual){ try{ const r=insRitmo(gsProyeccion(base),cu,GS.y,GS.m); if(r) out.push(r); }catch(e){} }
+  // 2) vs mes anterior (misma moneda)
+  if(prevTot>0){ const ref=esActual?prevHasta:prevTot;
+    if(ref>0){ const dif=(tot-ref)/ref*100, abs=Math.abs(dif), et=esActual?`al mismo día del mes pasado (${f(ref)})`:`al mes anterior (${f(ref)})`;
+      if(abs<5) out.push({ico:'⚖️',tono:'neu',cu,txt:`Tu gasto en ${insNomCu(cu)} va casi igual que ${et}.`});
+      else if(dif>0) out.push({ico:'📈',tono:abs>=25?'warn':'neu',cu,txt:`Llevas ${b(f(tot))}: ${b(abs.toFixed(0)+'% más')} que ${et}.`});
+      else out.push({ico:'📉',tono:'ok',cu,txt:`Llevas ${b(f(tot))}: ${b(abs.toFixed(0)+'% menos')} que ${et}. ¡Buen control!`}); } }
+  // 3) categorías
+  const cats=insAgr(its,i=>i.cat||''), catsPrev=insAgr(prev,i=>i.cat||'');
+  if(cats.length){ const c0=cats[0], nom=c0.k?c0.k.replace(/^\S+\s/,''):'Sin categoría', pct=Math.round(c0.v/tot*100);
+    out.push({ico:gsCatEmoji(c0.k),tono:pct>=45?'warn':'neu',cu,txt:`${b(escapeHtml(nom))} es tu mayor categoría en ${insNomCu(cu)}: ${b(pct+'%')} del gasto (${f(c0.v)}).${pct>=45?' Está muy concentrada.':''}`});
+    const umbral=cu==='USD'?15:50; let mejor=null;
+    cats.forEach(c=>{ const p=catsPrev.find(x=>x.k===c.k); if(!p||p.v<=0) return; const ref=esActual?p.items.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.amount,0):p.v; if(ref<=0) return; const dif=c.v-ref, pc=dif/ref*100; if(dif>=umbral&&pc>=30&&(!mejor||dif>mejor.dif)) mejor={c,dif,pc}; });
+    if(mejor){ const nm=mejor.c.k?mejor.c.k.replace(/^\S+\s/,''):'Sin categoría'; out.push({ico:'🔺',tono:'warn',cu,txt:`${b(escapeHtml(nm))} subió ${b(mejor.pc.toFixed(0)+'%')} (+${f(mejor.dif)}) frente a ${esActual?'este punto del mes pasado':'el mes anterior'}.`}); } }
+  // 4) mayor gasto
+  const may=its.reduce((a,i)=>(!a||i.amount>a.amount)?i:a,null);
+  if(may&&its.length>=3){ const pc=Math.round(may.amount/tot*100); if(pc>=15) out.push({ico:'💥',tono:'neu',cu,txt:`Tu mayor gasto en ${insNomCu(cu)} fue ${b(escapeHtml(may.desc))} por ${b(f(may.amount))} (${pc}% del mes).`}); }
+  // 5) repetidos
+  const rep=insAgr(its,i=>(i.desc||'').trim().toLowerCase()).filter(g=>g.n>=3&&g.k);
+  if(rep.length){ const g=rep[0]; out.push({ico:'🔁',tono:'neu',cu,txt:`${b(escapeHtml(g.items[0].desc))} se repite ${b(g.n+' veces')} y suma ${b(f(g.v))}.`}); }
+  // 6) hormiga
+  const lim=cu==='USD'?10:30, ch=its.filter(i=>i.amount<=lim);
+  if(ch.length>=8){ const s=ch.reduce((a,i)=>a+i.amount,0); out.push({ico:'🐜',tono:'neu',cu,txt:`Tienes ${b(ch.length+' gastos pequeños')} (≤ ${f(lim)}) que suman ${b(f(s))} (${Math.round(s/tot*100)}% del mes).`}); }
+  // 7) tarjetas de esa moneda con línea muy usada
+  try{ gsDisponible().tarjetas.filter(x=>x.cur===cu&&x.linea>0&&x.usadoPct>=70).forEach(x=>{ out.push({ico:'💳',tono:x.usadoPct>=90?'bad':'warn',cu,txt:`${b(escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim()))} usa el ${b(x.usadoPct.toFixed(0)+'%')} de su línea; te quedan ${f(x.libre)}.`}); }); }catch(e){}
+  // 8) pagos próximos
+  if(esActual){ try{ const pr=gsPagosConocidos(GS.y,GS.m,d).filter(q=>insCu(q.cur)===cu&&q.dia<=d+7); if(pr.length){ const s=pr.reduce((a,q)=>a+q.monto,0); out.push({ico:'📅',tono:'neu',cu,txt:`En los próximos 7 días vencen ${b(pr.length+' pago'+(pr.length===1?'':'s'))} programado${pr.length===1?'':'s'} por ${b(f(s))}: ${pr.slice(0,3).map(q=>escapeHtml(q.nombre)).join(', ')}${pr.length>3?'…':''}.`}); } }catch(e){} }
+  // 9) cuotas
+  const cu2=its.filter(i=>i.cuota); if(cu2.length){ const s=cu2.reduce((a,i)=>a+i.amount,0); out.push({ico:'🧾',tono:'neu',cu,txt:`${b(cu2.length+' consumo'+(cu2.length===1?'':'s'))} en cuotas ${cu2.length===1?'pesa':'pesan'} ${b(f(s))} este mes (${Math.round(s/tot*100)}%).`}); }
+  // 10) sin categoría
+  const sc=its.filter(i=>!i.cat); if(sc.length>=3) out.push({ico:'🏷️',tono:'neu',cu,txt:`${b(sc.length+' gastos')} en ${insNomCu(cu)} no tienen categoría (${f(sc.reduce((a,i)=>a+i.amount,0))}). Categorizarlos mejora estos análisis.`});
+  return out.slice(0,8);
+}
+function gsInsights(base){
+  const out=gsInsCu(base,'PEN').concat(gsInsCu(base,'USD'));
+  return out.length?out:[{ico:'🫥',tono:'neu',txt:'Todavía no hay gastos registrados en este mes.'}];
+}
+
+// Contexto para la IA: TODO por moneda, sin equivalencias ni tipo de cambio
 function gsIAContexto(base){
-  const tot=base.reduce((s,i)=>s+i.pen,0), rate=gsRate(), pv=gsPrevYM(), prev=gsItems(pv.y,pv.m);
-  const prevTot=prev.reduce((s,i)=>s+i.pen,0), esActual=gsEsMesActual(), d=esActual?new Date().getDate():31;
-  const r2=v=>Math.round(v*100)/100, sm=gsSum(base);
-  const catsPrev=gsAgrupar(prev,i=>i.cat||'');
-  const ctx={
-    fechaHoy:new Date().toLocaleDateString('es-PE'), tipoAnalisis:'gastos del mes', periodoConsultado:MONTHS[GS.m]+' '+GS.y, mesEnCurso:esActual, diaDelMes:esActual?d:null, tipoCambioVenta:rate,
-    gastoMes:{totalSoles:r2(sm.pen),totalDolares:r2(sm.usd),totalEquivSoles:r2(tot),cantidadConsumos:base.length},
-    mesAnterior:{totalEquivSoles:r2(prevTot),hastaMismoDiaEquivSoles:r2(prev.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.pen,0))},
-    porCategoria:gsAgrupar(base,i=>i.cat||'').slice(0,10).map(c=>{ const p=catsPrev.find(x=>x.k===c.k); return {categoria:c.k||'Sin categoría',equivSoles:r2(c.pen),porcentaje:Math.round(c.pen/(tot||1)*100),consumos:c.n,mesAnteriorEquivSoles:p?r2(p.pen):0}; }),
-    porOrigen:gsAgrupar(base,i=>i.origen).slice(0,8).map(o=>({origen:o.k,soles:r2(o.sol),dolares:r2(o.usd),consumos:o.n})),
-    mayoresGastos:[...base].sort((a,b)=>b.pen-a.pen).slice(0,12).map(i=>({concepto:i.desc,monto:r2(i.amount),moneda:i.cur,fecha:i.fecha,categoria:i.cat||'',origen:i.origen,cuota:i.cuota})),
-    comerciosRepetidos:gsAgrupar(base,i=>(i.desc||'').trim().toLowerCase()).filter(g=>g.n>=2&&g.k).slice(0,6).map(g=>({concepto:g.items[0].desc,veces:g.n,equivSoles:r2(g.pen)})),
-    gastosPequenosMenoresA30Soles:{cantidad:base.filter(i=>i.pen<=30).length,equivSoles:r2(base.filter(i=>i.pen<=30).reduce((s,i)=>s+i.pen,0))}
-  };
-  try{ const R=gsRecomendado(gsDisponible()); ctx.presupuesto={ingresoEsperado:r2(R.ingreso),ahorroObjetivo:r2(R.ahorro),presupuestoMes:r2(R.presupuesto),yaGastado:r2(R.gastado),pagosProgramadosPendientes:r2(R.comprometido),recomendadoParaGastar:r2(R.recomendado),porDia:r2(R.porDia),diasRestantes:R.diasRest,gastoTipicoMensual:r2(R.avgGas)}; }catch(e){}
-  try{ if(esActual){ const P=gsProyeccion(base); ctx.cierreProyectadoEquivSoles=r2(P.cierre); ctx.pagosProgramadosPendientesDetalle=P.conocidos.slice(0,10).map(q=>({nombre:q.nombre,dia:q.dia,monto:r2(q.monto),moneda:q.cur})); } }catch(e){}
+  const esActual=gsEsMesActual(), d=esActual?new Date().getDate():31, r2=v=>Math.round(v*100)/100, pv=gsPrevYM();
+  let P=null; try{ if(esActual) P=gsProyeccion(base); }catch(e){}
+  const ctx={fechaHoy:new Date().toLocaleDateString('es-PE'),tipoAnalisis:'gastos del mes',periodoConsultado:MONTHS[GS.m]+' '+GS.y,mesEnCurso:esActual,diaDelMes:esActual?d:null,
+    aviso:'Los montos están en su moneda original. NO conviertas entre soles y dólares ni los sumes; analiza cada moneda por separado.',porMoneda:{}};
+  [['PEN','soles'],['USD','dolares']].forEach(([cu,nom])=>{
+    const its=base.filter(i=>i.cur===cu); if(!its.length&&cu==='USD') return;
+    const prev=gsItems(pv.y,pv.m).filter(i=>i.cur===cu), tot=its.reduce((s,i)=>s+i.amount,0), catsPrev=insAgr(prev,i=>i.cat||''), lim=cu==='USD'?10:30;
+    const o={moneda:cu,gastoTotal:r2(tot),consumos:its.length,ingresosDelMes:r2(insIng(GS.y,GS.m,cu)),
+      mesAnterior:{total:r2(prev.reduce((s,i)=>s+i.amount,0)),hastaMismoDia:r2(prev.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.amount,0))},
+      porCategoria:insAgr(its,i=>i.cat||'').slice(0,10).map(c=>{ const p=catsPrev.find(x=>x.k===c.k); return {categoria:c.k||'Sin categoría',monto:r2(c.v),porcentaje:Math.round(c.v/(tot||1)*100),consumos:c.n,mesAnterior:p?r2(p.v):0}; }),
+      porOrigen:insAgr(its,i=>i.origen).slice(0,8).map(x=>({origen:x.k,monto:r2(x.v),consumos:x.n})),
+      mayoresGastos:[...its].sort((a,b)=>b.amount-a.amount).slice(0,12).map(i=>({concepto:i.desc,monto:r2(i.amount),fecha:i.fecha,categoria:i.cat||'',origen:i.origen,cuota:i.cuota})),
+      comerciosRepetidos:insAgr(its,i=>(i.desc||'').trim().toLowerCase()).filter(g=>g.n>=2&&g.k).slice(0,6).map(g=>({concepto:g.items[0].desc,veces:g.n,monto:r2(g.v)})),
+      gastosPequenos:{umbral:lim,cantidad:its.filter(i=>i.amount<=lim).length,monto:r2(its.filter(i=>i.amount<=lim).reduce((s,i)=>s+i.amount,0))}};
+    if(P&&P.por[cu]){ const Q=P.por[cu]; o.cierreProyectado=r2(Q.cierre); o.pagosProgramadosPendientes=Q.conocidos.slice(0,10).map(q=>({nombre:q.nombre,dia:q.dia,monto:r2(q.monto)})); }
+    ctx.porMoneda[nom]=o;
+  });
   try{ ctx.tarjetas=gsDisponible().tarjetas.map(x=>({tarjeta:((x.t.banco||'')+' '+(x.t.cat||'')).trim(),moneda:x.cur,lineaTotal:x.linea,lineaUsadaPct:Math.round(x.usadoPct)})); }catch(e){}
   ctx.datosCompletos={}; ctx.resumenRapido={};
   return ctx;
@@ -5916,7 +5958,7 @@ async function gsGenerarIA(){
   gsIALoading=true; gsIAErr=''; gsRenderIA(base);
   try{
     const contexto=gsIAContexto(base);
-    const mensaje='Analiza SOLO mis gastos de '+MONTHS[GS.m]+' '+GS.y+' usando únicamente el contexto que te envío (no consultes otros datos). Responde en español, breve (máximo 170 palabras), en este formato: 1) una línea de resumen; 2) "Lo que veo:" con 3 observaciones concretas (patrones, cambios vs mes anterior, concentración, gastos hormiga, riesgos con tarjetas o pagos próximos); 3) "Sugerencias:" con 3 acciones concretas y realistas para gastar mejor o ahorrar, con montos en S/ cuando se pueda. Usa viñetas cortas con emojis, no inventes datos, y muestra soles y dólares por separado cuando importe.';
+    const mensaje='Analiza SOLO mis gastos de '+MONTHS[GS.m]+' '+GS.y+' usando únicamente el contexto que te envío (no consultes otros datos). Responde en español, breve (máximo 170 palabras), en este formato: 1) una línea de resumen; 2) "Lo que veo:" con 3 observaciones concretas (patrones, cambios vs mes anterior, concentración, gastos hormiga, riesgos con tarjetas o pagos próximos); 3) "Sugerencias:" con 3 acciones concretas y realistas para gastar mejor o ahorrar, con montos en S/ cuando se pueda. Usa viñetas cortas con emojis, no inventes datos, y analiza soles y dólares por separado: NO conviertas entre monedas ni los sumes.';
     const idToken=await firebase.auth().currentUser.getIdToken();
     const res=await fetch(CHAT_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:JSON.stringify({mensaje,contexto,historial:[]})});
     const data=await res.json();
@@ -5932,9 +5974,8 @@ function gsRenderIA(base){
   const el=document.getElementById('gs-ia'); if(!el) return;
   base=base||gsItems(GS.y,GS.m);
   const ins=gsInsights(base);
-  const col={ok:'var(--green)',warn:'var(--amber)',bad:'var(--red)',neu:'var(--accent)'};
   let h=`<div class="section-title" style="margin-bottom:10px">💡 Insights de tus gastos</div>`;
-  h+=ins.map(x=>`<div class="gs-ins" style="border-left-color:${col[x.tono]||col.neu}"><span class="gs-ins-i">${x.ico}</span><span>${x.txt}</span></div>`).join('');
+  h+=insListaHtml(ins);
   h+=`<div style="font-size:10px;color:var(--text3);margin:6px 0 12px">Calculados al instante con tus datos (gratis, sin IA).</div>`;
   const c=gsIAGet();
   h+=`<div style="border-top:1px solid var(--border);padding-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:12px">✨ Análisis con IA</strong>`;
@@ -24214,6 +24255,223 @@ async function procesarPreguntaChatIA(texto, rango, yaEnHistorial){
   guardarHistorialChatIA();
   renderChatIAMensajes();
 }
+
+// ══════════════════════════════════════════════════════
+//  INSIGHTS POR SECCIÓN (Resumen, Presupuesto, Tarjetas, Deudas, Año completo)
+//  · Parte automática: se calcula al instante con tus datos (gratis, sin IA)
+//  · Parte IA: botón "Generar análisis" → misma Cloud Function (Gemini) del chat;
+//    se guarda por sección y periodo para no gastar cuota de más.
+// ══════════════════════════════════════════════════════
+const INS_KEY='ins_ia_v1';
+const insLoading={}, insErr={};
+const insHoyISO=()=>{ const h=new Date(); return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); };
+const insPlano=h=>String(h).replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+// ── Builders locales: SIEMPRE por moneda, sin convertir (devuelven [{ico,tono,cu,txt}]) ──
+const insNom=c=>escapeHtml((c||'').replace(/^\S+\s/,'')||c||'Sin categoría');
+const insNomTc=x=>escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim());
+const insCuotasPorMes=()=>{ const hoyMk=tcMonthKey(new Date().getFullYear(),new Date().getMonth()), r={PEN:{},USD:{}}; (state.tarjetas||[]).forEach(t=>Object.entries(t.movs||{}).forEach(([mk,arr])=>(arr||[]).forEach(mv=>{ if(mv.pagado||!mv.cuotaNumero||mk<=hoyMk) return; const cu=insCu(mv.currency||t.currency); r[cu][mk]=(r[cu][mk]||0)+mv.monto; }))); return r; };
+function insTotCat(y,m,cu){
+  const t={};
+  getMovs(y,m).forEach(mv=>{ if(mv.type!=='expense'||esTransferenciaInterna(mv)||!mv.cat||insCu(mv.currency)!==cu) return; t[mv.cat]=(t[mv.cat]||0)+mv.amount; });
+  getCategorizedTCMovsForMonth(y,m).forEach(mv=>{ if(insCu(mv.currency)!==cu) return; t[mv.cat]=(t[mv.cat]||0)+mv.monto; });
+  return t;
+}
+// los límites de presupuesto son en soles: se comparan SOLO contra el gasto en soles
+function insPresupuestos(y,m){
+  const tot=insTotCat(y,m,'PEN');
+  const esAct=(y===new Date().getFullYear()&&m===new Date().getMonth()), d=new Date().getDate(), D=daysInMonth(y,m);
+  return Object.entries(state.budgets||{}).map(([cat,b])=>{ const limit=b.limit||0, spent=tot[cat]||0;
+    return {cat,limit,spent,pct:limit>0?spent/limit*100:0,proy:esAct&&d>0?spent/d*D:null,diasRest:esAct?Math.max(1,D-d+1):0,esAct}; }).filter(x=>x.limit>0);
+}
+function insMesCu(y,m,cu){ let ing=0,gas=0,n=0; getMovs(y,m).forEach(mv=>{ if(esTransferenciaInterna(mv)||insCu(mv.currency)!==cu) return; n++; if(mv.type==='income') ing+=mv.amount; else if(mv.type==='expense') gas+=mv.amount; }); return {ing,gas,bal:ing-gas,n}; }
+const insSg=(v,cu)=>M((v<-0.004?'-':'')+(cu==='USD'?fmtD(Math.abs(v)):fmtS(Math.abs(v))));
+
+function insDash(){
+  const out=[], hoy=new Date(), y=hoy.getFullYear(), m=hoy.getMonth(), d=hoy.getDate(), b=insB;
+  // tarjetas: por moneda del estado
+  try{ gsDisponible().tarjetas.forEach(x=>{ const nom=b(insNomTc(x)), pd=parseInt(x.t.pago)||0; if(!pd) return;
+    [['PEN',x.cerrado.pen],['USD',x.cerrado.usd]].forEach(([cu,v])=>{ if(v<=0.004) return; const mon=b(insMon(v,cu));
+      if(pd<d) out.push({ico:'🚨',tono:'bad',cu,txt:`${nom} tiene ${mon} del estado cerrado y su día de pago (${pd}) ya pasó. Revisa si falta registrar el pago.`});
+      else if(pd-d<=7) out.push({ico:'💳',tono:pd-d<=2?'warn':'neu',cu,txt:`${nom} vence ${pd===d?b('hoy'):'en '+b((pd-d)+' día'+((pd-d)===1?'':'s'))} (día ${pd}): ${mon}.`}); }); }); }catch(e){}
+  // pagos programados
+  try{ const prAll=gsPagosConocidos(y,m,d).filter(q=>q.dia<=d+7); ['PEN','USD'].forEach(cu=>{ const pr=prAll.filter(q=>insCu(q.cur)===cu); if(!pr.length) return; const s=pr.reduce((a,q)=>a+q.monto,0); out.push({ico:'📅',tono:'neu',cu,txt:`${b(pr.length+' pago'+(pr.length===1?'':'s'))} programado${pr.length===1?'':'s'} en los próximos 7 días por ${b(insMon(s,cu))}: ${pr.slice(0,3).map(q=>escapeHtml(q.nombre)).join(', ')}${pr.length>3?'…':''}.`}); }); }catch(e){}
+  // presupuestos (límites en soles vs gasto en soles)
+  try{ const bs=insPresupuestos(y,m), exc=bs.filter(x=>x.pct>=100), cer=bs.filter(x=>x.pct>=80&&x.pct<100);
+    if(exc.length) out.push({ico:'🚨',tono:'bad',cu:'PEN',txt:`Ya te pasaste en ${b(exc.map(x=>insNom(x.cat)).join(', '))}.`});
+    if(cer.length) out.push({ico:'🎯',tono:'warn',cu:'PEN',txt:`Cerca del límite (≥80%): ${b(cer.map(x=>insNom(x.cat)+' '+x.pct.toFixed(0)+'%').join(', '))}.`}); }catch(e){}
+  // ritmo del mes por moneda
+  try{ const base=gsItems(y,m); const P=gsProyeccion(base); ['PEN','USD'].forEach(cu=>{ const r=insRitmo(P,cu,y,m); if(r) out.push(r); }); }catch(e){}
+  // balance del mes por moneda
+  ['PEN','USD'].forEach(cu=>{ const c=insMesCu(y,m,cu); if(!(c.ing>0||c.gas>0)) return; const pv=new Date(y,m-1,1), p=insMesCu(pv.getFullYear(),pv.getMonth(),cu);
+    out.push({ico:c.bal>=0?'💚':'🔻',tono:c.bal>=0?'ok':'warn',cu,txt:`Balance de ${MONTHS[m]}: ingresos ${insMon(c.ing,cu)} − gastos ${insMon(c.gas,cu)} = ${b(insSg(c.bal,cu))}${p.n>0?` (mes pasado completo: ${insSg(p.bal,cu)})`:''}.`}); });
+  // metas (cada una en su moneda)
+  try{ ['PEN','USD'].forEach(cu=>{ const ms=(state.metasAhorro||[]).filter(g=>!g.esMetaGrande&&insCu(g.currency)===cu&&g.montoObjetivo>0&&typeof g.montoActual==='number'&&g.montoActual<g.montoObjetivo).map(g=>({g,p:g.montoActual/g.montoObjetivo*100})).sort((x,z)=>z.p-x.p);
+    if(ms.length) out.push({ico:'🎯',tono:'neu',cu,txt:`Tu meta más avanzada en ${insNomCu(cu)}: ${b(escapeHtml(ms[0].g.nombre))} al ${b(ms[0].p.toFixed(0)+'%')} (${insMon(ms[0].g.montoActual,cu)} de ${insMon(ms[0].g.montoObjetivo,cu)})${ms.length>1?` · luego ${escapeHtml(ms[1].g.nombre)} (${ms[1].p.toFixed(0)}%)`:''}.`}); }); }catch(e){}
+  // préstamos por cobrar viejos
+  try{ ['PEN','USD'].forEach(cu=>{ const v=(state.deudas||[]).filter(x=>x.status==='pendiente'&&insCu(x.currency)===cu&&x.fecha&&(Date.now()-new Date(x.fecha+'T12:00:00'))/864e5>30);
+    if(v.length) out.push({ico:'🤝',tono:'neu',cu,txt:`${b(v.length+' préstamo'+(v.length===1?'':'s'))} sin cobrar hace más de 30 días (${insMon(v.reduce((a,x)=>a+x.monto,0),cu)}).`}); }); }catch(e){}
+  return out.slice(0,12);
+}
+function insPresu(){
+  const y=state.currentYear, m=state.currentMonth, out=[], b=insB, bs=insPresupuestos(y,m);
+  const totP=insTotCat(y,m,'PEN'), totU=insTotCat(y,m,'USD'), gP=Object.values(totP).reduce((a,v)=>a+v,0), gU=Object.values(totU).reduce((a,v)=>a+v,0);
+  if(!bs.length&&!gP&&!gU) return [{ico:'🫥',tono:'neu',txt:'Todavía no hay gastos categorizados ni presupuestos en este mes.'}];
+  const f=v=>insMon(v,'PEN');
+  bs.filter(x=>x.pct>=100).sort((a,z)=>(z.spent-z.limit)-(a.spent-a.limit)).slice(0,2).forEach(x=>out.push({ico:'🚨',tono:'bad',cu:'PEN',txt:`${b(insNom(x.cat))} ya superó su límite: ${f(x.spent)} de ${f(x.limit)} (${b('+'+f(x.spent-x.limit))}).`}));
+  const dHoy=new Date().getDate();
+  bs.filter(x=>x.pct<100&&x.proy!==null&&dHoy>=7&&x.proy>x.limit).sort((a,z)=>(z.proy-z.limit)-(a.proy-a.limit)).slice(0,2).forEach(x=>{ const tope=Math.max(0,(x.limit-x.spent)/x.diasRest);
+    out.push({ico:'📈',tono:'warn',cu:'PEN',txt:`${b(insNom(x.cat))} se pasaría ${b(f(x.proy-x.limit))} a este ritmo. Para no excederte, gasta máximo ${b(f(tope))} por día en esta categoría.`}); });
+  const cerca=bs.filter(x=>x.pct>=80&&x.pct<100&&!(x.proy!==null&&dHoy>=7&&x.proy>x.limit)); if(cerca.length) out.push({ico:'🎯',tono:'warn',cu:'PEN',txt:`Cerca del límite: ${b(cerca.map(x=>insNom(x.cat)+' '+x.pct.toFixed(0)+'%').join(', '))}.`});
+  const D=daysInMonth(y,m);
+  if(bs.length&&bs[0].esAct&&dHoy/D>=0.6){ const so=bs.filter(x=>x.pct<50); if(so.length) out.push({ico:'🌱',tono:'ok',cu:'PEN',txt:`Con el ${Math.round(dHoy/D*100)}% del mes ya pasado, ${b(so.map(x=>insNom(x.cat)).join(', '))} van por debajo del 50% de su límite: te sobra margen ahí.`}); }
+  // por moneda: categoría grande sin presupuesto / mayor categoría
+  const pvd=new Date(y,m-1,1);
+  [['PEN',totP,gP],['USD',totU,gU]].forEach(([cu,tot,g])=>{ if(!(g>0)) return; const tp=insTotCat(pvd.getFullYear(),pvd.getMonth(),cu), fm=v=>insMon(v,cu);
+    const es=Object.entries(tot).sort((a,z)=>z[1]-a[1]);
+    if(cu==='USD'){ const [c,v]=es[0]; out.push({ico:'💵',tono:'neu',cu,txt:`Tu mayor categoría en dólares es ${b(insNom(c))}: ${b(fm(v))} (${Math.round(v/g*100)}% de tus gastos en USD${tp[c]>0?`; el mes pasado fueron ${fm(tp[c])}`:''}). Los límites de presupuesto son en soles, así que no se comparan con estos gastos.`}); return; }
+    const sin=es.filter(([c,v])=>!(state.budgets||{})[c]&&v/g>=0.1);
+    if(sin.length){ const [c,v]=sin[0]; out.push({ico:'🏷️',tono:'neu',cu,txt:`${b(insNom(c))} pesa ${b(Math.round(v/g*100)+'%')} de tu gasto en soles (${fm(v)}) y no tiene presupuesto${tp[c]>0?` (el mes pasado fueron ${fm(tp[c])})`:''}. Considera ponerle un límite.`}); } });
+  if(bs.length){ const L=bs.reduce((a,x)=>a+x.limit,0), S=bs.reduce((a,x)=>a+x.spent,0); out.push({ico:'🧮',tono:'neu',cu:'PEN',txt:`Entre tus ${bs.length} presupuestos llevas ${b(f(S))} de ${f(L)} (${(S/L*100).toFixed(0)}%).`}); }
+  else out.push({ico:'💡',tono:'neu',txt:'Aún no tienes presupuestos por categoría. Crea uno con "+ Nueva Categoría" para recibir alertas y proyecciones.'});
+  return out.slice(0,10);
+}
+function insTarj(){
+  const out=[], hoy=new Date(), d=hoy.getDate(), D=daysInMonth(hoy.getFullYear(),hoy.getMonth()), b=insB;
+  if(!(state.tarjetas||[]).length) return [{ico:'🫥',tono:'neu',txt:'Aún no tienes tarjetas registradas.'}];
+  let dp; try{ dp=gsDisponible(); }catch(e){ return []; }
+  ['PEN','USD'].forEach(cu=>{
+    const dud=dp.tarjetas.reduce((s,x)=>s+(cu==='USD'?x.cerrado.usd+x.enCurso.usd:x.cerrado.pen+x.enCurso.pen),0), cer=cu==='USD'?dp.aPagar.usd:dp.aPagar.pen;
+    if(dud>0.004) out.push({ico:'💳',tono:'neu',cu,txt:`Deuda total en tarjetas en ${insNomCu(cu)}: ${b(insMon(dud,cu))} (${b(insMon(Math.max(0,cer),cu))} ya cerrado y por pagar este mes).`});
+    dp.tarjetas.forEach(x=>{ const nom=insNomTc(x), c=cu==='USD'?x.cerrado.usd:x.cerrado.pen, pd=parseInt(x.t.pago)||0;
+      if(x.cur===cu&&x.linea>0&&x.usadoPct>=70) out.push({ico:'🔥',tono:x.usadoPct>=90?'bad':'warn',cu,txt:`${b(nom)} usa el ${b(x.usadoPct.toFixed(0)+'%')} de su línea; solo te quedan ${b(insMon(x.libre,cu))}. Usarla mucho sube tu riesgo y tu utilización crediticia.`});
+      if(c>0.004&&pd){ if(pd<d) out.push({ico:'🚨',tono:'bad',cu,txt:`${b(nom)}: el día de pago (${pd}) ya pasó y figura ${b(insMon(c,cu))} sin pagar.`}); else if(pd-d<=7) out.push({ico:'⏰',tono:'warn',cu,txt:`${b(nom)} paga el día ${pd} (${pd===d?'hoy':'en '+(pd-d)+' día'+((pd-d)===1?'':'s')}): ${b(insMon(c,cu))}.`}); } });
+  });
+  // qué tarjeta conviene (sin montos)
+  const cand=dp.tarjetas.filter(x=>x.linea>0&&x.libre>0&&parseInt(x.t.cierre)>0).map(x=>{ const ci=parseInt(x.t.cierre); return {x,ds:((d-ci)%D+D)%D}; }).sort((a,z)=>a.ds-z.ds);
+  if(cand.length>1){ const k=cand[0], x=k.x; out.push({ico:'🧭',tono:'ok',txt:`Para una compra hoy, te conviene ${b(insNomTc(x))} (${x.cur==='USD'?'dólares':'soles'}): su corte fue hace ${k.ds} día${k.ds===1?'':'s'}, así que tienes casi un ciclo completo antes de que se cierre el estado (aprox., según el día de corte configurado).`}); }
+  // cuotas comprometidas por moneda
+  const cm=insCuotasPorMes(); ['PEN','USD'].forEach(cu=>{ const mks=Object.keys(cm[cu]).sort().slice(0,3); if(mks.length) out.push({ico:'🧾',tono:'neu',cu,txt:`Cuotas ya comprometidas en ${insNomCu(cu)}: ${mks.map(k=>b(MONTHS[parseInt(k.slice(5,7))-1])+' '+insMon(cm[cu][k],cu)).join(' · ')}. Es plata que ya no podrás gastar libremente esos meses.`}); });
+  const sl=dp.tarjetas.filter(x=>!(x.linea>0)); if(sl.length) out.push({ico:'⚙️',tono:'neu',txt:`${sl.length===1?'Una tarjeta no tiene':'Hay '+sl.length+' tarjetas sin'} línea de crédito configurada (${sl.slice(0,3).map(insNomTc).join(', ')}). Agrégala para ver el % usado y recibir alertas.`});
+  return out.slice(0,12);
+}
+function insDeudas(){
+  const out=[], hoy=new Date(), b=insB;
+  ['PEN','USD'].forEach(cu=>{
+    const pend=(state.deudas||[]).filter(x=>x.status==='pendiente'&&insCu(x.currency)===cu);
+    if(pend.length){ out.push({ico:'🤝',tono:'neu',cu,txt:`Tienes ${b(pend.length+' préstamo'+(pend.length===1?'':'s'))} por cobrar en ${insNomCu(cu)}: ${b(insMon(pend.reduce((a,x)=>a+x.monto,0),cu))}.`});
+      const dias=x=>x.fecha?Math.floor((hoy-new Date(x.fecha+'T12:00:00'))/864e5):0, v=[...pend].sort((a,z)=>dias(z)-dias(a))[0];
+      if(v&&dias(v)>=15) out.push({ico:'⏳',tono:dias(v)>60?'warn':'neu',cu,txt:`El más antiguo es ${b(escapeHtml(v.nombre||'—'))} (${insMon(v.monto,cu)}), pendiente hace ${b(dias(v)+' días')}. Quizá sea momento de recordárselo.`}); }
+  });
+  (state.deudasMayores||[]).forEach(dm=>{ const cs=dm.cuotas||[]; if(!cs.length) return; const cu=insCu(dm.currency), pag=cs.filter(c=>c.pagado).length, sig=cs.filter(c=>!c.pagado&&c.fecha).sort((a,z)=>a.fecha.localeCompare(z.fecha))[0];
+    const resto=cs.filter(c=>!c.pagado).reduce((a,c)=>a+(c.monto||0),0), nom=escapeHtml(dm.nombre||'Deuda');
+    if(!sig){ out.push({ico:'🎉',tono:'ok',cu,txt:`${b(nom)}: ¡todas las cuotas pagadas!`}); return; }
+    const dd=Math.ceil((new Date(sig.fecha+'T12:00:00')-hoy)/864e5);
+    out.push({ico:dd<0?'🚨':'🏛️',tono:dd<0?'bad':dd<=7?'warn':'neu',cu,txt:`${b(nom)}: ${pag}/${cs.length} cuotas pagadas (${Math.round(pag/cs.length*100)}%). Próxima ${dd<0?'vencida hace '+(-dd)+' día'+(dd===-1?'':'s'):dd===0?'hoy':'en '+dd+' día'+(dd===1?'':'s')} por ${b(insMon(sig.monto||dm.montoCuota||0,cu))}. Te faltan ${insMon(resto,cu)} en total.`}); });
+  try{ const pr=gsPagosConocidos(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()); ['PEN','USD'].forEach(cu=>{ const p=pr.filter(q=>insCu(q.cur)===cu); if(p.length) out.push({ico:'📅',tono:'neu',cu,txt:`Aún faltan ${b(p.length+' pago'+(p.length===1?'':'s'))} programados este mes en ${insNomCu(cu)} por ${b(insMon(p.reduce((a,q)=>a+q.monto,0),cu))}.`}); }); }catch(e){}
+  if(!out.length) out.push({ico:'🎉',tono:'ok',txt:'No tienes préstamos pendientes ni cuotas de deudas mayores. ¡Todo al día!'});
+  return out.slice(0,12);
+}
+function insAnioDatos(cu){
+  const y=(anioVistaYear===null?state.currentYear:anioVistaYear), meses=[];
+  for(let m=0;m<12;m++){ const c=insMesCu(y,m,cu); if(c.n>0) meses.push({m,ing:c.ing,gas:c.gas,bal:c.bal}); }
+  return {y,meses};
+}
+function insAnio(){
+  const out=[], b=insB, N=tcMesesLong(), y=(anioVistaYear===null?state.currentYear:anioVistaYear);
+  ['PEN','USD'].forEach(cu=>{ const {meses}=insAnioDatos(cu), f=v=>insMon(v,cu);
+    if(cu==='USD'&&!meses.length) return;
+    if(meses.length<2){ if(cu==='PEN') out.push({ico:'🫥',tono:'neu',cu,txt:`Hace falta más historial en soles en ${y} (al menos 2 meses con movimientos) para sacar conclusiones.`}); else out.push({ico:'🫥',tono:'neu',cu,txt:`Aún hay poco historial en dólares en ${y} (${meses.length} mes).`}); return; }
+    const ing=meses.reduce((a,x)=>a+x.ing,0), gas=meses.reduce((a,x)=>a+x.gas,0), bal=ing-gas;
+    out.push({ico:bal>=0?'💚':'🔻',tono:bal>=0?'ok':'warn',cu,txt:`En ${meses.length} meses de ${y}: ingresos ${f(ing)}, gastos ${f(gas)} → balance ${b(insSg(bal,cu))}${ing>0?` (ahorraste el ${b((bal/ing*100).toFixed(0)+'%')} de lo que ganaste)`:''}.`});
+    const mejor=[...meses].sort((a,z)=>z.bal-a.bal)[0], peor=[...meses].sort((a,z)=>a.bal-z.bal)[0];
+    out.push({ico:'🏆',tono:'ok',cu,txt:`Mejor mes: ${b(N[mejor.m])} (${insSg(mejor.bal,cu)}). Más flojo: ${b(N[peor.m])} (${insSg(peor.bal,cu)}).`});
+    const mg=[...meses].sort((a,z)=>z.gas-a.gas)[0], prom=gas/meses.length;
+    if(mg.gas>prom*1.2) out.push({ico:'💥',tono:'warn',cu,txt:`${b(N[mg.m])} fue tu mes más caro en ${insNomCu(cu)}: ${f(mg.gas)}, ${b(((mg.gas/prom-1)*100).toFixed(0)+'% sobre')} tu promedio mensual (${f(prom)}).`});
+    if(meses.length>=4){ const k=Math.min(3,Math.floor(meses.length/2)), ult=meses.slice(-k), ant=meses.slice(-2*k,-k), pu=ult.reduce((a,x)=>a+x.gas,0)/k, pa=ant.reduce((a,x)=>a+x.gas,0)/ant.length;
+      if(pa>0){ const dif=(pu/pa-1)*100; if(Math.abs(dif)>=8) out.push({ico:dif>0?'📈':'📉',tono:dif>0?'warn':'ok',cu,txt:`Tus gastos en ${insNomCu(cu)} de los últimos ${k} meses promedian ${f(pu)}: ${b(Math.abs(dif).toFixed(0)+'% '+(dif>0?'más':'menos'))} que los ${k} anteriores (${f(pa)}).`}); } }
+    const neg=meses.filter(x=>x.bal<0);
+    if(neg.length) out.push({ico:'⚠️',tono:'warn',cu,txt:`${b(neg.length+' de '+meses.length+' meses')} cerraron en negativo en ${insNomCu(cu)} (${neg.map(x=>N[x.m].slice(0,3)).join(', ')}).`});
+    else out.push({ico:'✅',tono:'ok',cu,txt:`Ningún mes cerró en negativo en ${insNomCu(cu)} este año. ¡Constancia!`});
+  });
+  return out;
+}
+
+// ── Contexto compacto para la IA: todo por moneda, sin tipo de cambio ──
+function insCtx(k){
+  const r2=v=>Math.round(v*100)/100, hoy=new Date(), c={aviso:'Los montos están en su moneda original. NO conviertas entre soles y dólares ni los sumes; analiza cada moneda por separado.'};
+  if(k==='dashboard'){ const y=hoy.getFullYear(), m=hoy.getMonth(); c.mesActual={};
+    ['PEN','USD'].forEach(cu=>{ const x=insMesCu(y,m,cu); if(x.n>0||cu==='PEN') c.mesActual[cu==='USD'?'dolares':'soles']={ingresos:r2(x.ing),gastos:r2(x.gas),balance:r2(x.bal)}; });
+    try{ const dp=gsDisponible(); c.disponible={totalParaGastarSoles:r2(dp.total.pen),totalParaGastarDolares:r2(dp.total.usd),tarjetasPorPagarSoles:r2(dp.aPagar.pen),tarjetasPorPagarDolares:r2(dp.aPagar.usd)};
+      c.tarjetas=dp.tarjetas.map(x=>({tarjeta:((x.t.banco||'')+' '+(x.t.cat||'')).trim(),diaPago:x.t.pago,usadoPct:Math.round(x.usadoPct),corteCerradoSoles:r2(x.cerrado.pen),corteCerradoDolares:r2(x.cerrado.usd)}));
+      c.pagosProgramadosPendientes=gsPagosConocidos(y,m,hoy.getDate()).slice(0,10).map(q=>({nombre:q.nombre,dia:q.dia,monto:r2(q.monto),moneda:insCu(q.cur)})); }catch(e){}
+    c.presupuestosEnSoles=insPresupuestos(y,m).map(b=>({categoria:b.cat,limite:r2(b.limit),gastadoEnSoles:r2(b.spent),pct:Math.round(b.pct)}));
+    c.metasAhorro=(state.metasAhorro||[]).filter(g=>!g.esMetaGrande).map(g=>({nombre:g.nombre,objetivo:g.montoObjetivo,actual:g.montoActual,moneda:insCu(g.currency)}));
+    c.prestamosPorCobrar=(state.deudas||[]).filter(x=>x.status==='pendiente').map(x=>({nombre:x.nombre,monto:x.monto,moneda:insCu(x.currency),fecha:x.fecha}));
+  } else if(k==='presupuesto'){ const y=state.currentYear, m=state.currentMonth, pv=new Date(y,m-1,1);
+    c.mes=MONTHS[m]+' '+y; c.diaDelMes=(y===hoy.getFullYear()&&m===hoy.getMonth())?hoy.getDate():null; c.diasDelMes=daysInMonth(y,m);
+    c.nota='Los límites de presupuesto están en soles y solo se comparan con el gasto en soles.';
+    c.gastoPorCategoria={};
+    ['PEN','USD'].forEach(cu=>{ const tot=insTotCat(y,m,cu), tp=insTotCat(pv.getFullYear(),pv.getMonth(),cu); const l=Object.entries(tot).sort((a,z)=>z[1]-a[1]).slice(0,15).map(([cat,v])=>({categoria:cat,gastado:r2(v),mesAnterior:r2(tp[cat]||0),tienePresupuesto:!!(state.budgets||{})[cat]})); if(l.length) c.gastoPorCategoria[cu==='USD'?'dolares':'soles']=l; });
+    c.presupuestosEnSoles=insPresupuestos(y,m).map(b=>({categoria:b.cat,limite:r2(b.limit),gastado:r2(b.spent),pct:Math.round(b.pct),proyeccionCierre:b.proy===null?null:r2(b.proy)}));
+  } else if(k==='tarjetas'){ try{ const dp=gsDisponible(); c.tarjetas=dp.tarjetas.map(x=>({tarjeta:((x.t.banco||'')+' '+(x.t.cat||'')).trim(),moneda:x.cur,linea:x.linea,usadoPct:Math.round(x.usadoPct),libre:r2(x.libre),diaCorte:x.t.cierre,diaPago:x.t.pago,corteCerradoSoles:r2(x.cerrado.pen),corteCerradoDolares:r2(x.cerrado.usd),cicloEnCursoSoles:r2(x.enCurso.pen),cicloEnCursoDolares:r2(x.enCurso.usd)})); }catch(e){}
+    const cm=insCuotasPorMes(); c.cuotasComprometidasPorMes={soles:Object.keys(cm.PEN).sort().slice(0,6).map(k2=>({mes:k2,monto:r2(cm.PEN[k2])})),dolares:Object.keys(cm.USD).sort().slice(0,6).map(k2=>({mes:k2,monto:r2(cm.USD[k2])}))};
+    c.diaDeHoy=hoy.getDate();
+  } else if(k==='deudas'){ c.prestamosPorCobrar=(state.deudas||[]).filter(x=>x.status==='pendiente').map(x=>({nombre:x.nombre,monto:x.monto,moneda:insCu(x.currency),fecha:x.fecha}));
+    c.deudasMayores=(state.deudasMayores||[]).map(dm=>{ const cs=dm.cuotas||[]; const sig=cs.filter(q=>!q.pagado&&q.fecha).sort((a,z)=>a.fecha.localeCompare(z.fecha))[0]; return {nombre:dm.nombre,moneda:insCu(dm.currency),cuotasTotales:cs.length,cuotasPagadas:cs.filter(q=>q.pagado).length,proximaCuota:sig?{fecha:sig.fecha,monto:sig.monto}:null,saldoPendiente:r2(cs.filter(q=>!q.pagado).reduce((a,q)=>a+(q.monto||0),0))}; });
+    try{ c.pagosProgramadosPendientesMes=gsPagosConocidos(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()).map(q=>({nombre:q.nombre,monto:r2(q.monto),moneda:insCu(q.cur)})); }catch(e){}
+  } else if(k==='anio'){ c.anio=(anioVistaYear===null?state.currentYear:anioVistaYear); c.meses={};
+    ['PEN','USD'].forEach(cu=>{ const {meses}=insAnioDatos(cu); if(meses.length) c.meses[cu==='USD'?'dolares':'soles']=meses.map(x=>({mes:tcMesesLong()[x.m],ingresos:r2(x.ing),gastos:r2(x.gas),balance:r2(x.bal)})); });
+  }
+  return c;
+}
+
+const INS={
+  dashboard:{pag:'dashboard',tit:'💡 Lo más importante ahora',local:insDash,per:insHoyISO,ia:'Revisa mi situación financiera de HOY y dime lo más importante.',pedido:'una línea de resumen; "Lo urgente:" con 2 o 3 cosas que debo atender en los próximos días (pagos, tarjetas, presupuestos); y "Sugerencias:" con 3 acciones concretas para mejorar mi mes'},
+  presupuesto:{pag:'presupuesto',tit:'💡 Insights de tu presupuesto',local:insPresu,per:()=>state.currentYear+'-'+state.currentMonth,ia:'Analiza mi presupuesto por categorías de este mes.',pedido:'una línea de resumen; "Lo que veo:" con 3 observaciones (categorías en riesgo, las que sobran, las que no tienen límite); y "Sugerencias:" con 3 ajustes concretos de límites o hábitos, con montos en S/'},
+  tarjetas:{pag:'tarjetas',tit:'💡 Insights de tus tarjetas',local:insTarj,per:insHoyISO,ia:'Analiza el uso de mis tarjetas de crédito.',pedido:'una línea de resumen; "Lo que veo:" con 3 observaciones (utilización de línea, vencimientos, cuotas comprometidas); y "Sugerencias:" con 3 acciones concretas, por ejemplo cuál tarjeta usar o qué pagar primero'},
+  deudas:{pag:'deudas',tit:'💡 Insights de tus deudas',local:insDeudas,per:insHoyISO,ia:'Analiza mis deudas, préstamos por cobrar y cuotas.',pedido:'una línea de resumen; "Lo que veo:" con 3 observaciones; y "Sugerencias:" con 3 acciones concretas (qué cobrar, qué cuota priorizar, cómo aliviar el flujo)'},
+  anio:{pag:'anio',tit:'💡 Insights del año',local:insAnio,per:()=>String(anioVistaYear===null?state.currentYear:anioVistaYear),ia:'Analiza mi año mes por mes.',pedido:'una línea de resumen; "Lo que veo:" con 3 observaciones (tendencia, meses atípicos, ahorro); y "Sugerencias:" con 3 acciones concretas para los meses que vienen'}
+};
+function insCacheGet(k){ try{ return (JSON.parse(localStorage.getItem(INS_KEY)||'{}'))[k+'|'+INS[k].per()]||null; }catch(e){ return null; } }
+function insCacheSet(k,v){ try{ const r=JSON.parse(localStorage.getItem(INS_KEY)||'{}'); r[k+'|'+INS[k].per()]=v; const ks=Object.keys(r); if(ks.length>40){ ks.sort((a,b)=>r[a].ts-r[b].ts); delete r[ks[0]]; } localStorage.setItem(INS_KEY,JSON.stringify(r)); }catch(e){} }
+
+async function insGenerarIA(k){
+  if(insLoading[k]) return; const S=INS[k];
+  insLoading[k]=true; insErr[k]=''; insRender(k);
+  try{
+    const locales=S.local().map(x=>insPlano(x.txt));
+    const contexto={fechaHoy:new Date().toLocaleDateString('es-PE'),tipoAnalisis:S.tit.replace(/^\S+\s/,''),periodoConsultado:S.per(),...insCtx(k),observacionesAutomaticas:locales,datosCompletos:{},resumenRapido:{}};
+    const mensaje=S.ia+' Usa SOLO el contexto que te envío (no consultes otros datos). Responde en español, breve (máximo 170 palabras) con este formato: '+S.pedido+'. Viñetas cortas con emojis, no inventes datos y analiza soles y dólares por separado: NO conviertas entre monedas ni los sumes.';
+    const idToken=await firebase.auth().currentUser.getIdToken();
+    const res=await fetch(CHAT_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:JSON.stringify({mensaje,contexto,historial:[]})});
+    const data=await res.json();
+    if(data&&data.success&&data.respuesta){ insCacheSet(k,{txt:data.respuesta,ts:Date.now()}); insErr[k]=''; }
+    else if(data&&data.error==='cuota_agotada') insErr[k]='🚦 Por hoy se acabó la cuota gratuita de Gemini (se renueva a medianoche, hora de California). No genera ningún cobro; prueba más tarde.';
+    else insErr[k]='No pude generar el análisis ahora mismo. Intenta de nuevo en un momento.';
+  }catch(e){ console.error('insGenerarIA',e); insErr[k]='No pude conectarme al asistente. Revisa tu conexión e intenta de nuevo.'; }
+  insLoading[k]=false; insRender(k);
+}
+function insRender(k){
+  const el=document.getElementById('ins-'+k); if(!el) return; const S=INS[k];
+  let ins=[]; try{ ins=S.local(); }catch(e){ console.error('insRender',k,e); }
+  let h=`<div class="section-title" style="margin-bottom:10px">${S.tit}</div>`;
+  h+=insListaHtml(ins)||'<div style="font-size:12px;color:var(--text3)">Sin datos suficientes todavía.</div>';
+  h+=`<div style="font-size:10px;color:var(--text3);margin:6px 0 12px">Calculados al instante con tus datos (gratis, sin IA).</div>`;
+  const c=insCacheGet(k);
+  h+=`<div style="border-top:1px solid var(--border);padding-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:12px">✨ Análisis con IA</strong><button class="btn btn-primary" style="font-size:11px;padding:5px 11px" ${insLoading[k]?'disabled':''} onclick="insGenerarIA('${k}')">${insLoading[k]?'Analizando…':(c?'🔄 Regenerar':'Generar análisis')}</button></div>`;
+  if(insLoading[k]) h+=`<div style="font-size:12px;color:var(--text2)">⏳ Gemini está revisando tus datos…</div>`;
+  else if(insErr[k]) h+=`<div style="font-size:12px;color:var(--amber);line-height:1.5">${escapeHtml(insErr[k])}</div>`;
+  if(!insLoading[k]&&c&&c.txt){ let t=String(c.txt); if(hiddenMode) t=t.replace(/\d[\d.,]*/g,'••'); t=escapeHtml(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
+    const fh=new Date(c.ts).toLocaleString('es-PE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    h+=`<div class="gs-ia-txt">${t}</div><div style="font-size:10px;color:var(--text3);margin-top:6px">Generado ${fh} · la IA puede equivocarse; los insights de arriba los calcula la app.</div>`;
+  } else if(!insLoading[k]&&!insErr[k]) h+=`<div style="font-size:11px;color:var(--text3);line-height:1.5">Pídele a Gemini un análisis de esta sección con sugerencias concretas. Se guarda para no gastar cuota de más.</div>`;
+  h+=`</div>`; el.innerHTML=h;
+}
+// se pinta cada vez que la app repinta la sección correspondiente
+[['renderDashboard','dashboard'],['renderPresupuesto','presupuesto'],['renderTarjetas','tarjetas'],['renderDeudas','deudas'],['renderAnioCompleto','anio']].forEach(([fn,k])=>{
+  const orig=window[fn]; if(typeof orig!=='function') return;
+  window[fn]=function(){ try{ return orig.apply(this,arguments); } finally{ try{ insRender(k); }catch(e){ console.error('ins',k,e); } } };
+});
 
 function startApp(){
   initFirebase();
