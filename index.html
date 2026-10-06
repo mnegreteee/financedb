@@ -1061,6 +1061,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-tcs .gs-tc{flex:1 1 320px;min-width:0;margin-top:0}
 .gs-det{background:var(--bg3);border-radius:10px;padding:10px 14px}
 .gs-det summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text2)}
+.gs-ins{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;color:var(--text2);background:var(--bg3);border-left:3px solid var(--accent);border-radius:8px;padding:8px 10px;margin-bottom:6px}
+.gs-ins b{color:var(--text)}
+.gs-ins-i{flex-shrink:0;font-size:14px}
+.gs-ia-txt{font-size:12px;line-height:1.65;color:var(--text);background:var(--bg3);border-radius:10px;padding:10px 12px}
 .gs-det .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 28px;margin-top:8px}
 @media(max-width:1000px){.gs-chartwrap{height:210px}}
 
@@ -1753,6 +1757,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div>
       <div class="card" style="padding:16px;margin-bottom:16px" id="gs-origen"></div>
       <div class="card" style="padding:16px" id="gs-cats"></div>
+      <div class="card" style="padding:16px;margin-top:16px" id="gs-ia"></div>
     </div>
   </div>
 </div>
@@ -3539,8 +3544,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 20:32'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Las transferencias entre tus propias cuentas (también las antiguas, detectadas por pareja) ya no cuentan como ingreso ni gasto en totales, gráficos, presupuestos, Año completo, salud financiera, Gastos y reportes; siguen en la lista (🔄) y en los saldos.';
+const APP_VERSION_DATE = '05/10/26 - 20:59'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo en Gastos: tarjeta 💡 Insights de tus gastos (observaciones automáticas gratis: ritmo vs presupuesto, comparación con el mes pasado, categorías que suben, gastos repetidos y hormiga, tarjetas y pagos próximos) + botón ✨ Análisis con IA (Gemini) con sugerencias.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5660,6 +5665,7 @@ function gsRefrescarLista(){
   gsRenderTrend(base);
   gsRenderLista(items);
   gsRenderLaterales(items);
+  gsRenderIA(base);
 }
 function gsRenderKpis(items){
   const el=document.getElementById('gs-kpis'); if(!el) return;
@@ -5815,6 +5821,136 @@ function gsRenderLaterales(items){
     <svg viewBox="0 0 120 120" style="width:120px;height:120px;flex-shrink:0"><circle cx="60" cy="60" r="40" fill="none" stroke="var(--bg4)" stroke-width="18"/>${segs}</svg>
     <div style="flex:1;min-width:140px">${sc.slice(0,8).map(([k,o])=>`<div class="gs-line" style="padding:2px 0"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${gsCatColor(k)};margin-right:6px"></span>${escapeHtml(k?k.replace(/^\S+\s/,''):'Sin categoría')}</span><b>${Math.round(o.v/tot*100)}%</b></div>`).join('')}</div></div>`:'<div class="empty">—</div>');
 }
+// ── INSIGHTS DE GASTOS (automáticos + análisis con IA bajo demanda) ──
+const GS_IA_KEY='gs_ia_v1';
+let gsIALoading=false, gsIAErr='';
+function gsIAGet(){ try{ return (JSON.parse(localStorage.getItem(GS_IA_KEY)||'{}'))[GS.y+'-'+GS.m]||null; }catch(e){ return null; } }
+function gsIASet(v){ try{ const r=JSON.parse(localStorage.getItem(GS_IA_KEY)||'{}'); r[GS.y+'-'+GS.m]=v; const ks=Object.keys(r); if(ks.length>12){ ks.sort((a,b)=>r[a].ts-r[b].ts); delete r[ks[0]]; } localStorage.setItem(GS_IA_KEY,JSON.stringify(r)); }catch(e){} }
+function gsPrevYM(){ let y=GS.y, m=GS.m-1; if(m<0){ m=11; y--; } return {y,m}; }
+function gsAgrupar(items,fn){ const mp=new Map(); items.forEach(i=>{ const k=fn(i); const o=mp.get(k)||{k,pen:0,n:0,usd:0,sol:0,items:[]}; o.pen+=i.pen; o.n++; if(i.cur==='USD') o.usd+=i.amount; else o.sol+=i.amount; o.items.push(i); mp.set(k,o); }); return [...mp.values()].sort((a,b)=>b.pen-a.pen); }
+
+function gsInsights(base){
+  const out=[]; const f=v=>M(fmtS(v)); const b=t=>`<b>${t}</b>`;
+  const tot=base.reduce((s,i)=>s+i.pen,0);
+  if(!base.length||tot<=0.004){ return [{ico:'🫥',tono:'neu',txt:'Todavía no hay gastos registrados en este mes.'}]; }
+  const hoy=new Date(), esActual=gsEsMesActual(), d=esActual?hoy.getDate():new Date(GS.y,GS.m+1,0).getDate();
+  const pv=gsPrevYM(), prev=gsItems(pv.y,pv.m), prevTot=prev.reduce((s,i)=>s+i.pen,0);
+  const prevHasta=prev.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.pen,0);
+  // 1) ritmo vs presupuesto / cierre proyectado
+  if(esActual){
+    try{
+      const P=gsProyeccion(base), R=gsRecomendado(gsDisponible());
+      if(R.presupuesto>0){
+        if(P.cierre<=R.presupuesto) out.push({ico:'✅',tono:'ok',txt:`A tu ritmo cerrarías el mes en ${b(f(P.cierre))}, dentro de tu presupuesto de ${f(R.presupuesto)} (te sobrarían ${f(R.presupuesto-P.cierre)}).`});
+        else out.push({ico:'⚠️',tono:'warn',txt:`A tu ritmo cerrarías en ${b(f(P.cierre))}, ${b(f(P.cierre-R.presupuesto))} por encima de tu presupuesto de ${f(R.presupuesto)}. Intenta no pasar de ${b(f(R.porDia))} por día.`});
+      } else if(P.cierre>0) out.push({ico:'📈',tono:'neu',txt:`Proyección de cierre de mes: ${b(f(P.cierre))} (incluye ${f(P.knownTotal)} de pagos ya programados).`});
+    }catch(e){}
+  }
+  // 2) vs mes anterior
+  if(prevTot>0){
+    const ref=esActual?prevHasta:prevTot;
+    if(ref>0){ const dif=(tot-ref)/ref*100, abs=Math.abs(dif);
+      const et=esActual?`al mismo día del mes pasado (${f(ref)})`:`al mes anterior (${f(ref)})`;
+      if(abs<5) out.push({ico:'⚖️',tono:'neu',txt:`Tu gasto va casi igual que ${et}.`});
+      else if(dif>0) out.push({ico:'📈',tono:abs>=25?'warn':'neu',txt:`Llevas ${b(f(tot))}: ${b(abs.toFixed(0)+'% más')} que ${et}.`});
+      else out.push({ico:'📉',tono:'ok',txt:`Llevas ${b(f(tot))}: ${b(abs.toFixed(0)+'% menos')} que ${et}. ¡Buen control!`});
+    }
+  }
+  // 3) categorías
+  const cats=gsAgrupar(base,i=>i.cat||''), catsPrev=gsAgrupar(prev,i=>i.cat||'');
+  if(cats.length){
+    const c0=cats[0], nom=c0.k?c0.k.replace(/^\S+\s/,''):'Sin categoría', pct=Math.round(c0.pen/tot*100);
+    out.push({ico:gsCatEmoji(c0.k),tono:pct>=45?'warn':'neu',txt:`${b(escapeHtml(nom))} es tu mayor categoría: ${b(pct+'%')} del gasto (${f(c0.pen)}).${pct>=45?' Está muy concentrada.':''}`});
+    let mejor=null;
+    cats.forEach(c=>{ const p=catsPrev.find(x=>x.k===c.k); if(!p||p.pen<=0) return; const ref=esActual?p.items.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.pen,0):p.pen; if(ref<=0) return; const dif=c.pen-ref, pc=dif/ref*100; if(dif>=50&&pc>=30&&(!mejor||dif>mejor.dif)) mejor={c,dif,pc}; });
+    if(mejor){ const nm=mejor.c.k?mejor.c.k.replace(/^\S+\s/,''):'Sin categoría'; out.push({ico:'🔺',tono:'warn',txt:`${b(escapeHtml(nm))} subió ${b(mejor.pc.toFixed(0)+'%')} (+${f(mejor.dif)}) frente a ${esActual?'este punto del mes pasado':'el mes anterior'}.`}); }
+  }
+  // 4) mayor gasto
+  const may=base.reduce((a,i)=>(!a||i.pen>a.pen)?i:a,null);
+  if(may&&base.length>=3){ const pc=Math.round(may.pen/tot*100); if(pc>=15) out.push({ico:'💥',tono:'neu',txt:`Tu mayor gasto fue ${b(escapeHtml(may.desc))} por ${b(M(gsFmt(may.amount,may.cur)))} (${pc}% del mes).`}); }
+  // 5) comercios repetidos
+  const rep=gsAgrupar(base,i=>(i.desc||'').trim().toLowerCase()).filter(g=>g.n>=3&&g.k);
+  if(rep.length){ const g=rep[0]; out.push({ico:'🔁',tono:'neu',txt:`${b(escapeHtml(g.items[0].desc))} se repite ${b(g.n+' veces')} y suma ${b(M(gsMix(g.sol,g.usd)))}.`}); }
+  // 6) gastos hormiga
+  const ch=base.filter(i=>i.pen<=30);
+  if(ch.length>=8){ const s=ch.reduce((a,i)=>a+i.pen,0); out.push({ico:'🐜',tono:'neu',txt:`Tienes ${b(ch.length+' gastos pequeños')} (≤ S/ 30) que suman ${b(f(s))} (${Math.round(s/tot*100)}% del mes).`}); }
+  // 7) tarjetas con línea muy usada
+  try{ gsDisponible().tarjetas.filter(x=>x.linea>0&&x.usadoPct>=70).forEach(x=>{ out.push({ico:'💳',tono:x.usadoPct>=90?'bad':'warn',txt:`${b(escapeHtml(((x.t.banco||'')+' '+(x.t.cat||'')).trim()))} usa el ${b(x.usadoPct.toFixed(0)+'%')} de su línea; te quedan ${M(gsFmt(x.libre,x.cur))}.`}); }); }catch(e){}
+  // 8) pagos próximos (7 días)
+  if(esActual){ try{ const pr=gsPagosConocidos(GS.y,GS.m,d).filter(q=>q.dia<=d+7); if(pr.length){ const s=pr.reduce((a,q)=>a+q.pen,0); out.push({ico:'📅',tono:'neu',txt:`En los próximos 7 días vencen ${b(pr.length+' pago'+(pr.length===1?'':'s'))} programados por ${b(f(s))}: ${pr.slice(0,3).map(q=>escapeHtml(q.nombre)).join(', ')}${pr.length>3?'…':''}.`}); } }catch(e){} }
+  // 9) cuotas
+  const cu=base.filter(i=>i.cuota);
+  if(cu.length){ const s=cu.reduce((a,i)=>a+i.pen,0); out.push({ico:'🧾',tono:'neu',txt:`${b(cu.length+' consumo'+(cu.length===1?'':'s'))} en cuotas ${cu.length===1?'pesa':'pesan'} ${b(f(s))} este mes (${Math.round(s/tot*100)}%).`}); }
+  // 10) sin categoría
+  const sc=base.filter(i=>!i.cat);
+  if(sc.length>=3) out.push({ico:'🏷️',tono:'neu',txt:`${b(sc.length+' gastos')} no tienen categoría (${f(sc.reduce((a,i)=>a+i.pen,0))}). Categorizarlos mejora estos análisis.`});
+  return out.slice(0,8);
+}
+
+function gsIAContexto(base){
+  const tot=base.reduce((s,i)=>s+i.pen,0), rate=gsRate(), pv=gsPrevYM(), prev=gsItems(pv.y,pv.m);
+  const prevTot=prev.reduce((s,i)=>s+i.pen,0), esActual=gsEsMesActual(), d=esActual?new Date().getDate():31;
+  const r2=v=>Math.round(v*100)/100, sm=gsSum(base);
+  const catsPrev=gsAgrupar(prev,i=>i.cat||'');
+  const ctx={
+    fechaHoy:new Date().toLocaleDateString('es-PE'), tipoAnalisis:'gastos del mes', periodoConsultado:MONTHS[GS.m]+' '+GS.y, mesEnCurso:esActual, diaDelMes:esActual?d:null, tipoCambioVenta:rate,
+    gastoMes:{totalSoles:r2(sm.pen),totalDolares:r2(sm.usd),totalEquivSoles:r2(tot),cantidadConsumos:base.length},
+    mesAnterior:{totalEquivSoles:r2(prevTot),hastaMismoDiaEquivSoles:r2(prev.filter(i=>parseInt(i.fecha.slice(8,10))<=d).reduce((s,i)=>s+i.pen,0))},
+    porCategoria:gsAgrupar(base,i=>i.cat||'').slice(0,10).map(c=>{ const p=catsPrev.find(x=>x.k===c.k); return {categoria:c.k||'Sin categoría',equivSoles:r2(c.pen),porcentaje:Math.round(c.pen/(tot||1)*100),consumos:c.n,mesAnteriorEquivSoles:p?r2(p.pen):0}; }),
+    porOrigen:gsAgrupar(base,i=>i.origen).slice(0,8).map(o=>({origen:o.k,soles:r2(o.sol),dolares:r2(o.usd),consumos:o.n})),
+    mayoresGastos:[...base].sort((a,b)=>b.pen-a.pen).slice(0,12).map(i=>({concepto:i.desc,monto:r2(i.amount),moneda:i.cur,fecha:i.fecha,categoria:i.cat||'',origen:i.origen,cuota:i.cuota})),
+    comerciosRepetidos:gsAgrupar(base,i=>(i.desc||'').trim().toLowerCase()).filter(g=>g.n>=2&&g.k).slice(0,6).map(g=>({concepto:g.items[0].desc,veces:g.n,equivSoles:r2(g.pen)})),
+    gastosPequenosMenoresA30Soles:{cantidad:base.filter(i=>i.pen<=30).length,equivSoles:r2(base.filter(i=>i.pen<=30).reduce((s,i)=>s+i.pen,0))}
+  };
+  try{ const R=gsRecomendado(gsDisponible()); ctx.presupuesto={ingresoEsperado:r2(R.ingreso),ahorroObjetivo:r2(R.ahorro),presupuestoMes:r2(R.presupuesto),yaGastado:r2(R.gastado),pagosProgramadosPendientes:r2(R.comprometido),recomendadoParaGastar:r2(R.recomendado),porDia:r2(R.porDia),diasRestantes:R.diasRest,gastoTipicoMensual:r2(R.avgGas)}; }catch(e){}
+  try{ if(esActual){ const P=gsProyeccion(base); ctx.cierreProyectadoEquivSoles=r2(P.cierre); ctx.pagosProgramadosPendientesDetalle=P.conocidos.slice(0,10).map(q=>({nombre:q.nombre,dia:q.dia,monto:r2(q.monto),moneda:q.cur})); } }catch(e){}
+  try{ ctx.tarjetas=gsDisponible().tarjetas.map(x=>({tarjeta:((x.t.banco||'')+' '+(x.t.cat||'')).trim(),moneda:x.cur,lineaTotal:x.linea,lineaUsadaPct:Math.round(x.usadoPct)})); }catch(e){}
+  ctx.datosCompletos={}; ctx.resumenRapido={};
+  return ctx;
+}
+
+async function gsGenerarIA(){
+  if(gsIALoading) return;
+  const base=gsItems(GS.y,GS.m);
+  if(!base.length){ gsIAErr='No hay gastos en este mes para analizar.'; gsRenderIA(base); return; }
+  gsIALoading=true; gsIAErr=''; gsRenderIA(base);
+  try{
+    const contexto=gsIAContexto(base);
+    const mensaje='Analiza SOLO mis gastos de '+MONTHS[GS.m]+' '+GS.y+' usando únicamente el contexto que te envío (no consultes otros datos). Responde en español, breve (máximo 170 palabras), en este formato: 1) una línea de resumen; 2) "Lo que veo:" con 3 observaciones concretas (patrones, cambios vs mes anterior, concentración, gastos hormiga, riesgos con tarjetas o pagos próximos); 3) "Sugerencias:" con 3 acciones concretas y realistas para gastar mejor o ahorrar, con montos en S/ cuando se pueda. Usa viñetas cortas con emojis, no inventes datos, y muestra soles y dólares por separado cuando importe.';
+    const idToken=await firebase.auth().currentUser.getIdToken();
+    const res=await fetch(CHAT_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:JSON.stringify({mensaje,contexto,historial:[]})});
+    const data=await res.json();
+    if(data&&data.success&&data.respuesta){ gsIASet({txt:data.respuesta,ts:Date.now()}); gsIAErr=''; }
+    else if(data&&data.error==='cuota_agotada') gsIAErr='🚦 Por hoy se acabó la cuota gratuita de Gemini (se renueva a medianoche, hora de California). No genera ningún cobro; prueba más tarde.';
+    else gsIAErr='No pude generar el análisis ahora mismo. Intenta de nuevo en un momento.';
+  }catch(e){ console.error('gsGenerarIA',e); gsIAErr='No pude conectarme al asistente. Revisa tu conexión e intenta de nuevo.'; }
+  gsIALoading=false;
+  gsRenderIA(gsItems(GS.y,GS.m));
+}
+
+function gsRenderIA(base){
+  const el=document.getElementById('gs-ia'); if(!el) return;
+  base=base||gsItems(GS.y,GS.m);
+  const ins=gsInsights(base);
+  const col={ok:'var(--green)',warn:'var(--amber)',bad:'var(--red)',neu:'var(--accent)'};
+  let h=`<div class="section-title" style="margin-bottom:10px">💡 Insights de tus gastos</div>`;
+  h+=ins.map(x=>`<div class="gs-ins" style="border-left-color:${col[x.tono]||col.neu}"><span class="gs-ins-i">${x.ico}</span><span>${x.txt}</span></div>`).join('');
+  h+=`<div style="font-size:10px;color:var(--text3);margin:6px 0 12px">Calculados al instante con tus datos (gratis, sin IA).</div>`;
+  const c=gsIAGet();
+  h+=`<div style="border-top:1px solid var(--border);padding-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:12px">✨ Análisis con IA</strong>`;
+  h+=`<button class="btn btn-primary" style="font-size:11px;padding:5px 11px" ${gsIALoading?'disabled':''} onclick="gsGenerarIA()">${gsIALoading?'Analizando…':(c?'🔄 Regenerar':'Generar análisis')}</button></div>`;
+  if(gsIALoading) h+=`<div style="font-size:12px;color:var(--text2)">⏳ Gemini está revisando tus gastos de ${MONTHS[GS.m]}…</div>`;
+  else if(gsIAErr) h+=`<div style="font-size:12px;color:var(--amber);line-height:1.5">${escapeHtml(gsIAErr)}</div>`;
+  if(!gsIALoading&&c&&c.txt){
+    let t=String(c.txt); if(hiddenMode) t=t.replace(/\d[\d.,]*/g,'••');
+    t=escapeHtml(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
+    const fh=new Date(c.ts).toLocaleString('es-PE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    h+=`<div class="gs-ia-txt">${t}</div><div style="font-size:10px;color:var(--text3);margin-top:6px">Generado ${fh} · la IA puede equivocarse; los números de los insights de arriba los calcula la app.</div>`;
+  } else if(!gsIALoading&&!gsIAErr) h+=`<div style="font-size:11px;color:var(--text3);line-height:1.5">Pídele a Gemini un análisis de ${MONTHS[GS.m]}: patrones, qué te está encareciendo el mes y 3 sugerencias concretas. Se guarda para no gastar cuota de más.</div>`;
+  h+=`</div>`;
+  el.innerHTML=h;
+}
+
 // ── ACCIONES ──
 function gsAbrir(tipo,id,tid,mk){
   if(tipo==='cuenta'){ editMovimiento(id); }
