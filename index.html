@@ -3550,8 +3550,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 21:12'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Todos los insights (Gastos, Resumen, Presupuesto, Tarjetas, Deudas, Año completo y el análisis con IA) ahora se calculan por moneda: soles y dólares por separado, sin convertir ni usar tipo de cambio. Gastos: tendencia diaria separada por moneda.';
+const APP_VERSION_DATE = '05/10/26 - 21:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Todas las tarjetas de insights con IA (Gastos, Resumen, Presupuesto, Tarjetas, Deudas, Año completo) ahora se pueden contraer/expandir: arrancan contraídas y recuerdan lo último que elegiste. Insights y análisis por moneda, sin convertir.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5848,7 +5848,7 @@ function gsRenderLaterales(items){
     <div style="flex:1;min-width:140px">${sc.slice(0,8).map(([k,o])=>`<div class="gs-line" style="padding:2px 0"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${gsCatColor(k)};margin-right:6px"></span>${escapeHtml(k?k.replace(/^\S+\s/,''):'Sin categoría')}</span><b>${Math.round(o.v/tot*100)}%</b></div>`).join('')}</div></div>`:'<div class="empty">—</div>');
 }
 // ── INSIGHTS DE GASTOS (automáticos + análisis con IA bajo demanda) ──
-const GS_IA_KEY='gs_ia_v1';
+const GS_IA_KEY='miguel_gs_ia_v1';
 let gsIALoading=false, gsIAErr='';
 function gsIAGet(){ try{ return (JSON.parse(localStorage.getItem(GS_IA_KEY)||'{}'))[GS.y+'-'+GS.m]||null; }catch(e){ return null; } }
 function gsIASet(v){ try{ const r=JSON.parse(localStorage.getItem(GS_IA_KEY)||'{}'); r[GS.y+'-'+GS.m]=v; const ks=Object.keys(r); if(ks.length>12){ ks.sort((a,b)=>r[a].ts-r[b].ts); delete r[ks[0]]; } localStorage.setItem(GS_IA_KEY,JSON.stringify(r)); }catch(e){} }
@@ -5870,6 +5870,15 @@ function insRitmo(P,cu,y,m){
     return rest>=0?{ico:'✅',tono:'ok',cu,txt:`A tu ritmo cerrarías gastando ${b(f(Q.cierre))} de lo que has ingresado hasta hoy (${f(ing)}): te quedarían ${b(f(rest))}.`}
       :{ico:'⚠️',tono:'warn',cu,txt:`A tu ritmo cerrarías gastando ${b(f(Q.cierre))}, ${b(f(-rest))} más de lo que has ingresado hasta hoy (${f(ing)}).`}; }
   return {ico:'📈',tono:'neu',cu,txt:`Proyección de cierre: ${b(f(Q.cierre))} (incluye ${f(Q.knownTotal)} de pagos programados). Aún no registras ingresos en ${insNomCu(cu)} este mes.`};
+}
+// ── contraer / expandir las tarjetas de insights (por defecto contraídas; se recuerda lo último que elegiste) ──
+const insColMem={};
+function insColGet(k){ try{ const r=JSON.parse(localStorage.getItem('miguel_ins_col_v1')||'{}'); if(k in r) return !!r[k]; }catch(e){ if(k in insColMem) return !!insColMem[k]; } return true; }
+function insColToggle(k){ const nv=!insColGet(k); insColMem[k]=nv; try{ const r=JSON.parse(localStorage.getItem('miguel_ins_col_v1')||'{}'); r[k]=nv; localStorage.setItem('miguel_ins_col_v1',JSON.stringify(r)); }catch(e){} if(k==='gastos') gsRenderIA(); else insRender(k); }
+function insCab(k,tit,ins,tieneIA){
+  const col=insColGet(k), n=ins.length, aten=ins.filter(x=>x.tono==='warn'||x.tono==='bad').length;
+  const res=col?`${n} insight${n===1?'':'s'}${aten?` · <b style="color:var(--amber)">${aten} por atender</b>`:''}${tieneIA?' · ✨ análisis listo':''}`:'';
+  return `<div class="gs-cab" role="button" tabindex="0" aria-expanded="${!col}" title="${col?'Expandir':'Contraer'}" onclick="insColToggle('${k}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();insColToggle('${k}')}"><div class="section-title" style="margin-bottom:${col?'0':'10px'}"><span class="gs-chev${col?' c':''}">▾</span> ${tit}</div><div class="gs-res">${res}</div></div>`;
 }
 // renderiza una lista de insights agrupada por moneda
 function insListaHtml(ins){
@@ -5974,7 +5983,9 @@ function gsRenderIA(base){
   const el=document.getElementById('gs-ia'); if(!el) return;
   base=base||gsItems(GS.y,GS.m);
   const ins=gsInsights(base);
-  let h=`<div class="section-title" style="margin-bottom:10px">💡 Insights de tus gastos</div>`;
+  const cab=insCab('gastos','💡 Insights de tus gastos',ins,!!gsIAGet());
+  if(insColGet('gastos')){ el.innerHTML=cab; return; }
+  let h=cab;
   h+=insListaHtml(ins);
   h+=`<div style="font-size:10px;color:var(--text3);margin:6px 0 12px">Calculados al instante con tus datos (gratis, sin IA).</div>`;
   const c=gsIAGet();
@@ -24262,7 +24273,7 @@ async function procesarPreguntaChatIA(texto, rango, yaEnHistorial){
 //  · Parte IA: botón "Generar análisis" → misma Cloud Function (Gemini) del chat;
 //    se guarda por sección y periodo para no gastar cuota de más.
 // ══════════════════════════════════════════════════════
-const INS_KEY='ins_ia_v1';
+const INS_KEY='miguel_ins_ia_v1';
 const insLoading={}, insErr={};
 const insHoyISO=()=>{ const h=new Date(); return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); };
 const insPlano=h=>String(h).replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
@@ -24454,7 +24465,9 @@ async function insGenerarIA(k){
 function insRender(k){
   const el=document.getElementById('ins-'+k); if(!el) return; const S=INS[k];
   let ins=[]; try{ ins=S.local(); }catch(e){ console.error('insRender',k,e); }
-  let h=`<div class="section-title" style="margin-bottom:10px">${S.tit}</div>`;
+  const cab=insCab(k,S.tit,ins,!!insCacheGet(k));
+  if(insColGet(k)){ el.innerHTML=cab; return; }
+  let h=cab;
   h+=insListaHtml(ins)||'<div style="font-size:12px;color:var(--text3)">Sin datos suficientes todavía.</div>';
   h+=`<div style="font-size:10px;color:var(--text3);margin:6px 0 12px">Calculados al instante con tus datos (gratis, sin IA).</div>`;
   const c=insCacheGet(k);
