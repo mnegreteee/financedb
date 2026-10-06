@@ -995,7 +995,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
 /* ── GASTOS ── */
 .gs-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;margin-bottom:16px;align-items:start}
-.gs-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.gs-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px;align-items:stretch}
+.gs-kdet{border-top:1px solid var(--border);margin-top:8px;padding-top:6px}
+.gs-grid.st{align-items:stretch}
+.gs-trend{display:flex;flex-direction:column}
+.gs-chartwrap{position:relative;flex:1 1 auto;min-height:240px;margin-top:8px;touch-action:pan-y;cursor:crosshair}
+.gs-tip{position:absolute;pointer-events:none;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:11px;box-shadow:0 6px 20px rgba(0,0,0,.35);z-index:5;min-width:160px;max-width:260px;display:none}
+.gs-tip b{font-family:var(--mono)}
 .gs-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--card-shadow)}
 .gs-kpi-l{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
 .gs-kpi-v{font-family:var(--mono);font-size:22px;font-weight:700;margin-top:4px}
@@ -1029,8 +1035,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
 .gs-stats div{background:var(--bg3);border-radius:8px;padding:8px 10px;font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600}
 .gs-stats b{display:block;font-family:var(--mono);font-size:13px;color:var(--text);margin-top:2px;text-transform:none}
-@media(max-width:1000px){.gs-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:1000px){.gs-grid{grid-template-columns:minmax(0,1fr)}.gs-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.gs-chartwrap{min-height:260px}}
 @media(max-width:560px){.gs-kpi-v{font-size:17px}.gs-stats{grid-template-columns:1fr}.gs-row{gap:9px;padding:9px 8px}}
+.gs-chartwrap>svg{position:absolute;left:0;top:0}
 </style>
 </head>
 <body>
@@ -1689,11 +1696,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button class="btn btn-primary" style="font-size:11px;padding:5px 12px" onclick="gsNuevoCuenta()">+ Gasto de cuenta</button>
   </div>
 
-  <div class="gs-grid">
-    <div>
-      <div class="gs-kpis" id="gs-kpis"></div>
-      <div class="card" style="padding:16px" id="gs-trend"></div>
-    </div>
+  <div class="gs-kpis" id="gs-kpis"></div>
+  <div class="gs-grid st">
+    <div class="card gs-trend" style="padding:16px" id="gs-trend"></div>
     <div class="card" style="padding:16px" id="gs-disp"></div>
   </div>
 
@@ -3504,8 +3509,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 19:29'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva sección 💸 Gastos: todos tus gastos de cuentas y tarjetas (por fecha de consumo) con filtros, tendencia diaria con proyección de cierre de mes y disponible para gastar según el corte de cada tarjeta.';
+const APP_VERSION_DATE = '05/10/26 - 19:41'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: gráfico interactivo (montos al pasar el mouse o tocar), fechas con día y mes, montos por tarjeta y cuenta, y gráfico alineado con el panel de Disponible.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5541,48 +5546,105 @@ function gsRenderKpis(items){
   const dias=gsEsMesActual()?new Date().getDate():(new Date(GS.y,GS.m,1)>new Date()?0:D);
   const prom=dias>0?tot/dias:0;
   const pct=v=>tot>0?Math.round(v/tot*100):0;
+  const det=(arr,ic)=>{ const m=new Map(); arr.forEach(i=>m.set(i.origen,(m.get(i.origen)||0)+i.pen)); const l=[...m.entries()].sort((a,b)=>b[1]-a[1]);
+    return l.length?`<div class="gs-kdet">${l.map(([k,v])=>`<div class="gs-line" style="padding:2px 0;font-size:11px"><span>${ic} ${escapeHtml(k)}</span><b>${M(fmtS(v))}</b></div>`).join('')}</div>`:''; };
   el.innerHTML=`
     <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div><div class="gs-kpi-v" style="color:var(--red)">${M(fmtS(tot))}</div><div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}</div></div>
     <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div><div class="gs-kpi-v">${M(fmtS(prom))}</div><div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
-    <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div><div class="gs-kpi-v" style="color:var(--purple)">${M(fmtS(sT))}</div><div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div></div>
-    <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div><div class="gs-kpi-v" style="color:var(--teal)">${M(fmtS(sC))}</div><div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div></div>`;
+    <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div><div class="gs-kpi-v" style="color:var(--purple)">${M(fmtS(sT))}</div><div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div>${det(tar,'💳')}</div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div><div class="gs-kpi-v" style="color:var(--teal)">${M(fmtS(sC))}</div><div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div>${det(cue,'🏦')}</div>`;
 }
+
+const GS_MES=['ene','feb','mar','abr','may','jun','jul','ago','set','oct','nov','dic'];
 function gsRenderTrend(items){
   const el=document.getElementById('gs-trend'); if(!el) return;
   const P=gsProyeccion(items);
-  const W=560,H=190,pl=8,pr=8,pt=12,pb=22, iw=W-pl-pr, ih=H-pt-pb;
-  const maxY=Math.max(1,P.cum[P.D],P.proj?P.proj[P.D]:0)*1.08;
-  const X=k=>pl+(k-0.5)/P.D*iw, Y=v=>pt+ih-(v/maxY)*ih;
-  const maxDay=Math.max(1,...P.daily);
-  const bw=Math.max(2,iw/P.D*0.6);
-  let bars='',real='',proy='',lbl='';
-  for(let k=1;k<=P.D;k++){
-    const hb=P.daily[k]/maxDay*ih*0.45;
-    if(P.daily[k]>0) bars+=`<rect x="${(X(k)-bw/2).toFixed(1)}" y="${(pt+ih-hb).toFixed(1)}" width="${bw.toFixed(1)}" height="${hb.toFixed(1)}" rx="1.5" fill="var(--accent)" opacity=".28"><title>Día ${k}: ${M(fmtS(P.daily[k]))}</title></rect>`;
-    if(k<=P.d) real+=(real?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.cum[k]).toFixed(1);
-    if(P.proj&&k>=P.d&&P.proj[k]!==null) proy+=(proy?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.proj[k]).toFixed(1);
-    if(k===1||(k%5===0&&P.D-k>=3)||k===P.D) lbl+=`<text x="${X(k).toFixed(1)}" y="${H-6}" font-size="9" fill="var(--text3)" text-anchor="middle">${k}</text>`;
-  }
-  const hoyX=P.esActual?`<line x1="${X(P.d).toFixed(1)}" x2="${X(P.d).toFixed(1)}" y1="${pt}" y2="${pt+ih}" stroke="var(--text3)" stroke-dasharray="2 3" opacity=".6"/>`:'';
+  GS._ch={P};
   const f=v=>M(fmtS(v));
-  const nota=P.esActual?'':(new Date(GS.y,GS.m,1)>new Date()?'Mes futuro: aún sin datos.':'Mes cerrado: gasto real acumulado.');
+  const nota=(new Date(GS.y,GS.m,1)>new Date())?'Mes futuro: aún sin datos.':'Mes cerrado: gasto real acumulado.';
   el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-      <div><div class="section-title">📈 Tendencia diaria acumulada</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros)</div></div>
+      <div><div class="section-title">📈 Tendencia diaria acumulada</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Mes completo (no depende de los filtros) · pasa el mouse o toca el gráfico para ver los montos</div></div>
       <div style="font-size:10px;color:var(--text3)"><span style="color:var(--accent)">━</span> real &nbsp;<span style="color:var(--amber)">╍</span> proyección &nbsp;<span style="opacity:.6">▮</span> gasto del día</div></div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:8px;display:block">
-      <line x1="${pl}" x2="${W-pr}" y1="${pt+ih}" y2="${pt+ih}" stroke="var(--border2)"/>
-      ${bars}${hoyX}
-      ${proy?`<path d="${proy}" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4"/>`:''}
-      ${real?`<path d="${real}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:''}
-      ${P.esActual?`<circle cx="${X(P.d).toFixed(1)}" cy="${Y(P.actual).toFixed(1)}" r="4" fill="var(--accent)"/>`:''}
-      ${lbl}</svg>
+    <div class="gs-chartwrap" id="gs-chartwrap" onpointermove="gsHover(event)" onpointerdown="gsHover(event)" onpointerleave="gsHoverOff()"></div>
     ${P.esActual?`<div class="gs-stats">
       <div>Cierre proyectado<b style="color:var(--amber)">${f(P.cierre)}</b></div>
       <div>Ritmo diario<b>${f(P.pace)}</b></div>
       <div>Pagos conocidos por venir<b>${f(P.knownTotal)}</b></div></div>
       <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">Proyección = gasto actual (${f(P.actual)}) + ritmo diario × días restantes${P.mayor>0?' (sin contar el gasto único más grande, '+f(P.mayor)+')':''} + pagos frecuentes y cuotas de deudas que faltan este mes${P.conocidos.length?': '+P.conocidos.map(c=>escapeHtml(c.nombre)).join(', '):''}. Los estados de tarjeta no se suman porque ya están en tus consumos.</div>`
       :`<div style="font-size:11px;color:var(--text3);margin-top:8px">${nota}</div>`}`;
+  gsDibujarChart();
 }
+function gsDibujarChart(){
+  const c=GS._ch, wrap=document.getElementById('gs-chartwrap'); if(!c||!wrap) return;
+  const P=c.P, W=Math.max(260,wrap.clientWidth), H=Math.max(200,wrap.clientHeight);
+  const pl=10,pr=10,pt=18,pb=24, iw=W-pl-pr, ih=H-pt-pb;
+  const maxY=Math.max(1,P.cum[P.D],P.proj?P.proj[P.D]:0)*1.1;
+  const X=k=>pl+(k-0.5)/P.D*iw, Y=v=>pt+ih-(v/maxY)*ih;
+  c.geo={W,H,pl,pr,pt,pb,iw,ih,X,Y};
+  const maxDay=Math.max(1,...P.daily);
+  const bw=Math.max(2,iw/P.D*0.6);
+  const step=W<420?10:5, minGap=Math.ceil(step*0.6);
+  let bars='',real='',proy='',lbl='';
+  for(let k=1;k<=P.D;k++){
+    const hb=P.daily[k]/maxDay*ih*0.45;
+    if(P.daily[k]>0) bars+=`<rect x="${(X(k)-bw/2).toFixed(1)}" y="${(pt+ih-hb).toFixed(1)}" width="${bw.toFixed(1)}" height="${hb.toFixed(1)}" rx="1.5" fill="var(--accent)" opacity=".32"/>`;
+    if(k<=P.d) real+=(real?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.cum[k]).toFixed(1);
+    if(P.proj&&k>=P.d&&P.proj[k]!==null) proy+=(proy?' L ':'M ')+X(k).toFixed(1)+' '+Y(P.proj[k]).toFixed(1);
+    if(k===1||(k%step===0&&P.D-k>=minGap)||k===P.D){
+      const anc=k===1?'start':k===P.D?'end':'middle', tx=k===1?pl:k===P.D?W-pr:X(k);
+      lbl+=`<text x="${tx.toFixed(1)}" y="${H-7}" font-size="10" fill="var(--text3)" text-anchor="${anc}">${k}/${GS_MES[GS.m]}</text>`;
+    }
+  }
+  const hoyX=P.esActual?`<line x1="${X(P.d).toFixed(1)}" x2="${X(P.d).toFixed(1)}" y1="${pt}" y2="${pt+ih}" stroke="var(--text3)" stroke-dasharray="2 3" opacity=".6"/>`:'';
+  const tag=(x,y,txt,col,anc)=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="10" font-weight="700" fill="${col}" text-anchor="${anc}" style="paint-order:stroke;stroke:var(--bg2);stroke-width:3px">${txt}</text>`;
+  let tags='';
+  if(P.esActual){
+    tags+=tag(X(P.d)+(X(P.d)>W*0.75?-8:8),Math.max(pt+8,Y(P.actual)-9),M(fmtS(P.actual)),'var(--accent)',X(P.d)>W*0.75?'end':'start');
+    tags+=tag(W-pr,Math.max(pt+8,Y(P.cierre)-8),M(fmtS(P.cierre)),'var(--amber)','end');
+  } else if(P.actual>0) tags+=tag(W-pr,Math.max(pt+8,Y(P.actual)-8),M(fmtS(P.actual)),'var(--accent)','end');
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block">
+    <line x1="${pl}" x2="${W-pr}" y1="${pt+ih}" y2="${pt+ih}" stroke="var(--border2)"/>
+    ${bars}${hoyX}
+    ${proy?`<path d="${proy}" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="5 4"/>`:''}
+    ${real?`<path d="${real}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`:''}
+    ${P.esActual?`<circle cx="${X(P.d).toFixed(1)}" cy="${Y(P.actual).toFixed(1)}" r="4" fill="var(--accent)"/>`:''}
+    ${lbl}${tags}
+    <g id="gs-hov" style="display:none"><line id="gs-hl" y1="${pt}" y2="${pt+ih}" stroke="var(--text2)" stroke-width="1" opacity=".7"/><circle id="gs-hd" r="5" fill="var(--bg2)" stroke-width="2.5"/></g></svg>
+    <div class="gs-tip" id="gs-tip"></div>`;
+}
+function gsHoverOff(){ const g=document.getElementById('gs-hov'), t=document.getElementById('gs-tip'); if(g) g.style.display='none'; if(t) t.style.display='none'; }
+function gsHover(e){
+  const c=GS._ch, wrap=document.getElementById('gs-chartwrap'); if(!c||!c.geo||!wrap) return;
+  const P=c.P, g=c.geo, r=wrap.getBoundingClientRect(), x=e.clientX-r.left;
+  let k=Math.round((x-g.pl)/g.iw*P.D+0.5); k=Math.max(1,Math.min(P.D,k));
+  const futuro=P.esActual&&k>P.d;
+  const val=futuro?P.proj[k]:P.cum[k];
+  const cx=g.X(k), cy=g.Y(val);
+  const hov=document.getElementById('gs-hov'), hl=document.getElementById('gs-hl'), hd=document.getElementById('gs-hd'), tip=document.getElementById('gs-tip');
+  if(!hov||!tip) return;
+  hov.style.display=''; hl.setAttribute('x1',cx); hl.setAttribute('x2',cx); hd.setAttribute('cx',cx); hd.setAttribute('cy',cy);
+  hd.setAttribute('stroke',futuro?'var(--amber)':'var(--accent)');
+  const f=v=>M(fmtS(v));
+  const dow=new Date(GS.y,GS.m,k).toLocaleDateString('es-PE',{weekday:'short'}).replace('.','');
+  let h=`<div style="font-weight:700;margin-bottom:4px">${dow.charAt(0).toUpperCase()+dow.slice(1)} ${k}/${GS_MES[GS.m]}${futuro?' <span style="color:var(--amber);font-weight:600">· proyección</span>':''}</div>`;
+  if(!futuro){
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto del día</span><b>${f(P.daily[k])}</b></div><div class="gs-line" style="padding:1px 0"><span>Acumulado real</span><b style="color:var(--accent)">${f(P.cum[k])}</b></div>`;
+    if(P.esActual&&k===P.d&&P.conocidos.some(q=>q.dia<=P.d)){ h+=`<div style="font-size:10px;color:var(--text3);margin-top:3px">Pendientes de hoy/vencidos: ${P.conocidos.filter(q=>q.dia<=P.d).map(q=>escapeHtml(q.nombre)+' '+f(q.pen)).join(', ')}</div>`; }
+  } else {
+    const kn=P.conocidos.filter(q=>q.dia===k), kt=kn.reduce((s,q)=>s+q.pen,0);
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Gasto estimado del día</span><b>${f(P.pace+kt)}</b></div>`;
+    if(kn.length) h+=`<div style="font-size:10px;color:var(--text3);padding:1px 0">↳ ritmo ${f(P.pace)} + ${kn.map(q=>escapeHtml(q.nombre)+' '+f(q.pen)).join(', ')}</div>`;
+    h+=`<div class="gs-line" style="padding:1px 0"><span>Acumulado proyectado</span><b style="color:var(--amber)">${f(P.proj[k])}</b></div>`;
+  }
+  tip.innerHTML=h; tip.style.display='block';
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  let left=cx+14; if(left+tw>g.W-2) left=cx-tw-14; if(left<2) left=2;
+  let top=Math.max(2,Math.min(cy-th/2,g.H-th-2));
+  tip.style.left=left+'px'; tip.style.top=top+'px';
+}
+let _gsRz=null;
+window.addEventListener('resize',()=>{ clearTimeout(_gsRz); _gsRz=setTimeout(()=>{ if(isPageActive('gastos')) gsDibujarChart(); },120); });
+
 function gsRenderLista(items){
   const el=document.getElementById('gs-list'); if(!el) return;
   if(!items.length){ el.innerHTML='<div class="empty"><div class="empty-icon">💸</div>Sin gastos con estos filtros.</div>'; return; }
