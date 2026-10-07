@@ -3562,8 +3562,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '05/10/26 - 21:35'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos (celular): los filtros ahora van en una sola fila que se desliza hacia los lados, como la barra de pestañas. En PC se ven igual que antes.';
+const APP_VERSION_DATE = '06/10/26 - 21:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Aprobaciones: al eliminar o aprobar un pendiente en la app, el aviso con botones del bot de Telegram también se borra o se marca como registrado (requiere desplegar el bot).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -21605,7 +21605,7 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
   }
   logActividad('pendiente_banco_aprobado', `Aprobado desde correo del banco: ${desc} — ${currency==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`, {pendienteId:p.id});
   saveState();
-  DOC_REF.collection('pendientesBanco').doc(p.id).delete().catch(e=>console.warn('No se pudo borrar el pendiente aprobado:', e));
+  quitarPendientesBanco([p.id],'aprobado');
   toast('✅ Movimiento registrado');
   return true;
 }
@@ -21715,12 +21715,44 @@ function confirmarAprobarPendiente(){
     cerrarAprobarPendienteModal();
   }
 }
+// Avisa al bot de Telegram (ver avisarPendienteDesdeApp en index.js) para que
+// el aviso con botones de estos pendientes se borre (accion 'eliminado') o se
+// marque como registrado (accion 'aprobado') en el chat. Solo manda los que
+// tienen tgMessageId (avisos nuevos). Siempre resuelve — si falla o tarda
+// más de 6 s, igual se sigue con el borrado normal: nunca bloquea la app.
+const AVISO_PENDIENTE_URL = 'https://us-central1-financedb-3bcff.cloudfunctions.net/avisarPendienteDesdeApp';
+async function avisarBotPendientes(ids, accion){
+  try{
+    const set=new Set(ids||[]);
+    const conMsg=pendientesBanco.filter(p=>set.has(p.id) && p.tgMessageId).map(p=>p.id);
+    if(!conMsg.length) return;
+    const user=firebase.auth().currentUser; if(!user) return;
+    const idToken=await user.getIdToken();
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),6000);
+    try{
+      await fetch(AVISO_PENDIENTE_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},body:JSON.stringify({ids:conMsg,accion}),signal:ctrl.signal});
+    } finally { clearTimeout(t); }
+  }catch(e){ console.warn('No se pudo avisar al bot de Telegram:', e); }
+}
+// Quita pendientes: primero avisa al bot (para limpiar su chat) y luego borra
+// los documentos. Los saca de la lista local al instante para que no se
+// puedan tocar dos veces mientras tanto.
+function quitarPendientesBanco(ids, accion){
+  const lista=(ids||[]).slice();
+  const avisar=avisarBotPendientes(lista, accion);
+  const set=new Set(lista);
+  pendientesBanco=pendientesBanco.filter(x=>!set.has(x.id));
+  updateAprobacionesBadge();
+  const pageEl=document.getElementById('page-aprobaciones');
+  if(pageEl && pageEl.classList.contains('active')) renderAprobacionesBanco();
+  return avisar.then(()=>Promise.all(lista.map(id=>DOC_REF.collection('pendientesBanco').doc(id).delete().catch(e=>console.warn('No se pudo borrar el pendiente:', e))))).catch(e=>console.warn('No se pudieron borrar los pendientes:', e));
+}
 function eliminarPendiente(id){
   const p=pendientesBanco.find(x=>x.id===id);
   if(!p) return;
   const quien = p.descripcion || (p.noReconocido?('correo sin reconocer de '+(p.banco||'?')):'este movimiento');
   if(!confirm(`¿Eliminar "${quien}"? No se va a registrar ningún movimiento (útil si ya lo cargaste a mano, si no corresponde a un gasto real, o si el correo no trae nada usable).`)) return;
-  DOC_REF.collection('pendientesBanco').doc(id).delete().catch(e=>console.warn('No se pudo borrar el pendiente eliminado:', e));
+  quitarPendientesBanco([id],'eliminado');
 }
 // Borra TODOS los pendientes de una sola vez (útil tras un mal arranque del
 // Apps Script que procesó correos viejos de golpe) — nunca toca movimientos
@@ -21732,7 +21764,8 @@ function vaciarTodosPendientes(){
   if(!DOC_REF){ alert('No se pudo conectar con la base de datos — intenta de nuevo en un momento.'); return; }
   const coleccion = DOC_REF.collection('pendientesBanco');
   const ids = pendientesBanco.map(p=>p.id);
-  _commitEnChunks(ids, (batch, id)=>batch.delete(coleccion.doc(id)))
+  avisarBotPendientes(ids,'eliminado')
+  .then(()=>_commitEnChunks(ids, (batch, id)=>batch.delete(coleccion.doc(id))))
   .then(()=>toast(`✅ ${ids.length} pendiente(s) eliminado(s)`))
   .catch(e=>{ console.warn('Error al vaciar pendientes:', e); alert('Hubo un error al vaciar los pendientes — revisa la consola o intenta de nuevo.'); });
 }
