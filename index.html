@@ -3562,8 +3562,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '06/10/26 - 22:05'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos frecuentes: nuevo campo opcional "Texto del correo del banco" (ej. PLUZ ENERGIA) para que el bot registre solo los pagos de monto variable cuando llegue el correo (requiere desplegar el bot).';
+const APP_VERSION_DATE = '06/10/26 - 22:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pagos frecuentes: el "Texto del correo del banco" ahora también aplica a montos fijos (deben coincidir texto y monto); en variables basta el texto (requiere desplegar el bot).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -25094,7 +25094,7 @@ if(state.projGoals){
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
       <select id="pf-cat"></select>
     </div>
-    <div class="field"><label>Texto del correo del banco <span style="font-size:10px;color:var(--text3)">(opcional — para registrar solo el pago cuando llegue el correo. Ej. PLUZ ENERGIA; separa varias palabras con coma. Solo se usa en pagos de monto variable; los de monto fijo se reconocen por el monto)</span></label>
+    <div class="field"><label>Texto del correo del banco <span style="font-size:10px;color:var(--text3)">(opcional — para registrar solo el pago cuando llegue el correo. Ej. PLUZ ENERGIA; separa varias palabras con coma. Monto variable: basta con que el texto aparezca en la descripción del correo. Monto fijo: deben coincidir el texto Y el monto; si lo dejas vacío, se reconoce solo por el monto)</span></label>
       <input id="pf-texto-correo" type="text" placeholder="Ej. PLUZ ENERGIA, LUZ DEL SUR">
     </div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
