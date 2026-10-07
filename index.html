@@ -2505,7 +2505,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="section-header" style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:8px">
     <div class="section-title">🔔 Aprobaciones</div>
-    <button id="btn-vaciar-pendientes" class="config-action-btn danger" style="font-size:10px;display:none" onclick="vaciarTodosPendientes()">🗑 Vaciar todos</button>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirCorreosImportantesModal()">📬 Correos importantes</button>
+      <button id="btn-vaciar-pendientes" class="config-action-btn danger" style="font-size:10px;display:none" onclick="vaciarTodosPendientes()">🗑 Vaciar todos</button>
+    </div>
   </div>
 
   <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Consumos y transferencias detectados en tu correo del banco. Revisa cada uno antes de que se registre — puede que ya lo hayas cargado a mano.</div>
@@ -3562,8 +3565,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '06/10/26 - 22:20'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos frecuentes: el "Texto del correo del banco" ahora también aplica a montos fijos (deben coincidir texto y monto); en variables basta el texto (requiere desplegar el bot).';
+const APP_VERSION_DATE = '06/10/26 - 22:50'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Aprobaciones: nuevo botón "📬 Correos importantes" para editar desde la app la lista de correos que el bot te avisa por Telegram (ej. boleta de pago); el script de Gmail la lee solo (requiere desplegar el bot y pegar el script nuevo una vez).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4914,6 +4917,7 @@ function migrateState(){
   if(!state.customCuentas)    state.customCuentas={};
   if(!state.cuentaColors)     state.cuentaColors={};
   if(!Array.isArray(state.pagosFrecuentes)) state.pagosFrecuentes=[];
+  if(state.correosImportantes===undefined) state.correosImportantes=null; // null = nunca configurada (el script de Gmail usa su lista interna)
   if(!Array.isArray(state.metasAhorro)) state.metasAhorro=[];
   if(!state.customCategorias) state.customCategorias={};
   if(!state.servicios)        state.servicios={};
@@ -21718,6 +21722,71 @@ function confirmarAprobarPendiente(){
     cerrarAprobarPendienteModal();
   }
 }
+// ── 📬 Correos importantes (no bancarios, ej. boleta de pago) ──────────────
+// La lista vive en state.correosImportantes (se sincroniza como cualquier otra
+// sección, en users/{uid}/secciones/correosImportantes). El bot la entrega al
+// Apps Script de Gmail (CorreoBanco.gs) en cada revisión de 10 min, así que
+// editarla aquí NO requiere volver a pegar el script. null = nunca guardada
+// (el script usa su lista interna, que trae la boleta de pago).
+const CI_DEFAULT=[{id:'ci-boleta',nombre:'Boleta de pago',remitente:'boletasyangoperu@gmail.com',asuntoIncluye:'boleta',adjuntos:true,emoji:'🧾',activo:true}];
+let _ciEdit=[];
+function abrirCorreosImportantesModal(){
+  const base=Array.isArray(state.correosImportantes)?state.correosImportantes:CI_DEFAULT;
+  _ciEdit=base.map(x=>({...x}));
+  ciRender();
+  document.getElementById('ci-overlay').classList.add('open');
+}
+function cerrarCorreosImportantesModal(){ document.getElementById('ci-overlay').classList.remove('open'); }
+function ciLeerDOM(){
+  document.querySelectorAll('#ci-list [data-ci]').forEach(card=>{
+    const i=+card.dataset.ci; const it=_ciEdit[i]; if(!it) return;
+    it.nombre=card.querySelector('.ci-nombre').value;
+    it.remitente=card.querySelector('.ci-remitente').value;
+    it.asuntoIncluye=card.querySelector('.ci-asunto').value;
+    it.emoji=card.querySelector('.ci-emoji').value;
+    it.adjuntos=card.querySelector('.ci-adj').checked;
+    it.activo=card.querySelector('.ci-activo').checked;
+  });
+}
+function ciRender(){
+  const cont=document.getElementById('ci-list');
+  if(!_ciEdit.length){ cont.innerHTML='<div class="dash-empty" style="margin:0">No hay correos importantes. Agrega uno con el botón de abajo.</div>'; return; }
+  const inp='style="width:100%;font-size:12px;padding:7px 9px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text)"';
+  cont.innerHTML=_ciEdit.map((it,i)=>`
+    <div data-ci="${i}" style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input class="ci-emoji" ${inp.replace('width:100%','width:46px;text-align:center')} maxlength="4" value="${escapeHtml(it.emoji||'📌')}" title="Ícono del aviso">
+        <input class="ci-nombre" ${inp} placeholder="Nombre (ej. Boleta de pago)" maxlength="60" value="${escapeHtml(it.nombre||'')}">
+      </div>
+      <input class="ci-remitente" ${inp} placeholder="Correo del remitente (ej. rrhh@empresa.com)" maxlength="120" value="${escapeHtml(it.remitente||'')}" style="margin-bottom:8px;width:100%;font-size:12px;padding:7px 9px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text)">
+      <input class="ci-asunto" placeholder="Asunto contiene… (opcional; coma = varias)" maxlength="120" value="${escapeHtml(it.asuntoIncluye||'')}" style="margin:8px 0;width:100%;font-size:12px;padding:7px 9px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px"><input type="checkbox" class="ci-adj" style="width:auto;margin:0" ${it.adjuntos?'checked':''}> Reenviar archivos adjuntos</label>
+        <label style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px"><input type="checkbox" class="ci-activo" style="width:auto;margin:0" ${it.activo!==false?'checked':''}> Activo</label>
+        <button class="config-action-btn danger" style="font-size:10px" onclick="ciEliminar(${i})">🗑 Quitar</button>
+      </div>
+    </div>`).join('');
+}
+function ciAgregar(){ ciLeerDOM(); _ciEdit.push({id:'ci-'+Date.now(),nombre:'',remitente:'',asuntoIncluye:'',adjuntos:true,emoji:'📌',activo:true}); ciRender(); }
+function ciEliminar(i){ ciLeerDOM(); _ciEdit.splice(i,1); ciRender(); }
+function guardarCorreosImportantes(){
+  ciLeerDOM();
+  const limpio=[];
+  for(const it of _ciEdit){
+    const remitente=(it.remitente||'').trim().toLowerCase();
+    const nombre=(it.nombre||'').trim();
+    if(!remitente && !nombre) continue; // fila vacía: se ignora
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(remitente)){ alert('Revisa el correo del remitente de "'+(nombre||'sin nombre')+'": debe ser una dirección válida (ej. rrhh@empresa.com).'); return; }
+    if(!nombre){ alert('Ponle un nombre a '+remitente+' (es lo que verás en el aviso de Telegram).'); return; }
+    limpio.push({id:it.id||('ci-'+Date.now()+limpio.length), nombre:nombre.slice(0,60), remitente:remitente.slice(0,120), asuntoIncluye:(it.asuntoIncluye||'').trim().slice(0,120), adjuntos:!!it.adjuntos, emoji:((it.emoji||'').trim()||'📌').slice(0,8), activo:it.activo!==false});
+  }
+  const antes=state.correosImportantes;
+  state.correosImportantes=limpio;
+  logActividad('correos_importantes_editado', `Correos importantes actualizados (${limpio.length} regla${limpio.length===1?'':'s'})`, {snapshotAntes:antes===undefined?null:antes});
+  saveState();
+  cerrarCorreosImportantesModal();
+  toast('✅ Guardado — el script lo toma en su próxima revisión (máx. 10 min)');
+}
 // Avisa al bot de Telegram (ver avisarPendienteDesdeApp en index.js) para que
 // el aviso con botones de estos pendientes se borre (accion 'eliminado') o se
 // marque como registrado (accion 'aprobado') en el chat. Solo manda los que
@@ -25108,6 +25177,18 @@ if(state.projGoals){
 </div>
 
 <!-- MODAL REGISTRAR MONTO VARIABLE -->
+<div class="modal-overlay" id="ci-overlay" onclick="if(event.target===this)cerrarCorreosImportantesModal()">
+  <div class="modal" style="width:560px;max-width:96vw;max-height:90vh;overflow:auto">
+    <div class="modal-title"><span>📬 Correos importantes</span><button class="modal-close" onclick="cerrarCorreosImportantesModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">Correos que NO son del banco (ej. tu boleta de pago). Cuando llegue uno que coincida, el bot te avisa por Telegram y, si lo activas, te reenvía los archivos adjuntos. El script de Gmail lee esta lista solo, en su revisión de cada 10 minutos — no hace falta tocar el script. Los cambios se aplican en la siguiente revisión.</div>
+    <div id="ci-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
+    <button class="config-action-btn neutral" style="font-size:11px" onclick="ciAgregar()">+ Agregar correo</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="cerrarCorreosImportantesModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCorreosImportantes()">Guardar</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="pf-registrar-overlay" onclick="if(event.target===this)confirmAndClose(this,'closePFRegistrar')">
   <div class="modal modal-sm" style="width:380px">
     <div class="modal-title"><span id="pf-registrar-title">Registrar pago</span><button class="modal-close" onclick="closePFRegistrar()">✕</button></div>
