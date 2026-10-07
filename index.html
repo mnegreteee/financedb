@@ -3562,8 +3562,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '06/10/26 - 21:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Aprobaciones: al eliminar o aprobar un pendiente en la app, el aviso con botones del bot de Telegram también se borra o se marca como registrado (requiere desplegar el bot).';
+const APP_VERSION_DATE = '06/10/26 - 22:05'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pagos frecuentes: nuevo campo opcional "Texto del correo del banco" (ej. PLUZ ENERGIA) para que el bot registre solo los pagos de monto variable cuando llegue el correo (requiere desplegar el bot).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16659,6 +16659,7 @@ function openPagoFrecuenteModal(id){
     if(pf.metodoPago==='cuenta') document.getElementById('pf-cuenta').value=pf.destino;
     else document.getElementById('pf-tarjeta').value=pf.destino;
     document.getElementById('pf-cat').value=pf.categoria||'';
+    document.getElementById('pf-texto-correo').value=pf.textoCorreo||'';
     document.getElementById('pf-dia-pago').value=(pf.diaPago&&pf.diaPago!=='ultimo')?pf.diaPago:'';
     document.getElementById('pf-dia-pago-ultimo').checked=(pf.diaPago==='ultimo');
     togglePfDiaPagoUltimo();
@@ -16680,6 +16681,7 @@ function openPagoFrecuenteModal(id){
     document.getElementById('pf-currency').value='PEN';
     document.getElementById('pf-metodo').value='cuenta';
     document.getElementById('pf-cat').value='';
+    document.getElementById('pf-texto-correo').value='';
     document.getElementById('pf-dia-pago').value='';
     document.getElementById('pf-dia-pago-ultimo').checked=false;
     togglePfDiaPagoUltimo();
@@ -16795,6 +16797,7 @@ function savePagoFrecuente(){
   const metodoPago=tipo==='ingreso'?'cuenta':document.getElementById('pf-metodo').value;
   const destino=metodoPago==='cuenta'?document.getElementById('pf-cuenta').value:document.getElementById('pf-tarjeta').value;
   const categoria=document.getElementById('pf-cat').value||'';
+  const textoCorreo=(document.getElementById('pf-texto-correo').value||'').trim().slice(0,120);
   const diaPagoRaw=document.getElementById('pf-dia-pago').value;
   const diaPago=document.getElementById('pf-dia-pago-ultimo').checked ? 'ultimo' : (diaPagoRaw ? Math.max(1,Math.min(31,parseInt(diaPagoRaw,10))) : null);
   if(!nombre){alert('Ingresa un nombre.');return;}
@@ -16809,11 +16812,11 @@ function savePagoFrecuente(){
     const pf=state.pagosFrecuentes.find(p=>p.id===editingPFId);
     if(pf){
       const antes={...pf};
-      Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,duracionMeses,fechaAnual,meses,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago});
+      Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,duracionMeses,fechaAnual,meses,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago,textoCorreo});
       logActividad('pago_frecuente_editado', `Pago frecuente editado: ${nombre}`, {pfId:pf.id, snapshotAntes:antes});
     }
   } else {
-    const nuevoPF={id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, duracionMeses, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, pagosRegistrados:{}, descuentosPendientes:[]};
+    const nuevoPF={id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, duracionMeses, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, textoCorreo, pagosRegistrados:{}, descuentosPendientes:[]};
     state.pagosFrecuentes.push(nuevoPF);
     logActividad('pago_frecuente_nuevo', `Pago frecuente nuevo: ${nombre}`, {pfId:nuevoPF.id});
   }
@@ -25090,6 +25093,9 @@ if(state.projGoals){
     </div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span></label>
       <select id="pf-cat"></select>
+    </div>
+    <div class="field"><label>Texto del correo del banco <span style="font-size:10px;color:var(--text3)">(opcional — para registrar solo el pago cuando llegue el correo. Ej. PLUZ ENERGIA; separa varias palabras con coma. Solo se usa en pagos de monto variable; los de monto fijo se reconocen por el monto)</span></label>
+      <input id="pf-texto-correo" type="text" placeholder="Ej. PLUZ ENERGIA, LUZ DEL SUR">
     </div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
       <button class="config-action-btn danger" id="pf-delete-btn" style="display:none" onclick="deletePagoFrecuente()">🗑 Eliminar</button>
