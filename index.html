@@ -1088,6 +1088,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-chev.c{transform:rotate(-90deg)}
 .gs-res{font-size:11px;color:var(--text3)}
 .gs-res b{font-family:var(--mono);font-size:13px}
+
+#update-banner{position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:9990;max-width:min(94vw,460px);width:max-content;background:var(--bg2);color:var(--text);border:1px solid var(--accent);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35);padding:12px 14px;display:none;align-items:center;gap:12px;font-size:13px;}
+#update-banner.show{display:flex;}
+#update-banner b{display:block;font-size:13px;}
+#update-banner small{color:var(--text3);font-size:11px;}
+#update-banner .ub-btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+#update-banner .ub-x{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px 4px;}
+.cl-ver{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--bg3);}
+.cl-ver-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;}
+.cl-ver-h b{font-size:14px;}
+.cl-ver-h span{font-size:11px;color:var(--text3);}
+.cl-ver ul{margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.5;}
+.cl-actual{border-color:var(--accent);}
 </style>
 </head>
 <body>
@@ -1351,6 +1364,18 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
         <!-- SECCIÓN: Actividad Reciente -->
         <div class="config-section">
+          <div class="config-section-title">Versión y novedades</div>
+          <div class="config-row">
+            <div class="config-row-label">Historial de cambios<small id="cfg-version-info"></small></div>
+            <button class="config-action-btn neutral" onclick="abrirChangelog();closeConfig()">📋 Ver cambios</button>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">Buscar actualización<small>Revisa si hay una versión nueva publicada</small></div>
+            <button class="config-action-btn neutral" onclick="buscarActualizacion(true)">🔄 Buscar</button>
+          </div>
+        </div>
+
+        <div class="config-section">
           <div class="config-section-title">Actividad Reciente</div>
           <div class="config-row">
             <div class="config-row-label">Ver y deshacer últimas acciones<small>Movimientos, consumos, transferencias, deudas...</small></div>
@@ -1412,6 +1437,18 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
 <!-- MODAL: REPARAR CONSUMOS CON FECHA DAÑADA -->
 <!-- MODAL: ACTIVIDAD RECIENTE -->
+<div class="modal-overlay" id="changelog-overlay" onclick="if(event.target===this)cerrarChangelog()">
+  <div class="modal" style="width:480px;max-height:82vh;overflow-y:auto">
+    <div class="modal-title"><span>📋 Historial de cambios</span><button class="modal-close" onclick="cerrarChangelog()">✕</button></div>
+    <div id="changelog-lista"></div>
+  </div>
+</div>
+<div id="update-banner" role="status">
+  <div style="flex:1"><b>🆕 Hay una nueva versión</b><small id="update-banner-sub">Actualiza para tener las últimas mejoras.</small></div>
+  <button class="ub-btn" onclick="location.reload()">Actualizar</button>
+  <button class="ub-x" onclick="cerrarAvisoActualizacion()" title="Más tarde">✕</button>
+</div>
+
 <div class="modal-overlay" id="actividad-overlay" onclick="if(event.target===this)cerrarActividadReciente()">
   <div class="modal" style="width:460px;max-height:80vh;overflow-y:auto">
     <div class="modal-title"><span>🕓 Actividad Reciente</span><button class="modal-close" onclick="cerrarActividadReciente()">✕</button></div>
@@ -3582,9 +3619,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '08/10/26 - 13:53'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Disponible separado por moneda: las cuentas operativas en dólares ya no se mezclan con las de soles (se muestra S/ + $). Pago parcial de tarjeta por consumos seleccionados y proyección de presupuesto con cuotas futuras. Revisión general de cálculos.';
+const APP_VERSION = 'v1.54.0';
+const APP_VERSION_DATE = '08/10/26 - 14:08'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo historial de cambios en Configuración y aviso flotante cuando hay una versión nueva. Disponible por moneda (S/ + $), pago parcial de tarjeta por consumos seleccionados y proyección de presupuesto con cuotas futuras. Revisión general de cálculos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -23437,6 +23474,80 @@ function seedDemo(){
       }
     }
   } catch(e){}
+})();
+
+// ── HISTORIAL DE CAMBIOS + AVISO DE NUEVA VERSIÓN ─────────────
+// Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
+// y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
+const APP_CHANGELOG = [
+ {
+  "v": "v1.54.0",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Nuevo: historial de cambios por versión en Configuración y aviso flotante cuando se publica una versión nueva.",
+   "Disponible separado por moneda: las cuentas operativas en dólares ya no se mezclan con las de soles (se muestra S/ + $).",
+   "Pago parcial de tarjeta: el monto debe coincidir con los consumos seleccionados y solo esos se marcan como pagados.",
+   "Presupuesto: la proyección al cierre suma completas las cuotas y consumos futuros del mes.",
+   "Saldos históricos, comparativos y gráfico de patrimonio calculados correctamente (incluido el tipo de cambio y la opción de inversiones).",
+   "Los retiros de ahorro ahora se muestran con signo negativo en Movimientos, totales y resúmenes.",
+   "Proyección de gastos del mes y promedio diario corregidos; proyección de ahorro con los últimos 12 meses y meta alcanzada.",
+   "Tarjetas: sin doble pago, cuotas en el mes de facturación correcto, importación de Excel sin duplicados ni montos mal leídos, línea usada y salud financiera por moneda, avisos de cierre/pago al cambiar de mes.",
+   "Préstamos: los pagos o cobros parciales dejan la deuda pendiente por el saldo; los totales no mezclan lo que tú debes.",
+   "Inversiones y Renta 5ta: costo promedio por fecha de venta y retención correcta de enero a marzo.",
+   "Cambio de dólares: utilidad correcta en ventas parciales. Combustible: km/galón con cargas comparables.",
+   "Limpieza de código sin uso."
+  ]
+ },
+ {
+  "v": "v1.53.0",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Bloqueo con Face ID / huella (Configuración → Seguridad): al bloquearse por inactividad ya no cierra la sesión, solo pide Face ID.",
+   "Inicio de sesión compatible con el autocompletado de iCloud Keychain."
+  ]
+ }
+];
+function abrirChangelog(){
+  const el=document.getElementById('changelog-lista'); if(!el) return;
+  el.innerHTML=APP_CHANGELOG.map((v,i)=>`<div class="cl-ver${i===0?' cl-actual':''}"><div class="cl-ver-h"><b>${escapeHtml(v.v)}${i===0?' · actual':''}</b><span>${escapeHtml(v.fecha)}</span></div><ul>${v.cambios.map(c=>`<li>${escapeHtml(c)}</li>`).join('')}</ul></div>`).join('')
+    +'<div style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px">Las versiones anteriores no tienen detalle registrado.</div>';
+  document.getElementById('changelog-overlay').classList.add('open');
+}
+function cerrarChangelog(){ const e=document.getElementById('changelog-overlay'); if(e) e.classList.remove('open'); }
+function _verAFecha(s){ // 'dd/mm/yy - hh:mm' -> número comparable
+  const m=String(s||'').match(/(\d{2})\/(\d{2})\/(\d{2})\s*-\s*(\d{2}):(\d{2})/);
+  return m?Number(m[3]+m[2]+m[1]+m[4]+m[5]):0;
+}
+let _avisoActDescartado=null, _ultimaBusquedaAct=0;
+function cerrarAvisoActualizacion(){ const b=document.getElementById('update-banner'); if(b){ b.classList.remove('show'); } }
+async function buscarActualizacion(manual){
+  try{
+    if(!/^https?:$/.test(location.protocol)) { if(manual) toast('Solo disponible en la app publicada','info'); return; }
+    if(!manual && Date.now()-_ultimaBusquedaAct<60000) return;
+    _ultimaBusquedaAct=Date.now();
+    const url=location.origin+location.pathname+'?_v='+Date.now();
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const t=await r.text();
+    const m=t.match(/const APP_VERSION_DATE = '([^']+)'/);
+    if(!m) throw new Error('sin versión');
+    const remoto=m[1];
+    if(_verAFecha(remoto)>_verAFecha(APP_VERSION_DATE)){
+      if(!manual && _avisoActDescartado===remoto) return;
+      _avisoActDescartado=remoto;
+      const n=t.match(/const APP_VERSION = '([^']+)'/);
+      const sub=document.getElementById('update-banner-sub');
+      if(sub) sub.textContent=(n?n[1]+' · ':'')+remoto+' — actualiza para tener las últimas mejoras.';
+      const b=document.getElementById('update-banner'); if(b) b.classList.add('show');
+    } else if(manual){ toast('Ya tienes la última versión ('+APP_VERSION+')','info'); }
+  }catch(e){ if(manual) toast('No se pudo buscar actualizaciones','err'); }
+}
+(function(){
+  const i=document.getElementById('cfg-version-info');
+  if(i) i.textContent=APP_VERSION+' · '+APP_VERSION_DATE;
+  setTimeout(()=>buscarActualizacion(false),20000);
+  setInterval(()=>buscarActualizacion(false),5*60*1000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) buscarActualizacion(false); });
 })();
 
 // ── INIT ─────────────────────────────────────────────
