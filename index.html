@@ -3640,9 +3640,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.54.1';
-const APP_VERSION_DATE = '08/10/26 - 14:41'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Configuración ordenada por temas (Apariencia, Avisos, Finanzas, Datos, Seguridad, Actividad y Zona de peligro) que se pueden contraer y expandir.';
+const APP_VERSION = 'v1.54.2';
+const APP_VERSION_DATE = '08/10/26 - 14:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos → Detalle por tarjeta: "A pagar [mes]" ahora coincide con la sección Tarjetas; las cuotas de meses posteriores se muestran aparte.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5554,6 +5554,7 @@ function gsFiltrar(items){
 function gsDisponible(){
   const hoy=new Date(), rate=gsRate();
   const thisMk=tcMonthKey(hoy.getFullYear(),hoy.getMonth());
+  const _sm=getSiguienteMesCalendario(), nextMk=tcMonthKey(_sm.pagoAnio,_sm.pagoMes);
   const saldos=reconstructSaldoAt(hoy.getFullYear(),hoy.getMonth());
   const cuentas=getCuentasOperativasUnicas().map(k=>{
     const cur=((state.customCuentas||{})[k]||{}).currency==='USD'?'USD':'PEN';
@@ -5563,19 +5564,20 @@ function gsDisponible(){
   const aPagar={pen:0,usd:0}, lineas={pen:0,usd:0};
   const tarjetas=(state.tarjetas||[]).map(t=>{
     const cur=t.currency==='USD'?'USD':'PEN', linea=parseFloat(t.linea)||0;
-    const cerrado={pen:0,usd:0}, enCurso={pen:0,usd:0};
+    const cerrado={pen:0,usd:0}, enCurso={pen:0,usd:0}, proximo={pen:0,usd:0}, futuro={pen:0,usd:0};
     let deudaCur=0;
     Object.entries(t.movs||{}).forEach(([mk,arr])=>(arr||[]).forEach(mv=>{
       if(mv.pagado) return;
       const mc=(mv.currency||cur)==='USD'?'USD':'PEN';
       const dest=(mk<=thisMk)?cerrado:enCurso;   // mk<=este mes: el estado ya cerró y se paga este mes (o está vencido)
       if(mc==='USD') dest.usd+=mv.monto; else dest.pen+=mv.monto;
+      if(dest===enCurso){ const d2=(mk===nextMk)?proximo:futuro; if(mc==='USD') d2.usd+=mv.monto; else d2.pen+=mv.monto; } // próximo mes vs cuotas de meses posteriores
       deudaCur+=(mc===cur)?mv.monto:(cur==='USD'?mv.monto/rate:mv.monto*rate); // deuda expresada en la moneda de la línea
     }));
     const libre=linea>0?Math.max(0,linea-deudaCur):0;
     aPagar.pen+=cerrado.pen; aPagar.usd+=cerrado.usd;
     if(cur==='USD') lineas.usd+=libre; else lineas.pen+=libre;
-    return {t,cur,linea,cerrado,enCurso,libre,usadoPct:linea>0?Math.min(100,deudaCur/linea*100):0};
+    return {t,cur,linea,cerrado,enCurso,proximo,futuro,libre,usadoPct:linea>0?Math.min(100,deudaCur/linea*100):0};
   });
   const libreCuentas={pen:enCuentas.pen-aPagar.pen,usd:enCuentas.usd-aPagar.usd};
   const total={pen:libreCuentas.pen+lineas.pen,usd:libreCuentas.usd+lineas.usd};
@@ -5754,7 +5756,8 @@ function gsRenderDisp(){
       ${x.linea>0?`<div class="gs-bar"><div style="width:${x.usadoPct}%;background:${barCol}"></div></div>
       <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea ${M(sym+' '+x.linea.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}))} · ${x.usadoPct.toFixed(0)}% usado</div>`:`<div style="font-size:10px;color:var(--amber);margin-top:3px">Sin línea de crédito configurada (edítala en Tarjetas)</div>`}
       <div class="gs-line" style="margin-top:4px"><span>Corte cerrado (se paga día ${x.t.pago||'—'})</span><b>${M(gsMix(x.cerrado.pen,x.cerrado.usd))}</b></div>
-      <div class="gs-line"><span>Ciclo en curso (próximo mes)</span><b>${M(gsMix(x.enCurso.pen,x.enCurso.usd))}</b></div></div>`;
+      <div class="gs-line"><span>A pagar ${tcMesesLong()[getSiguienteMesCalendario().pagoMes]} (ciclo en curso)</span><b>${M(gsMix(x.proximo.pen,x.proximo.usd))}</b></div>
+      ${(Math.abs(x.futuro.pen)+Math.abs(x.futuro.usd))>0.004?`<div class="gs-line"><span>Cuotas de meses siguientes</span><b>${M(gsMix(x.futuro.pen,x.futuro.usd))}</b></div>`:''}</div>`;
   });
   h+=`</div><div style="font-size:10px;color:var(--text3);margin-top:10px">Cuentas de ahorro no incluidas. Soles y dólares se muestran por separado, sin convertir.</div>`;
   el.innerHTML=h;
@@ -23501,6 +23504,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.54.2",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Gastos → Detalle por tarjeta: el monto \"A pagar [mes]\" ahora coincide con el de la sección Tarjetas de crédito; las cuotas de meses posteriores se muestran en una línea aparte."
+  ]
+ },
  {
   "v": "v1.54.1",
   "fecha": "08/10/26",
