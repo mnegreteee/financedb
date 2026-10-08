@@ -1101,6 +1101,27 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .cl-ver-h span{font-size:11px;color:var(--text3);}
 .cl-ver ul{margin:0;padding-left:18px;font-size:12px;color:var(--text2);line-height:1.5;}
 .cl-actual{border-color:var(--accent);}
+
+.cfg-bar{display:flex;gap:8px;padding:12px 12px 4px;}
+.cfg-bar button{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);}
+.cfg-bar button:hover{border-color:var(--accent);}
+.cfg-group{margin:8px 12px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg);}
+.cfg-group.open{border-color:var(--accent);}
+.cfg-group-h{display:flex;align-items:center;gap:10px;padding:12px 13px;cursor:pointer;user-select:none;}
+.cfg-group.open .cfg-group-h{background:var(--bg3);}
+.cfg-group-i{font-size:18px;width:26px;text-align:center;flex-shrink:0;}
+.cfg-group-t{flex:1;min-width:0;}
+.cfg-group-t b{display:block;font-size:13px;color:var(--text);}
+.cfg-group-t small{display:block;font-size:11px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cfg-group-c{color:var(--text3);font-size:11px;transition:transform .2s;}
+.cfg-group.open .cfg-group-c{transform:rotate(90deg);color:var(--accent);}
+.cfg-group-b{display:none;padding:2px 13px 8px;}
+.cfg-group.open .cfg-group-b{display:block;}
+.cfg-group-b .config-row{padding-left:0;padding-right:0;}
+.cfg-sub{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding:12px 0 2px;border-top:1px solid var(--border);}
+.cfg-group-b .cfg-sub:first-child{border-top:none;}
+.cfg-group.cfg-danger .cfg-group-t b{color:var(--red);}
+.cfg-group.cfg-danger{border-color:rgba(248,113,113,.35);}
 </style>
 </head>
 <body>
@@ -3619,9 +3640,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.54.0';
-const APP_VERSION_DATE = '08/10/26 - 14:08'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo historial de cambios en Configuración y aviso flotante cuando hay una versión nueva. Disponible por moneda (S/ + $), pago parcial de tarjeta por consumos seleccionados y proyección de presupuesto con cuotas futuras. Revisión general de cálculos.';
+const APP_VERSION = 'v1.54.1';
+const APP_VERSION_DATE = '08/10/26 - 14:41'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Configuración ordenada por temas (Apariencia, Avisos, Finanzas, Datos, Seguridad, Actividad y Zona de peligro) que se pueden contraer y expandir.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -23481,6 +23502,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.54.1",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Configuración ordenada por temas (Apariencia, Avisos y reportes, Finanzas, Datos, Seguridad y accesos, Actividad y versión, Zona de peligro), todos contraídos al abrir, con botones Expandir todo / Contraer todo."
+  ]
+ },
+ {
   "v": "v1.54.0",
   "fecha": "08/10/26",
   "cambios": [
@@ -23549,6 +23577,83 @@ async function buscarActualizacion(manual){
   setInterval(()=>buscarActualizacion(false),5*60*1000);
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) buscarActualizacion(false); });
 })();
+
+// ── CONFIGURACIÓN AGRUPADA EN TEMAS (contraíbles) ─────────────
+const CFG_GRUPOS=[
+  {id:'apariencia',i:'🎨',t:'Apariencia',secs:['Apariencia']},
+  {id:'avisos',i:'🔔',t:'Avisos y reportes',secs:[]},
+  {id:'finanzas',i:'💳',t:'Finanzas',secs:['Tipo de Cambio','Tarjetas de Crédito','Cuentas','Categorías']},
+  {id:'datos',i:'💾',t:'Datos',secs:['Datos — Exportar / Importar']},
+  {id:'seguridad',i:'🔒',t:'Seguridad y accesos',secs:['Usuarios','Seguridad']},
+  {id:'actividad',i:'🕓',t:'Actividad y versión',secs:['Actividad Reciente','Versión y novedades']},
+  {id:'peligro',i:'⚠️',t:'Zona de peligro',secs:['Data — Eliminar'],danger:true}
+];
+const CFG_FILAS_AVISOS=['Notificaciones del navegador','Reportes en PDF','País en movimientos'];
+function cfgToggleGrupo(id,forzar){
+  const g=document.getElementById('cfg-g-'+id); if(!g) return;
+  g.classList.toggle('open', forzar===undefined ? !g.classList.contains('open') : forzar);
+}
+function cfgTodos(abrir){ CFG_GRUPOS.forEach(g=>cfgToggleGrupo(g.id,abrir)); }
+function cfgResumenes(){
+  const set=(id,t)=>{ const e=document.getElementById('cfg-s-'+id); if(e) e.textContent=t; };
+  try{
+    const oscuro=(document.documentElement.getAttribute('data-theme')||'dark')==='dark';
+    set('apariencia','Tema '+(oscuro?'oscuro':'claro')+' · acento, fondo, cifras, relojes');
+    set('avisos','Notificaciones · reportes PDF · país');
+    const tc=(typeof state!=='undefined'&&state.tc)?state.tc:null;
+    set('finanzas',(tc?('TC '+Number(tc.compra).toFixed(3)+' / '+Number(tc.venta).toFixed(3)+' · '):'')+'tarjetas · cuentas · categorías');
+    set('datos','Exportar e importar · histórico Excel');
+    set('seguridad','Bloqueo '+(typeof inactivityMinutes!=='undefined'?inactivityMinutes+' min':'')+' · Face ID '+((typeof faceIdActivo==='function'&&faceIdActivo())?'activo':'apagado')+' · usuarios · accesos');
+    set('actividad',(typeof APP_VERSION!=='undefined'?APP_VERSION+' · ':'')+'actividad reciente · cambios');
+    set('peligro','Borrar meses o todos los datos');
+  }catch(e){}
+}
+function cfgAgrupar(){
+  const dd=document.getElementById('config-dropdown');
+  if(!dd||dd.dataset.agrupado) return;
+  const secs=[...dd.querySelectorAll(':scope > .config-section')];
+  const porTitulo=new Map();
+  secs.forEach(s=>{ const t=s.querySelector('.config-section-title'); porTitulo.set(s,(t?t.textContent:'').trim()); });
+  const bar=document.createElement('div'); bar.className='cfg-bar';
+  bar.innerHTML='<button onclick="cfgTodos(true)">⊞ Expandir todo</button><button onclick="cfgTodos(false)">⊟ Contraer todo</button>';
+  const frag=document.createDocumentFragment(); frag.appendChild(bar);
+  const cuerpos={};
+  CFG_GRUPOS.forEach(g=>{
+    const el=document.createElement('div'); el.className='cfg-group'+(g.danger?' cfg-danger':''); el.id='cfg-g-'+g.id;
+    el.innerHTML='<div class="cfg-group-h" onclick="cfgToggleGrupo(\''+g.id+'\')"><div class="cfg-group-i">'+g.i+'</div><div class="cfg-group-t"><b>'+g.t+'</b><small id="cfg-s-'+g.id+'"></small></div><div class="cfg-group-c">▶</div></div><div class="cfg-group-b" id="cfg-b-'+g.id+'"></div>';
+    cuerpos[g.id]=el.querySelector('.cfg-group-b'); frag.appendChild(el);
+  });
+  const mover=(s,g,conSub)=>{
+    const body=cuerpos[g.id];
+    const kids=[...s.children];
+    kids.forEach(k=>{
+      if(k.classList.contains('config-section-title')){
+        if(conSub){ const sub=document.createElement('div'); sub.className='cfg-sub'; sub.textContent=k.textContent; body.appendChild(sub); }
+        return;
+      }
+      body.appendChild(k);
+    });
+  };
+  secs.forEach(s=>{
+    const t=porTitulo.get(s);
+    const g=CFG_GRUPOS.find(x=>x.secs.includes(t));
+    if(!g) return;
+    mover(s,g, g.secs.length>1);
+  });
+  // Filas de avisos/reportes salen de Apariencia
+  const bAp=cuerpos['apariencia'], bAv=cuerpos['avisos'];
+  [...bAp.querySelectorAll(':scope > .config-row')].forEach(r=>{
+    const lab=(r.querySelector('.config-row-label')||{}).textContent||'';
+    if(CFG_FILAS_AVISOS.some(x=>lab.trim().startsWith(x))) bAv.appendChild(r);
+    else if(lab.trim().startsWith('Ícono del chat IA')){ const sub=document.createElement('div'); sub.className='cfg-sub'; sub.textContent='Asistente IA'; bAp.insertBefore(sub,r); }
+  });
+  secs.forEach(s=>s.remove());
+  dd.appendChild(frag);
+  dd.dataset.agrupado='1';
+  cfgResumenes();
+}
+cfgAgrupar();
+(function(){ const _tc=toggleConfig; toggleConfig=function(e){ const r=_tc.apply(this,arguments); cfgResumenes(); return r; }; })();
 
 // ── INIT ─────────────────────────────────────────────
 loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();renderRelojesMundiales();
