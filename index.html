@@ -3583,8 +3583,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
 const APP_VERSION = 'v1.53.0';
-const APP_VERSION_DATE = '08/10/26 - 09:05'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Seguridad: nuevo bloqueo con Face ID/huella (Configuración → Seguridad). Al bloquearse por inactividad ya no cierra tu sesión: solo pide Face ID. Login con autocompletado de iCloud Keychain.';
+const APP_VERSION_DATE = '08/10/26 - 13:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Disponible separado por moneda: las cuentas operativas en dólares ya no se mezclan con las de soles (se muestra S/ + $). Pago parcial de tarjeta por consumos seleccionados y proyección de presupuesto con cuotas futuras. Revisión general de cálculos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5567,7 +5567,7 @@ function gsProyeccion(items){
     conocidos=gsPagosConocidos(GS.y,GS.m,d);
     proj=Array(D+1).fill(null);
     for(let k=d;k<=D;k++){
-      proj[k]=actual+pace*(k-d)+conocidos.filter(c=>c.dia<=k).reduce((s,c)=>s+c.pen,0);
+      proj[k]=actual+(cum[k]-cum[d])+pace*(k-d)+conocidos.filter(c=>c.dia<=k).reduce((s,c)=>s+c.pen,0);
     }
     cierre=proj[D];
   }
@@ -5579,7 +5579,7 @@ function gsProyeccion(items){
     const ac=cm[d]; let my=0; if(its.length>=3) its.forEach(i=>{ if(i.amount>my) my=i.amount; });
     const pc=d>0?Math.max(0,ac-my)/d:0, kc=conocidos.filter(q=>(q.cur==='USD'?'USD':'PEN')===cu);
     let pj=null, ci=ac;
-    if(esActual){ pj=Array(D+1).fill(null); for(let k=d;k<=D;k++) pj[k]=ac+pc*(k-d)+kc.filter(q=>q.dia<=k).reduce((t,q)=>t+q.monto,0); ci=pj[D]; }
+    if(esActual){ pj=Array(D+1).fill(null); for(let k=d;k<=D;k++) pj[k]=ac+(cm[k]-cm[d])+pc*(k-d)+kc.filter(q=>q.dia<=k).reduce((t,q)=>t+q.monto,0); ci=pj[D]; }
     por[cu]={daily:dl,cum:cm,actual:ac,mayor:my,pace:pc,conocidos:kc,proj:pj,cierre:ci,knownTotal:kc.reduce((t,q)=>t+q.monto,0),hay:its.length>0||kc.length>0};
   });
   const kn=gsSumKn(conocidos);
@@ -5730,9 +5730,10 @@ function gsRenderKpis(items){
   const det=(arr,ic)=>{ const m=new Map(); arr.forEach(i=>{ const o=m.get(i.origen)||{pen:0,usd:0,eq:0}; if(i.cur==='USD') o.usd+=i.amount; else o.pen+=i.amount; o.eq+=i.pen; m.set(i.origen,o); }); const l=[...m.entries()].sort((a,b)=>b[1].eq-a[1].eq);
     return l.length?`<div class="gs-kdet">${l.map(([k,o])=>`<div class="gs-line" style="padding:2px 0;font-size:11px"><span>${ic} ${escapeHtml(k)}</span><b>${M(gsMix(o.pen,o.usd))}</b></div>`).join('')}</div>`:''; };
   const hayUsd=Math.abs(nA.usd)>0.004;
+  const nP=gsEsMesActual()?gsSum(items.filter(i=>i.fecha<=todayLocalISO())):nA;
   el.innerHTML=`
     <div class="gs-kpi"><div class="gs-kpi-l">Total gastado</div>${gsKV('var(--red)',nA.pen,nA.usd)}<div class="gs-kpi-s">${items.length} movimiento${items.length===1?'':'s'}</div></div>
-    <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div>${gsKV('',dias>0?nA.pen/dias:0,dias>0?nA.usd/dias:0)}<div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
+    <div class="gs-kpi"><div class="gs-kpi-l">Promedio diario</div>${gsKV('',dias>0?nP.pen/dias:0,dias>0?nP.usd/dias:0)}<div class="gs-kpi-s">en ${dias} día${dias===1?'':'s'}</div></div>
     <div class="gs-kpi"><div class="gs-kpi-l">Con tarjetas</div>${gsKV('var(--purple)',nT.pen,nT.usd)}<div class="gs-kpi-s">${pct(sT)}% · ${tar.length} consumos</div>${det(tar,'💳')}</div>
     <div class="gs-kpi"><div class="gs-kpi-l">Desde cuentas</div>${gsKV('var(--teal)',nC.pen,nC.usd)}<div class="gs-kpi-s">${pct(sC)}% · ${cue.length} gastos</div>${det(cue,'🏦')}</div>`;
 }
@@ -5887,7 +5888,6 @@ let gsIALoading=false, gsIAErr='';
 function gsIAGet(){ try{ return (JSON.parse(localStorage.getItem(GS_IA_KEY)||'{}'))[GS.y+'-'+GS.m]||null; }catch(e){ return null; } }
 function gsIASet(v){ try{ const r=JSON.parse(localStorage.getItem(GS_IA_KEY)||'{}'); r[GS.y+'-'+GS.m]=v; const ks=Object.keys(r); if(ks.length>12){ ks.sort((a,b)=>r[a].ts-r[b].ts); delete r[ks[0]]; } localStorage.setItem(GS_IA_KEY,JSON.stringify(r)); }catch(e){} }
 function gsPrevYM(){ let y=GS.y, m=GS.m-1; if(m<0){ m=11; y--; } return {y,m}; }
-function gsAgrupar(items,fn){ const mp=new Map(); items.forEach(i=>{ const k=fn(i); const o=mp.get(k)||{k,pen:0,n:0,usd:0,sol:0,items:[]}; o.pen+=i.pen; o.n++; if(i.cur==='USD') o.usd+=i.amount; else o.sol+=i.amount; o.items.push(i); mp.set(k,o); }); return [...mp.values()].sort((a,b)=>b.pen-a.pen); }
 
 // ── helpers por moneda (NO convierten nada) ──
 const insCu=c=>c==='USD'?'USD':'PEN';
@@ -6133,6 +6133,8 @@ function renderSparkline(containerId, valores, color){
     ${ultimo?`<circle cx="${ultimo[0].toFixed(1)}" cy="${ultimo[1].toFixed(1)}" r="2.2" fill="${color}"/>`:''}
   </svg>`;
 }
+function fmtSS(n){return (n<0?'-':'')+fmtS(n);}
+function fmtDS(n){return (n<0?'-':'')+fmtD(n);}
 function fmtD(n){return '$ '+Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 // Igual que fmtS/fmtD pero sin el símbolo de moneda — para armar montos con
 // el símbolo ya puesto aparte (ej. AFP y Lista de Compras, donde a veces es
@@ -6283,9 +6285,15 @@ function getCuentasOperativasUnicas(){
   const customSet=new Set(customKeys);
   return [...defaultOp.filter(k=>!customSet.has(k)), ...customKeys];
 }
-function sumaDisponibleDe(saldos){
-  return getCuentasOperativasUnicas().reduce((sum,k)=>sum+((saldos||{})[k]||0),0);
+// Disponible por moneda: 'PEN' (por defecto, lo que usan todos los cálculos en soles) o 'USD'.
+// Las cuentas operativas en dólares NO se mezclan con las de soles.
+function sumaDisponibleDe(saldos, moneda){
+  const mon=moneda==='USD'?'USD':'PEN';
+  return getCuentasOperativasUnicas().filter(k=>getAccountCurrency(k)===mon).reduce((sum,k)=>sum+((saldos||{})[k]||0),0);
 }
+function hayCuentasOperativasUSD(){ return getCuentasOperativasUnicas().some(k=>getAccountCurrency(k)==='USD'); }
+// Texto "S/ x" o "S/ x + $ y" (solo agrega dólares si existen cuentas operativas en dólares)
+function fmtDispDual(pen,usd){ return fmtSS(pen)+(hayCuentasOperativasUSD()?' + '+fmtDS(usd):''); }
 // Mismo cuidado pero para cuentas de AHORRO. moneda: 'PEN' o 'USD'.
 function sumaAhorroDe(saldos, moneda){
   const claveDefault = moneda==='USD' ? 'Ahorro Dólares' : 'Ahorro Soles';
@@ -6310,10 +6318,10 @@ function tieneDatosHasta(y,m){
     return yy<y || (yy===y && (mm-1)<=m);
   });
 }
-function getDisponible(y,m){
+function getDisponible(y,m,moneda){
   if(!tieneDatosHasta(y,m)) return null;
   const s=reconstructSaldoAt(y,m);
-  return sumaDisponibleDe(s);
+  return sumaDisponibleDe(s,moneda);
 }
 
 // ══════════════════════════════════════════════════════
@@ -6619,7 +6627,7 @@ function signoMontoMov(m){
 function calcularSaldoPorDiaCuenta(cuenta, y, m){
   const mesAnteriorY = m===0 ? y-1 : y;
   const mesAnteriorM = m===0 ? 11 : m-1;
-  const saldoInicial = (reconstructSaldoAt(mesAnteriorY, mesAnteriorM)||{})[cuenta]||0;
+  const saldoCierre = (reconstructSaldoAt(y, m)||{})[cuenta]||0;
   const movsDelMes=(state.movimientos||[]).filter(mv=>{
     if(mv.account!==cuenta) return false;
     const d=new Date(mv.date+'T12:00:00');
@@ -6632,7 +6640,8 @@ function calcularSaldoPorDiaCuenta(cuenta, y, m){
   });
   const diasEnMes=new Date(y,m+1,0).getDate();
   const saldoPorDia=[];
-  let saldoActual=saldoInicial;
+  const netoMes=Object.values(movPorFecha).reduce((a,v)=>a+v,0);
+  let saldoActual=saldoCierre-netoMes;
   for(let dia=1; dia<=diasEnMes; dia++){
     const fechaStr=y+'-'+String(m+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
     saldoActual += (movPorFecha[fechaStr]||0);
@@ -6985,7 +6994,8 @@ function calcularProyeccionCierre(){
   });
 
   const proyeccionPen=disponibleActual+ingPen-gastoPen-tarjetaPen;
-  const proyeccionUsd=ingUsd-gastoUsd-tarjetaUsd; // no hay "disponible" en dólares (cuentas operativas son siempre soles)
+  const disponibleUsdActual=getDisponible(y,m,'USD') ?? sumaDisponibleDe(state.cuentas,'USD');
+  const proyeccionUsd=disponibleUsdActual+ingUsd-gastoUsd-tarjetaUsd; // incluye lo que hay hoy en cuentas operativas en dólares
 
   return {
     disponibleActual, ingPen, ingUsd, gastoPen, gastoUsd, tarjetaPen, tarjetaUsd,
@@ -7162,7 +7172,10 @@ function checkBrowserNotifications(forzar){
   // 3. Tarjetas: cierre o pago dentro de 3 días
   (state.tarjetas||[]).forEach(t=>{
     const cierre=parseInt(t.cierre)||25, pago=parseInt(t.pago)||1;
-    const diffCierre=cierre-diaHoy, diffPago=pago-diaHoy;
+    const _dim=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
+    let diffCierre=cierre-diaHoy, diffPago=pago-diaHoy;
+    if(diffCierre<0) diffCierre+=_dim; // el día ya pasó este mes: próxima ocurrencia en el mes siguiente
+    if(diffPago<0) diffPago+=_dim;
     if(diffCierre>=0 && diffCierre<=3) mensajes.push(`📅 ${t.banco}: cierra ${diffCierre===0?'hoy':'en '+diffCierre+' días'}`);
     if(diffPago>=0 && diffPago<=3) mensajes.push(`💳 ${t.banco}: pago ${diffPago===0?'hoy':'en '+diffPago+' días'}`);
   });
@@ -7399,7 +7412,7 @@ function renderSummaryCards(){
   const prev=prevMY(state.currentYear,state.currentMonth);
   const dp=getDisponible(prev.year,prev.month);
   const pe=document.getElementById('sum-disp-prev');
-  if(dp!==null){pe.textContent=M(fmtS(dp));pe.style.color='var(--green)';}
+  if(dp!==null){pe.textContent=M(fmtDispDual(dp,getDisponible(prev.year,prev.month,'USD')||0));pe.style.color=dp>=0?'var(--green)':'var(--red)';}
   else{pe.textContent='—';pe.style.color='var(--text3)';}
   document.getElementById('sub-disp-prev').textContent=MONTHS[prev.month]+' '+prev.year;
 
@@ -7411,7 +7424,8 @@ function renderSummaryCards(){
   const hoyReal=new Date();
   const esMesActualReal = state.currentYear===hoyReal.getFullYear() && state.currentMonth===hoyReal.getMonth();
   const dc = dcRaw !== null ? dcRaw : (esMesActualReal ? sumaDisponibleDe(state.cuentas) : 0);
-  document.getElementById('sum-disp-cur').textContent=M(fmtS(dc));
+  const dcUsd = dcRaw !== null ? (getDisponible(state.currentYear,state.currentMonth,'USD')||0) : (esMesActualReal ? sumaDisponibleDe(state.cuentas,'USD') : 0);
+  document.getElementById('sum-disp-cur').textContent=M(fmtDispDual(dc,dcUsd));
   document.getElementById('sum-disp-cur').style.color=dc>=0?'var(--accent)':'var(--red)';
 
   // Proyección de cierre: si estás viendo el mes REAL actual, es la
@@ -7443,7 +7457,7 @@ function renderSummaryCards(){
   // personalizada repite el nombre de "Ahorro Soles"/"Ahorro Dólares".
   const aS=sumaAhorroDe(curSaldoCards,'PEN');
   const aD=sumaAhorroDe(curSaldoCards,'USD');
-  document.getElementById('sum-ahorro-soles').textContent=M(fmtS(aS));
+  document.getElementById('sum-ahorro-soles').textContent=M(fmtSS(aS));
   const intS=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='ahorro'&&(
     m.account==='Ahorro Soles'||
     ((state.customCuentas||{})[m.account]&&(state.customCuentas||{})[m.account].type==='ahorro'&&(state.customCuentas||{})[m.account].currency!=='USD')
@@ -7451,7 +7465,7 @@ function renderSummaryCards(){
   document.getElementById('sub-ahorro-soles').innerHTML=intS>0?`<span style="color:var(--green)">${M('+'+fmtS(intS))}</span> este mes`:'cuenta ahorro';
   document.getElementById('equiv-ahorro-soles').textContent=M('≈ '+fmtD(aS/state.tc.venta));
 
-  document.getElementById('sum-ahorro-dolar').textContent=M(fmtD(aD));
+  document.getElementById('sum-ahorro-dolar').textContent=M(fmtDS(aD));
   const intD=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='ahorro'&&(
     m.account==='Ahorro Dólares'||
     ((state.customCuentas||{})[m.account]&&(state.customCuentas||{})[m.account].type==='ahorro'&&(state.customCuentas||{})[m.account].currency==='USD')
@@ -7483,7 +7497,7 @@ function renderSummaryCards(){
 
   // Total Soles = Disponible actual + Ahorro Soles
   const totalSoles = dc + aS;
-  document.getElementById('sum-total-soles').textContent=M(fmtS(totalSoles));
+  document.getElementById('sum-total-soles').textContent=M(fmtSS(totalSoles));
   document.getElementById('sum-total-soles').style.color=totalSoles>=0?'var(--accent)':'var(--red)';
 
   if(ahorroMoneda==='PEN'){
@@ -7607,7 +7621,9 @@ function _reconstructSaldoAtRaw(y,m){
   const resolved={};   // key -> saldo ya resuelto por el snapshot más reciente que lo menciona
   const fromDate={};   // key -> fecha desde la cual sumar sus propios movimientos
   let cy=y, cm=m;
-  for(let i=0;i<24;i++){
+  let _maxBack=24;
+  Object.keys(state.snapshots||{}).forEach(sk=>{const [sy,sm]=sk.split('-').map(Number); _maxBack=Math.max(_maxBack,(y-sy)*12+(m-(sm-1))+1);});
+  for(let i=0;i<_maxBack;i++){
     const snap=(state.snapshots||{})[snapKey(cy,cm)];
     if(snap){
       const esCierre=!!snap._endOfMonth;
@@ -7630,7 +7646,7 @@ function _reconstructSaldoAtRaw(y,m){
         fromDate[k]= esCierre ? new Date(ny,nm,1) : mesSnapInicio;
       });
     }
-    if(Object.keys(resolved).length>=allKeys.length) break;
+    if(allKeys.every(k=>k in resolved)) break;
     cm--; if(cm<0){cm=11;cy--;}
   }
 
@@ -7689,7 +7705,7 @@ function renderAccountsTables(){
       const ocultarIcono=`<span onclick="event.stopPropagation();ocultarCuentaManual('${r.k}')" style="cursor:pointer;font-size:11px;margin-left:6px;opacity:.5" title="Ocultar esta cuenta de la lista">🙈</span>`;
       return `<tr class="acc-row ${sel}" draggable="true" data-key="${r.k}" data-tabla="${tabla}" ondragstart="cuentaDragStart(event)" ondragover="cuentaDragOver(event)" ondrop="cuentaDrop(event)" ondragend="cuentaDragEnd(event)" onclick="selectAccount('${r.k}')" style="${muted}">
         <td><span style="display:inline-flex;flex-direction:column;vertical-align:middle;margin-right:4px">${arrows}</span>${dot}${escapeHtml(r.l)}${tag}${ocultarIcono}</td>
-        <td style="text-align:right;font-size:11px;color:var(--text2)">${M(fc(prv))}</td>
+        <td style="text-align:right;font-size:11px;color:var(--text2)">${M((prv<0?'-':'')+fc(prv))}</td>
         <td style="color:${cur>=0?'var(--text)':'var(--red)'}">${cur<0?'-':''}${M(fc(cur))}</td>
       </tr>`;
     }).join('');
@@ -8216,7 +8232,7 @@ function renderMovimientos(){
     const esTr=esTransferenciaInterna(m);
     const ic=esTr?'🔄':m.type==='income'?'⬆':m.type==='expense'?'⬇':'🏦';
     const cls=esTr?'transfer':m.type==='income'?'income':m.type==='expense'?'expense':'ahorro';
-    const sign=m.type==='expense'?'-':'+';
+    const sign=(m.type==='expense'||(m.type==='ahorro'&&m.signedAmount<0))?'-':'+';
     const amtStr=sign+(m.currency==='USD'?fmtD(m.amount):fmtS(m.amount));
     const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})+(m.hora?' · '+m.hora:'');
     const paisHtml=m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:'';
@@ -8538,13 +8554,13 @@ function renderChart(){
     const data=meses.map(({y,m})=>{
       if(!tieneDatosHasta(y,m)) return null;
       const s=reconstructSaldoAt(y,m);
-      const disponible=sumaDisponibleDe(s);
+      const disponible=sumaDisponibleDe(s)+sumaDisponibleDe(s,'USD')*(state.tc?.compra||3.45);
       // Suma TODAS las cuentas de ahorro (default + personalizadas), sin
       // contar dos veces si alguna personalizada repite el nombre de una
       // cuenta de ahorro por defecto.
       const ahorroPEN=sumaAhorroDe(s,'PEN'), ahorroUSD=sumaAhorroDe(s,'USD');
-      const ahorro=ahorroPEN+(ahorroUSD*rate);
-      return +(disponible+ahorro+invValorAhora-deudaTCTotalAhora).toFixed(2);
+      const ahorro=ahorroPEN+(ahorroUSD*(state.tc?.compra||3.45));
+      return +(disponible+ahorro+(state.incluirInvEnPatrimonio!==false?invValorAhora:0)-deudaTCTotalAhora).toFixed(2);
     });
     const chartEl=document.getElementById('main-chart');
     if(data.every(v=>v===null)){
@@ -8614,8 +8630,9 @@ function invCantidadNeta(simbolo, hastaFecha){
 
 // Costo promedio ponderado de compra: "puro" (sin comisión, para % de crecimiento del
 // precio) y "conComision" (para el costo real de la inversión / utilidad al vender)
-function invCostoPromedio(simbolo){
-  const compras=(state.inversiones.compras||[]).filter(c=>c.simbolo===simbolo);
+function invCostoPromedio(simbolo,hastaFecha){
+  // hastaFecha (opcional): solo compras hechas hasta esa fecha (costo vigente al momento de una venta)
+  const compras=(state.inversiones.compras||[]).filter(c=>c.simbolo===simbolo && (!hastaFecha || !c.fecha || c.fecha<=hastaFecha));
   const qty=compras.reduce((s,c)=>s+c.cantidad,0);
   if(qty<=0) return {puro:0,conComision:0};
   const totalPuro=compras.reduce((s,c)=>s+(c.precio*c.cantidad),0);
@@ -8633,7 +8650,8 @@ function invUltimoPrecio(simbolo){
 
 // Utilidad realizada de una venta = Venta Neta − (costo promedio CON comisión × cantidad vendida)
 function invUtilidadVenta(venta){
-  const costo=invCostoPromedio(venta.simbolo).conComision;
+  const cp=invCostoPromedio(venta.simbolo,venta.fecha);
+  const costo=(cp.conComision>0||cp.puro>0)?cp.conComision:invCostoPromedio(venta.simbolo).conComision;
   const ventaNeta=(venta.precio*venta.cantidad)-(venta.comision||0);
   return ventaNeta-(costo*venta.cantidad);
 }
@@ -9964,8 +9982,10 @@ function saveMovimiento(){
       if(!confirm(`⚠️ Ya registraste "${dup.desc}" por ${sym} ${numFmtSigned(amount,2)} ese mismo día${dup.hora?' a las '+dup.hora:''}. ¿Seguro que quieres agregarlo de nuevo (no es sin querer)?`)) return;
     }
   }
-  if(state.editId){const old=state.movimientos.find(x=>x.id===state.editId);if(old)revertAccount(old);state.movimientos=state.movimientos.filter(x=>x.id!==state.editId);}
+  let _old=null;
+  if(state.editId){const old=state.movimientos.find(x=>x.id===state.editId);_old=old||null;if(old)revertAccount(old);state.movimientos=state.movimientos.filter(x=>x.id!==state.editId);}
   const mov={id:state.editId||Date.now().toString(),type:currentType,desc,amount,account,date,currency};
+  if(_old){ if(_old.linkId) mov.linkId=_old.linkId; if(currentType==='ahorro' && _old.signedAmount!==undefined) mov.signedAmount=(_old.signedAmount<0?-1:1)*amount; }
   // Firestore rechaza campos con valor "undefined" — si no hay categoría o
   // nota, simplemente se omite el campo por completo (nunca se le asigna
   // undefined), para no romper el guardado en la nube.
@@ -10053,12 +10073,15 @@ function getCategorizedTCMovsForMonth(y,m){
 // Proyección lineal de cierre de mes: (gastado hasta hoy / días transcurridos)
 // × días totales del mes — solo tiene sentido para el mes REAL actual (un mes
 // pasado ya "cerró" con su total real, uno futuro aún no tiene datos).
-function getMonthProjection(spent,y,m){
+// futuro = monto ya conocido con fecha posterior a hoy (cuotas de compras a plazos,
+// pagos programados): se suma completo y NO se extrapola, solo se proyecta el gasto ya ocurrido.
+function getMonthProjection(spent,y,m,futuro){
   const hoy=new Date();
   if(y!==hoy.getFullYear()||m!==hoy.getMonth()) return null;
   const diaHoy=hoy.getDate();
   if(diaHoy<=0) return null;
-  return (spent/diaHoy)*daysInMonth(y,m);
+  futuro=futuro||0;
+  return (Math.max(0,spent-futuro)/diaHoy)*daysInMonth(y,m)+futuro;
 }
 
 // Abre el detalle de auditoría de una categoría: todos los movimientos de
@@ -10175,7 +10198,11 @@ function renderPresupuesto(){
     const color=cls==='over'?'var(--red)':cls==='warn'?'var(--amber)':'var(--green)';
     const emoji=cat.split(' ')[0];
 
-    const proy=getMonthProjection(spent,y,m);
+    const _hoyISO=todayLocalISO();
+    const _toS=(c,v)=>c==='USD'?v*state.tc.venta:v;
+    const futuro=movs.filter(mv=>mv.cat===cat&&mv.date>_hoyISO).reduce((s,mv)=>s+_toS(mv.currency,mv.amount),0)
+      +tcMovsThisMonth.filter(mv=>mv.cat===cat&&mv.fecha>_hoyISO).reduce((s,mv)=>s+_toS(mv.currency,mv.monto),0);
+    const proy=getMonthProjection(spent,y,m,futuro);
     let proyHtml='';
     if(proy!==null){
       const seExcede=proy>b.limit;
@@ -10184,7 +10211,7 @@ function renderPresupuesto(){
       </div>`;
     }
 
-    return `<div class="budget-card" onclick="openCategoryDetailModal('${cat}')" style="cursor:pointer">
+    return `<div class="budget-card" onclick="openCategoryDetailModal(${escapeHtml(JSON.stringify(cat))})" style="cursor:pointer">
       <div class="budget-cat"><div class="budget-emoji">${emoji}</div><div>
         <div class="budget-name">${escapeHtml(cat)}</div>
         <div style="font-size:10px;color:var(--text3)">${MONTHS[m]}</div>
@@ -10471,7 +10498,7 @@ function aportarEsteMes(id){
   if(m.cuentaOrigenHabitual){
     const sym=m.currency==='USD'?'$':'S/';
     const ok=ejecutarTransferencia({
-      origen:m.cuentaOrigenHabitual, destino:m.cuentaVinculada, monto:proy.montoMensual,
+      origen:m.cuentaOrigenHabitual, destino:m.cuentaVinculada, monto:Math.round(Math.min(proy.montoMensual,Math.max(0,m.montoObjetivo-montoActual))*100)/100,
       fecha:todayLocalISO(), hora:horaLimaActual(), cat:m.categoriaHabitual,
       nota:'Aporte a meta: '+m.nombre,
     });
@@ -10512,8 +10539,8 @@ function renderMetasAhorro(){
 function totalAportadoEnMes(cuentaVinculada, y, mo){
   const mesStr=y+'-'+String(mo+1).padStart(2,'0');
   return (state.movimientos||[])
-    .filter(mv=>mv.account===cuentaVinculada && (mv.type==='income'||mv.type==='ahorro') && mv.date && mv.date.startsWith(mesStr))
-    .reduce((s,mv)=>s+(mv.amount||0),0);
+    .filter(mv=>mv.account===cuentaVinculada && ((mv.type==='income'&&esTransferenciaInterna(mv))||mv.type==='ahorro') && mv.date && mv.date.startsWith(mesStr))
+    .reduce((s,mv)=>s+(mv.type==='ahorro'&&mv.signedAmount!==undefined?mv.signedAmount:(mv.amount||0)),0);
 }
 function buildMetaCardHtml(m){
   const sym=m.currency==='USD'?'$':'S/';
@@ -10704,11 +10731,13 @@ function renderProyeccion(){
   };
   // Calculate avg monthly saving from last 3 months with data
   const months=[];
-  for(let i=0;i<12;i++){
-    const movs=getMovs(state.currentYear,i).filter(m=>m.type==='ahorro');
+  const hoyP=new Date();
+  for(let i=11;i>=0;i--){
+    const dP=new Date(hoyP.getFullYear(),hoyP.getMonth()-i,1);
+    const movs=getMovs(dP.getFullYear(),dP.getMonth()).filter(m=>m.type==='ahorro');
     if(movs.length>0){
-      const soles=movs.filter(m=>esAhorroDe(m.account,'PEN')).reduce((s,m)=>s+m.amount,0);
-      const dolar=movs.filter(m=>esAhorroDe(m.account,'USD')).reduce((s,m)=>s+m.amount,0);
+      const soles=movs.filter(m=>esAhorroDe(m.account,'PEN')).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
+      const dolar=movs.filter(m=>esAhorroDe(m.account,'USD')).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
       months.push({soles,dolar});
     }
   }
@@ -10724,7 +10753,7 @@ function renderProyeccion(){
 
   function projCard(id,label,cur,goal,avg,months,color,fmt){
     const pct=Math.min(100,(cur/goal)*100);
-    const eta=months!=null?(months<=0?'¡Meta alcanzada! 🎉':`~${months} ${months===1?'mes':'meses'}`):'Sin datos suficientes';
+    const eta=(cur>=goal||months!=null&&months<=0)?'¡Meta alcanzada! 🎉':months!=null?(months<=0?'¡Meta alcanzada! 🎉':`~${months} ${months===1?'mes':'meses'}`):'Sin datos suficientes';
     document.getElementById(id).innerHTML=`
       <div class="section-header"><div class="section-title">${label}</div><span style="color:${color};font-family:var(--mono);font-size:15px">${M(fmt(cur))}</span></div>
       <div class="proj-row"><div class="proj-label">Meta</div><div class="proj-val">${M(fmt(goal))}</div></div>
@@ -10844,7 +10873,7 @@ function renderComparativo(){
   // Populate options from months with data
   const hasData=new Set();
   state.movimientos.forEach(m=>{const d=new Date(m.date+'T12:00:00');hasData.add(d.getFullYear()+'-'+d.getMonth());});
-  const opts=[...hasData].sort().map(k=>{
+  const opts=[...hasData].sort((a,b)=>{const[x1,x2]=a.split('-').map(Number),[y1,y2]=b.split('-').map(Number);return (x1-y1)||(x2-y2);}).map(k=>{
     const[y,m]=k.split('-');
     return`<option value="${k}">${MONTHS[+m]} ${y}</option>`;
   }).join('');
@@ -10869,20 +10898,20 @@ function renderComparativo(){
     {label:'Ahorro Soles',a:sumaAhorroDe(reconstructSaldoAt(yA,mA),'PEN'),b:sumaAhorroDe(reconstructSaldoAt(yB,mB),'PEN'),fmt:fmtS,color:'var(--purple)'},
     {label:'Disponible',a:getDisponible(yA,mA)||0,b:getDisponible(yB,mB)||0,fmt:fmtS,color:'var(--teal)'},
   ];
-  const maxVal=Math.max(...rows.map(r=>Math.max(r.a,r.b)))||1;
+  const maxVal=Math.max(...rows.map(r=>Math.max(Math.abs(r.a),Math.abs(r.b))))||1;
 
   content.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:12px;font-size:12px">
     <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:var(--accent);display:inline-block"></span>${labelA}</span>
     <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:var(--amber);display:inline-block;opacity:.7"></span>${labelB}</span>
   </div>`+rows.map(r=>{
-    const pA=(r.a/maxVal)*100,pB=(r.b/maxVal)*100;
+    const pA=Math.abs(r.a)/maxVal*100,pB=Math.abs(r.b)/maxVal*100; const sg=v=>(v<-0.004?'-':'')+r.fmt(v);
     return`<div class="compare-row">
       <div class="compare-label">${r.label}</div>
       <div class="compare-bar-wrap">
         <div style="flex:1"><div style="height:8px;background:${r.color};border-radius:3px;width:${pA}%;transition:width .4s"></div></div>
         <div style="flex:1"><div style="height:8px;background:${r.color};border-radius:3px;width:${pB}%;opacity:.55;transition:width .4s"></div></div>
       </div>
-      <div class="compare-val" style="color:${r.color}">${M(r.fmt(r.a))}<br><span style="opacity:.6">${M(r.fmt(r.b))}</span></div>
+      <div class="compare-val" style="color:${r.color}">${M(sg(r.a))}<br><span style="opacity:.6">${M(sg(r.b))}</span></div>
     </div>`;
   }).join('');
 }
@@ -11681,7 +11710,8 @@ function togglePayment(sid,pid){
 }
 function addSrvPayment(sid,pid,svc,person){
   const acct=svc.account||'BBVA';
-  const date=new Date(state.currentYear,state.currentMonth,svc.payDay||9).toISOString().slice(0,10);
+  const _dim=new Date(state.currentYear,state.currentMonth+1,0).getDate();
+  const date=state.currentYear+'-'+String(state.currentMonth+1).padStart(2,'0')+'-'+String(Math.min(svc.payDay||9,_dim)).padStart(2,'0');
   const movId='srv-'+paymentKey(sid,pid);
   state.movimientos=state.movimientos.filter(m=>m.id!==movId);
   const mov={id:movId,type:'income',desc:svc.name+' - '+person.name,amount:svc.pricePerPerson,account:acct,date,currency:'PEN'};
@@ -12312,12 +12342,6 @@ function mostrarCuentaForzada(nombre){
   renderAccountsTables();
   if(typeof renderAhorrosIntereses==='function' && document.getElementById('page-ahorros-intereses')) renderAhorrosIntereses();
 }
-function ocultarCuentaForzada(nombre){
-  // Mismo destino que el botón manual — una vez oculta, no importa si fue
-  // porque estaba en S/0 o porque se ocultó a mano, el camino de vuelta es
-  // el mismo ("👁️ Mostrar" desde la vista de Ocultas).
-  ocultarCuentaManual(nombre);
-}
 let cuentasOcultasView=false;
 function toggleCuentasOcultasView(){
   cuentasOcultasView=!cuentasOcultasView;
@@ -12538,6 +12562,10 @@ function confirmDeleteWithTransfer(){
       desc:'Traspaso de saldo desde "'+fromKey+'" (cuenta eliminada)',
       amount, account:to, date:todayISO(), currency:toCurrency
     });
+  }
+  if(amount>0.004){
+    const fromCurrency=(state.customCuentas||{})[fromKey]?.currency || (fromKey==='Ahorro Dólares'?'USD':'PEN');
+    pushMovimiento({id:'transfer-'+Date.now()+'a', type:'expense', desc:'Traspaso de saldo a "'+to+'" (cuenta eliminada)', amount, account:fromKey, date:todayISO(), currency:fromCurrency});
   }
   doDeleteCuenta(fromKey,null);
   cancelTransfer();
@@ -12992,6 +13020,7 @@ function getSiguienteMesCalendario(){
 }
 
 function tcMonthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
+function tcMkAddMonths(mk,n){ const [y,m]=mk.split('-').map(Number); const d=new Date(y,m-1+n,1); return tcMonthKey(d.getFullYear(),d.getMonth()); }
 
 function getTarjeta(id){ return (state.tarjetas||[]).find(t=>t.id===id); }
 
@@ -13067,7 +13096,7 @@ function detectarConsumosFrecuentesSugeridos(){
   const grupos={}; // "nombreNormalizado|monto" -> [{monto,tarjetaId,currency,cat,fecha,descOriginal}]
   (state.tarjetas||[]).forEach(t=>{
     Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>{
-      if(!m.desc || m.fecha<limiteStr || !m.monto) return;
+      if(!m.desc || !m.fecha || m.fecha<limiteStr || !m.monto) return;
       const key=cfClaveGrupo(m.desc,m.monto);
       if(!cfNombreNormalizado(m.desc) || yaExisten.has(key) || ignorados.has(key)) return;
       if(!grupos[key]) grupos[key]=[];
@@ -13455,7 +13484,7 @@ function tcMovTableRow(m, cardCur){
     <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-      ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}','${escapeHtml(m.desc.replace(/ — Cuota \d+\/\d+$/,''))}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
+      ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}',${escapeHtml(JSON.stringify(m.desc.replace(/ — Cuota \d+\/\d+$/,'')))})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
       <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
     </td>
   </tr>`;
@@ -13486,7 +13515,7 @@ function tcMovCardHtml(m, cardCur){
       <div class="tc-mov-card-actions">
         <input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">
         <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
-        ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}','${escapeHtml(m.desc.replace(/ — Cuota \d+\/\d+$/,''))}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
+        ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}',${escapeHtml(JSON.stringify(m.desc.replace(/ — Cuota \d+\/\d+$/,'')))})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
         <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
       </div>
     </div>
@@ -13602,7 +13631,9 @@ function renderTCDetail(){
 
   const linea=parseFloat(t&&t.linea)||0;
   const rate=state.tc?.venta||3.45;
-  const deudaEnMonedaTarjeta=cardCur==='USD'?deudaByCur.usd+(deudaByCur.pen/rate):deudaByCur.pen+(deudaByCur.usd*rate);
+  // Línea usada = deuda NO pagada de todos los meses (no solo la del mes que se ve)
+  const _sinPagar=sumTCByCurrency(getAllTCMovs(currentTCId).filter(m=>!m.pagado),cardCur);
+  const deudaEnMonedaTarjeta=cardCur==='USD'?_sinPagar.usd+(_sinPagar.pen/rate):_sinPagar.pen+(_sinPagar.usd*rate);
   const usadoPct=linea>0?Math.min(100,(deudaEnMonedaTarjeta/linea)*100):0;
 
   document.getElementById('tc-sum-deuda').textContent=M(fmtTCMixed(deudaByCur.pen,deudaByCur.usd));
@@ -13708,9 +13739,10 @@ function pagarSeleccionados(){
   if(!pendingPayMovIds.length){ alert('Selecciona al menos un consumo.'); return; }
   const t=getTarjeta(currentTCId);
   const movs=getTCMovs(currentTCId,currentTCMonth);
-  const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(Boolean);
+  const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(m=>m&&!m.pagado);
   const {pen,usd}=sumTCByCurrency(selMovs, t&&t.currency);
   document.getElementById('tc-pago-monto').textContent=M(fmtTCMixed(pen,usd));
+  window._pagoSelPen=pen; window._pagoSelUsd=usd;
   document.getElementById('tc-pago-tipo').value='total';
   document.getElementById('tc-pago-parcial-field').style.display='none';
   const cw=document.getElementById('tc-pago-cuenta-wrap');if(cw)cw.style.display='block';
@@ -13725,6 +13757,7 @@ function pagarSeleccionados(){
 function onPagoTipoChange(){
   const tipo=document.getElementById('tc-pago-tipo').value;
   document.getElementById('tc-pago-parcial-field').style.display=tipo==='parcial'?'block':'none';
+  if(tipo==='parcial'){ const v=document.getElementById('tc-pago-parcial-val'); if(!v.value&&window._pagoSelPen>0) v.value=(Math.round(window._pagoSelPen*100)/100).toFixed(2); }
   // Hide "Descontar de cuenta" when paying with points (no real money deducted)
   const cuentaWrap=document.getElementById('tc-pago-cuenta-wrap');
   if(cuentaWrap) cuentaWrap.style.display=tipo==='puntos'?'none':'block';
@@ -13758,7 +13791,7 @@ function confirmarPago(){
     // sí se refleje en Disponible Actual, la tabla de Cuentas y el historial
     // (mutar state.cuentas directamente, como se hacía antes, no bastaba:
     // esos valores se recalculan siempre desde los movimientos).
-    const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(Boolean);
+    const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(m=>m&&!m.pagado);
     const {pen,usd}=sumTCByCurrency(selMovs, t&&t.currency);
     const desc='Pago de tarjeta '+(t?t.banco+(t.cat?' '+t.cat:''):'')+' - '+fechaLabel;
     if(pen>0.004){
@@ -13771,6 +13804,11 @@ function confirmarPago(){
     // Parcial: un solo monto en soles (según indica el campo del formulario)
     const montoAPagar=parseFloat(document.getElementById('tc-pago-parcial-val').value)||0;
     if(montoAPagar<=0){alert('Ingresa un monto válido.');return;}
+    // El pago parcial se hace eligiendo los consumos que lo cubren: el monto debe coincidir con la suma de los seleccionados
+    const _sel=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(m=>m&&!m.pagado);
+    const _s=sumTCByCurrency(_sel, t&&t.currency);
+    if(_s.usd>0.004){alert('Hay consumos en dólares seleccionados: usa pago Total o selecciona solo consumos en soles.');return;}
+    if(Math.abs(_s.pen-montoAPagar)>0.01){alert('El monto parcial (S/ '+montoAPagar.toFixed(2)+') no coincide con la suma de los consumos seleccionados (S/ '+_s.pen.toFixed(2)+'). Selecciona los consumos que sumen ese monto, o usa pago Total.');return;}
     const desc='Pago de tarjeta '+(t?t.banco+(t.cat?' '+t.cat:''):'')+' - '+fechaLabel+' (parcial)';
     pushMovimiento({id:'pagoTC'+Date.now(),type:'expense',desc,amount:montoAPagar,account:cuenta,date:hoy,currency:'PEN'});
   }
@@ -13778,7 +13816,7 @@ function confirmarPago(){
   // Marcar movimientos como pagados
   pendingPayMovIds.forEach(id=>{
     const m=movs.find(x=>x.id===id);
-    if(m){ m.pagado=true; m.metodoPago='dinero'; }
+    if(m&&!m.pagado){ m.pagado=true; m.metodoPago='dinero'; }
   });
   saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas(); render();
 }
@@ -13937,7 +13975,8 @@ function calcularSaludFinanciera(){
     let deudaEnMonedaTarjeta=0;
     allMovs.filter(mv=>!mv.pagado).forEach(mv=>{
       deudaTCTotal+=toS(mv);
-      deudaEnMonedaTarjeta+=mv.monto;
+      const _cm=(mv.currency||t.currency)==='USD'?'USD':'PEN', _ct=t.currency==='USD'?'USD':'PEN';
+      deudaEnMonedaTarjeta+=_cm===_ct?mv.monto:(_ct==='USD'?mv.monto/rate:mv.monto*rate);
     });
     const linea=parseFloat(t.linea)||0;
     if(linea>0){
@@ -14512,6 +14551,7 @@ function saveTCMov(){
     const cuotaRedondeada=Math.round(cuotaCalculada*100)/100;
     let sumaAcumulada=0;
     let ultimoMk=null;
+    const mkPrimera=getBillingMonthKey(fecha,t);
     for(let i=1;i<=numCuotas;i++){
       const fechaCuota=i===1?fecha:sumarMesesConDia(fecha,i-1);
       let montoEsta;
@@ -14524,7 +14564,7 @@ function saveTCMov(){
         // última cuota SIN intereses: absorbe el redondeo para que la suma cuadre exacto con el monto original
         montoEsta=Math.round((monto-sumaAcumulada)*100)/100;
       }
-      const mk=getBillingMonthKey(fechaCuota,t);
+      const mk=tcMkAddMonths(mkPrimera,i-1);
       ultimoMk=mk;
       if(!t.movs[mk]) t.movs[mk]=[];
       const nuevoMov={id:'tcm'+Date.now()+'c'+i,desc:`${desc} — Cuota ${i}/${numCuotas}`,fecha:fechaCuota,monto:montoEsta,pagado:false,cat,currency,grupoCuotaId,cuotaNumero:i,cuotaTotal:numCuotas,conIntereses:conInteres};
@@ -15182,8 +15222,10 @@ function tcEvolutionTogglePill(key, idx){
   if(!tcEvolutionChart) return;
   tcEvolutionChart.setDatasetVisibility(idx, !tcEvolutionHidden.has(key));
   tcEvolutionChart.update();
-  const pill=document.getElementById('tc-evolution-legend')?.children[idx];
+  const lg=document.getElementById('tc-evolution-legend');
+  const pill=lg?.children[idx+1]; // el hijo 0 es el botón Todas/Ninguna
   if(pill) pill.classList.toggle('off', tcEvolutionHidden.has(key));
+  if(lg&&lg.children[0]) lg.children[0].textContent = tcEvolutionAllKeys.every(k=>!tcEvolutionHidden.has(k)) ? '☐ Ninguna' : '☑ Todas';
 }
 
 
@@ -15300,8 +15342,8 @@ function parseTCExcel(wb){
     const desc   = (row['DESCRIPCION']||row['Descripcion']||row['descripcion']||'').toString().trim();
     const rawDate= row['FECHA']  ||row['Fecha']  ||row['fecha']  ||'';
     const rawDateR=rawR['FECHA'] ||rawR['Fecha'] ||rawR['fecha'] ||'';
-    const montoS = String(row['MONTO'] ||row['Monto'] ||row['monto'] ||0).replace(',','.');
-    const monto  = parseFloat(montoS)||0;
+    const montoRaw = (rawR['MONTO']!==undefined?rawR['MONTO']:(rawR['Monto']!==undefined?rawR['Monto']:(rawR['monto']!==undefined?rawR['monto']:(row['MONTO']||row['Monto']||row['monto']||0))));
+    const monto  = (()=>{ if(typeof montoRaw==='number') return montoRaw; let s=String(montoRaw||'0').replace(/[^\d.,-]/g,''); const lc=s.lastIndexOf(','), ld=s.lastIndexOf('.'); if(lc>-1&&ld>-1){ s = lc>ld ? s.replace(/\./g,'').replace(',','.') : s.replace(/,/g,''); } else if(lc>-1){ s = /,\d{1,2}$/.test(s) ? s.replace(',','.') : s.replace(/,/g,''); } return parseFloat(s)||0; })();
     const estado = (row['ESTADO']||row['Estado']||row['estado']||'Pendiente').toString().trim();
     const banco  = (row['Banco'] ||row['BANCO']  ||row['banco']  ||'').toString().trim();
     const categoria=(row['CATEGORIA']||row['Categoria']||row['categoria']||row['CATEGORÍA']||row['Categoría']||'').toString().trim();
@@ -15333,6 +15375,7 @@ function parseTCExcel(wb){
       const cuotaCalculada=conIntereses?calcularCuotaFrances(monto,tea,numCuotas):monto/numCuotas;
       const cuotaRedondeada=Math.round(cuotaCalculada*100)/100;
       let sumaAcumulada=0;
+      const mkPrimeraX=tarjeta?getBillingMonthKey(fecha,tarjeta):fecha.slice(0,7);
       for(let i=1;i<=numCuotas;i++){
         const fechaCuota=i===1?fecha:sumarMesesConDia(fecha,i-1);
         let montoEsta;
@@ -15344,7 +15387,7 @@ function parseTCExcel(wb){
         } else {
           montoEsta=Math.round((monto-sumaAcumulada)*100)/100; // la última absorbe el redondeo
         }
-        const mkCuota=tarjeta?getBillingMonthKey(fechaCuota,tarjeta):fechaCuota.slice(0,7);
+        const mkCuota=tcMkAddMonths(mkPrimeraX,i-1);
         if(!result[banco]) result[banco]={};
         if(!result[banco][mkCuota]) result[banco][mkCuota]=[];
         const nuevoMov={
@@ -15373,7 +15416,7 @@ function parseTCExcel(wb){
       id: 'tch-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).slice(2,6),
       desc: titleCaseTC(desc),
       fecha,
-      monto: Math.abs(monto),
+      monto,
       currency,
       pagado: !/pendient|no\s*pagad|sin\s*pagar/i.test(estado) && /pagad|paid|^si$/i.test(estado),
       ...(categoria ? { cat: categoria } : {}),
@@ -15478,8 +15521,13 @@ function applyTCHistorico(){
 
     // Replace each month's data
     Object.entries(monthData).forEach(([mk, movs]) => {
-      tarjeta.movs[mk] = movs; // replace entirely
-      totalImported += movs.length;
+      // Fusionar sin duplicar: no se borra lo ya registrado en ese mes
+      const actuales = tarjeta.movs[mk] || [];
+      const firma = x => [x.fecha, (x.desc||'').trim().toLowerCase(), Math.round((x.monto||0)*100), x.currency||''].join('|');
+      const vistos = new Set(actuales.map(firma));
+      const nuevos = movs.filter(x => !vistos.has(firma(x)));
+      tarjeta.movs[mk] = actuales.concat(nuevos);
+      totalImported += nuevos.length;
     });
   });
 
@@ -16252,7 +16300,7 @@ function renderDashboard(){
     const r=state.tc?.venta||3.45;
     return s+(d.currency==='USD'?d.monto*r:d.monto);
   },0);
-  setKpi('kpi-disponible', fmtS(dispCur), 'operativas · ' + MONTHS[curM], dispCur>=0?'var(--accent)':'var(--red)');
+  setKpi('kpi-disponible', fmtDispDual(dispCur,getDisponible(curY,curM,'USD')||0), 'operativas · ' + MONTHS[curM], dispCur>=0?'var(--accent)':'var(--red)');
   setKpi('kpi-ahorro', fmtTCMixed(aS, aD), 'cuentas de ahorro', 'var(--purple)');
   // Sparklines de los últimos 6 meses — mismo patrón que la Proyección de
   // Cierre usa para su gráfico de tendencia (getDisponible por mes), pero
@@ -16325,7 +16373,8 @@ function renderDashboard(){
         let unpaidPen=0, unpaidUsd=0;
         movsUnpaid.forEach(m=>{ if((m.currency||t.currency)==='USD') unpaidUsd+=m.monto; else unpaidPen+=m.monto; });
         const linea=parseFloat(t.linea)||0;
-        const pct=linea>0?Math.min(100,(unpaid/linea)*100):0;
+        const unpaidEnMonedaTarjeta=t.currency==='USD'?unpaid/rate:unpaid; // la línea está en la moneda de la tarjeta
+        const pct=linea>0?Math.min(100,(unpaidEnMonedaTarjeta/linea)*100):0;
         const barCol=pct>=90?'var(--red)':pct>=70?'var(--amber)':t.color||'var(--accent)';
         const {label}=getSiguienteMesCalendario();
         return`<div class="dash-tc-row" onclick="showPage('tarjetas');setTimeout(()=>openTCDetail('${t.id}'),50)" style="cursor:pointer">
@@ -16437,14 +16486,7 @@ function renderNuevosWidgetsDashboard(){
       presEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">🎯</div>Sin presupuestos configurados.</div>';
     } else {
       const hoyP=new Date();
-      const gastosPorCat={};
-      (state.movimientos||[]).forEach(mv=>{
-        if(mv.type!=='expense' || esTransferenciaInterna(mv)) return;
-        const d=new Date(mv.date+'T12:00:00');
-        if(d.getFullYear()!==hoyP.getFullYear()||d.getMonth()!==hoyP.getMonth()) return;
-        const c=mv.cat||'Sin categoría';
-        gastosPorCat[c]=(gastosPorCat[c]||0)+mv.amount;
-      });
+      const gastosPorCat=catTotalsForMonth(hoyP.getFullYear(),hoyP.getMonth());
       presEl.innerHTML=cats.slice(0,3).map(cat=>{
         const limite=state.budgets[cat].limit||0;
         const gastado=gastosPorCat[cat]||0;
@@ -16545,7 +16587,7 @@ function renderNuevosWidgetsDashboard(){
       if(mv.type!=='expense' || esTransferenciaInterna(mv)) return false;
       const d=new Date(mv.date+'T12:00:00');
       return d.getFullYear()===y && d.getMonth()===m;
-    }).reduce((s,mv)=>s+mv.amount,0);
+    }).reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*(state.tc?.venta||3.45):mv.amount),0);
     const actual=gastoMes(hoyC.getFullYear(),hoyC.getMonth());
     const anterior=gastoMes(prevC.year,prevC.month);
     const diff=anterior>0?((actual-anterior)/anterior*100):0;
@@ -16561,7 +16603,7 @@ function renderNuevosWidgetsDashboard(){
     const totalAhorroAnio=(state.movimientos||[]).filter(mv=>{
       if(mv.type!=='ahorro'||mv.currency!=='PEN') return false;
       return new Date(mv.date+'T12:00:00').getFullYear()===anioActual;
-    }).reduce((s,mv)=>s+mv.amount,0);
+    }).reduce((s,mv)=>s+(mv.signedAmount!==undefined?mv.signedAmount:mv.amount),0);
     setValorToggleable(anioEl, fmtS(totalAhorroAnio));
     document.getElementById('kpi-anio-sub').textContent=anioActual;
   }
@@ -17592,11 +17634,13 @@ function renderDeudas(){
 
   // ── Totals (always in soles) ──────────────────────
   const toSoles = d => d.currency==='USD' ? d.monto*rate : d.monto;
-  const pendientes = deudas.filter(d=>d.status==='pendiente');
-  const pagados    = deudas.filter(d=>d.status==='pagado');
+  // Los totales son de lo que ME DEBEN (prestado/cobrado); lo que yo debo no se mezcla aquí
+  const deudasMeDeben = deudas.filter(d=>d.direccion!=='yo_debo');
+  const pendientes = deudasMeDeben.filter(d=>d.status==='pendiente');
+  const pagados    = deudasMeDeben.filter(d=>d.status==='pagado');
   const sumPend    = pendientes.reduce((s,d)=>s+toSoles(d),0);
   const sumPagado  = pagados.reduce((s,d)=>s+toSoles(d),0);
-  const sumTotal   = deudas.reduce((s,d)=>s+toSoles(d),0);
+  const sumTotal   = deudasMeDeben.reduce((s,d)=>s+toSoles(d),0);
 
   const sp=document.getElementById('d-sum-pendiente'); if(sp) sp.textContent=M(fmtS(sumPend));
   const sg=document.getElementById('d-sum-pagado');    if(sg) sg.textContent=M(fmtS(sumPagado));
@@ -17666,7 +17710,7 @@ function renderDeudas(){
         ${d.items.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)).map(it=>`
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2)">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(it.desc)} <span style="color:var(--text3)">· ${new Date(it.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit'})}</span></span>
-            <span style="font-family:var(--mono);margin-left:8px">${fmtAmt(it.monto)}</span>
+            <span style="font-family:var(--mono);margin-left:8px">${it.monto<0?'−':''}${fmtAmt(it.monto)}</span>
             ${!isPaid?`<span onclick="openDeudaItemModal('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Editar gasto">✏</span>`:''}
             ${!isPaid?`<span onclick="deleteDeudaItem('${d.id}','${it.id}')" style="cursor:pointer;color:var(--text3);margin-left:6px" title="Quitar gasto">✕</span>`:''}
           </div>`).join('')}
@@ -17920,10 +17964,20 @@ function confirmarDeudaPago(){
   const montoMovido = (!isNaN(parcial)&&parcial>0) ? parcial : d.monto;
   if(!fechaPago){alert(esYoDebo?'Selecciona la fecha de pago.':'Selecciona la fecha de cobro.');return;}
 
-  // Marcar como pagado
-  d.status    = 'pagado';
-  d.fechaPago = fechaPago;
-  d.cuentaPago= cuenta;
+  const esParcial = !isNaN(parcial) && parcial>0 && parcial < d.monto - 0.004;
+  if(!isNaN(parcial) && parcial > d.monto + 0.004){ alert('El monto parcial no puede ser mayor que la deuda ('+d.monto.toFixed(2)+').'); return; }
+  if(esParcial){
+    // Pago parcial: la deuda sigue pendiente por el saldo que falta
+    if(!Array.isArray(d.pagosParciales)) d.pagosParciales=[];
+    d.pagosParciales.push({fecha:fechaPago,monto:parcial,cuenta});
+    d.monto = Math.round((d.monto-parcial)*100)/100;
+    if(Array.isArray(d.items)) d.items.push({id:'pp'+Date.now(),desc:(esYoDebo?'Pago parcial':'Cobro parcial'),fecha:fechaPago,monto:-parcial});
+  } else {
+    // Marcar como pagado
+    d.status    = 'pagado';
+    d.fechaPago = fechaPago;
+    d.cuentaPago= cuenta;
+  }
 
   // Si es una deuda que YO debo, el dinero SALE de la cuenta (se resta);
   // si me deben a mí, el dinero ENTRA (se suma) — es el mismo flujo, solo
@@ -18941,7 +18995,8 @@ function renderFuelSummary(type, rows){
   const kmTotal =complete.reduce((s,r)=>s+(r.kmUsado||0),0);
   const galTotal=rows.reduce((s,r)=>s+(parseFloat(r.galones)||0),0);
   const gasTotal=rows.reduce((s,r)=>s+(r.totalGlp||0),0);
-  const kxgAvg  =galTotal>0?kmTotal/galTotal:null;
+  const galCompletos=complete.reduce((s,r)=>s+(parseFloat(r.galones)||0),0);
+  const kxgAvg  =galCompletos>0?kmTotal/galCompletos:null; // km y galones de las MISMAS cargas
   const lastPxg =[...rows].reverse().find(r=>parseFloat(r.pxg)>0);
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   set(`fs-${type}-km`,    kmTotal >0?fuelFmt(kmTotal,0)+' km':'—');
@@ -19323,8 +19378,10 @@ function renderTcOperaciones(){
     const dolares = tieneVenta ? op.montoDolaresVenta : op.montoDolaresCompra;
     const tc = tieneVenta ? op.tcVenta : tcProyectado;
     const soles = tieneVenta ? op.montoSolesVenta : dolares*tc;
-    const utilidad = soles - op.montoSolesCompra;
-    const spread = op.montoDolaresCompra>0 ? utilidad/op.montoDolaresCompra : 0;
+    // Venta parcial: se compara contra el costo proporcional de los dólares vendidos
+    const costoBase = (tieneVenta && op.montoDolaresCompra>0 && dolares<op.montoDolaresCompra) ? op.montoSolesCompra*(dolares/op.montoDolaresCompra) : op.montoSolesCompra;
+    const utilidad = soles - costoBase;
+    const spread = (tieneVenta?dolares:op.montoDolaresCompra)>0 ? utilidad/(tieneVenta?dolares:op.montoDolaresCompra) : 0;
     const uColor = utilidad>=0 ? 'var(--green)' : 'var(--red)';
     const liveColor = uColor; // rojo/verde según el signo, sea proyectado o real — el "~" ya indica si es estimado
     const tilde = tieneVenta ? '' : '~';
@@ -19775,9 +19832,10 @@ function getDMResumen(d){
   const total = d.cuotas.length;
   const pagadas = d.cuotas.filter(c=>c.pagado).length;
   const restantes = total-pagadas;
-  const saldoPendiente = d.tipo==='fijo'
+  let saldoPendiente = d.tipo==='fijo'
     ? d.cuotas.filter(c=>!c.pagado).reduce((s,c)=>s+c.monto,0)
     : (d.importe - d.cuotas.filter(c=>c.pagado).reduce((s,c)=>s+c.amort,0));
+  if(Math.abs(saldoPendiente)<0.005) saldoPendiente=0; // evita mostrar -0.00 por redondeo
   const proxima = d.cuotas.filter(c=>!c.pagado).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha))[0];
   return { total, pagadas, restantes, saldoPendiente, proximaFecha: proxima?proxima.fecha:null };
 }
@@ -20343,7 +20401,8 @@ function calcularRenta5taMes(anio,mesIdx,ingresoRecurrente,ingresoUnico){
   // Se prefiere la retención REAL (de tu boleta) sobre nuestro estimado
   // viejo — así el cálculo se autocorrige con datos reales en vez de
   // arrastrar un error de un mes anterior.
-  const retencionAcumuladaPrevia=boletasPrevias.reduce((s,b)=>s+(b.retencion5taReal!=null?b.retencion5taReal:(b.retencion5taEstimada||0)),0)+(cfg.retencionAnterior||0);
+  // Ene–Mar la retención es impuesto/12 sin descontar lo retenido antes (SUNAT): el descuento de retenciones previas empieza en abril
+  const retencionAcumuladaPrevia=(mesIdx<=2?[]:boletasPrevias).reduce((s,b)=>s+(b.retencion5taReal!=null?b.retencion5taReal:(b.retencion5taEstimada||0)),0)+(cfg.retencionAnterior||0);
   const mesesQueFaltan=11-mesIdx; // meses DESPUÉS del actual
   const gratJul=calcularGratificacion(anio,'jul').baseGrat;
   const gratDic=calcularGratificacion(anio,'dic').baseGrat;
@@ -23346,19 +23405,6 @@ function deleteCalEvent(){
 }
 
 // ── DASHBOARD: Próximos eventos del mes actual (cuenta regresiva) ──
-function getUpcomingCalEventsThisMonth(){
-  const today = new Date(); today.setHours(0,0,0,0);
-  const y = today.getFullYear(), m = today.getMonth();
-  const occurrences = getEventOccurrencesForMonth(y, m);
-  return occurrences
-    .map(o=>{
-      const d = new Date(o.fecha+'T00:00:00');
-      const diffDays = Math.round((d-today)/(1000*60*60*24));
-      return {...o, diffDays};
-    })
-    .filter(o=>o.diffDays>=0)
-    .sort((a,b)=>a.diffDays-b.diffDays);
-}
 
 // ── SEED ─────────────────────────────────────────────
 function seedDemo(){
