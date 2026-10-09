@@ -3754,9 +3754,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.57.0';
-const APP_VERSION_DATE = '08/10/26 - 23:47'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.57.1';
+const APP_VERSION_DATE = '09/10/26 - 02:29'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Interno: el asistente de IA y los avisos al bot de Telegram ahora usan el nuevo servidor del bot (Cloudflare). No cambia nada en pantalla.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22722,7 +22722,7 @@ function guardarCorreosImportantes(){
 // marque como registrado (accion 'aprobado') en el chat. Solo manda los que
 // tienen tgMessageId (avisos nuevos). Siempre resuelve — si falla o tarda
 // más de 6 s, igual se sigue con el borrado normal: nunca bloquea la app.
-const AVISO_PENDIENTE_URL = 'https://us-central1-financedb-3bcff.cloudfunctions.net/avisarPendienteDesdeApp';
+const AVISO_PENDIENTE_URL = 'https://dbfinance-bot.miguelo996600860.workers.dev/aviso';
 async function avisarBotPendientes(ids, accion){
   try{
     const set=new Set(ids||[]);
@@ -24210,6 +24210,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.57.1",
+  "fecha": "09/10/26",
+  "cambios": [
+   "Interno: el asistente de IA y los avisos al bot de Telegram ahora usan el nuevo servidor del bot (Cloudflare). No cambia nada en pantalla."
+  ]
+ },
+ {
   "v": "v1.57.0",
   "fecha": "08/10/26",
   "cambios": [
@@ -24700,7 +24707,7 @@ function detenerListenerTiempoReal(){
 //  en `state`, y se lo manda a una Cloud Function (chatFinanzas) que llama
 //  a Gemini. Cero costo extra de Firestore, mismo Gemini gratis del bot.
 // ══════════════════════════════════════════════════════
-const CHAT_FUNCTION_URL = 'https://us-central1-financedb-3bcff.cloudfunctions.net/chatFinanzas';
+const CHAT_FUNCTION_URL = 'https://dbfinance-bot.miguelo996600860.workers.dev/chat';
 // Ya no hay una clave fija aquí (CHAT_WIDGET_KEY) — se autentica con el ID
 // token real de tu sesión de Firebase Auth (ver enviarMensajeChatIA), que
 // nadie puede fabricar sin loguearse de verdad con tu contraseña.
