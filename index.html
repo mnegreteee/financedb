@@ -205,6 +205,27 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .account-table td{padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .account-table td:last-child{text-align:right;font-family:var(--mono);}
 .account-table tr:last-child td{border-bottom:none;}
+/* Tarjeta unificada Cuentas+Ahorros: ocupa el espacio de las 2 tarjetas anteriores */
+.cu-wide{grid-column:span 2;}
+.cuentas-uni{container-type:inline-size;}
+.cu-tabla td.cu-n,.cu-tabla th.cu-n{text-align:right;font-family:var(--mono);vertical-align:top;padding-left:8px;}
+.cu-tabla td:first-child{vertical-align:middle;}
+.cu-tabla td.cu-prev{font-size:11px;color:var(--text2);}
+.cu-tabla .cu-pr{padding-right:12px;}
+.cu-tabla .cu-sep{border-left:1px solid var(--border);padding-left:12px;}
+.cu-tabla th.cu-sep{padding-left:12px;}
+.cu-l{line-height:20px;white-space:nowrap;}
+.cu-tabla tr.cu-tot td{border-top:1px solid var(--border2);}
+.cu-cards{display:none;}
+.cu-card{padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.cu-card.selected{background:rgba(91,141,239,.10);}
+.cu-nm{font-weight:600;margin-bottom:6px;font-size:13px;}
+.cu-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cu-box{background:var(--bg3);border-radius:8px;padding:7px 9px;}
+.cu-k{font-size:9px;letter-spacing:.6px;color:var(--text3);text-transform:uppercase;margin-bottom:2px;}
+.cu-box .cu-l{font-family:var(--mono);font-size:13px;}
+.cu-box .cu-pv{font-size:10px;color:var(--text3);line-height:15px;}
+@container (max-width:560px){.cu-tabla{display:none;}.cu-cards{display:block;}}
 .acc-row{cursor:pointer;transition:background .12s;}
 .acc-row:hover td{background:rgba(91,141,239,.05);}
 .acc-row.selected td{background:rgba(91,141,239,.10);}
@@ -586,6 +607,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 @media(max-width:900px){
   .main-grid{grid-template-columns:repeat(3,1fr);}
   .mid-grid,.mid-grid-3col{grid-template-columns:1fr;}
+  .cu-wide{grid-column:auto;}
   .budget-grid{grid-template-columns:repeat(2,1fr);}
   .srv-grid{grid-template-columns:1fr;}
   /* Dashboard */
@@ -1681,15 +1703,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div class="mid-grid-3col">
-    <div class="card" style="padding:18px">
-      <div class="section-header"><div class="section-title">Cuentas</div><div style="display:flex;align-items:center;gap:6px"><button id="cuentas-op-ocultas-btn" class="config-action-btn neutral" style="font-size:9px;display:none;padding:3px 7px" onclick="toggleCuentasOpOcultasView()"></button><button id="btn-transferir" class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="openTransferModal()">🔄 Transferir</button></div></div>
-      <div id="cuentas-op-subtitulo" style="font-size:10px;color:var(--text3);margin-top:-8px;margin-bottom:8px">BCP · BBVA · Efectivo</div>
-      <table class="account-table"><thead><tr><th>Cuenta</th><th>Previo</th><th style="text-align:right">Actual</th></tr></thead><tbody id="accounts-tbody"></tbody></table>
+    <div class="card cuentas-uni cu-wide" style="padding:18px">
+      <div class="section-header"><div class="section-title">Cuentas</div><div style="display:flex;align-items:center;gap:6px"><button id="cuentas-ocultas-btn" class="config-action-btn neutral" style="font-size:9px;display:none;padding:3px 7px" onclick="toggleCuentasOcultasView()"></button><button id="btn-transferir" class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="openTransferModal()">🔄 Transferir</button></div></div>
+      <div id="cuentas-op-subtitulo" style="font-size:10px;color:var(--text3);margin-top:-8px;margin-bottom:8px">Disponible y ahorro · Soles · Dólares</div>
+      <table class="account-table cu-tabla"><thead>
+        <tr><th rowspan="2" style="vertical-align:bottom">Cuenta</th><th colspan="2" style="text-align:center;border-bottom:none;padding-bottom:2px;color:var(--text2)">Disponible</th><th colspan="2" class="cu-sep" style="text-align:center;border-bottom:none;padding-bottom:2px;color:var(--text2)">Ahorro</th></tr>
+        <tr><th style="text-align:right">Previo</th><th class="cu-pr" style="text-align:right">Actual</th><th class="cu-sep" style="text-align:right">Previo</th><th style="text-align:right">Saldo</th></tr>
+      </thead><tbody id="accounts-tbody"></tbody></table>
+      <div class="cu-cards"><div id="accounts-cards"></div><div id="accounts-totales-cards"></div></div>
       <div id="account-filter-badge" style="display:none;margin-top:8px"><div class="filter-badge"><span id="filter-badge-text"></span><span style="cursor:pointer" onclick="clearAccountFilter()"> ✕</span></div></div>
-    </div>
-    <div class="card" style="padding:18px">
-      <div class="section-header"><div class="section-title">Ahorros</div><div style="display:flex;align-items:center;gap:8px"><button id="ahorros-ocultas-btn" class="config-action-btn neutral" style="font-size:9px;display:none;padding:3px 7px" onclick="toggleCuentasOcultasView()"></button><div style="font-size:10px;color:var(--text3)">Soles · Dólares</div></div></div>
-      <table class="account-table" id="savings-table"><thead><tr><th>Cuenta</th><th>Previo</th><th style="text-align:right">Saldo</th></tr></thead><tbody id="savings-tbody"></tbody></table>
     </div>
     <div class="card" style="padding:18px">
       <div class="section-title" style="margin-bottom:6px">Tipo de Cambio <span style="font-size:10px;color:var(--text3)">(clic para editar)</span></div>
@@ -3640,9 +3662,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.55.1';
-const APP_VERSION_DATE = '08/10/26 - 21:53'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Arreglo: ahora detecta y permite unir cuentas como "Pichincha S/." y "Pichincha $" bajo un solo banco.';
+const APP_VERSION = 'v1.55.2';
+const APP_VERSION_DATE = '08/10/26 - 22:05'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Cuentas y Ahorros ahora son una sola tarjeta (Disponible y Ahorro por banco, soles y dólares), y en Gestionar cuentas puedes ver y cambiar el tipo de cada cuenta.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4618,7 +4640,7 @@ function eliminarActividad(logId){
 }
 function mostrarSkeletons(){
   const objetivos=[
-    ['accounts-tbody', 4], ['savings-tbody', 3], ['mov-list', 5],
+    ['accounts-tbody', 4], ['mov-list', 5],
   ];
   objetivos.forEach(([id,n])=>{
     const el=document.getElementById(id);
@@ -7944,10 +7966,8 @@ function renderAccountsTables(){
   const p=prevMY(state.currentYear,state.currentMonth);
   const prevSaldo=reconstructSaldoAt(p.year,p.month);
 
-  // Reordena una lista de filas según state.ordenCuentas (orden manual guardado
-  // por el usuario, arrastrando o con ▲▼) — las que no estén en esa lista
-  // (cuentas nuevas, o antes de usar esta función) se van al final, en su
-  // orden natural de siempre.
+  // Reordena según state.ordenCuentas (orden manual guardado — flechas ▲▼ o arrastrando).
+  // Las que no estén en esa lista (cuentas nuevas) se van al final en su orden natural.
   function ordenarPorPreferencia(rows){
     const orden=state.ordenCuentas||[];
     return [...rows].sort((a,b)=>{
@@ -7959,184 +7979,143 @@ function renderAccountsTables(){
     });
   }
 
-  // Agrupa filas por banco: BBVA con S/ y $ (o disponible y ahorro) se ve como UNA
-  // fila con los montos apilados. Cada cuenta sigue siendo independiente por dentro.
-  function agruparPorBanco(list){
-    const grupos=[], idx={};
-    list.forEach(r=>{
-      const id=getBanco(r.k)+'|'+(r.otras?1:0);
-      if(!(id in idx)){ idx[id]=grupos.length; grupos.push({banco:getBanco(r.k),rows:[]}); }
-      grupos[idx[id]].rows.push(r);
-    });
-    grupos.forEach(g=>g.rows.sort((x,y)=>(x.s==='$'?1:0)-(y.s==='$'?1:0)));
-    return grupos;
-  }
-  function makeRows(list, tabla){
-    const grupos=agruparPorBanco(list);
-    return grupos.map((g,idx)=>{
-      const rs=g.rows, first=rs[0], keys=rs.map(r=>r.k);
-      const sel=keys.every(k=>selectedAccounts.has(k))?'selected':'';
-      const otras=rs.every(r=>r.otras);
-      const muted=otras?'opacity:.65;font-style:italic':'';
-      const tag=otras?`<span style="font-size:9px;background:var(--bg4);color:var(--text3);border-radius:3px;padding:1px 5px;margin-left:5px;vertical-align:middle">no suma</span>`:'';
-      const col=getCuentaColor(first.k);
-      const lbl = rs.length>1 ? g.banco
-        : (grupos.some(o=>o!==g && o.banco===g.banco) ? accLabel(first.k) : g.banco);
-      const dot=`<label style="cursor:pointer;display:inline-flex;position:relative;margin-right:7px;vertical-align:middle" title="Cambiar color de ${escapeHtml(lbl)}" onclick="event.stopPropagation()"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><input type="color" value="${col}" onchange="updateCuentaColor('${first.k}', this.value)" style="position:absolute;width:0;height:0;opacity:0;border:none;padding:0"></label>`;
-      const arrows=`<span onclick="event.stopPropagation();moverCuenta('${tabla}','${first.k}',-1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${idx===0?'visibility:hidden':''}" title="Subir">▲</span><span onclick="event.stopPropagation();moverCuenta('${tabla}','${first.k}',1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${idx===grupos.length-1?'visibility:hidden':''}" title="Bajar">▼</span>`;
-      // Botón de ocultar manual — disponible en TODAS las cuentas, sin
-      // importar su saldo, como respaldo confiable por si el auto-ocultado
-      // en S/0 no cubre algún caso puntual. Ocultar la manda a "🙈 Ocultas".
-      const ocultarIcono=`<span onclick="event.stopPropagation();${keys.map(k=>`ocultarCuentaManual('${k}')`).join(';')}" style="cursor:pointer;font-size:11px;margin-left:6px;opacity:.5" title="Ocultar de la lista">🙈</span>`;
-      const celda=(campo)=>rs.map(r=>{
-        const v=(campo==='cur'?curSaldo:prevSaldo)[r.k]||0;
-        const fc=r.s==='$'?fmtD:fmtS;
-        const neg=v<0;
-        if(campo==='cur') return `<div style="color:${neg?'var(--red)':'var(--text)'}">${neg?'-':''}${M(fc(v))}</div>`;
-        return `<div>${M((neg?'-':'')+fc(v))}</div>`;
-      }).join('');
-      return `<tr class="acc-row ${sel}" draggable="true" data-key="${first.k}" data-keys="${encodeURIComponent(JSON.stringify(keys))}" data-tabla="${tabla}" ondragstart="cuentaDragStart(event)" ondragover="cuentaDragOver(event)" ondrop="cuentaDrop(event)" ondragend="cuentaDragEnd(event)" onclick="selectAccountsGroup(this)" style="${muted}">
-        <td><span style="display:inline-flex;flex-direction:column;vertical-align:middle;margin-right:4px">${arrows}</span>${dot}${escapeHtml(lbl)}${tag}${ocultarIcono}</td>
-        <td style="text-align:right;font-size:11px;color:var(--text2)">${celda('prv')}</td>
-        <td>${celda('cur')}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  // Build account lists dynamically from what actually exists in state.cuentas
+  // ── Armado de la lista de cuentas (misma lógica de siempre) ──
+  // cat: 'disp' = disponible (operativa), 'otras' = no suma, 'ah' = ahorro.
   const custom=state.customCuentas||{};
   const defaultOp=['BCP','BBVA','Efectivo'];
   const defaultAh=['Ahorro Soles','Ahorro Dólares'];
-  const defaultIcons={BCP:'🟦',BBVA:'🔵',Efectivo:'💵','Ahorro Soles':'🏦','Ahorro Dólares':'💲'};
   const defaultAhCur={'Ahorro Soles':'S/','Ahorro Dólares':'$'};
-
-  // Cuentas table: operativa defaults + all custom (op, otras — NOT ahorro defaults)
-  const allOpRows=[];
-  const allOpRowsOcultas=[]; // en S/0 y no forzadas a mostrar — para la vista "🙈 Ocultas"
-  // Add default operativa only if they exist in state.cuentas
+  const visibles=[], ocultas=[];
+  function agregar(fila){ (cuentaAhorroVisible(fila.k, curSaldo[fila.k]||0)?visibles:ocultas).push(fila); }
   defaultOp.forEach(k=>{
+    if(k in custom) return; // si existe una personalizada con ese nombre, manda la personalizada
     const tieneSaldo = curSaldo[k]!==undefined && curSaldo[k]!==0;
-    if(state.cuentas[k]!==undefined || tieneSaldo){
-      const fila={k,l:k,ic:defaultIcons[k],s:'S/',otras:false};
-      if(cuentaAhorroVisible(k, curSaldo[k]||0)) allOpRows.push(fila); else allOpRowsOcultas.push(fila);
-    }
+    if(state.cuentas[k]!==undefined || tieneSaldo) agregar({k,s:'S/',cat:'disp'});
   });
-  // Add all custom accounts (op, otras — ahorro custom go in savings table)
   Object.entries(custom).forEach(([k,v])=>{
-    if(v.type==='ahorro') return; // skip, goes in savings table
-    const fila={k,l:k,ic:v.type==='otras'?'📋':'💳',s:v.currency==='USD'?'$':'S/',otras:v.type==='otras'};
-    if(cuentaAhorroVisible(k, curSaldo[k]||0)) allOpRows.push(fila); else allOpRowsOcultas.push(fila);
+    if(v.type==='ahorro') return;
+    agregar({k,s:v.currency==='USD'?'$':'S/',cat:v.type==='otras'?'otras':'disp'});
   });
-
-  // Ahorro table: default ahorro + custom ahorro
-  const ahRows=[];
-  const ahRowsOcultas=[]; // en S/0 y no forzadas a mostrar — para la vista "🙈 Cuentas ocultas"
   defaultAh.forEach(k=>{
-    // Ojo: antes esto era "curSaldo[k]!==0", pero para una cuenta borrada
-    // curSaldo[k] es undefined, y undefined!==0 es TRUE en JS — por eso las
-    // cuentas por defecto seguían apareciendo aunque las borraras.
+    if(k in custom) return;
+    // Ojo: para una cuenta borrada curSaldo[k] es undefined y undefined!==0 es TRUE —
+    // por eso se exige que exista en state.cuentas o tenga saldo real.
     const tieneSaldo = curSaldo[k]!==undefined && curSaldo[k]!==0;
-    if(state.cuentas[k]!==undefined || tieneSaldo){
-      const fila={k,l:k,ic:defaultIcons[k],s:defaultAhCur[k],otras:false};
-      if(cuentaAhorroVisible(k, curSaldo[k]||0)) ahRows.push(fila); else ahRowsOcultas.push(fila);
-    }
+    if(state.cuentas[k]!==undefined || tieneSaldo) agregar({k,s:defaultAhCur[k],cat:'ah'});
   });
   Object.entries(custom).forEach(([k,v])=>{
-    if(v.type==='ahorro'){
-      const fila={k,l:k,ic:'🏦',s:v.currency==='USD'?'$':'S/',otras:false};
-      if(cuentaAhorroVisible(k, curSaldo[k]||0)) ahRows.push(fila); else ahRowsOcultas.push(fila);
-    }
+    if(v.type==='ahorro') agregar({k,s:v.currency==='USD'?'$':'S/',cat:'ah'});
   });
-
-  // Si una cuenta personalizada se crea con el MISMO nombre que una de las 5
-  // cuentas por defecto, quedaría dos veces en la tabla — se deduplica por
-  // nombre, quedándose con la versión personalizada (tiene más info propia).
+  // Si una cuenta personalizada se llama igual que una por defecto, se queda la personalizada.
   function dedupePorNombre(rows){
     const vistos=new Set(); const out=[];
     for(let i=rows.length-1;i>=0;i--){
       if(vistos.has(rows[i].k)) continue;
-      vistos.add(rows[i].k);
-      out.unshift(rows[i]);
+      vistos.add(rows[i].k); out.unshift(rows[i]);
     }
     return out;
   }
-  const allOpRowsDeduped=dedupePorNombre(allOpRows);
-  const ahRowsDeduped=dedupePorNombre(ahRows);
+  const vis=dedupePorNombre(visibles), ocu=dedupePorNombre(ocultas);
 
-  // El subtítulo bajo "Cuentas" antes decía siempre "BCP · BBVA · Efectivo"
-  // sin importar cuáles tuvieras de verdad — ahora refleja las cuentas
-  // operativas reales (incluye las personalizadas, ej. "Agora (YT)").
-  const subtituloEl=document.getElementById('cuentas-op-subtitulo');
-  if(subtituloEl){
-    subtituloEl.textContent = allOpRowsDeduped.length ? [...new Set(allOpRowsDeduped.map(r=>getBanco(r.k)))].join(' · ') : 'Sin cuentas registradas';
+  // ── Botón "🙈 Ocultas" único (antes había uno por tarjeta) ──
+  const btnOc=document.getElementById('cuentas-ocultas-btn');
+  if(btnOc){
+    btnOc.style.display=(ocu.length||cuentasOcultasView)?'inline-flex':'none';
+    btnOc.textContent=cuentasOcultasView?'‹ Volver':`🙈 Ocultas (${ocu.length})`;
   }
-
-  // Botón "🙈 Ocultas" de Cuentas operativas — mismo patrón que en Ahorros:
-  // solo aparece si hay alguna en S/0 sin forzar a mostrar.
-  const allOpRowsOcultasDeduped=dedupePorNombre(allOpRowsOcultas);
-  const btnOpOcultas=document.getElementById('cuentas-op-ocultas-btn');
-  if(btnOpOcultas){
-    btnOpOcultas.style.display=(allOpRowsOcultasDeduped.length||cuentasOpOcultasView)?'inline-flex':'none';
-    btnOpOcultas.textContent=cuentasOpOcultasView?'‹ Volver':`🙈 Ocultas (${allOpRowsOcultasDeduped.length})`;
-  }
-  if(cuentasOpOcultasView){
-    document.getElementById('accounts-tbody').innerHTML = allOpRowsOcultasDeduped.length
-      ? allOpRowsOcultasDeduped.map(r=>`<tr>
-          <td style="opacity:.7">${escapeHtml(accLabel(r.k))} <span style="font-size:9px;color:var(--text3)">(${r.s} 0)</span></td>
-          <td style="text-align:right;font-size:11px;color:var(--text3)">—</td>
-          <td style="text-align:right"><button onclick="mostrarCuentaForzada('${r.k}')" style="font-size:9px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">👁️ Mostrar</button></td>
-        </tr>`).join('')
-      : '<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">No tienes cuentas ocultas.</td></tr>';
-  } else {
-    document.getElementById('accounts-tbody').innerHTML=allOpRowsDeduped.length?makeRows(ordenarPorPreferencia(allOpRowsDeduped),'op'):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</td></tr>';
-  }
-
-  // Filas de TOTAL por moneda — coinciden con lo que muestran las tarjetas
-  // "Ahorro Soles" y "Ahorro Dólares" de arriba (mismo criterio de suma).
-  let totalFilas='';
-  if(ahRowsDeduped.length){
-    let totS=0, totD=0, prevS=0, prevD=0, hayS=false, hayD=false;
-    ahRowsDeduped.forEach(r=>{
-      const cur=curSaldo[r.k]||0, prv=prevSaldo[r.k]||0;
-      if(r.s==='$'){ totD+=cur; prevD+=prv; hayD=true; }
-      else { totS+=cur; prevS+=prv; hayS=true; }
-    });
-    const filaTotal=(label,tot,prv,fc)=>`<tr style="border-top:1px solid var(--border2)">
-      <td style="font-weight:600;padding-top:9px">${label}</td>
-      <td style="text-align:right;font-size:11px;color:var(--text2);padding-top:9px">${M(fc(prv))}</td>
-      <td style="font-weight:700;color:var(--teal);padding-top:9px">${M(fc(tot))}</td>
-    </tr>`;
-    if(hayS) totalFilas+=filaTotal('Total Soles', totS, prevS, fmtS);
-    if(hayD) totalFilas+=filaTotal('Total Dólares', totD, prevD, fmtD);
-  }
-
-  // Botón "🙈 Cuentas ocultas" — solo aparece si hay alguna en S/0 sin
-  // forzar a mostrar. Al tocarlo, la MISMA tabla cambia a mostrar solo esas
-  // cuentas ocultas, cada una con un botón para volver a mostrarla.
-  const ahRowsOcultasDeduped=dedupePorNombre(ahRowsOcultas);
-  const btnOcultas=document.getElementById('ahorros-ocultas-btn');
-  if(btnOcultas){
-    btnOcultas.style.display=(ahRowsOcultasDeduped.length||cuentasOcultasView)?'inline-flex':'none';
-    btnOcultas.textContent=cuentasOcultasView?'‹ Volver':`🙈 Ocultas (${ahRowsOcultasDeduped.length})`;
-  }
+  const tbody=document.getElementById('accounts-tbody');
+  const cards=document.getElementById('accounts-cards');
+  const foot=document.getElementById('accounts-totales-cards');
+  const TIPO_TXT={disp:'Disponible',otras:'Otras',ah:'Ahorro'};
   if(cuentasOcultasView){
-    document.getElementById('savings-tbody').innerHTML = ahRowsOcultasDeduped.length
-      ? ahRowsOcultasDeduped.map(r=>`<tr>
-          <td style="opacity:.7">${escapeHtml(accLabel(r.k))} <span style="font-size:9px;color:var(--text3)">(${r.s} 0)</span></td>
-          <td style="text-align:right;font-size:11px;color:var(--text3)">—</td>
-          <td style="text-align:right"><button onclick="mostrarCuentaForzada('${r.k}')" style="font-size:9px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">👁️ Mostrar</button></td>
-        </tr>`).join('')
-      : '<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">No tienes cuentas ocultas.</td></tr>';
+    const fila=r=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)"><span style="opacity:.7">${escapeHtml(accLabel(r.k))} <span style="font-size:9px;color:var(--text3)">(${TIPO_TXT[r.cat]} · ${r.s} 0)</span></span><button onclick="mostrarCuentaForzada('${r.k}')" style="font-size:9px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">👁️ Mostrar</button></div>`;
+    const html=ocu.length?ocu.map(fila).join(''):'<div style="color:var(--text3);text-align:center;padding:12px;font-size:12px">No tienes cuentas ocultas.</div>';
+    tbody.innerHTML=`<tr><td colspan="5" style="padding:0">${html}</td></tr>`;
+    if(cards) cards.innerHTML=html;
+    if(foot) foot.innerHTML='';
+    return;
+  }
+  if(!vis.length){
+    tbody.innerHTML='<tr><td colspan="5" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</td></tr>';
+    if(cards) cards.innerHTML='<div style="color:var(--text3);text-align:center;padding:12px;font-size:12px">Carga el histórico Excel para ver tus cuentas</div>';
+    if(foot) foot.innerHTML='';
     return;
   }
 
-  document.getElementById('savings-tbody').innerHTML=ahRowsDeduped.length?(makeRows(ordenarPorPreferencia(ahRowsDeduped),'ahorro')+totalFilas):'<tr><td colspan="3" style="color:var(--text3);text-align:center;padding:12px;font-size:12px">—</td></tr>';
+  // ── Agrupar por banco: UNA fila por banco con Disponible y Ahorro, S/ y $ apilados ──
+  // Las cuentas "otras" (no suman) quedan en su propia fila atenuada.
+  const grupos=[], idx={};
+  vis.forEach(r=>{
+    const id=getBanco(r.k)+'|'+(r.cat==='otras'?'o':'');
+    if(!(id in idx)){ idx[id]=grupos.length; grupos.push({banco:getBanco(r.k),otras:r.cat==='otras',rows:[],k:r.k}); }
+    grupos[idx[id]].rows.push(r);
+  });
+  const gOrd=ordenarPorPreferencia(grupos);
+  const ordMon=(x,y)=>(x.s==='$'?1:0)-(y.s==='$'?1:0);
+  // Valor mostrado: lo que se redondea a 0.00 se trata como cero (sin "-S/ 0.00" rojo).
+  const val=(m,k)=>{ const v=(m[k]||0); return Math.abs(v)<0.005?0:v; };
+  const celda=(arr,m,esCur)=>{
+    if(!arr.length) return `<div class="cu-l" style="color:var(--text3)">—</div>`;
+    return arr.map(r=>{
+      const v=val(m,r.k), fc=r.s==='$'?fmtD:fmtS, neg=v<0;
+      return esCur
+        ? `<div class="cu-l" style="color:${neg?'var(--red)':'var(--text)'}">${neg?'-':''}${M(fc(v))}</div>`
+        : `<div class="cu-l">${neg?'-':''}${M(fc(v))}</div>`;
+    }).join('');
+  };
+  const rowsHTML=[], cardsHTML=[];
+  gOrd.forEach((g,i)=>{
+    const rs=[...g.rows].sort(ordMon);
+    const disp=rs.filter(r=>r.cat!=='ah'), ah=rs.filter(r=>r.cat==='ah');
+    const keys=rs.map(r=>r.k), first=rs[0];
+    const sel=keys.every(k=>selectedAccounts.has(k))?'selected':'';
+    const muted=g.otras?'opacity:.65;font-style:italic':'';
+    const tag=g.otras?`<span style="font-size:9px;background:var(--bg4);color:var(--text3);border-radius:3px;padding:1px 5px;margin-left:5px;vertical-align:middle">no suma</span>`:'';
+    const col=getCuentaColor(first.k);
+    const lbl=(grupos.some(o=>o!==g && o.banco===g.banco) && rs.length===1)?accLabel(first.k):g.banco;
+    const dot=`<label style="cursor:pointer;display:inline-flex;position:relative;margin-right:7px;vertical-align:middle" title="Cambiar color de ${escapeHtml(lbl)}" onclick="event.stopPropagation()"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span><input type="color" value="${col}" onchange="updateCuentaColor('${first.k}', this.value)" style="position:absolute;width:0;height:0;opacity:0;border:none;padding:0"></label>`;
+    const arrows=`<span onclick="event.stopPropagation();moverCuenta('op','${g.k}',-1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${i===0?'visibility:hidden':''}" title="Subir">▲</span><span onclick="event.stopPropagation();moverCuenta('op','${g.k}',1)" style="cursor:pointer;color:var(--text3);font-size:9px;padding:0 3px;${i===gOrd.length-1?'visibility:hidden':''}" title="Bajar">▼</span>`;
+    const ocultarIcono=`<span onclick="event.stopPropagation();${keys.map(k=>`ocultarCuentaManual('${k}')`).join(';')}" style="cursor:pointer;font-size:11px;margin-left:6px;opacity:.5" title="Ocultar de la lista">🙈</span>`;
+    const attrs=`data-key="${g.k}" data-keys="${encodeURIComponent(JSON.stringify(keys))}" data-tabla="op"`;
+    rowsHTML.push(`<tr class="acc-row ${sel}" draggable="true" ${attrs} ondragstart="cuentaDragStart(event)" ondragover="cuentaDragOver(event)" ondrop="cuentaDrop(event)" ondragend="cuentaDragEnd(event)" onclick="selectAccountsGroup(this)" style="${muted}">
+      <td><span style="display:inline-flex;flex-direction:column;vertical-align:middle;margin-right:4px">${arrows}</span>${dot}${escapeHtml(lbl)}${tag}${ocultarIcono}</td>
+      <td class="cu-n cu-prev">${celda(disp,prevSaldo,false)}</td>
+      <td class="cu-n cu-pr">${celda(disp,curSaldo,true)}</td>
+      <td class="cu-n cu-prev cu-sep">${celda(ah,prevSaldo,false)}</td>
+      <td class="cu-n">${celda(ah,curSaldo,true)}</td>
+    </tr>`);
+    const bloque=(titulo,arr)=>`<div class="cu-box"><div class="cu-k">${titulo}</div>${celda(arr,curSaldo,true)}${arr.some(r=>Math.abs(val(prevSaldo,r.k)-val(curSaldo,r.k))>=0.005)?`<div class="cu-pv">antes</div>${celda(arr,prevSaldo,false).replace(/class="cu-l"/g,'class="cu-l cu-pv"')}`:''}</div>`;
+    cardsHTML.push(`<div class="cu-card acc-row ${sel}" ${attrs} onclick="selectAccountsGroup(this)" style="${muted}">
+      <div class="cu-nm">${arrows}${dot}${escapeHtml(lbl)}${tag}${ocultarIcono}</div>
+      <div class="cu-grid2">${bloque('Disponible',disp)}${bloque('Ahorro',ah)}</div>
+    </div>`);
+  });
+
+  // ── Totales por moneda (Disponible no incluye "otras", igual que antes) ──
+  const T={S:{dp:0,dc:0,ap:0,ac:0,hay:false},D:{dp:0,dc:0,ap:0,ac:0,hay:false}};
+  vis.forEach(r=>{
+    const t=r.s==='$'?T.D:T.S; t.hay=true;
+    if(r.cat==='disp'){ t.dp+=prevSaldo[r.k]||0; t.dc+=curSaldo[r.k]||0; }
+    else if(r.cat==='ah'){ t.ap+=prevSaldo[r.k]||0; t.ac+=curSaldo[r.k]||0; }
+  });
+  const norm=v=>Math.abs(v)<0.005?0:v;
+  const totRow=(label,t,fc)=>t.hay?`<tr class="cu-tot">
+      <td style="font-weight:600;padding-top:9px">${label}</td>
+      <td class="cu-n cu-prev" style="padding-top:9px"><div class="cu-l">${M(fc(norm(t.dp)))}</div></td>
+      <td class="cu-n cu-pr" style="padding-top:9px;font-weight:700;color:var(--teal)"><div class="cu-l">${M(fc(norm(t.dc)))}</div></td>
+      <td class="cu-n cu-prev cu-sep" style="padding-top:9px"><div class="cu-l">${M(fc(norm(t.ap)))}</div></td>
+      <td class="cu-n" style="padding-top:9px;font-weight:700;color:var(--teal)"><div class="cu-l">${M(fc(norm(t.ac)))}</div></td>
+    </tr>`:'';
+  const totCard=(label,t,fc)=>t.hay?`<div class="cu-box" style="margin-top:8px"><div class="cu-k">${label}</div><div class="cu-grid2" style="gap:6px"><div><div class="cu-k" style="margin:0">Disponible</div><div class="cu-l" style="font-weight:700;color:var(--teal)">${M(fc(norm(t.dc)))}</div></div><div><div class="cu-k" style="margin:0">Ahorro</div><div class="cu-l" style="font-weight:700;color:var(--teal)">${M(fc(norm(t.ac)))}</div></div></div></div>`:'';
+  tbody.innerHTML=rowsHTML.join('')+totRow('Total Soles',T.S,fmtS)+totRow('Total Dólares',T.D,fmtD);
+  if(cards) cards.innerHTML=cardsHTML.join('');
+  if(foot) foot.innerHTML=totCard('Total Soles',T.S,fmtS)+totCard('Total Dólares',T.D,fmtD);
 }
 // ── Reordenar Cuentas/Ahorros a mano — flechas ▲▼ (cualquier dispositivo) o
 // arrastrando con el mouse (PC). Ambos caminos guardan en state.ordenCuentas.
 function moverCuenta(tabla, key, dir){
-  const tbodyId=tabla==='op'?'accounts-tbody':'savings-tbody';
-  const keys=[...document.querySelectorAll('#'+tbodyId+' tr')].map(tr=>tr.dataset.key);
+  const tbodyId='accounts-tbody'; // una sola tabla (Cuentas+Ahorros unificados)
+  const keys=[...document.querySelectorAll('#'+tbodyId+' tr.acc-row')].map(tr=>tr.dataset.key);
   const idx=keys.indexOf(key), swapIdx=idx+dir;
   if(idx===-1||swapIdx<0||swapIdx>=keys.length) return;
   const otherKey=keys[swapIdx];
@@ -8158,8 +8137,8 @@ function cuentaDrop(ev){
   const targetKey=ev.currentTarget.dataset.key;
   const tabla=ev.currentTarget.dataset.tabla;
   if(!cuentaDragKey||cuentaDragKey===targetKey) return;
-  const tbodyId=tabla==='op'?'accounts-tbody':'savings-tbody';
-  const keys=[...document.querySelectorAll('#'+tbodyId+' tr')].map(tr=>tr.dataset.key);
+  const tbodyId='accounts-tbody'; // una sola tabla (Cuentas+Ahorros unificados)
+  const keys=[...document.querySelectorAll('#'+tbodyId+' tr.acc-row')].map(tr=>tr.dataset.key);
   if(!state.ordenCuentas) state.ordenCuentas=[];
   keys.forEach(k=>{ if(!state.ordenCuentas.includes(k)) state.ordenCuentas.push(k); });
   const fromIdx=state.ordenCuentas.indexOf(cuentaDragKey);
@@ -12689,10 +12668,7 @@ function toggleCuentasOcultasView(){
   renderAccountsTables();
 }
 let cuentasOpOcultasView=false;
-function toggleCuentasOpOcultasView(){
-  cuentasOpOcultasView=!cuentasOpOcultasView;
-  renderAccountsTables();
-}
+function toggleCuentasOpOcultasView(){ toggleCuentasOcultasView(); } // compat: ahora hay un solo botón 🙈 Ocultas
 
 // ══════════════════════════════════════════════════════
 //  RECONCILIACIÓN DE SALDO — comparar lo que la app calcula contra el
@@ -12797,13 +12773,19 @@ function renderCuentasList(){
     const delBtn=`<button class="config-action-btn danger" onclick="startDeleteCuenta('${k}')" style="font-size:10px;padding:3px 8px">🗑</button>`;
     const masBtn=enGrupo?'':`<button class="config-action-btn neutral" onclick="abrirBolsilloModal({banco:${JSON.stringify(getBanco(k)).replace(/"/g,'&quot;')}})" title="Agregar otro bolsillo (disponible/ahorro, soles/dólares) a este banco" style="font-size:10px;padding:3px 8px">＋</button>`;
     const bancoBtn=`<button class="config-action-btn neutral" onclick="asignarBancoUI('${k}')" title="Cambiar a qué banco pertenece esta cuenta (para unirla con otras)" style="font-size:10px;padding:3px 8px">🔗</button>`;
-    const tLabel={'operativa':'operativa · ','ahorro':'ahorro · ','otras':'otras · '};
+    // Tipo de cuenta SIEMPRE visible y editable (Disponible / Ahorro / Otras). Las cuentas base de
+    // la app (BCP, BBVA, Efectivo, Ahorro Soles/Dólares) no tienen registro propio: su tipo es fijo.
+    const tipoAct=getAccountType(k);
+    const bloqueado=!(custom[k]);
+    const tipoBg={operativa:'rgba(91,141,239,.18)',ahorro:'rgba(45,212,191,.18)',otras:'var(--bg4)'}[tipoAct]||'var(--bg4)';
+    const chipTipo=`<select ${bloqueado?'disabled':''} onchange="cambiarTipoCuenta('${k}',this.value)" title="${bloqueado?'Cuenta base de la app: su tipo es fijo':'Toca para cambiar el tipo: Disponible, Ahorro u Otras (no suma)'}" style="font-size:10px;padding:2px 4px;border-radius:10px;border:1px solid var(--border2);background:${tipoBg};color:var(--text);font-family:inherit;cursor:${bloqueado?'default':'pointer'};max-width:128px"><option value="operativa" ${tipoAct==='operativa'?'selected':''}>💳 Disponible</option><option value="ahorro" ${tipoAct==='ahorro'?'selected':''}>🏦 Ahorro</option><option value="otras" ${tipoAct==='otras'?'selected':''}>📋 Otras (no suma)</option></select>`;
     // TODAS las cuentas (fijas y personalizadas) pueden cambiar su color
     const dot=`<input type="color" value="${getCuentaColor(k)}" onchange="updateCuentaColor('${k}',this.value)" title="Cambiar color" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;flex-shrink:0">`;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:6px">
+    return `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1 1 150px;min-width:0">
         ${dot}
-        <span style="font-size:13px;font-weight:500">${escapeHtml(enGrupo ? accLabel(k).replace(getBanco(k)+' · ','') : accLabel(k))}</span>${enGrupo?'':`<span style="font-size:10px;color:var(--text3)">${tLabel[t]||''}${cur}</span>`}
+        <span style="font-size:13px;font-weight:500">${escapeHtml(enGrupo ? (cur==='USD'?'Dólares ($)':'Soles (S/)') : accLabel(k))}</span>${enGrupo?'':`<span style="font-size:10px;color:var(--text3)">${cur==='USD'?'$':'S/'}</span>`}
+        ${chipTipo}
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-family:var(--mono);font-size:12px;color:${bal>=0?'var(--text2)':'var(--red)'}">${balStr}</span>
@@ -12854,6 +12836,29 @@ function asignarBancoUI(key){
   if(!nuevo || nuevo===key) delete state.bancoDeCuenta[key]; else state.bancoDeCuenta[key]=nuevo;
   saveState(); renderCuentasList(); render();
   toast(`"${key}" ahora es parte de: ${getBanco(key)}`);
+}
+// Cambia una cuenta entre Disponible / Ahorro / Otras (no suma). Solo cambia dónde se muestra y cómo
+// se suma: NO toca saldos, movimientos ni el banco. Las cuentas base de la app no se pueden cambiar.
+function cambiarTipoCuenta(k,nuevo){
+  const c=(state.customCuentas||{})[k];
+  if(!c){ toast('Esta es una cuenta base de la app: su tipo es fijo.','error'); renderCuentasList(); return; }
+  const actual=c.type||'operativa';
+  if(nuevo===actual || !['operativa','ahorro','otras'].includes(nuevo)){ renderCuentasList(); return; }
+  if(actual==='ahorro'){
+    const nAh=(state.movimientos||[]).filter(m=>m.account===k && m.type==='ahorro').length;
+    const nMetas=(state.metasAhorro||[]).filter(m=>m && m.cuentaVinculada===k).length;
+    if(nAh||nMetas){
+      const partes=[];
+      if(nAh) partes.push(`${nAh} movimiento(s) de ahorro (depósitos, retiros o intereses)`);
+      if(nMetas) partes.push(`${nMetas} meta(s) vinculada(s)`);
+      if(!confirm(`"${accLabel(k)}" tiene ${partes.join(' y ')}.\n\nSi deja de ser cuenta de ahorro, su saldo se conserva igual, pero esos movimientos ya no contarán en el resumen/intereses de ahorro y la meta dejará de verla como cuenta de ahorro.\n\n¿Continuar?`)){ renderCuentasList(); return; }
+    }
+  }
+  c.type=nuevo;
+  saveState(); clearSaldoCache();
+  renderCuentasList(); render();
+  const txt={operativa:'Disponible',ahorro:'Ahorro',otras:'Otras (no suma)'}[nuevo];
+  toast(`"${accLabel(k)}" ahora es cuenta de ${txt}`);
 }
 function renombrarBancoUI(banco){
   const r=prompt(`Nuevo nombre para el banco "${banco}" (se cambia en todas sus cuentas; los saldos no se tocan):`, banco);
@@ -23858,6 +23863,17 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.55.2",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Pantalla principal: las tarjetas \"Cuentas\" y \"Ahorros\" ahora son UNA sola, con el mismo espacio de las dos. Cada banco es una fila con sus columnas Disponible y Ahorro (Previo y Actual), con soles y dólares apilados y totales por moneda.",
+   "En celular la tarjeta unificada se ve como una mini-tarjeta por banco, con cajitas de Disponible y Ahorro.",
+   "Un solo botón \"🙈 Ocultas\" para las cuentas en cero (antes había uno por tarjeta). Las flechas ▲▼, arrastrar, el color y el filtro por cuenta siguen igual.",
+   "Gestionar cuentas: cada cuenta muestra siempre su tipo (💳 Disponible, 🏦 Ahorro, 📋 Otras = no suma) y se puede cambiar tocándolo. Solo cambia dónde se muestra y cómo suma; no mueve saldos. Las cuentas base (BCP, BBVA, Efectivo, Ahorro Soles/Dólares) tienen tipo fijo.",
+   "Los saldos que se redondean a cero ya no se ven como \"-S/ 0.00\" en rojo."
+  ]
+ },
+ {
   "v": "v1.55.1",
   "fecha": "08/10/26",
   "cambios": [
@@ -25409,6 +25425,7 @@ if(state.projGoals){
 <div class="modal-overlay" id="cuentas-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeCuentasModal')">
   <div class="modal" style="width:500px;max-height:90vh;overflow-y:auto">
     <div class="modal-title"><span>🏦 Gestionar Cuentas</span><button class="modal-close" onclick="closeCuentasModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">💡 Cada cuenta muestra su <b>tipo</b> (💳 Disponible · 🏦 Ahorro · 📋 Otras = no suma). Tócalo para cambiarlo; solo cambia dónde se muestra y cómo suma, no mueve saldos.</div>
     <div id="cuentas-list" style="margin-bottom:16px"></div>
 
     <!-- Transfer modal (inline) -->
