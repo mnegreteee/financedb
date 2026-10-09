@@ -3640,9 +3640,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.55.0';
-const APP_VERSION_DATE = '08/10/26 - 21:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Cuentas por banco: un solo BBVA con soles/dólares y disponible/ahorro, y los formularios muestran solo las cuentas de la moneda elegida.';
+const APP_VERSION = 'v1.55.1';
+const APP_VERSION_DATE = '08/10/26 - 21:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Arreglo: ahora detecta y permite unir cuentas como "Pichincha S/." y "Pichincha $" bajo un solo banco.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4852,7 +4852,7 @@ function guardarBolsilloModal(){
 function _bancoBaseDe(k){
   return String(k).replace(/s\//gi,' ').replace(/\$/g,' ')
     .replace(/\b(soles?|d[oó]lares?|usd|pen|ahorros?|disponible|cuenta|corriente)\b/gi,' ')
-    .replace(/[()·\-–_]/g,' ').replace(/\s+/g,' ').trim();
+    .replace(/[()·\-–_.,]/g,' ').replace(/\s+/g,' ').trim();
 }
 function detectarCuentasUnibles(){
   const grupos={};
@@ -23857,6 +23857,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.55.1",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Gestionar cuentas: corregido el aviso de \"cuentas que parecen del mismo banco\" — nombres como \"Pichincha S/.\" y \"Pichincha $\" (con punto o coma) ahora sí se detectan y se pueden unir."
+  ]
+ },
  {
   "v": "v1.55.0",
   "fecha": "08/10/26",
