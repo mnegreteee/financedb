@@ -3491,6 +3491,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
     </div>
     <div class="field"><label>Nota (opcional)</label><textarea id="f-note" placeholder="Agrega un comentario o detalle..."></textarea></div>
+    <div class="field" id="f-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
+      <select id="f-descpf"><option value="">No descontar</option></select>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveMovimiento()">Guardar</button>
@@ -3754,9 +3757,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.57.1';
-const APP_VERSION_DATE = '09/10/26 - 02:29'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Interno: el asistente de IA y los avisos al bot de Telegram ahora usan el nuevo servidor del bot (Cloudflare). No cambia nada en pantalla.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.58.0';
+const APP_VERSION_DATE = '09/10/26 - 12:51'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: al registrar un gasto, un consumo de tarjeta o una transferencia puedes elegir ➖ descontarlo de un pago frecuente con descuentos (ej. Préstamo Ripley), en la misma moneda. Si eliminas ese registro, el descuento se quita solo.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4270,6 +4273,7 @@ function renderActividadReciente(){
 // traiga el ref — reutilizado por varios tipos de actividad (pago frecuente
 // y gasto de combustible pueden haber ido a cualquiera de los dos).
 function _revertirMovOConsumo(ref){
+  quitarDescuentosPorOrigenWeb([ref.movId, ref.consumoId, ref.movIdA]);
   if(ref.movId){
     const m=state.movimientos.find(x=>x.id===ref.movId);
     if(m){ revertAccount(m); _movimientosBorradosExplicitamente.push(ref.movId); state.movimientos=state.movimientos.filter(x=>x.id!==ref.movId); }
@@ -5066,12 +5070,15 @@ function openTransferModal(destinoSugerido, montoSugerido, origenSugerido, catSu
   updateCategorySelects();
   document.getElementById('tr-cat').value=catSugerida||'';
   document.getElementById('tr-nota').value='';
+  document.getElementById('tr-descpf').innerHTML='<option value="">No descontar</option>';
   onTransferAccountChange();
+  refrescarDescPFTransfer();
   document.getElementById('transfer-modal-overlay').classList.add('open');
 }
 function closeTransferModal(){ document.getElementById('transfer-modal-overlay').classList.remove('open'); }
-function onTransferCurrencyChange(){ _trDestManual=false; trPoblar('',''); onTransferAccountChange(); }
+function onTransferCurrencyChange(){ _trDestManual=false; trPoblar('',''); onTransferAccountChange(); refrescarDescPFTransfer(); }
 function onTransferOrigenChange(){
+  setTimeout(()=>{ if(typeof refrescarDescPFTransfer==='function') refrescarDescPFTransfer(); },0);
   const selO=document.getElementById('tr-origen'), selD=document.getElementById('tr-destino');
   trPoblar(selO.value, _trDestManual?selD.value:'', true);
   onTransferAccountChange();
@@ -5136,6 +5143,7 @@ function ejecutarTransferencia({origen, destino, monto, fecha, hora, cat, nota})
   const currency=getAccountCurrency(origen);
   const desc=nota ? `Transferencia: ${nota}` : `Transferencia ${accLabel(origen)} → ${accLabel(destino)}`;
   const idBase='transfer'+Date.now();
+  window._ultimaTransferIdBase=idBase;
   pushMovimiento({id:idBase+'a', type:'expense', desc, amount:monto, account:origen, date:fecha, hora, cat, currency, linkId:idBase});
   pushMovimiento({id:idBase+'b', type:'income',  desc, amount:monto, account:destino, date:fecha, hora, cat, currency, linkId:idBase});
   state.cuentas[origen]=(state.cuentas[origen]||0)-monto;
@@ -5160,6 +5168,7 @@ function saveTransfer(){
   }
   const ok=ejecutarTransferencia({origen,destino,monto,fecha,hora,cat,nota});
   if(!ok) return;
+  aplicarDescuentoPF('tr-descpf', nota?('Transferencia: '+nota):('Transferencia '+accLabel(origen)+' → '+accLabel(destino)), monto, window._ultimaTransferIdBase+'a', fecha, getAccountCurrency(origen));
   saveState(); closeTransferModal(); render(); toast('Transferencia registrada');
 }
 function saveState(immediate){
@@ -10062,6 +10071,7 @@ function openModal(){
   document.getElementById('f-cat').value='';
   document.getElementById('f-date').value=todayLocalISO();
   document.getElementById('f-time').value=horaLimaActual();
+  document.getElementById('f-descpf').innerHTML='<option value="">No descontar</option>';
   updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
   const _rbA=document.getElementById('rb-ahorro'); if(_rbA) _rbA.style.display='none'; // nuevo movimiento: solo Ingreso o Gasto
   setType('income');
@@ -10092,6 +10102,7 @@ function setType(t){
 // tipo es "Ahorro", solo las de ahorro). preservar = cuenta que debe seguir
 // apareciendo (ej. al editar un movimiento viejo).
 function refrescarCuentasMov(preservar){
+  refrescarDescPF('f-descpf','f-descpf-wrap',document.getElementById('f-currency').value,currentType==='expense'&&!state.editId);
   const sel=document.getElementById('f-account'); if(!sel) return;
   const mon=document.getElementById('f-currency').value==='USD'?'USD':'PEN';
   const soloAh=(currentType==='ahorro');
@@ -10145,6 +10156,7 @@ function deleteMovimiento(id,e){
   const m=state.movimientos.find(x=>x.id===id);
   if(!m||!confirm('¿Eliminar "'+m.desc+'"?'))return;
   revertAccount(m);_movimientosBorradosExplicitamente.push(id);state.movimientos=state.movimientos.filter(x=>x.id!==id);
+  quitarDescuentosPorOrigenWeb([id]);
   logActividad('movimiento_eliminado', `${m.desc} — ${m.currency==='USD'?'$':'S/'} ${numFmtSigned(Number(m.amount),2)} (${m.account})`, {movimientoSnapshot:m});
   saveState();render();
 }
@@ -10459,6 +10471,44 @@ function renderHistorialSesiones(){
   }).join('');
 }
 
+// ── ➖ Descontar un gasto de un Pago Frecuente "base con descuentos" ──
+// Al crear un gasto, un consumo de tarjeta o una transferencia, se puede elegir un
+// pago frecuente (misma moneda, sin convertir): el monto se suma a sus descuentos
+// pendientes y, si ese registro se elimina, el descuento se quita solo.
+function pfsDescontables(currency){
+  const cur=currency==='USD'?'USD':'PEN';
+  return (state.pagosFrecuentes||[]).filter(p=>p.tipoMonto==='base_descuentos' && (p.currency==='USD'?'USD':'PEN')===cur);
+}
+function refrescarDescPF(selId, wrapId, currency, visible){
+  const sel=document.getElementById(selId), wrap=document.getElementById(wrapId); if(!sel||!wrap) return;
+  const lista=visible?pfsDescontables(currency):[];
+  const prev=sel.value;
+  sel.innerHTML='<option value="">No descontar</option>'+lista.map(p=>'<option value="'+escapeHtml(p.id)+'">➖ '+escapeHtml(p.nombre)+'</option>').join('');
+  if(lista.some(p=>p.id===prev)) sel.value=prev;
+  wrap.style.display=lista.length?'':'none';
+}
+function refrescarDescPFTC(){
+  refrescarDescPF('tc-m-descpf','tc-m-descpf-wrap',document.getElementById('tc-m-currency').value,!editingTCMovId);
+}
+function refrescarDescPFTransfer(){
+  const o=document.getElementById('tr-origen');
+  refrescarDescPF('tr-descpf','tr-descpf-wrap',o&&o.value?getAccountCurrency(o.value):'PEN',true);
+}
+function aplicarDescuentoPF(selId, concepto, monto, origenId, fecha, currency){
+  const sel=document.getElementById(selId); const pfId=sel&&sel.value; if(!pfId||!(monto>0)) return;
+  const pf=(state.pagosFrecuentes||[]).find(p=>p.id===pfId); if(!pf) return;
+  if(!pf.descuentosPendientes) pf.descuentosPendientes=[];
+  const d={id:'desc-'+Date.now(), concepto, monto, fecha:fecha||todayISO(), origenId};
+  pf.descuentosPendientes.push(d);
+  logActividad('descuento_pendiente', 'Descuento en '+pf.nombre+': '+concepto+' — '+(currency==='USD'?'$':'S/')+' '+numFmtSigned(monto,2), {pfId, descuentoId:d.id});
+}
+function quitarDescuentosPorOrigenWeb(ids){
+  ids=(ids||[]).filter(Boolean); if(!ids.length) return;
+  (state.pagosFrecuentes||[]).forEach(p=>{ if(Array.isArray(p.descuentosPendientes)) p.descuentosPendientes=p.descuentosPendientes.filter(d=>!ids.includes(d.origenId)); });
+}
+function actualizarDescuentoPorOrigenWeb(id, monto){
+  (state.pagosFrecuentes||[]).forEach(p=>(p.descuentosPendientes||[]).forEach(d=>{ if(d.origenId===id && monto>0) d.monto=monto; }));
+}
 function saveMovimiento(){
   const desc=document.getElementById('f-desc').value.trim();
   const amount=parseFloat(document.getElementById('f-amount').value);
@@ -10506,6 +10556,8 @@ function saveMovimiento(){
   }
   const esNuevoMov=!state.editId;
   pushMovimiento(mov);
+  if(esNuevoMov && currentType==='expense') aplicarDescuentoPF('f-descpf',desc,amount,mov.id,date,currency);
+  else if(!esNuevoMov) actualizarDescuentoPorOrigenWeb(mov.id,amount);
   if(esNuevoMov){
     const sym=currency==='USD'?'$':'S/';
     logActividad('movimiento', `${desc} — ${sym} ${numFmtSigned(amount,2)} (${account})`, {movId:mov.id});
@@ -15068,6 +15120,7 @@ function actualizarPreviewCuota(){
 function onConsumoTarjetaChange(){
   const t=getTarjeta(document.getElementById('tc-m-tarjeta').value);
   if(t) document.getElementById('tc-m-currency').value=t.currency||'PEN';
+  if(typeof refrescarDescPFTC==='function') refrescarDescPFTC();
 }
 function openAddMovTC(){
   editingTCMovId=null;
@@ -15089,6 +15142,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-con-interes').checked=false;
   document.getElementById('tc-m-tea').value='';
   onEsCuotaChange();
+  refrescarDescPFTC();
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15115,6 +15169,7 @@ function openAddMovTCFromList(){
   document.getElementById('tc-m-tea').value='';
   onEsCuotaChange();
   onConsumoTarjetaChange(); // fija la moneda según la primera tarjeta seleccionada
+  refrescarDescPFTC();
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15138,6 +15193,7 @@ function editTCMov(movId){
   document.getElementById('tc-m-es-cuota').checked=false;
   document.getElementById('tc-m-es-cuota').closest('.field').style.display='none'; // no se puede "convertir a cuotas" algo que ya existe, solo al crear
   onEsCuotaChange();
+  refrescarDescPFTC();
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15228,6 +15284,7 @@ function saveTCMov(){
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
       foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat; foundMov.currency=currency;
+      actualizarDescuentoPorOrigenWeb(foundMov.id,monto);
       if(hora) foundMov.hora=hora; else delete foundMov.hora;
       if(newMk!==foundInMonth){
         // Move to the new billing month
@@ -15250,6 +15307,7 @@ function saveTCMov(){
     const paisCache=getPaisCache();
     if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
     t.movs[newMk].push(nuevoMov);
+    aplicarDescuentoPF('tc-m-descpf',desc,monto,nuevoMov.id,fecha,currency);
     const symTC=currency==='USD'?'$':'S/';
     logActividad('tc_consumo', `${desc} — ${symTC} ${numFmtSigned(monto,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, monthKey:newMk, consumoId:nuevoMov.id});
     // If adding to a different month than currently viewing, switch to it
@@ -15296,6 +15354,7 @@ function deleteTCMov(movId){
 function eliminarUnConsumoDeTarjeta(t, monthKey, movId){
   if(!t.movs||!t.movs[monthKey]) return;
   const consumoBorrado=t.movs[monthKey].find(m=>m.id===movId);
+  quitarDescuentosPorOrigenWeb([movId]);
   t.movs[monthKey]=t.movs[monthKey].filter(m=>m.id!==movId);
   if(consumoBorrado){
     const symTC=consumoBorrado.currency==='USD'?'$':'S/';
@@ -26280,6 +26339,9 @@ if(state.projGoals){
       </div>
     </div>
     <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tr-nota" type="text" placeholder="Ej. Para gastos del mes"></div>
+    <div class="field" id="tr-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
+      <select id="tr-descpf"><option value="">No descontar</option></select>
+    </div>
     <div id="tr-preview" style="display:none;font-size:11px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTransferModal()">Cancelar</button>
@@ -26917,7 +26979,7 @@ if(state.projGoals){
     </div>
     <div class="field-row">
       <div class="field"><label>Moneda</label>
-        <select id="tc-m-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+        <select id="tc-m-currency" onchange="refrescarDescPFTC()"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
       <div class="field" id="tc-m-pagado-wrap"><label>Estado</label>
         <select id="tc-m-pagado"><option value="no">Pendiente</option><option value="si">Ya pagado</option></select>
@@ -26962,6 +27024,9 @@ if(state.projGoals){
         <option value="🏦 Finanzas">🏦 Finanzas</option>
         <option value="📦 Otros">📦 Otros</option>
       </select>
+    </div>
+    <div class="field" id="tc-m-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
+      <select id="tc-m-descpf"><option value="">No descontar</option></select>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTCMovModal()">Cancelar</button>
