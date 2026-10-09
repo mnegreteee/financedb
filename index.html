@@ -1396,6 +1396,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div class="config-section">
           <div class="config-section-title">Datos — Exportar / Importar</div>
           <div class="config-row">
+            <div class="config-row-label">Uso de Firebase<small id="cfg-uso-fb">Calculando…</small></div>
+            <button class="config-action-btn neutral" onclick="actualizarUsoFirebase()">🔄 Actualizar</button>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Exportar JSON<small>Backup completo</small></div>
             <button class="config-action-btn neutral" onclick="exportJSON()">⬇ JSON</button>
           </div>
@@ -3750,9 +3754,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.56.1';
-const APP_VERSION_DATE = '08/10/26 - 23:04'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Presupuesto → Gasto por categoría: el ícono de cada categoría ahora toma solo el emoji del nombre (antes "Otros" mostraba el 😈 junto con el texto "Otros").';
+const APP_VERSION = 'v1.57.0';
+const APP_VERSION_DATE = '08/10/26 - 23:47'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3879,6 +3883,7 @@ async function _writeSeccionesCambiadas(localMeta, lastSynced){
 // Lee TODAS las secciones actuales de la nube y arma el "meta" completo.
 async function _readTodasLasSecciones(){
   const snap = await _seccionesColl().get();
+  _lec.secc += snap.size;
   const meta = {};
   snap.forEach(doc=>{
     try{ meta[doc.id] = JSON.parse(doc.data().value); }
@@ -4005,6 +4010,8 @@ let saveTimer=null;
 // Se usa para detectar qué movimientos cambiaron (agregados/editados) y
 // escribir SOLO esos, en vez de reescribir todo el historial cada vez.
 let _lastSyncedMovs = {};
+// Contador de lecturas a Firestore de ESTA sesión (documentos leídos), para el panel Configuración → Datos → Uso de Firebase.
+const _lec = {secc:0, movs:0, listener:0};
 
 // IDs de movimientos que se quitaron A PROPÓSITO en esta sesión (por una
 // acción explícita del usuario: el botón "Eliminar", deshacer algo desde
@@ -5461,6 +5468,7 @@ function loadState(){
         // Los movimientos ahora viven en users/{uid}/movimientos/{id} (un doc por movimiento),
         // así una escritura externa (bot, atajo) puede agregar uno solo sin reescribir todo.
         return conTimeout(DOC_REF.collection('movimientos').get(), 15000, 'Tiempo de espera agotado (15s) leyendo tus movimientos de Firestore.').then(movSnap=>{
+          _lec.movs += movSnap.size;
           const subMovs = movSnap.docs.map(d=>d.data());
 
           if(subMovs.length>0){
@@ -24202,6 +24210,14 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.57.0",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Configuración → Datos → \"Uso de Firebase\": muestra cuántos movimientos tienes en total, cuántas lecturas a Firebase llevas en esta sesión y cuántas veces puedes abrir la app al día dentro de la cuota gratis (50,000 lecturas).",
+   "Menos lecturas: el listener en tiempo real ahora solo escucha los movimientos del mes actual y el anterior (antes releía todo el historial al abrir). Lo que cambies tú en este dispositivo, aunque sea de hace meses, se guarda igual; un cambio hecho desde OTRO dispositivo sobre un movimiento antiguo aparece al recargar la app."
+  ]
+ },
+ {
   "v": "v1.56.1",
   "fecha": "08/10/26",
   "cambios": [
@@ -24377,7 +24393,20 @@ function cfgToggleGrupo(id,forzar){
   g.classList.toggle('open', forzar===undefined ? !g.classList.contains('open') : forzar);
 }
 function cfgTodos(abrir){ CFG_GRUPOS.forEach(g=>cfgToggleGrupo(g.id,abrir)); }
+// Contador de movimientos y de lecturas a Firestore (cuota gratis: 50,000 lecturas por día).
+function actualizarUsoFirebase(){
+  const el=document.getElementById('cfg-uso-fb'); if(!el) return;
+  const nMov=(state.movimientos||[]).length;
+  const nf=n=>Number(n).toLocaleString('es-PE');
+  const total=_lec.secc+_lec.movs+_lec.listener;
+  // Una "apertura" = carga inicial (secciones + movimientos) + lo que lee el listener al conectarse.
+  const aprox=nMov+(_lec.secc||0)+(typeof _movsListenerDesde==='string'&&_movsListenerDesde?(state.movimientos||[]).filter(m=>m.date&&m.date>=_movsListenerDesde).length:0);
+  const aperturas=aprox>0?Math.floor(50000/aprox):0;
+  el.innerHTML='📊 <b>'+nf(nMov)+'</b> movimientos en total · esta sesión: <b>'+nf(total)+'</b> lecturas<br>'
+    +'Abrir la app lee ≈ <b>'+nf(aprox)+'</b> documentos → la cuota gratis (50,000/día) alcanza para ≈ <b>'+nf(aperturas)+'</b> aperturas por día.';
+}
 function cfgResumenes(){
+  try{ actualizarUsoFirebase(); }catch(e){}
   const set=(id,t)=>{ const e=document.getElementById('cfg-s-'+id); if(e) e.textContent=t; };
   try{
     const oscuro=(document.documentElement.getAttribute('data-theme')||'dark')==='dark';
@@ -24544,6 +24573,7 @@ function iniciarListenerTiempoReal(){
   if(!DOC_REF) return;
   _tcUnsubscribeListener = _seccionesColl().onSnapshot(snap=>{
     if(demoMode) return;
+    _lec.listener += snap.docChanges().length;
     if(!_lastSyncedMeta) return; // todavía no terminamos la carga inicial
     let huboCambiosAjenos = false;
     snap.docChanges().forEach(change=>{
@@ -24574,19 +24604,52 @@ function iniciarListenerTiempoReal(){
     }
   }, err=>console.warn('Listener en tiempo real desconectado:', err));
 
-  // Movimientos agregados desde OTRO lado (el bot de Telegram, un atajo, u
-  // otro dispositivo) — sin esto, aparecían recién al recargar la página,
-  // porque el listener de arriba solo cubre "secciones", no movimientos.
-  _movsUnsubscribeListener = DOC_REF.collection('movimientos').onSnapshot(snap=>{
+  _iniciarListenerMovs();
+
+  // Pendientes de aprobación bancaria — colección chica (unos pocos a la
+  // vez), así que simplemente se reconstruye completa en cada cambio en vez
+  // de diffear como con movimientos (no vale la pena la complejidad extra).
+  _pendientesBancoUnsub = DOC_REF.collection('pendientesBanco').onSnapshot(snap=>{
     if(demoMode) return;
+    _lec.listener += snap.docChanges().length;
+    pendientesBanco = snap.docs.map(d=>d.data());
+    // Más nuevo primero, para que lo recién detectado se vea arriba.
+    pendientesBanco.sort((a,b)=>(b.creadoEn&&b.creadoEn.seconds||0)-(a.creadoEn&&a.creadoEn.seconds||0));
+    updateAprobacionesBadge();
+    const pageEl=document.getElementById('page-aprobaciones');
+    if(pageEl && pageEl.classList.contains('active')) renderAprobacionesBanco();
+  }, err=>console.warn('Listener de pendientes bancarios desconectado:', err));
+}
+
+// ── Listener de movimientos ACOTADO a los 2 últimos meses (el actual y el anterior) ──
+// Antes escuchaba la colección completa y, al abrir la app, volvía a leer TODOS los
+// movimientos (una segunda lectura completa además de la carga inicial). Ahora solo
+// escucha los de la ventana reciente — donde llegan las novedades del bot, de un atajo
+// o de otro dispositivo. Lo que se edita en ESTE dispositivo (aunque sea de hace 5 meses)
+// funciona igual: se guarda normalmente. Un cambio hecho en OTRO dispositivo sobre un
+// movimiento más antiguo aparece al recargar la app.
+let _movsListenerDesde = '';
+function _ventanaMovsDesde(){
+  const d=new Date(); const p=new Date(d.getFullYear(), d.getMonth()-1, 1);
+  return p.getFullYear()+'-'+String(p.getMonth()+1).padStart(2,'0')+'-01';
+}
+function _iniciarListenerMovs(){
+  if(!DOC_REF) return;
+  if(_movsUnsubscribeListener){ _movsUnsubscribeListener(); _movsUnsubscribeListener=null; }
+  _movsListenerDesde = _ventanaMovsDesde();
+  _movsUnsubscribeListener = DOC_REF.collection('movimientos').where('date','>=',_movsListenerDesde).onSnapshot(snap=>{
+    if(demoMode) return;
+    _lec.listener += snap.docChanges().length;
     if(!_lastSyncedMeta) return; // todavía no terminamos la carga inicial
     let huboCambiosAjenos = false;
     snap.docChanges().forEach(change=>{
       if(change.doc.metadata.hasPendingWrites) return; // propia escritura optimista
       const id = change.doc.id;
       if(change.type==='removed'){
-        const idx=state.movimientos.findIndex(m=>m.id===id);
-        if(idx!==-1){ state.movimientos.splice(idx,1); delete _lastSyncedMovs[id]; huboCambiosAjenos=true; }
+        // Con la consulta acotada, "removed" también ocurre cuando un movimiento SALE de la
+        // ventana (ej. otro dispositivo le cambió la fecha a una más antigua) — no solo cuando
+        // se borra. Por eso se verifica con una lectura puntual antes de quitarlo.
+        if(state.movimientos.some(m=>m.id===id)) _verificarMovQuitadoDeVentana(id);
         return;
       }
       const data = change.doc.data();
@@ -24604,20 +24667,26 @@ function iniciarListenerTiempoReal(){
       toast('🔄 Nuevo movimiento de otro dispositivo');
     }
   }, err=>console.warn('Listener de movimientos desconectado:', err));
-
-  // Pendientes de aprobación bancaria — colección chica (unos pocos a la
-  // vez), así que simplemente se reconstruye completa en cada cambio en vez
-  // de diffear como con movimientos (no vale la pena la complejidad extra).
-  _pendientesBancoUnsub = DOC_REF.collection('pendientesBanco').onSnapshot(snap=>{
-    if(demoMode) return;
-    pendientesBanco = snap.docs.map(d=>d.data());
-    // Más nuevo primero, para que lo recién detectado se vea arriba.
-    pendientesBanco.sort((a,b)=>(b.creadoEn&&b.creadoEn.seconds||0)-(a.creadoEn&&a.creadoEn.seconds||0));
-    updateAprobacionesBadge();
-    const pageEl=document.getElementById('page-aprobaciones');
-    if(pageEl && pageEl.classList.contains('active')) renderAprobacionesBanco();
-  }, err=>console.warn('Listener de pendientes bancarios desconectado:', err));
 }
+function _verificarMovQuitadoDeVentana(id){
+  if(!DOC_REF) return;
+  DOC_REF.collection('movimientos').doc(id).get().then(d=>{
+    _lec.listener++;
+    const idx=state.movimientos.findIndex(m=>m.id===id);
+    if(d.exists){
+      const data=d.data(); // sigue existiendo: solo salió de la ventana → se actualiza, NO se borra
+      if(idx!==-1) state.movimientos[idx]=data; else state.movimientos.push(data);
+      _lastSyncedMovs[id]=JSON.stringify(data);
+    } else if(idx!==-1){
+      state.movimientos.splice(idx,1); delete _lastSyncedMovs[id];
+    } else return;
+    clearSaldoCache(); render();
+  }).catch(e=>console.warn('No se pudo verificar el movimiento',id,e));
+}
+// Si la app queda abierta de un mes al siguiente, la ventana se corre sola al volver a la pestaña.
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden && _movsUnsubscribeListener && _movsListenerDesde && _ventanaMovsDesde()!==_movsListenerDesde) _iniciarListenerMovs();
+});
 function detenerListenerTiempoReal(){
   if(_tcUnsubscribeListener){ _tcUnsubscribeListener(); _tcUnsubscribeListener=null; }
   if(_movsUnsubscribeListener){ _movsUnsubscribeListener(); _movsUnsubscribeListener=null; }
