@@ -808,7 +808,29 @@ body.compact-mode .anual-table{font-size:11px;}
 
 
 /* ══ TC TRACKER (Comparador Casas de Cambio) ══ */
-.tct-table-wrap{overflow-x:auto;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius);}
+.tct-table-wrap{overflow:auto;max-height:var(--fit10,none);margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius);}
+.tcop-wrap{overflow:auto;max-height:var(--fit10,none);}
+.tct-table thead th,#tcop-table thead th{position:sticky;top:0;z-index:3;background:var(--bg2);}
+.tct-table thead tr:nth-child(2) th,#tcop-table thead tr:nth-child(2) th{top:var(--thead1,26px);}
+/* gráfico inferior del Comparador */
+.tcx-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.tcx-ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.tcx-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.tcx-chips span{font-size:10px;padding:4px 10px;border:1px solid var(--border);border-radius:99px;cursor:pointer;color:var(--text2);font-family:var(--mono);user-select:none;}
+.tcx-chips span.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tcx-casas{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 10px;}
+.tcx-casas span{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 10px;border:1px solid var(--border2);border-radius:99px;cursor:pointer;color:var(--text2);user-select:none;opacity:.45;}
+.tcx-casas span.on{opacity:1;background:var(--bg3);color:var(--text);}
+.tcx-casas i{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.tcx-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 12px;}
+.tcx-stat{background:var(--bg3);border-radius:10px;padding:10px 12px;min-width:0;}
+.tcx-stat small{display:block;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;}
+.tcx-stat b{font-family:var(--mono);font-size:16px;}
+.tcx-stat i{font-style:normal;font-size:10px;color:var(--text3);display:block;}
+.tcx-leg{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:10px;margin:0 0 6px;font-family:var(--mono);}
+.tcx-cv{position:relative;height:300px;}
+.tcx-cv canvas{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
+@media(max-width:700px){.tcx-stats{grid-template-columns:repeat(2,1fr);}.tcx-cv{height:230px;}}
 .tct-table{width:100%;border-collapse:collapse;font-size:11px;min-width:1400px;}
 .tct-table th{padding:6px 8px;text-align:center;white-space:nowrap;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
 .tct-table td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:var(--mono);white-space:nowrap;}
@@ -2083,7 +2105,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
       <button class="btn btn-primary" style="font-size:11px" onclick="openTcOpCompraModal()">+ Nueva operación</button>
     </div>
-    <div style="overflow-x:auto">
+    <div class="tcop-wrap" id="tcop-wrap">
     <table class="account-table" style="font-size:11px" id="tcop-table">
       <thead><tr>
         <th colspan="4" class="tct-group-header" style="background:#22c55e">COMPRA</th>
@@ -2099,6 +2121,22 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <tbody id="tcop-tbody"></tbody>
     </table>
     </div>
+  </div>
+
+  <!-- ══ Gráfico: evolución del tipo de cambio (mejor / peor / por casa) ══ -->
+  <div class="card" style="padding:18px;margin-top:24px" id="tcx-card">
+    <div class="tcx-top">
+      <div>
+        <div class="section-title">Evolución del tipo de cambio</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px" id="tcx-sub">Mejor compra y mejor venta de cada fecha registrada arriba</div>
+      </div>
+      <div class="tcx-ctl" id="tcx-ctl"></div>
+    </div>
+    <div class="tcx-casas" id="tcx-casas" style="display:none"></div>
+    <div class="tcx-stats" id="tcx-stats"></div>
+    <div class="tcx-leg" id="tcx-leg"></div>
+    <div class="tcx-cv"><canvas id="tcx-cv"></canvas></div>
+    <div id="tcx-empty" style="display:none;text-align:center;color:var(--text3);font-size:12px;padding:30px 0">Registra al menos 2 fechas arriba para ver la evolución.</div>
   </div>
 
 </div>
@@ -3712,9 +3750,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.55.4';
-const APP_VERSION_DATE = '08/10/26 - 22:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo movimiento: se quitó el tipo "Ahorro" (para mover plata usa Transferir; para intereses o depósitos a tu ahorro, Ingreso en esa cuenta).';
+const APP_VERSION = 'v1.56.0';
+const APP_VERSION_DATE = '08/10/26 - 22:54'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Comparador de TC: las tablas de tipo de cambio y de Historial de operaciones muestran 10 filas con scroll (lo más reciente primero) y hay un nuevo gráfico al final con el mejor/peor TC y por casa de cambio.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4824,6 +4862,23 @@ function getAccountType(k){
   const c=(state.customCuentas||{})[k];
   if(c) return c.type||'operativa';
   return CUENTAS_DEFAULT_TIPO[k]||'operativa';
+}
+// Moneda de una cuenta (las personalizadas guardan la suya; 'Ahorro Dólares' es USD).
+function monedaDeCuenta(k){
+  const c=(state.customCuentas||{})[k];
+  if(c && c.currency) return c.currency;
+  return k==='Ahorro Dólares'?'USD':'PEN';
+}
+// Cuánto aporta un movimiento al saldo de una cuenta de AHORRO (con signo):
+// ingresos y transferencias que entran suman, gastos y transferencias que salen
+// restan; los movimientos "Ahorro" antiguos conservan su signo original.
+// Devuelve 0 si la cuenta no es de ahorro.
+function aporteAhorroNeto(m){
+  if(!m || getAccountType(m.account)!=='ahorro') return 0;
+  if(m.type==='ahorro') return m.signedAmount!==undefined?m.signedAmount:(m.amount||0);
+  if(m.type==='income') return m.amount||0;
+  if(m.type==='expense') return -(m.amount||0);
+  return 0;
 }
 function getBanco(k){
   const b=(state.bancoDeCuenta||{})[k];
@@ -7864,18 +7919,13 @@ function renderSummaryCards(){
   const aS=sumaAhorroDe(curSaldoCards,'PEN');
   const aD=sumaAhorroDe(curSaldoCards,'USD');
   document.getElementById('sum-ahorro-soles').textContent=M(fmtSS(aS));
-  const intS=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='ahorro'&&(
-    m.account==='Ahorro Soles'||
-    ((state.customCuentas||{})[m.account]&&(state.customCuentas||{})[m.account].type==='ahorro'&&(state.customCuentas||{})[m.account].currency!=='USD')
-  )).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
+  const _movsMesAh=getMovs(state.currentYear,state.currentMonth);
+  const intS=_movsMesAh.filter(m=>monedaDeCuenta(m.account)!=='USD').reduce((s,m)=>s+aporteAhorroNeto(m),0);
   document.getElementById('sub-ahorro-soles').innerHTML=intS>0?`<span style="color:var(--green)">${M('+'+fmtS(intS))}</span> este mes`:'cuenta ahorro';
   document.getElementById('equiv-ahorro-soles').textContent=M('≈ '+fmtD(aS/state.tc.venta));
 
   document.getElementById('sum-ahorro-dolar').textContent=M(fmtDS(aD));
-  const intD=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='ahorro'&&(
-    m.account==='Ahorro Dólares'||
-    ((state.customCuentas||{})[m.account]&&(state.customCuentas||{})[m.account].type==='ahorro'&&(state.customCuentas||{})[m.account].currency==='USD')
-  )).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
+  const intD=_movsMesAh.filter(m=>monedaDeCuenta(m.account)==='USD').reduce((s,m)=>s+aporteAhorroNeto(m),0);
   document.getElementById('sub-ahorro-dolar').innerHTML=intD>0?`<span style="color:var(--green)">${M('+'+fmtD(intD))}</span> este mes`:'cuenta ahorro';
   document.getElementById('equiv-ahorro-dolar').textContent=M('≈ '+fmtS(aD*state.tc.compra));
 
@@ -11171,10 +11221,10 @@ function renderProyeccion(){
   const hoyP=new Date();
   for(let i=11;i>=0;i--){
     const dP=new Date(hoyP.getFullYear(),hoyP.getMonth()-i,1);
-    const movs=getMovs(dP.getFullYear(),dP.getMonth()).filter(m=>m.type==='ahorro');
+    const movs=getMovs(dP.getFullYear(),dP.getMonth()).filter(m=>aporteAhorroNeto(m)!==0);
     if(movs.length>0){
-      const soles=movs.filter(m=>esAhorroDe(m.account,'PEN')).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
-      const dolar=movs.filter(m=>esAhorroDe(m.account,'USD')).reduce((s,m)=>s+(m.signedAmount!==undefined?m.signedAmount:m.amount),0);
+      const soles=movs.filter(m=>esAhorroDe(m.account,'PEN')).reduce((s,m)=>s+aporteAhorroNeto(m),0);
+      const dolar=movs.filter(m=>esAhorroDe(m.account,'USD')).reduce((s,m)=>s+aporteAhorroNeto(m),0);
       months.push({soles,dolar});
     }
   }
@@ -17158,9 +17208,9 @@ function renderNuevosWidgetsDashboard(){
   if(anioEl){
     const anioActual=new Date().getFullYear();
     const totalAhorroAnio=(state.movimientos||[]).filter(mv=>{
-      if(mv.type!=='ahorro'||mv.currency!=='PEN') return false;
+      if(monedaDeCuenta(mv.account)==='USD' || aporteAhorroNeto(mv)===0) return false;
       return new Date(mv.date+'T12:00:00').getFullYear()===anioActual;
-    }).reduce((s,mv)=>s+(mv.signedAmount!==undefined?mv.signedAmount:mv.amount),0);
+    }).reduce((s,mv)=>s+aporteAhorroNeto(mv),0);
     setValorToggleable(anioEl, fmtS(totalAhorroAnio));
     document.getElementById('kpi-anio-sub').textContent=anioActual;
   }
@@ -19979,6 +20029,113 @@ function renderTcOperaciones(){
       <td style="white-space:nowrap">${tieneVenta?`<span onclick="openTcOpVentaModal('${op.id}')" style="cursor:pointer;color:var(--text3);margin-right:8px">✏️</span>`:''}<span onclick="deleteTcOperacion('${op.id}')" style="cursor:pointer;color:var(--text3)">🗑</span></td>
     </tr>`;
   }).join('');
+  tcFit10();
+}
+
+
+// ── Gráfico inferior del Comparador de TC ──
+// Modo "Mejor TC": mejor compra / mejor venta de cada fecha (y opcionalmente la peor).
+// Modo "Por casa": la serie de una o varias casas de cambio registradas.
+let tcxRango=90, tcxModo='mejor', tcxPeor=false, tcxMetrica='compra', tcxCasas=null, tcxInst=null;
+function tcxSerie(ids){
+  const empresas=(state.tcEmpresas||[]).filter(e=>!ids||ids.includes(e.id));
+  const porFecha=new Map();
+  (state.tcTracker||[]).filter(r=>r&&r.fecha).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).forEach(r=>{
+    let mc=null,pc=null,mv=null,pv=null; const por={};
+    empresas.forEach(e=>{
+      const rt=(r.rates&&r.rates[e.id])||{}; const c=parseFloat(rt.compra), v=parseFloat(rt.venta);
+      por[e.id]={compra:c>0?c:null,venta:v>0?v:null};
+      if(c>0){ if(!mc||c>mc.v) mc={v:c,e:e.nombre}; if(!pc||c<pc.v) pc={v:c,e:e.nombre}; }
+      if(v>0){ if(!mv||v<mv.v) mv={v:v,e:e.nombre}; if(!pv||v>pv.v) pv={v:v,e:e.nombre}; }
+    });
+    if(!mc&&!mv) return;
+    porFecha.set(r.fecha,{fecha:r.fecha,por,
+      compra:mc?mc.v:null,compraEmp:mc?mc.e:'',peorCompra:pc?pc.v:null,peorCompraEmp:pc?pc.e:'',
+      venta:mv?mv.v:null,ventaEmp:mv?mv.e:'',peorVenta:pv?pv.v:null,peorVentaEmp:pv?pv.e:''});
+  });
+  return [...porFecha.values()];
+}
+function tcxSet(k,v){ if(k==='modo') tcxModo=v; else if(k==='rango') tcxRango=+v; else if(k==='peor') tcxPeor=!tcxPeor; else if(k==='metrica') tcxMetrica=v; renderTCXChart(); }
+function tcxToggleCasa(id){
+  const todas=(state.tcEmpresas||[]).map(e=>e.id);
+  let sel=(tcxCasas||todas).filter(x=>todas.includes(x));
+  if(sel.length===todas.length) sel=[id];                       // estaban todas: te quedas solo con esa
+  else if(sel.includes(id)) sel=sel.filter(x=>x!==id); else sel=sel.concat(id);
+  tcxCasas=(!sel.length||sel.length===todas.length)?null:sel;   // null = todas
+  renderTCXChart();
+}
+function renderTCXChart(){
+  const cv=document.getElementById('tcx-cv'); if(!cv) return;
+  const ctl=document.getElementById('tcx-ctl'), casasEl=document.getElementById('tcx-casas'), stats=document.getElementById('tcx-stats'),
+        leg=document.getElementById('tcx-leg'), empty=document.getElementById('tcx-empty'), sub=document.getElementById('tcx-sub');
+  const empresas=state.tcEmpresas||[];
+  const todas=empresas.map(e=>e.id);
+  let sel=(tcxCasas||todas).filter(x=>todas.includes(x)); if(!sel.length) sel=todas;
+  const modoCasa=tcxModo==='casa';
+  const chip=(on,fn,txt)=>`<span class="${on?'on':''}" onclick="${fn}">${txt}</span>`;
+  ctl.innerHTML=
+    `<div class="tcx-chips">${chip(!modoCasa,"tcxSet('modo','mejor')",'Mejor TC')}${chip(modoCasa,"tcxSet('modo','casa')",'Por casa de cambio')}</div>`+
+    `<div class="tcx-chips">${[[7,'7d'],[30,'30d'],[90,'90d'],[0,'Todo']].map(([n,t])=>chip(tcxRango===n,`tcxSet('rango',${n})`,t)).join('')}</div>`;
+  if(sub) sub.textContent=modoCasa?'Tasas de las casas de cambio que elijas (toca una casa para verla sola; toca varias para compararlas)':'Mejor compra y mejor venta de cada fecha registrada arriba';
+  if(casasEl){
+    casasEl.style.display=modoCasa?'flex':'none';
+    casasEl.innerHTML=modoCasa?empresas.map(e=>`<span class="${sel.includes(e.id)?'on':''}" onclick="tcxToggleCasa('${e.id}')"><i style="background:${e.color}"></i>${escapeHtml(e.nombre)}</span>`).join(''):'';
+  }
+  const serie=tcxSerie(modoCasa?sel:null);
+  let pts=serie;
+  if(tcxRango>0 && serie.length){
+    const fin=new Date(serie[serie.length-1].fecha+'T12:00:00'); fin.setDate(fin.getDate()-tcxRango);
+    pts=serie.filter(p=>new Date(p.fecha+'T12:00:00')>=fin);
+    if(pts.length<2) pts=serie.slice(-2);
+  }
+  if(tcxInst){ tcxInst.destroy(); tcxInst=null; }
+  if(pts.length<2){ cv.parentElement.style.display='none'; empty.style.display='block'; stats.innerHTML=''; leg.innerHTML=''; return; }
+  cv.parentElement.style.display=''; empty.style.display='none';
+  const f4=v=>v==null?'—':(+v).toFixed(4);
+  const fd=s=>{const d=new Date(s+'T12:00:00');return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');};
+  const ok=pts.filter(p=>p.compra!=null&&p.venta!=null); const a=ok[0]||pts[0], z=ok[ok.length-1]||pts[pts.length-1];
+  const bestC=pts.filter(p=>p.compra!=null).reduce((m,x)=>(!m||x.compra>m.compra)?x:m,null);
+  const bestV=pts.filter(p=>p.venta!=null).reduce((m,x)=>(!m||x.venta<m.venta)?x:m,null);
+  const dl=(x,y)=>(x==null||y==null)?'':((x-y)>=0?'▲ +':'▼ ')+(x-y).toFixed(4)+' en el periodo';
+  stats.innerHTML=
+    `<div class="tcx-stat"><small>Compra actual</small><b style="color:#2dd4bf">${f4(z.compra)}</b><i>${dl(z.compra,a.compra)}</i></div>`+
+    `<div class="tcx-stat"><small>Venta actual</small><b style="color:#a78bfa">${f4(z.venta)}</b><i>${dl(z.venta,a.venta)}</i></div>`+
+    `<div class="tcx-stat"><small>Mejor compra del periodo</small><b>${f4(bestC&&bestC.compra)}</b><i>${bestC?escapeHtml(bestC.compraEmp)+' · '+fd(bestC.fecha):''}</i></div>`+
+    `<div class="tcx-stat"><small>Mejor venta del periodo</small><b>${f4(bestV&&bestV.venta)}</b><i>${bestV?escapeHtml(bestV.ventaEmp)+' · '+fd(bestV.fecha):''}</i></div>`;
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const tick=isDark?'#a8a9b3':'#5c5d67', grid=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)';
+  const TEAL='#2dd4bf', VIO='#a78bfa';
+  const ds=[]; const mk=(label,col,data,o={})=>ds.push(Object.assign({label,data,borderColor:col,backgroundColor:col,borderWidth:2,tension:.3,spanGaps:true,pointRadius:pts.length<=20?2.5:0,pointHoverRadius:4,pointBackgroundColor:col,fill:false},o));
+  let leyenda='';
+  if(!modoCasa){
+    mk('Venta',VIO,pts.map(p=>p.venta)); mk('Compra',TEAL,pts.map(p=>p.compra),{backgroundColor:'rgba(45,212,191,.10)',fill:true});
+    leyenda=`<span><span style="color:${TEAL}">●</span> Compra (mejor tasa a la que te compran tus dólares)</span><span><span style="color:${VIO}">●</span> Venta (mejor tasa a la que te venden dólares)</span>`;
+    if(tcxPeor){
+      mk('Venta (peor)',VIO,pts.map(p=>p.peorVenta),{borderDash:[5,4],borderWidth:1.2,pointRadius:0}); mk('Compra (peor)',TEAL,pts.map(p=>p.peorCompra),{borderDash:[5,4],borderWidth:1.2,pointRadius:0});
+      leyenda+=`<span style="color:var(--text3)">┄ líneas punteadas: la peor tasa de cada fecha</span>`;
+    }
+    leyenda+=`<span class="tcx-chips" style="display:inline-flex"><span class="${tcxPeor?'on':''}" onclick="tcxSet('peor')">Mostrar peor TC</span></span>`;
+  } else if(sel.length===1){
+    const id=sel[0], e=empresas.find(x=>x.id===id);
+    mk('Venta',VIO,pts.map(p=>p.por[id]?p.por[id].venta:null)); mk('Compra',TEAL,pts.map(p=>p.por[id]?p.por[id].compra:null),{backgroundColor:'rgba(45,212,191,.10)',fill:true});
+    leyenda=`<span style="color:${e.color}">● ${escapeHtml(e.nombre)}</span><span><span style="color:${TEAL}">●</span> Compra</span><span><span style="color:${VIO}">●</span> Venta</span>`;
+  } else {
+    const m=tcxMetrica;
+    sel.forEach(id=>{ const e=empresas.find(x=>x.id===id); mk(e.nombre,e.color,pts.map(p=>p.por[id]?p.por[id][m]:null)); });
+    leyenda=sel.map(id=>{const e=empresas.find(x=>x.id===id);return `<span><span style="color:${e.color}">●</span> ${escapeHtml(e.nombre)}</span>`;}).join('')+
+      `<span class="tcx-chips" style="display:inline-flex">${chip(m==='compra',"tcxSet('metrica','compra')",'Ver compra')}${chip(m==='venta',"tcxSet('metrica','venta')",'Ver venta')}</span>`;
+  }
+  leg.innerHTML=leyenda;
+  if(typeof Chart==='undefined') return;
+  tcxInst=new Chart(cv.getContext('2d'),{type:'line',data:{labels:pts.map(p=>fd(p.fecha)),datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:200},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:isDark?'#262830':'#ffffff',titleColor:isDark?'#f0f0f2':'#1a1b1e',bodyColor:isDark?'#f0f0f2':'#1a1b1e',borderColor:isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.15)',borderWidth:1,
+        callbacks:{title:it=>new Date(pts[it[0].dataIndex].fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'}),
+          label:c=>{const p=pts[c.dataIndex]; const v=c.parsed.y; if(v==null) return ' '+c.dataset.label+' —';
+            let emp=''; if(!modoCasa){ const l=c.dataset.label; emp=' · '+(l==='Compra'?p.compraEmp:l==='Venta'?p.ventaEmp:l==='Compra (peor)'?p.peorCompraEmp:p.peorVentaEmp); }
+            return ' '+c.dataset.label+' '+(+v).toFixed(4)+emp;}}}},
+      scales:{x:{grid:{display:false},ticks:{color:tick,font:{size:9},maxTicksLimit:10,maxRotation:0}},
+              y:{grace:'6%',grid:{color:grid},ticks:{color:tick,font:{size:9},callback:v=>(+v).toFixed(3)}}}}});
 }
 
 // Aviso entre las casas de cambio y la tabla: (1) según el ÚLTIMO registro,
@@ -20042,10 +20199,11 @@ function renderTCTracker(){
     tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">
       Sin registros. Agrega una fecha con el botón de arriba.</td></tr>`;
     renderTcOperaciones();
+    tcFit10(); try{ renderTCXChart(); }catch(e){ console.warn('Gráfico TC página:',e); }
     return;
   }
 
-  tbody.innerHTML = rows.map(row=>{
+  tbody.innerHTML = rows.slice().reverse().map(row=>{  // más reciente primero
     const r = computeTCRow(row, empresas, ahorroActual);
     const empresaCells = empresas.map(e=>{
       const rate = (row.rates && row.rates[e.id]) || {};
@@ -20078,6 +20236,26 @@ function renderTCTracker(){
   }).join('');
 
   renderTcOperaciones();
+  tcFit10();
+  try{ renderTCXChart(); }catch(e){ console.warn('Gráfico TC página:',e); }
+}
+
+// Las tablas del Comparador y del Historial muestran 10 filas; el resto se
+// desliza dentro de la misma tabla (con la cabecera fija).
+function tcFit10(){
+  const fit=(table,wrap)=>{
+    if(!table||!wrap) return;
+    const trs=table.querySelectorAll('thead tr');
+    const body=table.querySelectorAll('tbody tr');
+    if(!trs.length||!trs[0].getBoundingClientRect().height){ return; } // página oculta: se recalcula al mostrarla
+    wrap.style.setProperty('--thead1',Math.round(trs[0].getBoundingClientRect().height)+'px');
+    if(body.length<=10 || body[0].querySelector('td[colspan]')){ wrap.style.removeProperty('--fit10'); return; }
+    const head=table.querySelector('thead').getBoundingClientRect().height;
+    let h=head; for(let i=0;i<10;i++) h+=body[i].getBoundingClientRect().height;
+    wrap.style.setProperty('--fit10',Math.ceil(h+2)+'px');
+  };
+  fit(document.querySelector('#page-tc-tracker .tct-table'),document.querySelector('#page-tc-tracker .tct-table-wrap'));
+  fit(document.getElementById('tcop-table'),document.getElementById('tcop-wrap'));
 }
 
 function renderTCTrackerHeader(empresas){
@@ -24018,6 +24196,21 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.56.0",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Comparador de TC: la tabla de tipo de cambio ahora muestra lo más reciente primero y solo 10 filas; el resto se desliza dentro de la misma tabla (la cabecera queda fija). Lo mismo en el Historial de operaciones.",
+   "Comparador de TC: nuevo gráfico de líneas al final de la página. Modo \"Mejor TC\" (mejor compra y mejor venta por fecha, con opción de mostrar también la peor) y modo \"Por casa de cambio\" para ver una o varias casas registradas. Rangos 7d / 30d / 90d / Todo."
+  ]
+ },
+ {
+  "v": "v1.55.5",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Ahorro: tras quitar el tipo \"Ahorro\" de Nuevo movimiento, tres cálculos solo contaban los movimientos antiguos. Ahora suman también lo que depositas o retiras de tus cuentas de ahorro con Ingreso, Gasto o Transferir: el \"este mes\" de las tarjetas de ahorro, el \"Ahorro promedio/mes\" de Proyección y el \"total ahorrado del año\" del Dashboard."
+  ]
+ },
  {
   "v": "v1.55.4",
   "fecha": "08/10/26",
