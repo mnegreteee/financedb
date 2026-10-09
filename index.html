@@ -3750,9 +3750,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.56.0';
-const APP_VERSION_DATE = '08/10/26 - 22:54'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Comparador de TC: las tablas de tipo de cambio y de Historial de operaciones muestran 10 filas con scroll (lo más reciente primero) y hay un nuevo gráfico al final con el mejor/peor TC y por casa de cambio.';
+const APP_VERSION = 'v1.56.1';
+const APP_VERSION_DATE = '08/10/26 - 23:04'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Presupuesto → Gasto por categoría: el ícono de cada categoría ahora toma solo el emoji del nombre (antes "Otros" mostraba el 😈 junto con el texto "Otros").';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10626,6 +10626,11 @@ function closeCategoryDetailModal(){
   document.getElementById('catdetail-modal-overlay').classList.remove('open');
 }
 
+// Ícono de una categoría = su emoji inicial (aunque no haya espacio después); sin emoji → 🏷️
+function catIcono(c){
+  const m=String(c||'').match(/^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\uFE0F\u200D]|\p{Emoji_Modifier})+/u);
+  return m?m[0]:'🏷️';
+}
 function renderPresupuesto(){
   const grid=document.getElementById('budget-grid');
   const empty=document.getElementById('budget-empty');
@@ -10655,7 +10660,7 @@ function renderPresupuesto(){
     spendListEl.innerHTML=`<div class="card" style="padding:14px 18px">`+allCatsSorted.map(cat=>{
       const amt=allTotals[cat];
       const pctDelTotal=granTotal>0?(amt/granTotal*100):0;
-      const emoji=cat.split(' ')[0];
+      const emoji=catIcono(cat);
       const tieneBudget=state.budgets&&state.budgets[cat];
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openCategoryDetailModal('${cat}')">
         <div style="font-size:16px">${emoji}</div>
@@ -10683,7 +10688,7 @@ function renderPresupuesto(){
     const pct=Math.min(100,(spent/b.limit)*100);
     const cls=pct>=100?'over':pct>=80?'warn':'ok';
     const color=cls==='over'?'var(--red)':cls==='warn'?'var(--amber)':'var(--green)';
-    const emoji=cat.split(' ')[0];
+    const emoji=catIcono(cat);
 
     const _hoyISO=todayLocalISO();
     const _toS=(c,v)=>c==='USD'?v*state.tc.venta:v;
@@ -24196,6 +24201,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.56.1",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Presupuesto: corregido el ícono de la categoría \"Otros\" (aparecía el emoji junto con la palabra \"Otros\"). Ahora el ícono se toma solo del emoji del nombre en todas las categorías; si una categoría no tiene emoji se muestra 🏷️."
+  ]
+ },
  {
   "v": "v1.56.0",
   "fecha": "08/10/26",
