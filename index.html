@@ -1654,7 +1654,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="dash-shortcut-grid">
     <div class="dash-shortcut" onclick="openModal()">
       <div class="dash-shortcut-icon">➕</div>
-      <div><div class="dash-shortcut-label">Nuevo movimiento</div><div class="dash-shortcut-sub">Ingreso, gasto o ahorro</div></div>
+      <div><div class="dash-shortcut-label">Nuevo movimiento</div><div class="dash-shortcut-sub">Ingreso o gasto</div></div>
     </div>
     <div class="dash-shortcut" onclick="showPage('presupuesto')">
       <div class="dash-shortcut-icon">🎯</div>
@@ -3405,7 +3405,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="radio-group">
         <div class="radio-btn selected-income" id="rb-income" onclick="setType('income')">⬆ Ingreso</div>
         <div class="radio-btn" id="rb-expense" onclick="setType('expense')">⬇ Gasto</div>
-        <div class="radio-btn" id="rb-ahorro" onclick="setType('ahorro')">🏦 Ahorro</div>
+        <div class="radio-btn" id="rb-ahorro" onclick="setType('ahorro')" style="display:none">🏦 Ahorro</div><!-- ya no se crean movimientos "Ahorro": solo aparece al editar uno antiguo. Para mover plata usa Transferir; para intereses/depósitos a un ahorro, Ingreso en esa cuenta -->
       </div>
     </div>
     <div class="field-row">
@@ -3712,9 +3712,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.55.3';
-const APP_VERSION_DATE = '08/10/26 - 22:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gestionar cuentas con tarjetas por banco (buscador, resumen y acciones en ⋯) y gráfico del mejor tipo de cambio dentro de la tarjeta Tipo de Cambio.';
+const APP_VERSION = 'v1.55.4';
+const APP_VERSION_DATE = '08/10/26 - 22:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo movimiento: se quitó el tipo "Ahorro" (para mover plata usa Transferir; para intereses o depósitos a tu ahorro, Ingreso en esa cuenta).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8562,6 +8562,10 @@ function applyMovBulkCat(){
 }
 
 function renderMovimientos(){
+  // La pestaña "Ahorro" solo existe si quedan movimientos de ahorro antiguos (Excel/histórico); ya no se crean nuevos.
+  const _hayAh=(state.movimientos||[]).some(m=>m.type==='ahorro');
+  const _tAh=document.getElementById('tab-ahorro'); if(_tAh) _tAh.style.display=_hayAh?'':'none';
+  if(!_hayAh && state.currentTab==='ahorro') state.currentTab='todos';
   // Defensa extra: la pestaña resaltada (Todos/Ingresos/Gastos/Ahorro) SIEMPRE
   // debe reflejar el filtro que realmente se está aplicando (state.currentTab),
   // no solo cuando se hace clic — así nunca puede quedar un filtro "invisible".
@@ -10001,6 +10005,7 @@ function openModal(){
   document.getElementById('f-date').value=todayLocalISO();
   document.getElementById('f-time').value=horaLimaActual();
   updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
+  const _rbA=document.getElementById('rb-ahorro'); if(_rbA) _rbA.style.display='none'; // nuevo movimiento: solo Ingreso o Gasto
   setType('income');
   document.getElementById('modal-overlay').classList.add('open');
   detectarPaisEnSegundoPlano(); // respaldo, por si el caché venció o el permiso se dio recién
@@ -10058,6 +10063,7 @@ function editMovimiento(id){
   document.getElementById('f-time').value=m.hora||'';
   document.getElementById('f-currency').value=m.currency||'PEN';
   currentType=m.type;
+  const _rbA=document.getElementById('rb-ahorro'); if(_rbA) _rbA.style.display=(m.type==='ahorro')?'':'none'; // solo se muestra al editar un movimiento de ahorro antiguo
   updateAccountSelects(); // asegura que la cuenta del movimiento (aunque sea tipo "otras") esté en la lista
   refrescarCuentasMov(m.account); // incluye la cuenta del movimiento aunque su moneda no coincida (datos viejos)
   document.getElementById('f-account').value=m.account;
@@ -24012,6 +24018,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.55.4",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Nuevo movimiento: se quitó el tipo \"Ahorro\" (era casi igual a un Ingreso y confundía). Ahora solo hay Ingreso y Gasto. Para mover plata entre tus cuentas usa Transferir; para intereses o depósitos a tu cuenta de ahorro, registra un Ingreso en esa cuenta.",
+   "Tus movimientos de ahorro anteriores (Excel/histórico) siguen igual: se pueden ver, editar y siguen sumando al saldo. La pestaña \"Ahorro\" de Movimientos solo aparece si todavía tienes alguno."
+  ]
+ },
  {
   "v": "v1.55.3",
   "fecha": "08/10/26",
