@@ -217,6 +217,50 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .cu-l{line-height:20px;white-space:nowrap;}
 .cu-tabla tr.cu-tot td{border-top:1px solid var(--border2);}
 .cu-cards{display:none;}
+/* Tarjeta Tipo de Cambio: el gráfico rellena el espacio hasta el borde inferior (mismo nivel que la tarjeta Cuentas) */
+.tc-card{display:flex;flex-direction:column;}
+.tc-chart{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;flex:1 1 auto;min-height:150px;}
+.tc-ch-h{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+.tc-ch-k{font-size:10px;color:var(--text3);letter-spacing:.7px;text-transform:uppercase;}
+.tc-chips span{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);margin-left:3px;cursor:pointer;font-family:var(--mono);}
+.tc-chips span.on{background:rgba(91,141,239,.2);color:var(--text);border-color:rgba(91,141,239,.5);}
+.tc-leg{display:flex;gap:4px 12px;flex-wrap:wrap;font-size:10px;margin-bottom:4px;font-family:var(--mono);}
+.tc-cv{position:relative;flex:1 1 0;min-height:96px;}
+.tc-cv canvas{position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
+#tc-chart-empty{position:absolute;inset:0;align-items:center;justify-content:center;text-align:center;font-size:11px;color:var(--text3);padding:0 10px;}
+/* ── Gestionar cuentas: tarjetas por banco ── */
+.cm-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px;}
+.cm-sum>div{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:9px 11px;}
+.cm-sum small{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);}
+.cm-sum .v{font-family:var(--mono);font-weight:600;font-size:14px;margin-top:2px;}
+.cm-bar{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
+.cm-search{flex:1;display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:0 12px;min-width:0;}
+.cm-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--text);padding:9px 0;font-size:13px;font-family:inherit;}
+.cm-grid{columns:2 300px;column-gap:12px;}
+.cm-unir{column-span:all;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:11px;color:var(--text2);}
+.cm-bank{break-inside:avoid;background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:12px;}
+.cm-bh{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.cm-bh b{font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cm-bt{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;}
+.cm-dotw{position:relative;display:inline-flex;cursor:pointer;flex:none;}
+.cm-dot{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.06);}
+.cm-dotw input{position:absolute;width:0;height:0;opacity:0;border:none;padding:0;}
+.cm-ib{width:28px;height:28px;border-radius:8px;background:var(--bg4);border:1px solid var(--border2);color:var(--text);display:grid;place-items:center;cursor:pointer;font-size:12px;flex:none;font-family:inherit;}
+.cm-ib.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.cm-acc{padding:9px 0;border-top:1px solid var(--border);}
+.cm-main{display:flex;align-items:center;gap:8px;min-width:0;}
+.cm-acc.open{background:rgba(91,141,239,.07);margin:0 -8px;padding:9px 8px;border-radius:10px;border-top-color:transparent;}
+.cm-mon{font-size:10px;font-weight:700;width:26px;height:20px;border-radius:6px;background:var(--bg4);color:var(--text2);display:grid;place-items:center;font-family:var(--mono);flex:none;}
+.cm-bal{margin-left:auto;flex:none;font-family:var(--mono);font-weight:600;font-size:13px;white-space:nowrap;}
+.cm-nm{font-size:10px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cm-acts{display:flex;flex-wrap:wrap;gap:6px;padding-top:8px;}
+select.cm-tipo{appearance:none;-webkit-appearance:none;border:none;border-radius:20px;padding:4px 22px 4px 10px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer;max-width:150px;background-repeat:no-repeat;background-position:right 8px center;background-size:8px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23999' stroke-width='1.6'/%3E%3C/svg%3E");}
+select.cm-tipo:disabled{cursor:default;opacity:.85;background-image:none;padding-right:10px;}
+select.cm-tipo option{color:var(--text);background:var(--bg2);}
+select.ct-operativa{background-color:rgba(91,141,239,.18);color:#9db9f5;}
+select.ct-ahorro{background-color:rgba(45,212,191,.18);color:#5ee7d4;}
+select.ct-otras{background-color:var(--bg4);color:var(--text3);}
+@media(max-width:600px){.cm-grid{columns:1;}.cm-bar .btn{padding:8px 10px;}.cm-bh{flex-wrap:wrap;}.cm-bt{order:9;width:100%;padding-left:20px;margin-top:-2px;}select.cm-tipo{max-width:118px;padding-left:8px;}.cm-main{gap:6px;}}
 .cu-card{padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer;}
 .cu-card.selected{background:rgba(91,141,239,.10);}
 .cu-nm{font-weight:600;margin-bottom:6px;font-size:13px;}
@@ -608,6 +652,7 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
   .main-grid{grid-template-columns:repeat(3,1fr);}
   .mid-grid,.mid-grid-3col{grid-template-columns:1fr;}
   .cu-wide{grid-column:auto;}
+  .tc-cv{flex:none;height:170px;}
   .budget-grid{grid-template-columns:repeat(2,1fr);}
   .srv-grid{grid-template-columns:1fr;}
   /* Dashboard */
@@ -1713,7 +1758,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="cu-cards"><div id="accounts-cards"></div><div id="accounts-totales-cards"></div></div>
       <div id="account-filter-badge" style="display:none;margin-top:8px"><div class="filter-badge"><span id="filter-badge-text"></span><span style="cursor:pointer" onclick="clearAccountFilter()"> ✕</span></div></div>
     </div>
-    <div class="card" style="padding:18px">
+    <div class="card tc-card" style="padding:18px">
       <div class="section-title" style="margin-bottom:6px">Tipo de Cambio <span style="font-size:10px;color:var(--text3)">(clic para editar)</span></div>
       <div id="tc-mode-info" style="font-size:10px;color:var(--text3);margin-bottom:12px;line-height:1.5"></div>
       <div style="margin-bottom:14px"><div style="font-size:10px;color:var(--text2);margin-bottom:3px">COMPRA</div><div style="font-size:22px;font-family:var(--mono);color:var(--amber)">S/ <span class="tc-editable" id="tc-compra-disp" onclick="editTC('compra')">3.4170</span></div></div>
@@ -1722,6 +1767,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div style="font-size:10px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.7px">Equivalencias</div>
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--text2)">S/ 1,000</span><span class="money" id="equiv-1000-soles" style="font-family:var(--mono)"></span></div>
         <div style="display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--text2)">$ 100</span><span class="money" id="equiv-100-dolar" style="font-family:var(--mono)"></span></div>
+      </div>
+      <div class="tc-chart">
+        <div class="tc-ch-h"><span class="tc-ch-k">Mejor tipo de cambio</span><span class="tc-chips" id="tc-chips"><span data-n="7" onclick="setTCRango(7)">7d</span><span data-n="30" class="on" onclick="setTCRango(30)">30d</span><span data-n="90" onclick="setTCRango(90)">90d</span><span data-n="0" onclick="setTCRango(0)">Todo</span></span></div>
+        <div class="tc-leg" id="tc-leg"></div>
+        <div class="tc-cv"><canvas id="tc-chart"></canvas><div id="tc-chart-empty" style="display:none"></div></div>
       </div>
     </div>
   </div>
@@ -3662,9 +3712,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.55.2';
-const APP_VERSION_DATE = '08/10/26 - 22:05'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Cuentas y Ahorros ahora son una sola tarjeta (Disponible y Ahorro por banco, soles y dólares), y en Gestionar cuentas puedes ver y cambiar el tipo de cada cuenta.';
+const APP_VERSION = 'v1.55.3';
+const APP_VERSION_DATE = '08/10/26 - 22:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gestionar cuentas con tarjetas por banco (buscador, resumen y acciones en ⋯) y gráfico del mejor tipo de cambio dentro de la tarjeta Tipo de Cambio.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7393,6 +7443,67 @@ function updateTCDisplay(){
       modeEl.innerHTML='✏️ Manual · <span class="tc-editable" onclick="setTCAuto()">volver a automático</span>';
     }
   }
+  try{ renderTCChart(); }catch(e){ console.warn('Gráfico TC:',e); }
+}
+// ── Gráfico "Mejor tipo de cambio" (tarjeta Tipo de Cambio) ──
+// Serie = el mejor compra / mejor venta de CADA día registrado en el Comparador de TC
+// (state.tcTracker). Mismo criterio que los números grandes de la tarjeta.
+let tcRango=30, tcChartInst=null, tcChartKey='';
+function tcSerie(){
+  const empresas=state.tcEmpresas||[];
+  const ahorro=(typeof getTotalAhorroSoles==='function')?getTotalAhorroSoles():0;
+  const porFecha=new Map();
+  (state.tcTracker||[]).filter(r=>r&&r.fecha).slice().sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).forEach(r=>{
+    const c=computeTCRow(r,empresas,ahorro);
+    if(!c.mejorCompra||!c.mejorVenta) return;
+    porFecha.set(r.fecha,{fecha:r.fecha,
+      compra:c.mejorVenta.tc, compraEmp:c.mejorVenta.empresa.nombre,   // "Compra" global = mejor tasa a la que te compran tus dólares
+      venta:c.mejorCompra.tc,  ventaEmp:c.mejorCompra.empresa.nombre});// "Venta" global = mejor tasa a la que te venden dólares
+  });
+  return [...porFecha.values()];
+}
+function setTCRango(n){ tcRango=n; renderTCChart(); }
+function renderTCChart(){
+  const cv=document.getElementById('tc-chart'); if(!cv) return;
+  const empty=document.getElementById('tc-chart-empty'), leg=document.getElementById('tc-leg'), chips=document.getElementById('tc-chips');
+  if(chips) chips.querySelectorAll('span').forEach(s=>s.classList.toggle('on',+s.dataset.n===tcRango));
+  const serie=tcSerie();
+  let pts=serie;
+  if(tcRango>0 && serie.length){
+    const fin=new Date(serie[serie.length-1].fecha+'T12:00:00'); fin.setDate(fin.getDate()-tcRango);
+    pts=serie.filter(p=>new Date(p.fecha+'T12:00:00')>=fin);
+    if(pts.length<2) pts=serie.slice(-2); // pocos datos en ese rango: al menos los 2 últimos días
+  }
+  if(pts.length<2){
+    if(tcChartInst){ tcChartInst.destroy(); tcChartInst=null; } tcChartKey='';
+    if(empty){ empty.style.display='flex'; empty.textContent='Registra al menos 2 días en el Comparador de TC (página 💱 TC) para ver la tendencia.'; }
+    if(leg) leg.innerHTML='';
+    return;
+  }
+  if(empty) empty.style.display='none';
+  const a=pts[0], z=pts[pts.length-1];
+  const dlt=v=>(v>=0?'▲ +':'▼ ')+v.toFixed(4);
+  if(leg) leg.innerHTML=
+    `<span><span style="color:#2dd4bf">●</span> Compra <b>${z.compra.toFixed(4)}</b> <span style="color:var(--text3)">${dlt(z.compra-a.compra)}</span></span>`+
+    `<span><span style="color:#a78bfa">●</span> Venta <b>${z.venta.toFixed(4)}</b> <span style="color:var(--text3)">${dlt(z.venta-a.venta)}</span></span>`+
+    `<span style="color:var(--text3)">spread ${(z.venta-z.compra).toFixed(4)}</span>`;
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const key=JSON.stringify([pts.map(p=>[p.fecha,p.compra,p.venta,p.compraEmp,p.ventaEmp]),isDark]);
+  if(tcChartInst && key===tcChartKey) return;
+  tcChartKey=key;
+  if(typeof Chart==='undefined') return;
+  if(tcChartInst){ tcChartInst.destroy(); tcChartInst=null; }
+  const tick=isDark?'#a8a9b3':'#5c5d67', grid=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)';
+  const fmt=f=>{ const d=new Date(f+'T12:00:00'); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); };
+  const mk=(label,col,fill,data)=>({label,data,borderColor:col,backgroundColor:fill,borderWidth:2,tension:.3,fill:label==='Compra',pointRadius:pts.length<=14?3:0,pointHoverRadius:4,pointBackgroundColor:col});
+  tcChartInst=new Chart(cv.getContext('2d'),{type:'line',
+    data:{labels:pts.map(p=>fmt(p.fecha)),datasets:[mk('Venta','#a78bfa','rgba(167,139,250,.08)',pts.map(p=>p.venta)),mk('Compra','#2dd4bf','rgba(45,212,191,.10)',pts.map(p=>p.compra))]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:isDark?'#262830':'#ffffff',titleColor:isDark?'#f0f0f2':'#1a1b1e',bodyColor:isDark?'#f0f0f2':'#1a1b1e',borderColor:isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.15)',borderWidth:1,padding:8,
+        callbacks:{title:it=>{const p=pts[it[0].dataIndex];return new Date(p.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});},
+                   label:c=>{const p=pts[c.dataIndex];return ' '+c.dataset.label+' '+c.parsed.y.toFixed(4)+' · '+(c.dataset.label==='Compra'?p.compraEmp:p.ventaEmp);}}}},
+      scales:{x:{grid:{display:false},ticks:{color:tick,font:{size:9},maxTicksLimit:5,maxRotation:0}},
+              y:{grace:'8%',grid:{color:grid},ticks:{color:tick,font:{size:9},maxTicksLimit:4,callback:v=>(+v).toFixed(3)}}}}});
 }
 function setTCAuto(){
   state.tc.mode='auto';
@@ -12597,6 +12708,9 @@ function isOtrasCuenta(key){
 let pendingDeleteKey=null;
 
 function openCuentasModal(){
+  _cmAbierta=null;
+  const _b=document.getElementById('cm-buscar'); if(_b) _b.value='';
+  const _w=document.getElementById('nc-wrap'); if(_w) _w.style.display='none';
   renderCuentasList();
   cancelTransfer();
   // Populate year selector
@@ -12749,80 +12863,115 @@ function confirmarReconciliacion(){
   render();
 }
 
+let _cmAbierta=null; // cuenta con el panel de acciones abierto (⋯)
+function cmToggleCuenta(k){ _cmAbierta=(_cmAbierta===k?null:k); renderCuentasList(); }
+function toggleNuevaCuentaForm(){
+  const w=document.getElementById('nc-wrap'); if(!w) return;
+  const abrir=w.style.display==='none';
+  w.style.display=abrir?'block':'none';
+  if(abrir){ try{ w.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){} const n=document.getElementById('nc-name'); if(n) n.focus(); }
+}
+function updateBancoColor(keys,color){
+  if(!state.cuentaColors) state.cuentaColors={};
+  keys.forEach(k=>{ state.cuentaColors[k]=color; });
+  saveState(); render(); renderCuentasList();
+}
 function renderCuentasList(){
   const el=document.getElementById('cuentas-list');
   const custom=state.customCuentas||{};
-  const typeLabel={operativa:'operativa · ',ahorro:'ahorro · ',otras:'otras · '};
   const defaultTypes={BCP:'operativa',BBVA:'operativa',Efectivo:'operativa','Ahorro Soles':'ahorro','Ahorro Dólares':'ahorro'};
   const defaultCurs={BCP:'PEN',BBVA:'PEN',Efectivo:'PEN','Ahorro Soles':'PEN','Ahorro Dólares':'USD'};
-  const isDefault=k=>k in defaultTypes;
-  // Saldo REAL a la fecha de hoy — el mismo motor (snapshots + historial de
-  // movimientos) que usa el resto de la app. OJO: "state.cuentas[k]" es un
-  // campo aparte que el resto de la app YA NO usa para calcular nada — solo
-  // se llenó al crear la cuenta y podía quedar desactualizado para siempre.
+  // Saldo REAL a la fecha de hoy — el mismo motor que usa el resto de la app
+  // ("state.cuentas[k]" ya no se usa para calcular nada, solo se llenó al crear la cuenta).
   const hoyCuentas=new Date();
   const saldosReales=reconstructSaldoAt(hoyCuentas.getFullYear(), hoyCuentas.getMonth())||{};
+  const nz=v=>Math.abs(v)<0.005?0:v; // lo que redondea a 0.00 se trata como cero (sin "-S/ 0.00")
 
-  function rowHTML(k,t,cur,enGrupo){
-    const bal=saldosReales[k]||0;
-    const sym=cur==='USD'?'$':'S/';
-    const balStr=(bal>=0?'':'-')+sym+' '+numFmtSigned(Math.abs(bal),2);
-    const editBtn=`<button class="config-action-btn neutral" onclick="editCuenta('${k}')" style="font-size:10px;padding:3px 8px">✏ Editar saldo</button>`;
-    const renameBtn=`<button class="config-action-btn neutral" onclick="renombrarCuentaUI('${k}')" title="Cambiar el nombre de esta cuenta en toda la app" style="font-size:10px;padding:3px 8px">🏷️</button>`;
-    const reconBtn=`<button class="config-action-btn neutral" onclick="openReconciliarModal('${k}')" title="Comparar con el saldo real del banco" style="font-size:10px;padding:3px 8px">🔍</button>`;
-    const delBtn=`<button class="config-action-btn danger" onclick="startDeleteCuenta('${k}')" style="font-size:10px;padding:3px 8px">🗑</button>`;
-    const masBtn=enGrupo?'':`<button class="config-action-btn neutral" onclick="abrirBolsilloModal({banco:${JSON.stringify(getBanco(k)).replace(/"/g,'&quot;')}})" title="Agregar otro bolsillo (disponible/ahorro, soles/dólares) a este banco" style="font-size:10px;padding:3px 8px">＋</button>`;
-    const bancoBtn=`<button class="config-action-btn neutral" onclick="asignarBancoUI('${k}')" title="Cambiar a qué banco pertenece esta cuenta (para unirla con otras)" style="font-size:10px;padding:3px 8px">🔗</button>`;
-    // Tipo de cuenta SIEMPRE visible y editable (Disponible / Ahorro / Otras). Las cuentas base de
-    // la app (BCP, BBVA, Efectivo, Ahorro Soles/Dólares) no tienen registro propio: su tipo es fijo.
-    const tipoAct=getAccountType(k);
-    const bloqueado=!(custom[k]);
-    const tipoBg={operativa:'rgba(91,141,239,.18)',ahorro:'rgba(45,212,191,.18)',otras:'var(--bg4)'}[tipoAct]||'var(--bg4)';
-    const chipTipo=`<select ${bloqueado?'disabled':''} onchange="cambiarTipoCuenta('${k}',this.value)" title="${bloqueado?'Cuenta base de la app: su tipo es fijo':'Toca para cambiar el tipo: Disponible, Ahorro u Otras (no suma)'}" style="font-size:10px;padding:2px 4px;border-radius:10px;border:1px solid var(--border2);background:${tipoBg};color:var(--text);font-family:inherit;cursor:${bloqueado?'default':'pointer'};max-width:128px"><option value="operativa" ${tipoAct==='operativa'?'selected':''}>💳 Disponible</option><option value="ahorro" ${tipoAct==='ahorro'?'selected':''}>🏦 Ahorro</option><option value="otras" ${tipoAct==='otras'?'selected':''}>📋 Otras (no suma)</option></select>`;
-    // TODAS las cuentas (fijas y personalizadas) pueden cambiar su color
-    const dot=`<input type="color" value="${getCuentaColor(k)}" onchange="updateCuentaColor('${k}',this.value)" title="Cambiar color" style="width:16px;height:16px;padding:0;border:none;border-radius:50%;cursor:pointer;flex-shrink:0">`;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 8px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1 1 150px;min-width:0">
-        ${dot}
-        <span style="font-size:13px;font-weight:500">${escapeHtml(enGrupo ? (cur==='USD'?'Dólares ($)':'Soles (S/)') : accLabel(k))}</span>${enGrupo?'':`<span style="font-size:10px;color:var(--text3)">${cur==='USD'?'$':'S/'}</span>`}
-        ${chipTipo}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-family:var(--mono);font-size:12px;color:${bal>=0?'var(--text2)':'var(--red)'}">${balStr}</span>
-        ${editBtn}${renameBtn}${bancoBtn}${masBtn}${reconBtn}${delBtn}
-      </div>
-    </div>`;
-  }
-  // Show all accounts that exist in state.cuentas — agrupadas por banco
-  let h='';
-  const filas=[]; // {k,t,cur}
+  // ── Todas las cuentas que existen ──
+  const filas=[]; // {k,cur}
   const shownKeys=new Set();
   Object.keys(defaultTypes).forEach(k=>{
-    if(state.cuentas[k]!==undefined){filas.push({k,t:defaultTypes[k],cur:defaultCurs[k]});shownKeys.add(k);}
+    if(state.cuentas[k]!==undefined){filas.push({k,cur:defaultCurs[k]});shownKeys.add(k);}
   });
-  Object.entries(custom).forEach(([k,v])=>{if(!shownKeys.has(k))filas.push({k,t:v.type,cur:v.currency});});
-  // Sugerencia de unir cuentas que parecen del mismo banco (nunca une solo)
-  detectarCuentasUnibles().forEach((g,gi)=>{
-    h+=`<div style="background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.35);border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:11px;color:var(--text2)">
+  Object.entries(custom).forEach(([k,v])=>{if(!shownKeys.has(k))filas.push({k,cur:v.currency||'PEN'});});
+
+  // ── Resumen de arriba: Disponible / Ahorro por moneda (las "Otras" no suman) ──
+  const resEl=document.getElementById('cm-resumen');
+  if(resEl){
+    const tiles=[['operativa','PEN','Disponible S/'],['operativa','USD','Disponible $'],['ahorro','PEN','Ahorro S/'],['ahorro','USD','Ahorro $']];
+    resEl.innerHTML=tiles.map(([t,c,lbl])=>{
+      const ks=filas.filter(f=>getAccountType(f.k)===t && (f.cur==='USD'?'USD':'PEN')===c);
+      if(!ks.length) return '';
+      const s=nz(ks.reduce((a,f)=>a+(saldosReales[f.k]||0),0));
+      const col=t==='ahorro'?'color:var(--teal)':'';
+      return `<div><small>${lbl}</small><div class="v" style="${col}">${c==='USD'?'$':'S/'} ${numFmtSigned(s,2)}</div></div>`;
+    }).join('');
+  }
+
+  // ── Fila de una cuenta (tipo editable + saldo + ⋯ acciones) ──
+  function filaHTML(f){
+    const k=f.k, cur=f.cur==='USD'?'USD':'PEN', sym=cur==='USD'?'$':'S/';
+    const bal=nz(saldosReales[k]||0);
+    const balStr=(bal<0?'-':'')+sym+' '+numFmtSigned(Math.abs(bal),2);
+    const tipoAct=getAccountType(k);
+    const bloqueado=!(custom[k]); // cuentas base de la app: tipo fijo
+    const chip=`<select class="cm-tipo ct-${tipoAct}" ${bloqueado?'disabled':''} onclick="event.stopPropagation()" onchange="cambiarTipoCuenta('${k}',this.value)" title="${bloqueado?'Cuenta base de la app: su tipo es fijo':'Toca para cambiar el tipo: Disponible, Ahorro u Otras (no suma)'}"><option value="operativa" ${tipoAct==='operativa'?'selected':''}>💳 Disponible</option><option value="ahorro" ${tipoAct==='ahorro'?'selected':''}>🏦 Ahorro</option><option value="otras" ${tipoAct==='otras'?'selected':''}>📋 Otras · no suma</option></select>`;
+    const ambiguo=getBanco(k)!==k && accLabel(k)===k; // dos cuentas del mismo banco+tipo+moneda: mostrar su nombre
+    const abierta=_cmAbierta===k;
+    const acts=abierta?`<div class="cm-acts">
+        <button class="config-action-btn neutral" onclick="editCuenta('${k}')">✏ Editar saldo</button>
+        <button class="config-action-btn neutral" onclick="renombrarCuentaUI('${k}')">🏷 Renombrar</button>
+        <button class="config-action-btn neutral" onclick="openReconciliarModal('${k}')" title="Comparar con el saldo real del banco">🔍 Conciliar</button>
+        <button class="config-action-btn neutral" onclick="asignarBancoUI('${k}')" title="Cambiar a qué banco pertenece esta cuenta">🔗 Cambiar de banco</button>
+        <button class="config-action-btn danger" onclick="startDeleteCuenta('${k}')">🗑 Eliminar</button>
+      </div>`:'';
+    return `<div class="cm-acc ${abierta?'open':''}"><div class="cm-main">
+      <span class="cm-mon">${sym}</span>${chip}${ambiguo?`<span class="cm-nm" title="${escapeHtml(k)}">${escapeHtml(k)}</span>`:''}
+      <span class="cm-bal" style="color:${bal<0?'var(--red)':'var(--text)'}">${balStr}</span>
+      <button class="cm-ib ${abierta?'on':''}" onclick="cmToggleCuenta('${k}')" title="Más acciones">⋯</button></div>${acts}
+    </div>`;
+  }
+
+  // ── Armado: sugerencia de unir + una tarjeta por banco ──
+  let h='';
+  detectarCuentasUnibles().forEach(g=>{
+    h+=`<div class="cm-unir">
       🔗 Estas cuentas parecen del mismo banco: <b>${g.keys.map(escapeHtml).join(' · ')}</b>
       <div style="margin-top:6px"><button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="unirCuentasEnBanco(${JSON.stringify(g.banco).replace(/"/g,'&quot;')},${JSON.stringify(g.keys).replace(/"/g,'&quot;')})">Unir como "${escapeHtml(g.banco)}"</button>
       <span style="color:var(--text3)"> — solo agrupa el nombre; no mueve ni cambia saldos</span></div></div>`;
   });
+  const q=((document.getElementById('cm-buscar')||{}).value||'').trim().toLowerCase();
   const bancosOrden=[]; filas.forEach(f=>{ const b=getBanco(f.k); if(!bancosOrden.includes(b)) bancosOrden.push(b); });
+  let mostrados=0;
   bancosOrden.forEach(b=>{
-    const miembros=filas.filter(f=>getBanco(f.k)===b);
+    const miembrosTodos=filas.filter(f=>getBanco(f.k)===b);
+    const bancoCoincide=!q || b.toLowerCase().includes(q);
+    const miembros=bancoCoincide?miembrosTodos:miembrosTodos.filter(f=>(f.k+' '+accLabel(f.k)).toLowerCase().includes(q));
+    if(!miembros.length) return;
+    mostrados++;
+    const keys=miembrosTodos.map(f=>f.k);
     const bq=JSON.stringify(b).replace(/"/g,'&quot;');
-    const btnMas=`<button class="config-action-btn neutral" onclick="abrirBolsilloModal({banco:${bq}})" title="Agregar otra cuenta (disponible/ahorro, soles/dólares) a este banco" style="font-size:10px;padding:3px 8px">＋ Bolsillo</button>`;
-    if(miembros.length>1){
-      h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:6px 0 2px">
-        <span style="font-size:12px;font-weight:700;color:var(--text)">🏦 ${escapeHtml(b)}</span>
-        <span style="display:flex;gap:6px"><button class="config-action-btn neutral" onclick="renombrarBancoUI(${bq})" title="Cambiar el nombre del banco" style="font-size:10px;padding:3px 8px">✏ Banco</button>${btnMas}</span></div>`;
-      miembros.forEach(m=>{ h+='<div style="margin-left:12px">'+rowHTML(m.k,m.t,m.cur,true)+'</div>'; });
-    } else {
-      h+=rowHTML(miembros[0].k,miembros[0].t,miembros[0].cur,false);
-    }
+    const col=getCuentaColor(keys[0]);
+    // total del banco por moneda (sin contar "otras"; si solo tiene "otras", las muestra)
+    const sumas=(cur)=>{ const ms=miembrosTodos.filter(f=>(f.cur==='USD'?'USD':'PEN')===cur); if(!ms.length) return null;
+      let usar=ms.filter(f=>getAccountType(f.k)!=='otras'); if(!usar.length) usar=ms;
+      const s=nz(usar.reduce((a,f)=>a+(saldosReales[f.k]||0),0)); return (cur==='USD'?'$ ':'S/ ')+numFmtSigned(s,2); };
+    const tot=[sumas('PEN'),sumas('USD')].filter(Boolean).join(' · ');
+    const unica=miembrosTodos.length===1 && getBanco(keys[0])===keys[0];
+    const renBtn=unica
+      ? `<button class="cm-ib" onclick="renombrarCuentaUI('${keys[0]}')" title="Cambiar el nombre">✏</button>`
+      : `<button class="cm-ib" onclick="renombrarBancoUI(${bq})" title="Cambiar el nombre del banco">✏</button>`;
+    h+=`<div class="cm-bank">
+      <div class="cm-bh">
+        <label class="cm-dotw" title="Cambiar color"><span class="cm-dot" style="background:${col}"></span><input type="color" value="${col}" onchange='updateBancoColor(${JSON.stringify(keys).replace(/'/g,"&#39;")},this.value)'></label>
+        <b title="${escapeHtml(b)}">${escapeHtml(b)}</b><span class="cm-bt">${tot}</span>
+        <button class="cm-ib" onclick="abrirBolsilloModal({banco:${bq}})" title="Agregar otra cuenta (disponible/ahorro, soles/dólares) a este banco">＋</button>${renBtn}
+      </div>
+      ${miembros.map(filaHTML).join('')}
+    </div>`;
   });
-  el.innerHTML=h||'<div style="color:var(--text3);font-size:12px;padding:8px 0">No hay cuentas registradas. Carga el histórico Excel.</div>';
+  if(!mostrados) h+=`<div style="color:var(--text3);font-size:12px;padding:8px 0;column-span:all">${q?'Ninguna cuenta coincide con la búsqueda.':'No hay cuentas registradas. Carga el histórico Excel.'}</div>`;
+  el.innerHTML=h;
   updateAccountSelects();
 }
 
@@ -13115,6 +13264,7 @@ function saveNewCuenta(){
   document.getElementById('nc-name').value='';
   document.getElementById('nc-balance').value='';
   document.getElementById('nc-color').value='#5b8def';
+  const ncw=document.getElementById('nc-wrap'); if(ncw) ncw.style.display='none';
   saveState(); renderCuentasList(); render();
 }
 
@@ -23863,6 +24013,15 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.55.3",
+  "fecha": "08/10/26",
+  "cambios": [
+   "Tarjeta Tipo de Cambio: nuevo gráfico lineal del mejor tipo de cambio (compra y venta) con rangos 7d / 30d / 90d / Todo. Al tocar un punto ves la fecha, el valor y qué casa de cambio fue la mejor ese día. Llena el espacio hasta el borde inferior de la tarjeta Cuentas, así que ambas quedan al mismo nivel.",
+   "Gestionar cuentas rediseñado: una tarjeta por banco con sus cuentas adentro, resumen arriba (Disponible y Ahorro por moneda), buscador, y el tipo de cada cuenta como pastilla de color (toca para cambiarlo).",
+   "Gestionar cuentas: las acciones de cada cuenta (editar saldo, renombrar, conciliar, cambiar de banco, eliminar) ahora están en el botón ⋯; el formulario \"Nueva cuenta\" se abre con el botón ＋ Nueva cuenta. También se adapta mejor al celular."
+  ]
+ },
+ {
   "v": "v1.55.2",
   "fecha": "08/10/26",
   "cambios": [
@@ -25423,10 +25582,12 @@ if(state.projGoals){
 
 <!-- MODAL CUENTAS -->
 <div class="modal-overlay" id="cuentas-modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeCuentasModal')">
-  <div class="modal" style="width:500px;max-height:90vh;overflow-y:auto">
+  <div class="modal" style="width:860px;max-width:96vw;max-height:92vh;overflow-y:auto">
     <div class="modal-title"><span>🏦 Gestionar Cuentas</span><button class="modal-close" onclick="closeCuentasModal()">✕</button></div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">💡 Cada cuenta muestra su <b>tipo</b> (💳 Disponible · 🏦 Ahorro · 📋 Otras = no suma). Tócalo para cambiarlo; solo cambia dónde se muestra y cómo suma, no mueve saldos.</div>
-    <div id="cuentas-list" style="margin-bottom:16px"></div>
+    <div id="cm-resumen" class="cm-sum"></div>
+    <div class="cm-bar"><label class="cm-search"><span>🔎</span><input id="cm-buscar" type="search" placeholder="Buscar cuenta o banco…" oninput="renderCuentasList()"></label><button class="btn btn-primary" onclick="toggleNuevaCuentaForm()">＋ Nueva cuenta</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">💡 Toca el <b>tipo</b> de una cuenta (💳 Disponible · 🏦 Ahorro · 📋 Otras = no suma) para cambiarlo; solo cambia dónde se muestra y cómo suma, no mueve saldos. Los <b>⋯</b> abren las demás acciones.</div>
+    <div id="cuentas-list" class="cm-grid" style="margin-bottom:16px"></div>
 
     <!-- Transfer modal (inline) -->
     <div id="transfer-wrap" style="display:none;background:var(--amber-bg);border:1px solid var(--amber);border-radius:9px;padding:14px;margin-bottom:14px">
@@ -25441,7 +25602,7 @@ if(state.projGoals){
       </div>
     </div>
 
-    <div style="background:var(--bg3);border-radius:10px;padding:14px">
+    <div id="nc-wrap" style="display:none"><div style="background:var(--bg3);border-radius:10px;padding:14px">
       <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Nueva cuenta</div>
       <div class="field-row">
         <div class="field"><label>Banco o nombre <span style="font-size:10px;color:var(--text3)">(si ya existe, se agrega como bolsillo de ese banco)</span></label><input id="nc-name" type="text" placeholder="Ej. Interbank"></div>
@@ -25480,7 +25641,7 @@ if(state.projGoals){
       <div style="display:flex;justify-content:flex-end;margin-top:8px">
         <button class="btn btn-primary" onclick="saveNewCuenta()">+ Agregar cuenta</button>
       </div>
-    </div>
+    </div></div>
   </div>
 </div>
 
