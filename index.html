@@ -215,6 +215,10 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .cu-tabla .cu-sep{border-left:1px solid var(--border);padding-left:12px;}
 .cu-tabla th.cu-sep{padding-left:12px;}
 .cu-l{line-height:20px;white-space:nowrap;}
+/* Variación vs. previo: etiqueta a la izquierda del monto actual */
+.cu-var{display:inline-block;margin-right:8px;border-radius:999px;padding:0 7px;font-family:var(--mono);font-size:10px;font-weight:500;line-height:17px;vertical-align:middle;}
+.cu-var.up{color:var(--teal);background:rgba(45,212,191,.13);}
+.cu-var.dn{color:var(--red);background:rgba(251,113,133,.13);}
 .cu-tabla tr.cu-tot td{border-top:1px solid var(--border2);}
 .cu-cards{display:none;}
 /* Tarjeta Tipo de Cambio: el gráfico rellena el espacio hasta el borde inferior (mismo nivel que la tarjeta Cuentas) */
@@ -3761,9 +3765,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.59.1';
-const APP_VERSION_DATE = '09/10/26 - 15:17'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Arreglo: las deudas antiguas (sin dirección guardada) ahora también aparecen al cargar un gasto a la deuda de una persona.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.60.0';
+const APP_VERSION_DATE = '09/10/26 - 16:34'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: en la tabla Cuentas, cada saldo actual muestra una etiqueta ▲/▼ con el % de variación contra el previo (verde sube, rojo baja; el monto exacto al pasar el cursor). También en los totales.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8237,12 +8241,20 @@ function renderAccountsTables(){
   const ordMon=(x,y)=>(x.s==='$'?1:0)-(y.s==='$'?1:0);
   // Valor mostrado: lo que se redondea a 0.00 se trata como cero (sin "-S/ 0.00" rojo).
   const val=(m,k)=>{ const v=(m[k]||0); return Math.abs(v)<0.005?0:v; };
+  // Etiqueta de variación vs. "previo" (misma moneda, sin convertir). Sin cambio = nada.
+  const pillVar=(prev,cur,fc)=>{
+    const d=cur-prev; if(Math.abs(d)<0.005) return '';
+    const up=d>0, base=Math.abs(prev), pc=base>=0.005?Math.abs(d)/base*100:null;
+    const txt=pc===null?(up?'nuevo':''):(pc>=10?pc.toFixed(0):pc.toFixed(1))+' %';
+    const tip=hiddenMode?'':(up?'+':'−')+fc(Math.abs(d));
+    return `<span class="cu-var ${up?'up':'dn'}" title="${tip}">${up?'▲':'▼'}${txt?' '+txt:''}</span>`;
+  };
   const celda=(arr,m,esCur)=>{
     if(!arr.length) return `<div class="cu-l" style="color:var(--text3)">—</div>`;
     return arr.map(r=>{
       const v=val(m,r.k), fc=r.s==='$'?fmtD:fmtS, neg=v<0;
       return esCur
-        ? `<div class="cu-l" style="color:${neg?'var(--red)':'var(--text)'}">${neg?'-':''}${M(fc(v))}</div>`
+        ? `<div class="cu-l" style="color:${neg?'var(--red)':'var(--text)'}">${r.cat!=='otras'?pillVar(val(prevSaldo,r.k),v,fc):''}${neg?'-':''}${M(fc(v))}</div>`
         : `<div class="cu-l">${neg?'-':''}${M(fc(v))}</div>`;
     }).join('');
   };
@@ -8285,11 +8297,11 @@ function renderAccountsTables(){
   const totRow=(label,t,fc)=>t.hay?`<tr class="cu-tot">
       <td style="font-weight:600;padding-top:9px">${label}</td>
       <td class="cu-n cu-prev" style="padding-top:9px"><div class="cu-l">${M(fc(norm(t.dp)))}</div></td>
-      <td class="cu-n cu-pr" style="padding-top:9px;font-weight:700;color:var(--teal)"><div class="cu-l">${M(fc(norm(t.dc)))}</div></td>
+      <td class="cu-n cu-pr" style="padding-top:9px;font-weight:700;color:var(--teal)"><div class="cu-l">${pillVar(norm(t.dp),norm(t.dc),fc)}${M(fc(norm(t.dc)))}</div></td>
       <td class="cu-n cu-prev cu-sep" style="padding-top:9px"><div class="cu-l">${M(fc(norm(t.ap)))}</div></td>
-      <td class="cu-n" style="padding-top:9px;font-weight:700;color:var(--teal)"><div class="cu-l">${M(fc(norm(t.ac)))}</div></td>
+      <td class="cu-n" style="padding-top:9px;font-weight:700;color:var(--teal)"><div class="cu-l">${pillVar(norm(t.ap),norm(t.ac),fc)}${M(fc(norm(t.ac)))}</div></td>
     </tr>`:'';
-  const totCard=(label,t,fc)=>t.hay?`<div class="cu-box" style="margin-top:8px"><div class="cu-k">${label}</div><div class="cu-grid2" style="gap:6px"><div><div class="cu-k" style="margin:0">Disponible</div><div class="cu-l" style="font-weight:700;color:var(--teal)">${M(fc(norm(t.dc)))}</div></div><div><div class="cu-k" style="margin:0">Ahorro</div><div class="cu-l" style="font-weight:700;color:var(--teal)">${M(fc(norm(t.ac)))}</div></div></div></div>`:'';
+  const totCard=(label,t,fc)=>t.hay?`<div class="cu-box" style="margin-top:8px"><div class="cu-k">${label}</div><div class="cu-grid2" style="gap:6px"><div><div class="cu-k" style="margin:0">Disponible</div><div class="cu-l" style="font-weight:700;color:var(--teal)">${pillVar(norm(t.dp),norm(t.dc),fc)}${M(fc(norm(t.dc)))}</div></div><div><div class="cu-k" style="margin:0">Ahorro</div><div class="cu-l" style="font-weight:700;color:var(--teal)">${pillVar(norm(t.ap),norm(t.ac),fc)}${M(fc(norm(t.ac)))}</div></div></div></div>`:'';
   tbody.innerHTML=rowsHTML.join('')+totRow('Total Soles',T.S,fmtS)+totRow('Total Dólares',T.D,fmtD);
   if(cards) cards.innerHTML=cardsHTML.join('');
   if(foot) foot.innerHTML=totCard('Total Soles',T.S,fmtS)+totCard('Total Dólares',T.D,fmtD);
