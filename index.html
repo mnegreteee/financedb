@@ -3494,6 +3494,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="field" id="f-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="f-descpf"><option value="">No descontar</option></select>
     </div>
+    <div class="field" id="f-deuda-wrap" style="display:none"><label>🤝 ¿Cargar a la deuda de una persona? <span style="font-size:10px;color:var(--text3)">(préstamos "me deben" en la misma moneda, o una deuda nueva)</span></label>
+      <select id="f-deuda" onchange="onDeudaCargoChange('f-deuda')"><option value="">No cargar a deuda</option></select>
+      <input id="f-deuda-new" type="text" placeholder="Nombre de la persona" style="display:none;margin-top:6px">
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveMovimiento()">Guardar</button>
@@ -3757,9 +3761,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.58.0';
-const APP_VERSION_DATE = '09/10/26 - 12:51'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: al registrar un gasto, un consumo de tarjeta o una transferencia puedes elegir ➖ descontarlo de un pago frecuente con descuentos (ej. Préstamo Ripley), en la misma moneda. Si eliminas ese registro, el descuento se quita solo.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.59.1';
+const APP_VERSION_DATE = '09/10/26 - 15:17'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Arreglo: las deudas antiguas (sin dirección guardada) ahora también aparecen al cargar un gasto a la deuda de una persona.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5070,7 +5074,7 @@ function openTransferModal(destinoSugerido, montoSugerido, origenSugerido, catSu
   updateCategorySelects();
   document.getElementById('tr-cat').value=catSugerida||'';
   document.getElementById('tr-nota').value='';
-  document.getElementById('tr-descpf').innerHTML='<option value="">No descontar</option>';
+  document.getElementById('tr-descpf').innerHTML='<option value="">No descontar</option>'; document.getElementById('tr-deuda').innerHTML='<option value="">No cargar a deuda</option>';
   onTransferAccountChange();
   refrescarDescPFTransfer();
   document.getElementById('transfer-modal-overlay').classList.add('open');
@@ -5153,6 +5157,7 @@ function ejecutarTransferencia({origen, destino, monto, fecha, hora, cat, nota})
   return true;
 }
 function saveTransfer(){
+  if(!validarDeudaNuevaWeb('tr-deuda')) return;
   const origen=document.getElementById('tr-origen').value;
   let destino=document.getElementById('tr-destino').value;
   const monto=parseFloat(document.getElementById('tr-monto').value)||0;
@@ -10071,7 +10076,7 @@ function openModal(){
   document.getElementById('f-cat').value='';
   document.getElementById('f-date').value=todayLocalISO();
   document.getElementById('f-time').value=horaLimaActual();
-  document.getElementById('f-descpf').innerHTML='<option value="">No descontar</option>';
+  document.getElementById('f-descpf').innerHTML='<option value="">No descontar</option>'; document.getElementById('f-deuda').innerHTML='<option value="">No cargar a deuda</option>';
   updateAccountSelects(); // asegura que cuentas nuevas (incl. tipo "otras") aparezcan siempre
   const _rbA=document.getElementById('rb-ahorro'); if(_rbA) _rbA.style.display='none'; // nuevo movimiento: solo Ingreso o Gasto
   setType('income');
@@ -10479,22 +10484,45 @@ function pfsDescontables(currency){
   const cur=currency==='USD'?'USD':'PEN';
   return (state.pagosFrecuentes||[]).filter(p=>p.tipoMonto==='base_descuentos' && (p.currency==='USD'?'USD':'PEN')===cur);
 }
-function refrescarDescPF(selId, wrapId, currency, visible){
+function deudasCargables(currency){
+  const cur=currency==='USD'?'USD':'PEN';
+  return (state.deudas||[]).filter(d=>(d.direccion||'me_deben')==='me_deben' && d.status==='pendiente' && (d.currency==='USD'?'USD':'PEN')===cur);
+}
+function refrescarDescPF(selId, wrapId, currency, visible, reset){
   const sel=document.getElementById(selId), wrap=document.getElementById(wrapId); if(!sel||!wrap) return;
   const lista=visible?pfsDescontables(currency):[];
-  const prev=sel.value;
+  const prev=reset?'':sel.value;
   sel.innerHTML='<option value="">No descontar</option>'+lista.map(p=>'<option value="'+escapeHtml(p.id)+'">➖ '+escapeHtml(p.nombre)+'</option>').join('');
   if(lista.some(p=>p.id===prev)) sel.value=prev;
   wrap.style.display=lista.length?'':'none';
+  // 🤝 Cargar a la deuda de una persona (monto único o "voy sumando gastos") o crear una nueva
+  const dsel=document.getElementById(selId.replace('descpf','deuda')), dwrap=document.getElementById(wrapId.replace('descpf','deuda')); if(!dsel||!dwrap) return;
+  const dl=visible?deudasCargables(currency):[];
+  const dprev=reset?'':dsel.value;
+  dsel.innerHTML='<option value="">No cargar a deuda</option>'+dl.map(d=>'<option value="'+escapeHtml(d.id)+'">🤝 '+escapeHtml(d.nombre)+(Array.isArray(d.items)?' (voy sumando gastos)':' (monto único)')+'</option>').join('')+(visible?'<option value="__new__">➕ Deuda nueva…</option>':'');
+  if(dprev==='__new__'||dl.some(d=>d.id===dprev)) dsel.value=dprev;
+  dwrap.style.display=visible?'':'none';
+  onDeudaCargoChange(dsel.id);
 }
-function refrescarDescPFTC(){
-  refrescarDescPF('tc-m-descpf','tc-m-descpf-wrap',document.getElementById('tc-m-currency').value,!editingTCMovId);
+function onDeudaCargoChange(dselId){
+  const dsel=document.getElementById(dselId), inp=document.getElementById(dselId+'-new'); if(!dsel||!inp) return;
+  inp.style.display=dsel.value==='__new__'?'':'none';
+  if(dsel.value!=='__new__') inp.value='';
+}
+function validarDeudaNuevaWeb(dselId){
+  const dsel=document.getElementById(dselId), inp=document.getElementById(dselId+'-new');
+  if(dsel&&dsel.value==='__new__'&&!(inp&&inp.value.trim())){ alert('Escribe el nombre de la persona para la deuda nueva (o elige "No cargar a deuda").'); if(inp) inp.focus(); return false; }
+  return true;
+}
+function refrescarDescPFTC(reset){
+  refrescarDescPF('tc-m-descpf','tc-m-descpf-wrap',document.getElementById('tc-m-currency').value,!editingTCMovId,reset===true);
 }
 function refrescarDescPFTransfer(){
   const o=document.getElementById('tr-origen');
   refrescarDescPF('tr-descpf','tr-descpf-wrap',o&&o.value?getAccountCurrency(o.value):'PEN',true);
 }
 function aplicarDescuentoPF(selId, concepto, monto, origenId, fecha, currency){
+  aplicarCargoDeudaWeb(selId, concepto, monto, origenId, fecha, currency);
   const sel=document.getElementById(selId); const pfId=sel&&sel.value; if(!pfId||!(monto>0)) return;
   const pf=(state.pagosFrecuentes||[]).find(p=>p.id===pfId); if(!pf) return;
   if(!pf.descuentosPendientes) pf.descuentosPendientes=[];
@@ -10502,14 +10530,55 @@ function aplicarDescuentoPF(selId, concepto, monto, origenId, fecha, currency){
   pf.descuentosPendientes.push(d);
   logActividad('descuento_pendiente', 'Descuento en '+pf.nombre+': '+concepto+' — '+(currency==='USD'?'$':'S/')+' '+numFmtSigned(monto,2), {pfId, descuentoId:d.id});
 }
+// 🤝 Carga el gasto a la deuda elegida: acumulativa → nuevo gasto en su lista; monto único → se suma al
+// monto (queda anotado en "cargos"); "nueva" → crea una deuda acumulativa a nombre de la persona.
+function aplicarCargoDeudaWeb(selId, concepto, monto, origenId, fecha, currency){
+  const dselId=selId.replace('descpf','deuda');
+  const dsel=document.getElementById(dselId); const v=dsel&&dsel.value; if(!v||!(monto>0)) return;
+  fecha=fecha||todayISO();
+  const cur=currency==='USD'?'USD':'PEN', sym=cur==='USD'?'$':'S/';
+  if(!state.deudas) state.deudas=[];
+  if(v==='__new__'){
+    const nombre=((document.getElementById(dselId+'-new')||{}).value||'').trim(); if(!nombre) return;
+    const item={id:'di'+Date.now(), desc:concepto, monto, fecha, origenId};
+    const nd={id:'deu'+Date.now(), nombre, monto, currency:cur, fecha, nota:'', cat:'', direccion:'me_deben', status:'pendiente', fechaPago:null, cuentaPago:null, items:[item], creadaDesdeOrigen:origenId};
+    state.deudas.push(nd);
+    logActividad('deuda', 'Préstamo (acumulativa) nuevo desde un gasto: '+nombre+' — '+sym+' '+numFmtSigned(monto,2), {deudaId:nd.id});
+    return;
+  }
+  const d=state.deudas.find(x=>x.id===v); if(!d) return;
+  if(Array.isArray(d.items)){
+    const item={id:'di'+Date.now(), desc:concepto, monto, fecha, origenId};
+    d.items.push(item); recalcDeudaMonto(d);
+    logActividad('deuda_item', concepto+' — '+sym+' '+numFmtSigned(monto,2)+' ('+d.nombre+')', {deudaId:d.id, itemId:item.id});
+  } else {
+    if(!Array.isArray(d.cargos)) d.cargos=[];
+    d.cargos.push({id:'cg'+Date.now(), desc:concepto, monto, fecha, origenId});
+    d.monto=(Number(d.monto)||0)+monto;
+    logActividad('deuda_cargo', 'Cargo a la deuda de '+d.nombre+': '+concepto+' — '+sym+' '+numFmtSigned(monto,2), {deudaId:d.id});
+  }
+}
 function quitarDescuentosPorOrigenWeb(ids){
   ids=(ids||[]).filter(Boolean); if(!ids.length) return;
   (state.pagosFrecuentes||[]).forEach(p=>{ if(Array.isArray(p.descuentosPendientes)) p.descuentosPendientes=p.descuentosPendientes.filter(d=>!ids.includes(d.origenId)); });
+  // 🤝 también quita lo cargado a deudas; si la deuda se creó desde ese gasto y quedó vacía, se elimina
+  if(!Array.isArray(state.deudas)) return;
+  state.deudas.forEach(d=>{
+    if(Array.isArray(d.items) && d.items.some(it=>ids.includes(it.origenId))){ d.items=d.items.filter(it=>!ids.includes(it.origenId)); recalcDeudaMonto(d); }
+    if(Array.isArray(d.cargos)){ const q=d.cargos.filter(c=>ids.includes(c.origenId)); if(q.length){ d.monto=(Number(d.monto)||0)-q.reduce((s,c)=>s+c.monto,0); d.cargos=d.cargos.filter(c=>!ids.includes(c.origenId)); } }
+  });
+  state.deudas=state.deudas.filter(d=>!(d.creadaDesdeOrigen && ids.includes(d.creadaDesdeOrigen) && Array.isArray(d.items) && !d.items.length));
 }
 function actualizarDescuentoPorOrigenWeb(id, monto){
   (state.pagosFrecuentes||[]).forEach(p=>(p.descuentosPendientes||[]).forEach(d=>{ if(d.origenId===id && monto>0) d.monto=monto; }));
+  (state.deudas||[]).forEach(d=>{
+    (d.items||[]).forEach(it=>{ if(it.origenId===id && monto>0) it.monto=monto; });
+    if(Array.isArray(d.items)) recalcDeudaMonto(d);
+    (d.cargos||[]).forEach(c=>{ if(c.origenId===id && monto>0){ d.monto=(Number(d.monto)||0)-c.monto+monto; c.monto=monto; } });
+  });
 }
 function saveMovimiento(){
+  if(!validarDeudaNuevaWeb('f-deuda')) return;
   const desc=document.getElementById('f-desc').value.trim();
   const amount=parseFloat(document.getElementById('f-amount').value);
   const account=document.getElementById('f-account').value;
@@ -15142,7 +15211,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-con-interes').checked=false;
   document.getElementById('tc-m-tea').value='';
   onEsCuotaChange();
-  refrescarDescPFTC();
+  refrescarDescPFTC(true);
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15169,7 +15238,7 @@ function openAddMovTCFromList(){
   document.getElementById('tc-m-tea').value='';
   onEsCuotaChange();
   onConsumoTarjetaChange(); // fija la moneda según la primera tarjeta seleccionada
-  refrescarDescPFTC();
+  refrescarDescPFTC(true);
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15193,7 +15262,7 @@ function editTCMov(movId){
   document.getElementById('tc-m-es-cuota').checked=false;
   document.getElementById('tc-m-es-cuota').closest('.field').style.display='none'; // no se puede "convertir a cuotas" algo que ya existe, solo al crear
   onEsCuotaChange();
-  refrescarDescPFTC();
+  refrescarDescPFTC(true);
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15201,6 +15270,7 @@ function editTCMov(movId){
 function closeTCMovModal(){ document.getElementById('tc-mov-overlay').classList.remove('open'); }
 
 function saveTCMov(){
+  if(!validarDeudaNuevaWeb('tc-m-deuda')) return;
   const desc=(document.getElementById('tc-m-desc').value||'').trim();
   const fecha=document.getElementById('tc-m-fecha').value;
   const hora=document.getElementById('tc-m-hora').value;
@@ -26342,6 +26412,10 @@ if(state.projGoals){
     <div class="field" id="tr-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="tr-descpf"><option value="">No descontar</option></select>
     </div>
+    <div class="field" id="tr-deuda-wrap" style="display:none"><label>🤝 ¿Cargar a la deuda de una persona? <span style="font-size:10px;color:var(--text3)">(préstamos "me deben" en la misma moneda, o una deuda nueva)</span></label>
+      <select id="tr-deuda" onchange="onDeudaCargoChange('tr-deuda')"><option value="">No cargar a deuda</option></select>
+      <input id="tr-deuda-new" type="text" placeholder="Nombre de la persona" style="display:none;margin-top:6px">
+    </div>
     <div id="tr-preview" style="display:none;font-size:11px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.6"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTransferModal()">Cancelar</button>
@@ -27027,6 +27101,10 @@ if(state.projGoals){
     </div>
     <div class="field" id="tc-m-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="tc-m-descpf"><option value="">No descontar</option></select>
+    </div>
+    <div class="field" id="tc-m-deuda-wrap" style="display:none"><label>🤝 ¿Cargar a la deuda de una persona? <span style="font-size:10px;color:var(--text3)">(préstamos "me deben" en la misma moneda, o una deuda nueva)</span></label>
+      <select id="tc-m-deuda" onchange="onDeudaCargoChange('tc-m-deuda')"><option value="">No cargar a deuda</option></select>
+      <input id="tc-m-deuda-new" type="text" placeholder="Nombre de la persona" style="display:none;margin-top:6px">
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="closeTCMovModal()">Cancelar</button>
