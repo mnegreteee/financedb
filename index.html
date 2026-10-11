@@ -2791,10 +2791,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
     <div id="ahi-grafico-card" class="card" style="padding:16px 20px;margin-top:16px;margin-bottom:16px">
       <div class="section-header" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <div class="section-title" style="font-size:13px">📈 Saldo acumulado e interés ganado</div>
-        <div id="ahi-grafico-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div class="section-title" style="font-size:13px;cursor:pointer;user-select:none" onclick="toggleAhiGrafico()">📈 Saldo acumulado e interés ganado <span id="ahi-grafico-flecha" style="font-size:11px;color:var(--text3)">▾</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <div id="ahi-grafico-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <button class="btn" id="ahi-grafico-btn" onclick="toggleAhiGrafico()" style="font-size:11px;padding:5px 10px">Contraer</button>
+        </div>
       </div>
-      <div id="ahi-grafico"></div>
+      <div id="ahi-grafico-cuerpo"><div id="ahi-grafico"></div></div>
     </div>
 
     <div id="ahi-detalle-dias-card" class="card" style="padding:14px 20px;margin-top:16px;margin-bottom:16px;display:none">
@@ -3774,9 +3777,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.4';
-const APP_VERSION_DATE = '11/10/26 - 17:04'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gráfico de Ahorros e Intereses: los meses proyectados suman también los movimientos que ya registraste con fecha futura (saldo real) y calculan el interés con la TREA de ese mes según la tabla «TREA por mes».'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.6';
+const APP_VERSION_DATE = '11/10/26 - 18:02'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Ahorros e Intereses: el detalle de cada mes del gráfico ahora muestra ahorro del mes, saldo al inicio (cierre del mes anterior), interés y saldo al cierre; en los meses cerrados usa el interés registrado y el estimado queda como referencia.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7222,19 +7225,47 @@ async function copiarDetalleAhi(){
 const AHI_MESES_REALES=8, AHI_MESES_PROY=4;
 let ahiCapas={saldo:true,interes:true,tendencia:true};
 let ahiTipData=[];
+let ahiGraficoAbierto=true;
+try{ if(localStorage.getItem('ahiGraficoAbierto')==='0') ahiGraficoAbierto=false; }catch(e){}
+function aplicarAhiGraficoAbierto(){
+  const c=document.getElementById('ahi-grafico-cuerpo'), ch=document.getElementById('ahi-grafico-chips'),
+        b=document.getElementById('ahi-grafico-btn'), fl=document.getElementById('ahi-grafico-flecha');
+  if(c) c.style.display=ahiGraficoAbierto?'':'none';
+  if(ch) ch.style.display=ahiGraficoAbierto?'flex':'none';
+  if(b) b.textContent=ahiGraficoAbierto?'Contraer':'Expandir';
+  if(fl) fl.textContent=ahiGraficoAbierto?'▾':'▸';
+  const card=document.getElementById('ahi-grafico-card'), hd=card&&card.querySelector('.section-header');
+  if(hd) hd.style.marginBottom=ahiGraficoAbierto?'10px':'0';
+}
+function toggleAhiGrafico(){
+  ahiGraficoAbierto=!ahiGraficoAbierto;
+  try{ localStorage.setItem('ahiGraficoAbierto',ahiGraficoAbierto?'1':'0'); }catch(e){}
+  aplicarAhiGraficoAbierto();
+}
 function ahiHideTip(){ const t=document.getElementById('ahi-tip'); if(t) t.style.display='none'; }
 function ahiShowTip(i){
   const t=document.getElementById('ahi-tip'), d=ahiTipData[i];
   if(!t||!d) return;
   const f=v=>M(d.sym+' '+numFmt(v));
   const sg=v=>M((v<0?'− ':'+ ')+d.sym+' '+numFmt(v));
-  t.innerHTML=`<div style="font-weight:700;margin-bottom:2px">${d.titulo}</div>`
-    +(d.inicio!==null?`<div style="color:var(--text3)">Saldo del mes anterior + su interés</div>`:'')
-    +(d.proy&&d.movReal?`<div>Movimientos ya registrados: <b>${sg(d.movReal)}</b></div>`:'')
-    +(d.proy?'':`<div>Ahorro del mes: <b>${sg(d.ahorro)}</b></div>`)
-    +(d.proy&&d.trea?`<div>TREA aplicada: <b>${d.trea.toFixed(2)}%</b></div>`:'')
-    +`<div>${d.proy?'Interés proyectado':'Interés del mes'}: <b style="color:var(--amber)">${d.interes===null?'—':M('≈ '+d.sym+' '+numFmt(d.interes))}</b></div>`
-    +`<div>${d.proy?'Saldo al inicio del mes':'Saldo al cierre'}: <b style="color:var(--accent)">${f(d.saldo)}</b></div>`;
+  const ap=v=>M('≈ '+d.sym+' '+numFmt(v));
+  const fila=(l,v)=>`<div>${l}: <b>${v}</b></div>`;
+  const ref=d.tipo==='cerrado'?`cierre de ${d.mesAnt}`:(d.tipo==='curso'?`cierre de ${d.mesAnt}`:`cierre proy. de ${d.mesAnt}`);
+  const treaTxt=d.trea?` (TREA ${d.trea.toFixed(2)}%)`:'';
+  let h=`<div style="font-weight:700;margin-bottom:2px">${d.titulo}</div>`;
+  // 1. Ahorro del mes  2. Saldo al inicio  3. Interés  4. Saldo al cierre
+  h+=fila(`Ahorro de ${d.mes}`,sg(d.ahorro));
+  h+=fila(`Saldo al inicio <span style="color:var(--text3)">(${ref})</span>`,f(d.inicio));
+  if(d.tipo==='cerrado'){
+    h+=`<div>Interés registrado: <b style="color:var(--amber)">${d.intReg?sg(d.intReg):'— (no registrado)'}</b></div>`;
+  } else {
+    if(d.intReg) h+=`<div>Interés ya registrado: <b style="color:var(--amber)">${sg(d.intReg)}</b></div>`;
+    h+=`<div>Interés proyectado${treaTxt}: <b style="color:var(--amber)">${d.interes===null?'—':ap(d.interes)}</b></div>`;
+  }
+  if(Math.abs(d.ajuste)>=0.005) h+=fila('Otros ajustes del saldo',sg(d.ajuste));
+  h+=`<div>${d.tipo==='cerrado'?'Saldo al cierre':'Saldo al cierre (proy.)'}: <b style="color:var(--accent)">${f(d.cierre)}</b></div>`;
+  if(d.tipo==='cerrado' && d.interes!==null) h+=`<div style="color:var(--text3)">Interés estimado con tu TREA: ${ap(d.interes)} (referencia)</div>`;
+  t.innerHTML=h;
   const c=(i+0.5)/d.n*100;
   t.style.left=c+'%';
   t.style.transform=i<=1?'translateX(-'+(i===0?10:30)+'%)':(i>=d.n-2?'translateX(-'+(i===d.n-1?90:70)+'%)':'translateX(-50%)');
@@ -7260,13 +7291,13 @@ function renderAhiGrafico(cuenta, sym, saldoActual, treaVigente, metodo){
   const y0=hoy.getFullYear(), m0=hoy.getMonth();
   // Movimientos de la cuenta por mes (sin contar los que sean intereses, para
   // no duplicarlos con la línea de interés).
-  const netoPorMes={}; let primerMes=null;
+  const netoPorMes={}, intRegPorMes={}; let primerMes=null;
   (state.movimientos||[]).forEach(mv=>{
     if(mv.account!==cuenta || !mv.date) return;
     const k=mv.date.slice(0,7);
     if(primerMes===null || k<primerMes) primerMes=k;
-    if(/inter[eé]s/i.test(mv.desc||'')) return;
     const {signo,monto}=signoMontoMov(mv);
+    if(/inter[eé]s/i.test(mv.desc||'')){ intRegPorMes[k]=(intRegPorMes[k]||0)+signo*monto; return; }
     netoPorMes[k]=(netoPorMes[k]||0)+signo*monto;
   });
   const claveDe=(y,m)=>y+'-'+String(m+1).padStart(2,'0');
@@ -7280,12 +7311,14 @@ function renderAhiGrafico(cuenta, sym, saldoActual, treaVigente, metodo){
   for(let i=-(nReal-1);i<=0;i++){
     const d=new Date(y0,m0+i,1), y=d.getFullYear(), m=d.getMonth();
     const saldo=(reconstructSaldoAt(y,m)||{})[cuenta]||0;
+    const dAnt=new Date(y,m-1,1);
+    const inicio=(reconstructSaldoAt(dAnt.getFullYear(),dAnt.getMonth())||{})[cuenta]||0;
     let interes=null;
     if(getTREAEnMes(cuenta,y,m)){
       const r=metodo==='diario'?calcularInteresDiarioMes(cuenta,y,m):calcularInteresMensualPromedioMes(cuenta,y,m);
       interes=(r && r.interes!==null && r.interes!==undefined)?r.interes:null;
     }
-    reales.push({y,m,key:claveDe(y,m),saldo,interes,neto:netoPorMes[claveDe(y,m)]||0});
+    reales.push({y,m,key:claveDe(y,m),saldo,inicio,interes,neto:netoPorMes[claveDe(y,m)]||0,intReg:intRegPorMes[claveDe(y,m)]||0,trea:getTREAEnMes(cuenta,y,m)});
   }
   // Proyección con TREA fija.
   // El mes siguiente PARTE de: saldo actual + interés del mes en curso.
@@ -7295,15 +7328,16 @@ function renderAhiGrafico(cuenta, sym, saldoActual, treaVigente, metodo){
     const d=new Date(y0,m0+k,1);
     // Si ya registraste movimientos con fecha de ese mes futuro (saldo real), se suman.
     const movReal=netoPorMes[claveDe(d.getFullYear(),d.getMonth())]||0;
-    const inicio=saldo+movReal;
+    const inicio=saldo; // = saldo al cierre (proy.) del mes anterior
+    const base=inicio+movReal;
     // TREA de ese mes según tu tabla «TREA por mes» (la última registrada sigue
     // aplicando hacia adelante); la proyección es SOLO de interés, sin ahorros nuevos.
     const treaK=getTREAEnMes(cuenta,d.getFullYear(),d.getMonth())||treaVigente||0;
     const tasaK=treaK?Math.pow(1+treaK/100,1/12)-1:0;
-    const interes=inicio>0?inicio*tasaK:0;
-    // La barra del mes proyectado = saldo con el que ARRANCA ese mes (mes anterior + su interés).
-    proy.push({y:d.getFullYear(),m:d.getMonth(),inicio,movReal,trea:treaK,saldo:Math.max(0,inicio),interes});
-    saldo=inicio+interes;
+    const interes=base>0?base*tasaK:0;
+    // La barra del mes proyectado = saldo con el que ARRANCA ese mes (= cierre proy. del mes anterior).
+    proy.push({y:d.getFullYear(),m:d.getMonth(),inicio,movReal,trea:treaK,saldo:Math.max(0,inicio),interes,cierre:base+interes});
+    saldo=base+interes;
   }
   const todos=reales.map(r=>({...r,proy:false})).concat(proy.map(p=>({...p,proy:true})));
   const n=todos.length;
@@ -7325,11 +7359,25 @@ function renderAhiGrafico(cuenta, sym, saldoActual, treaVigente, metodo){
   const tickL=ticks.map(k=>`<div style="position:absolute;right:6px;top:${k*25}%;transform:translateY(-50%);font-size:10px;color:var(--accent)">${oculto?'':ahiAbrev(maxL-k*maxL/4,sym)}</div>`).join('');
   const tickR=ticks.map(k=>`<div style="position:absolute;left:6px;top:${k*25}%;transform:translateY(-50%);font-size:10px;color:var(--amber)">${oculto?'':ahiAbrev(maxR-k*maxR/4,sym)}</div>`).join('');
   const grid=ticks.map(k=>`<div style="position:absolute;left:0;right:0;top:${k*25}%;height:1px;background:var(--border)"></div>`).join('');
-  ahiTipData=todos.map((t,i)=>({
-    titulo:MONTHS[t.m]+' '+t.y+(t.proy?' (proyección)':(i===reales.length-1?' (en curso)':'')),
-    inicio:t.proy?t.inicio:null, saldo:t.saldo, ahorro:t.proy?null:t.neto, trea:t.proy?t.trea:null, movReal:t.proy?t.movReal:0,
-    interes:(t.interes===null||t.interes===undefined)?null:t.interes, sym, proy:t.proy, n, i
-  }));
+  const iCurso=reales.length-1;
+  ahiTipData=todos.map((t,i)=>{
+    const tipo=t.proy?'proy':(i===iCurso?'curso':'cerrado');
+    const dAnt=new Date(t.y,t.m-1,1);
+    const intEst=(t.interes===null||t.interes===undefined)?null:t.interes;
+    let ahorro,cierre,intReg=0;
+    if(tipo==='proy'){ ahorro=t.movReal; cierre=t.cierre; }
+    else {
+      ahorro=t.neto; intReg=t.intReg;
+      cierre=tipo==='curso'?t.saldo+(intEst||0):t.saldo;
+    }
+    // Lo que no explican el ahorro ni el interés registrado (ej. un cierre de mes guardado a mano).
+    const ajuste=tipo==='proy'?0:Math.round((t.saldo-t.inicio-ahorro-intReg)*100)/100;
+    return {
+      titulo:MONTHS[t.m]+' '+t.y+(tipo==='proy'?' (proyección)':(tipo==='curso'?' (en curso)':'')),
+      tipo, mes:MONTHS[t.m].toLowerCase(), mesAnt:MONTHS[dAnt.getMonth()].toLowerCase(),
+      ahorro, inicio:t.inicio, intReg, interes:intEst, cierre, ajuste, trea:t.trea||null, sym, n, i
+    };
+  });
   const barras=todos.map(t=>{
     const h=(t.saldo/maxL*100);
     const estilo=t.proy?'background:rgba(91,141,239,.16);border:1.5px dashed var(--accent)':'background:var(--accent)';
@@ -7375,7 +7423,7 @@ function renderAhiGrafico(cuenta, sym, saldoActual, treaVigente, metodo){
       ${stat('Interés proyectado',M('≈ '+sym+' '+numFmt(intProy)),AHI_MESES_PROY+' meses','var(--amber)')}
       ${stat('Saldo proyectado a '+MONTHS_SHORT[ultimo.m],M(sym+' '+numFmt(ultimo.saldo)),'hoy '+M(sym+' '+numFmt(saldoActual)),'var(--accent)')}
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">💡 Pasa el mouse (o toca) una barra para ver su detalle. La proyección parte de lo real: la barra de cada mes proyectado es el saldo del mes anterior más el interés de ese mes anterior (ej.: noviembre = saldo real de octubre + interés de octubre), aplicando la TREA que registraste para ese mes (la última registrada sigue vigente hasta que cargues otra). No se suponen ahorros ni retiros nuevos (solo cuentan los movimientos que ya registraste con fecha de un mes futuro). Los movimientos cuya descripción dice «interés» no cuentan como ahorro. Todo es aproximado.</div>${aviso}`;
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">💡 Pasa el mouse (o toca) una barra para ver su detalle: ahorro del mes, saldo al inicio (cierre del mes anterior), interés y saldo al cierre. En los meses cerrados el interés es el que registraste como movimiento (descripción con «interés»); el estimado con tu TREA se muestra solo como referencia. En el mes en curso y en los proyectados, el saldo al cierre (proy.) = saldo al inicio + ahorro del mes + interés proyectado, y ese cierre es el saldo al inicio del mes siguiente (ej.: noviembre arranca con el cierre proyectado de octubre). Se usa la TREA que registraste para cada mes (la última sigue vigente hasta que cargues otra). No se suponen ahorros ni retiros nuevos (solo cuentan los movimientos que ya registraste con fecha de un mes futuro). Todo es aproximado.</div>${aviso}`;
 }
 function renderAhorrosIntereses(){
   if(!poblarAhiCuentaTabs()) return;
@@ -7423,6 +7471,7 @@ function renderAhorrosIntereses(){
   `;
   if(document.getElementById('ahi-detalle-dias-card').style.display!=='none') renderAhiDetalleDias();
   renderAhiGrafico(cuenta, sym, saldoActual, treaMes, metodo);
+  aplicarAhiGraficoAbierto();
 
   // ── Historial de TREA (más reciente primero) ──
   const hist=state.ahorroTREA[cuenta]||{};
