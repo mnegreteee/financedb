@@ -3736,7 +3736,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="year-selector">
       <span style="font-size:13px;color:var(--text2)">Año:</span>
       <select id="del-year" onchange="renderDeleteMonths()"></select>
-      <button class="config-action-btn neutral" style="font-size:11px" onclick="selectAllDelMonths()">Seleccionar todo</button>
+      <button class="config-action-btn neutral" style="font-size:11px" id="del-selall-btn" onclick="selectAllDelMonths()">Seleccionar todo</button>
       <button class="config-action-btn neutral" style="font-size:11px" onclick="clearDelMonths()">Limpiar</button>
     </div>
 
@@ -3765,9 +3765,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.61.1';
-const APP_VERSION_DATE = '11/10/26 - 14:20'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mejora: el botón «Selec. todos» de Consumos de tarjeta ahora alterna: la primera vez marca todos los consumos NO pagados y al volver a presionarlo los desmarca (no toca los ya pagados). El botón cambia a «Deselec. todos» cuando ya están todos marcados.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.61.2';
+const APP_VERSION_DATE = '11/10/26 - 14:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mejora: el check del encabezado de la tabla de Consumos ahora marca/desmarca solo los consumos NO pagados (antes también marcaba los pagados), y en «Borrar data por período» el botón «Seleccionar todo» ahora alterna (marca todos los meses con datos y, al volver a presionarlo, los desmarca).'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12580,15 +12580,26 @@ function toggleDelMonth(i){
   updateDelSummary();
 }
 
-function selectAllDelMonths(){
+// Meses del año elegido que tienen algo para borrar (movimientos o snapshot)
+function delMesesConDatos(){
   const year = parseInt(document.getElementById('del-year').value);
+  const out=[];
   MONTHS.forEach((_,i)=>{
     const n = state.movimientos.filter(m=>{const d=new Date(m.date+'T12:00:00');return d.getFullYear()===year&&d.getMonth()===i;}).length;
     const hasSnap = !!(state.snapshots||{})[year+'-'+String(i+1).padStart(2,'0')];
-    if(n>0||hasSnap){
-      delSelectedMonths.add(i);
-      document.getElementById('mc-'+i).classList.add('selected');
-    }
+    if(n>0||hasSnap) out.push(i);
+  });
+  return out;
+}
+// "Seleccionar todo" alterna: si ya están todos los meses con datos marcados, los desmarca.
+function selectAllDelMonths(){
+  const meses=delMesesConDatos();
+  if(!meses.length) return;
+  const marcar=!meses.every(i=>delSelectedMonths.has(i));
+  meses.forEach(i=>{
+    const el=document.getElementById('mc-'+i);
+    if(marcar){ delSelectedMonths.add(i); if(el) el.classList.add('selected'); }
+    else { delSelectedMonths.delete(i); if(el) el.classList.remove('selected'); }
   });
   updateDelSummary();
 }
@@ -12600,6 +12611,8 @@ function clearDelMonths(){
 }
 
 function updateDelSummary(){
+  const bSel=document.getElementById('del-selall-btn');
+  if(bSel){ const md=delMesesConDatos(); bSel.textContent=(md.length&&md.every(i=>delSelectedMonths.has(i)))?'Deseleccionar todo':'Seleccionar todo'; }
   const year = parseInt(document.getElementById('del-year').value);
   const sum = document.getElementById('del-summary');
   if(!delSelectedMonths.size){sum.style.display='none';return;}
@@ -14429,16 +14442,17 @@ function onTCSelChange(){
     const row=document.getElementById('tc-row-'+c.dataset.id);
     if(row) row.classList.toggle('selected-row', c.checked);
   });
-  const checked=[...cbs].filter(c=>c.checked);
+  const pend=tcPendientesCbs();
   const allCb=document.getElementById('tc-check-all');
-  if(allCb) allCb.checked=checked.length===cbs.length&&cbs.length>0;
+  if(allCb) allCb.checked=pend.length>0&&pend.every(c=>c.checked);
   updateTCSelectionTotal();
   actualizarBtnSelTodosTC();
 }
 
 function toggleAllTCMov(checked){
-  document.querySelectorAll('.tc-sel-cb').forEach(c=>c.checked=checked);
-  updateTCSelectionTotal();
+  // Solo los NO pagados (los ya pagados no se tocan)
+  tcPendientesCbs().forEach(c=>c.checked=checked);
+  onTCSelChange();
 }
 
 // Botón "Selec. todos": alterna SOLO los consumos no pagados (los ya pagados
