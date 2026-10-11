@@ -3765,9 +3765,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.61.2';
-const APP_VERSION_DATE = '11/10/26 - 14:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mejora: el check del encabezado de la tabla de Consumos ahora marca/desmarca solo los consumos NO pagados (antes también marcaba los pagados), y en «Borrar data por período» el botón «Seleccionar todo» ahora alterna (marca todos los meses con datos y, al volver a presionarlo, los desmarca).'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.62.0';
+const APP_VERSION_DATE = '11/10/26 - 15:03'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mejora: en Consumos de tarjeta, al marcar el check «Pagado» de un consumo se abre el pago normal de tarjeta (elegir la cuenta de la que se descuenta, pago total/parcial/puntos) y recién al confirmar se marca como pagado y se descuenta de la cuenta; si cancelas, el consumo sigue pendiente.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -14231,7 +14231,7 @@ function tcMovTableRow(m, cardCur){
     <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
     <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
-    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
+    <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked,this)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
     <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
     <td>
       <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
@@ -14264,7 +14264,7 @@ function tcMovCardHtml(m, cardCur){
     <div class="tc-mov-card-right">
       <div class="tc-mov-card-amount" style="color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</div>
       <div class="tc-mov-card-actions">
-        <input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked)" title="Marcar como pagado">
+        <input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked,this)" title="Marcar como pagado">
         <button onclick="editTCMov('${m.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px" title="Editar">✏</button>
         ${m.grupoCuotaId?`<button onclick="editarNombreGrupoCuotas(getTarjeta(currentTCId),'${m.grupoCuotaId}',${escapeHtml(JSON.stringify(m.desc.replace(/ — Cuota \d+\/\d+$/,'')))})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px" title="Renombrar todas las cuotas de esta compra">✏️📦</button>`:''}
         <button onclick="deleteTCMov('${m.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px" title="Eliminar">✕</button>
@@ -14488,7 +14488,15 @@ function updateTCSelectionTotal(){
   pendingPayMovIds=cbs.map(c=>c.dataset.id);
 }
 
-function toggleTCPaid(movId, paid){
+function toggleTCPaid(movId, paid, el){
+  // Marcar «Pagado» = hacer un pago normal de tarjeta: se abre el modal para
+  // elegir la cuenta (o puntos / parcial) y recién al CONFIRMAR se marca como
+  // pagado y se descuenta. Si se cancela, el check vuelve a quedar sin marcar.
+  if(paid){
+    if(el) el.checked=false;
+    pagarSeleccionados([movId]);
+    return;
+  }
   const t=getTarjeta(currentTCId); if(!t) return;
   const movs=t.movs&&t.movs[currentTCMonth];
   const mov=movs&&movs.find(m=>m.id===movId);
@@ -14506,7 +14514,10 @@ function markSelectedPaid(){
 }
 
 // ── PAGO ──────────────────────────────────────────────
-function pagarSeleccionados(){
+function pagarSeleccionados(idsForzados){
+  // Con ids (check «Pagado» de un consumo) se paga solo ese consumo; sin ids se usa
+  // lo marcado en los checkboxes de selección (se relee para no usar una lista vieja).
+  if(Array.isArray(idsForzados)) pendingPayMovIds=idsForzados.slice(); else updateTCSelectionTotal();
   if(!pendingPayMovIds.length){ alert('Selecciona al menos un consumo.'); return; }
   const t=getTarjeta(currentTCId);
   const movs=getTCMovs(currentTCId,currentTCMonth);
