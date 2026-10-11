@@ -3765,9 +3765,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.60.0';
-const APP_VERSION_DATE = '09/10/26 - 16:34'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: en la tabla Cuentas, cada saldo actual muestra una etiqueta ▲/▼ con el % de variación contra el previo (verde sube, rojo baja; el monto exacto al pasar el cursor). También en los totales.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.61.0';
+const APP_VERSION_DATE = '11/10/26 - 13:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: los pagos e ingresos frecuentes aparecen solos en el Calendario (solo el nombre, sin monto), en el día y con la frecuencia que configuraste (mensual, semestral y anual). Los del período ya registrados se ven atenuados con ✅. Un toque lleva a la sección de Pagos/Ingresos Frecuentes.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20897,6 +20897,8 @@ const CAL_TIPOS = {
   evento:        {icon:'📌', label:'Evento importante',    color:'#a78bfa'},
   cuota_tc:      {icon:'💳', label:'Cuota de tarjeta',      color:'#2dd4bf'},
   deuda_mayor:   {icon:'🏛️', label:'Cuota deuda mayor',     color:'#f472b6'},
+  pf_gasto:      {icon:'💸', label:'Pago frecuente',        color:'#f08a7e'},
+  pf_ingreso:    {icon:'💵', label:'Ingreso frecuente',     color:'#34d399'},
   otro:          {icon:'📝', label:'Otro',                 color:'#6b7280'},
 };
 const CAL_DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -21033,6 +21035,57 @@ function renderFechasImportantes(){
 
 // Devuelve todas las ocurrencias (evento + fecha concreta) que caen en un año/mes dado,
 // resolviendo eventos recurrentes al día-del-mes correspondiente (con clamp si el mes es más corto).
+// Pagos e ingresos frecuentes → ocurrencias del calendario (solo lectura, se
+// calculan al vuelo: nunca se guardan como eventos). Solo el NOMBRE, sin monto.
+// Mensual: su día de pago (sin día configurado → día 1); semestral: sus meses
+// (mismo criterio de día); anual: el día/mes de su fecha de vencimiento.
+// "hecho" = ya registrado en ese período (se ve atenuado con ✅). Los meses
+// anteriores a la creación del pago frecuente no se rellenan hacia atrás
+// (salvo que ya tengan registro).
+function getOcurrenciasFrecuentesMes(year, month){
+  const out=[];
+  const D=daysInMonth(year,month);
+  const mk=year+'-'+String(month+1).padStart(2,'0');
+  (state.pagosFrecuentes||[]).forEach(pf=>{
+    if(!pf || pf.oculto || !pf.nombre) return;
+    const freq=pf.frecuencia||'mensual';
+    const reg=pf.pagosRegistrados||{};
+    let dia=null, hecho=false;
+    if(freq==='mensual' || freq==='semestral'){
+      if(freq==='mensual'){
+        if(typeof pfActivoEnMes==='function' && !pfActivoEnMes(pf,year,month)) return;
+        if(pf.mesInicio && mk<pf.mesInicio) return;
+      } else if(!(pf.meses||[]).includes(month+1)) return;
+      dia=pf.diaPago ? (typeof pfDiaLimite==='function' ? pfDiaLimite(pf.diaPago,D) : Math.min(parseInt(pf.diaPago,10)||1,D)) : 1;
+      hecho=!!reg[mk];
+    } else if(freq==='anual'){
+      if(!pf.fechaAnual) return;
+      const o=new Date(pf.fechaAnual+'T12:00:00');
+      if(o.getMonth()!==month) return;
+      dia=Math.min(o.getDate(),D);
+      hecho=!!reg[String(year)];
+    } else return;
+    if(!hecho){
+      const mc=/^pf-(\d{10,})/.exec(String(pf.id||''));
+      if(mc){
+        const c=new Date(parseInt(mc[1],10));
+        const ck=c.getFullYear()+'-'+String(c.getMonth()+1).padStart(2,'0');
+        if(mk<ck) return;
+      }
+    }
+    out.push({
+      fecha: year+'-'+String(month+1).padStart(2,'0')+'-'+String(dia).padStart(2,'0'),
+      event:{
+        id:'auto-pf-'+pf.id+'-'+mk,
+        titulo:pf.nombre,
+        tipo: pf.tipo==='ingreso' ? 'pf_ingreso' : 'pf_gasto',
+        auto:true, origenPage:'deudas',
+        hecho:hecho, icono: hecho ? '✅' : null
+      }
+    });
+  });
+  return out;
+}
 function getEventOccurrencesForMonth(year, month){
   const events = [...(state.calendarEvents || []), ...getEventosAutomaticos()];
   const occurrences = [];
@@ -21054,6 +21107,7 @@ function getEventOccurrencesForMonth(year, month){
       }
     }
   });
+  getOcurrenciasFrecuentesMes(year,month).forEach(o=>occurrences.push(o));
   return occurrences;
 }
 
@@ -21117,7 +21171,7 @@ function renderCalendario(){
     const chips = dayEvents.slice(0,maxShow).map(o=>{
       const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
       const clickAccion = o.event.auto ? `showPage('${o.event.origenPage}')` : `openCalEventModal('${o.event.id}')`;
-      return `<div class="cal-event-chip" style="background:${t.color}" onclick="event.stopPropagation();${clickAccion}" title="${escapeHtml(o.event.titulo)}${o.event.auto?' (automático — toca para ver el detalle)':''}">${o.event.icono||t.icon} ${escapeHtml(o.event.titulo)}</div>`;
+      return `<div class="cal-event-chip" style="background:${t.color}${o.event.hecho?';opacity:.5':''}" onclick="event.stopPropagation();${clickAccion}" title="${escapeHtml(o.event.titulo)}${o.event.hecho?' — ya registrado':''}${o.event.auto?' (automático — toca para ver el detalle)':''}">${o.event.icono||t.icon} ${escapeHtml(o.event.titulo)}</div>`;
     }).join('');
     const more = dayEvents.length>maxShow ? `<div class="cal-event-more">+${dayEvents.length-maxShow} más</div>` : '';
     return `<div class="cal-day ${isToday?'cal-today':''}" onclick="openCalEventModal(null,'${dateStr}')">
