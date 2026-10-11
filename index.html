@@ -1841,6 +1841,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
       <div id="mov-bulk-bar" style="display:none;align-items:center;gap:8px;background:var(--bg3);border-radius:8px;padding:8px 10px;margin-bottom:10px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--text2)"><span id="mov-bulk-count">0</span> seleccionados</span>
+        <button class="btn" id="mov-bulk-all-btn" style="font-size:11px;padding:5px 10px" onclick="selectAllMovBulk()">Selec. todos</button>
         <select id="mov-bulk-cat" style="flex:1;min-width:140px;font-size:11px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px"></select>
         <button class="btn btn-primary" style="font-size:11px;padding:5px 10px" onclick="applyMovBulkCat()">Aplicar categoría</button>
         <button class="btn" style="font-size:11px;padding:5px 10px" onclick="toggleMovBulkMode()">Cancelar</button>
@@ -2787,6 +2788,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div id="ahi-contenido">
     <div class="dash-split ahi-summary-grid" id="ahi-summary" style="align-items:stretch"></div>
+
+    <div id="ahi-grafico-card" class="card" style="padding:16px 20px;margin-top:16px;margin-bottom:16px">
+      <div class="section-header" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div class="section-title" style="font-size:13px">📈 Saldo acumulado e interés ganado</div>
+        <div id="ahi-grafico-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div id="ahi-grafico"></div>
+    </div>
 
     <div id="ahi-detalle-dias-card" class="card" style="padding:14px 20px;margin-top:16px;margin-bottom:16px;display:none">
       <div class="section-header" style="margin-bottom:10px">
@@ -3765,9 +3774,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.62.0';
-const APP_VERSION_DATE = '11/10/26 - 15:03'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mejora: en Consumos de tarjeta, al marcar el check «Pagado» de un consumo se abre el pago normal de tarjeta (elegir la cuenta de la que se descuenta, pago total/parcial/puntos) y recién al confirmar se marca como pagado y se descuenta de la cuenta; si cancelas, el consumo sigue pendiente.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.0';
+const APP_VERSION_DATE = '11/10/26 - 16:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: en Ahorros e Intereses hay un gráfico de barras (saldo acumulado al cierre de cada mes) con la línea de interés ganado y una proyección de 4 meses con la TREA fija, sumando el ahorro promedio de los últimos 3 meses completos.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4629,7 +4638,19 @@ function eliminarActividad(logId){
     } else if(entry.tipo==='tc_consumo_pagado'){
       const t=getTarjeta(ref.tarjetaId);
       const mov=t && t.movs && t.movs[ref.monthKey] && t.movs[ref.monthKey].find(m=>m.id===ref.consumoId);
-      if(mov) mov.pagado=ref.pagadoAntes;
+      if(mov){
+        mov.pagado=ref.pagadoAntes;
+        if(ref.pagoRevertido){
+          // Se vuelve a dejar el pago como estaba antes de la devolución
+          const r=ref.pagoRevertido;
+          const ex=(state.movimientos||[]).find(x=>x.id===r.id);
+          if(ex) ex.amount=r.amountAntes;
+          else if(r.snapshot) state.movimientos.push(r.snapshot);
+          clearSaldoCache();
+          if(ref.metodoPagoAntes) mov.metodoPago=ref.metodoPagoAntes;
+          if(ref.pagoMovIdAntes) mov.pagoMovId=ref.pagoMovIdAntes;
+        }
+      }
     } else if(entry.tipo==='deuda_mayor_cuota'){
       const d=(state.deudasMayores||[]).find(x=>x.id===ref.deudaMayorId);
       const c=d && d.cuotas && d.cuotas.find(x=>x.numero==ref.cuotaNumero);
@@ -7193,6 +7214,138 @@ async function copiarDetalleAhi(){
     alert('No se pudo copiar automáticamente. Aquí está el detalle:\n\n'+texto);
   }
 }
+// ── Gráfico de Ahorros e Intereses ──────────────────────────────────
+// Barras = SALDO al cierre de cada mes (el mes siguiente arranca desde ahí);
+// línea = interés aproximado de cada mes; línea punteada = proyección con la
+// TREA vigente (fija): cada mes futuro suma el ahorro promedio de los
+// últimos 3 meses completos y el interés se calcula sobre el saldo con el
+// que arranca ese mes. Todo en la moneda de la cuenta, sin conversiones.
+const AHI_MESES_REALES=8, AHI_MESES_PROY=4;
+let ahiCapas={saldo:true,interes:true,tendencia:true};
+function toggleAhiCapa(k){ ahiCapas[k]=!ahiCapas[k]; renderAhorrosIntereses(); }
+function ahiNiceMax(v){
+  if(!(v>0)) return 1;
+  const p=Math.pow(10,Math.floor(Math.log10(v)));
+  const f=v/p;
+  const n=f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10;
+  return n*p;
+}
+function ahiAbrev(v,sym){
+  const a=Math.abs(v);
+  const t=a>=1e6?(a/1e6).toFixed(1).replace(/\.0$/,'')+'M':a>=1e3?(a/1e3).toFixed(a>=1e4?0:1).replace(/\.0$/,'')+'k':String(Math.round(a*10)/10);
+  return sym+' '+t;
+}
+function renderAhiGrafico(cuenta, sym, saldoActual, treaVigente, metodo){
+  const el=document.getElementById('ahi-grafico'), chipsEl=document.getElementById('ahi-grafico-chips');
+  if(!el) return;
+  const hoy=new Date();
+  const y0=hoy.getFullYear(), m0=hoy.getMonth();
+  // Movimientos de la cuenta por mes (sin contar los que sean intereses, para
+  // no duplicarlos con la línea de interés).
+  const netoPorMes={}; let primerMes=null;
+  (state.movimientos||[]).forEach(mv=>{
+    if(mv.account!==cuenta || !mv.date) return;
+    const k=mv.date.slice(0,7);
+    if(primerMes===null || k<primerMes) primerMes=k;
+    if(/inter[eé]s/i.test(mv.desc||'')) return;
+    const {signo,monto}=signoMontoMov(mv);
+    netoPorMes[k]=(netoPorMes[k]||0)+signo*monto;
+  });
+  const claveDe=(y,m)=>y+'-'+String(m+1).padStart(2,'0');
+  // Cuántos meses reales mostrar: desde el primer movimiento, máx. AHI_MESES_REALES.
+  let nReal=AHI_MESES_REALES;
+  if(primerMes){
+    const [py,pm]=primerMes.split('-').map(Number);
+    nReal=Math.max(1,Math.min(AHI_MESES_REALES,(y0-py)*12+(m0-(pm-1))+1));
+  } else nReal=1;
+  const reales=[];
+  for(let i=-(nReal-1);i<=0;i++){
+    const d=new Date(y0,m0+i,1), y=d.getFullYear(), m=d.getMonth();
+    const saldo=(reconstructSaldoAt(y,m)||{})[cuenta]||0;
+    let interes=null;
+    if(getTREAEnMes(cuenta,y,m)){
+      const r=metodo==='diario'?calcularInteresDiarioMes(cuenta,y,m):calcularInteresMensualPromedioMes(cuenta,y,m);
+      interes=(r && r.interes!==null && r.interes!==undefined)?r.interes:null;
+    }
+    reales.push({y,m,key:claveDe(y,m),saldo,interes,neto:netoPorMes[claveDe(y,m)]||0});
+  }
+  // Ahorro promedio = últimos 3 meses COMPLETOS (sin el mes en curso).
+  const completos=reales.slice(0,-1).slice(-3);
+  const ahorroProm=completos.length?completos.reduce((s,r)=>s+r.neto,0)/completos.length:0;
+  // Proyección con TREA fija.
+  const tasaM=treaVigente?Math.pow(1+treaVigente/100,1/12)-1:0;
+  const proy=[]; let saldo=saldoActual;
+  for(let k=1;k<=AHI_MESES_PROY;k++){
+    const d=new Date(y0,m0+k,1);
+    const interes=saldo>0?saldo*tasaM:0;
+    saldo=saldo+ahorroProm+interes;
+    proy.push({y:d.getFullYear(),m:d.getMonth(),saldo:Math.max(0,saldo),interes});
+  }
+  const todos=reales.map(r=>({...r,proy:false})).concat(proy.map(p=>({...p,proy:true})));
+  const n=todos.length;
+  const maxL=ahiNiceMax(Math.max(1,...todos.map(t=>t.saldo))*1.05);
+  const maxR=ahiNiceMax(Math.max(0.01,...todos.map(t=>t.interes||0))*1.15);
+  const hayTrea=!!treaVigente;
+  const px=i=>(i*100+50), py=v=>100-Math.max(0,Math.min(v,maxR))/maxR*100;
+  const ptsReal=reales.map((r,i)=>r.interes===null?null:[px(i),py(r.interes)]);
+  let lineaPath='', gap=true;
+  ptsReal.forEach(p=>{ if(!p){gap=true;return;} lineaPath+=(gap?'M':'L')+p[0]+' '+p[1]+' '; gap=false; });
+  const iu=reales.length-1;
+  let tendPath='';
+  if(hayTrea){
+    const pts=[[px(iu),py(reales[iu].interes!==null?reales[iu].interes:0)]].concat(proy.map((p,k)=>[px(iu+1+k),py(p.interes)]));
+    tendPath=pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  }
+  const oculto=hiddenMode;
+  const ticks=[0,1,2,3,4];
+  const tickL=ticks.map(k=>`<div style="position:absolute;right:6px;top:${k*25}%;transform:translateY(-50%);font-size:10px;color:var(--accent)">${oculto?'':ahiAbrev(maxL-k*maxL/4,sym)}</div>`).join('');
+  const tickR=ticks.map(k=>`<div style="position:absolute;left:6px;top:${k*25}%;transform:translateY(-50%);font-size:10px;color:var(--amber)">${oculto?'':ahiAbrev(maxR-k*maxR/4,sym)}</div>`).join('');
+  const grid=ticks.map(k=>`<div style="position:absolute;left:0;right:0;top:${k*25}%;height:1px;background:var(--border)"></div>`).join('');
+  const barras=todos.map(t=>{
+    const h=(t.saldo/maxL*100);
+    const estilo=t.proy?'background:rgba(91,141,239,.16);border:1.5px dashed var(--accent)':'background:var(--accent)';
+    const tip=`${MONTHS[t.m]} ${t.y}${t.proy?' (proyección)':''} — saldo ${sym} ${numFmt(t.saldo)}${t.interes!==null&&t.interes!==undefined?' · interés ≈ '+sym+' '+numFmt(t.interes):''}`;
+    return `<div title="${escapeHtml(oculto?MONTHS[t.m]+' '+t.y:tip)}" style="flex:1;min-width:0;display:flex;align-items:flex-end;justify-content:center">${ahiCapas.saldo?`<div style="width:58%;height:${h}%;${estilo};border-radius:4px 4px 0 0;box-sizing:border-box"></div>`:''}</div>`;
+  }).join('');
+  const puntos=ptsReal.map((p,i)=>p?`<div style="position:absolute;left:${p[0]/(n*100)*100}%;top:${p[1]}%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--bg2);border:2px solid var(--amber);box-sizing:border-box"></div>`:'').join('');
+  const meses=todos.map(t=>`<div style="flex:1;min-width:0;text-align:center;font-size:10px;color:${t.proy?'var(--text3)':'var(--text2)'}">${MONTHS_SHORT[t.m]}</div>`).join('');
+  const hoyX=(reales.length/n*100);
+  const svg=`<svg viewBox="0 0 ${n*100} 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+    ${ahiCapas.tendencia&&tendPath?`<path d="${tendPath}" fill="none" stroke="#f0a53c" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`:''}
+    ${ahiCapas.interes&&lineaPath?`<path d="${lineaPath}" fill="none" stroke="#f0a53c" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`:''}
+  </svg>`;
+  const chip=(k,label,color)=>`<button class="btn" onclick="toggleAhiCapa('${k}')" style="font-size:11px;padding:5px 10px;display:flex;align-items:center;gap:6px;${ahiCapas[k]?'':'opacity:.45'}"><span style="width:9px;height:9px;border-radius:3px;background:${color};display:inline-block"></span>${label}</button>`;
+  chipsEl.innerHTML=chip('saldo','Saldo','var(--accent)')+chip('interes','Interés','#f0a53c')+(hayTrea?chip('tendencia','Tendencia TREA','#f0a53c'):'');
+  const sum=a=>a.reduce((s,v)=>s+(v||0),0);
+  const intReal=sum(reales.map(r=>r.interes)), intProy=sum(proy.map(p=>p.interes));
+  const ultimo=proy[proy.length-1];
+  const stat=(l,v,nota,color)=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:var(--text3)">${l}</div><div style="font-size:15px;font-weight:700;color:${color||'var(--text)'};margin:2px 0">${v}</div><div style="font-size:10px;color:var(--text3)">${nota}</div></div>`;
+  const aviso=hayTrea?'':`<div style="font-size:11px;color:var(--amber);margin-top:8px">Esta cuenta aún no tiene TREA: se proyecta solo el ahorro, sin interés. Agrégala en «TREA por mes».</div>`;
+  el.innerHTML=`
+    <div style="display:flex;align-items:stretch">
+      <div style="width:50px;position:relative;height:230px;flex:none">${tickL}</div>
+      <div style="flex:1;min-width:0">
+        <div style="position:relative;height:230px">
+          ${grid}
+          <div style="position:absolute;left:${hoyX}%;top:0;bottom:0;width:0;border-left:1px dashed var(--text3)"></div>
+          <div style="position:absolute;inset:0;display:flex">${barras}</div>
+          ${svg}${ahiCapas.interes?puntos:''}
+        </div>
+        <div style="display:flex;margin-top:6px">${meses}</div>
+      </div>
+      <div style="width:50px;position:relative;height:230px;flex:none">${tickR}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:10px;color:var(--text2);margin:10px 0">
+      <span>▮ Saldo al cierre del mes (eje izq.)</span><span>━ Interés del mes (eje der.)</span>${hayTrea?'<span>┅ Proyección con TREA fija (a la derecha de la línea gris)</span>':''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
+      ${stat('TREA fija',hayTrea?treaVigente.toFixed(2)+'%':'—','toda la proyección')}
+      ${stat('Interés en el gráfico',M('≈ '+sym+' '+numFmt(intReal)),'meses mostrados','var(--amber)')}
+      ${stat('Interés proyectado',M('≈ '+sym+' '+numFmt(intProy)),AHI_MESES_PROY+' meses','var(--amber)')}
+      ${stat('Saldo proyectado a '+MONTHS_SHORT[ultimo.m],M(sym+' '+numFmt(ultimo.saldo)),'hoy '+M(sym+' '+numFmt(saldoActual)),'var(--accent)')}
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">💡 Cada mes proyectado parte del saldo anterior y suma tu ahorro promedio de los últimos 3 meses completos (${M((ahorroProm<0?'− ':'')+sym+' '+numFmt(ahorroProm))} al mes) más el interés de ese mes. Los movimientos cuya descripción dice «interés» no cuentan como ahorro. Todo es aproximado.</div>${aviso}`;
+}
 function renderAhorrosIntereses(){
   if(!poblarAhiCuentaTabs()) return;
   const cuenta=ahiCuentaActual;
@@ -7238,6 +7391,7 @@ function renderAhorrosIntereses(){
     </div>
   `;
   if(document.getElementById('ahi-detalle-dias-card').style.display!=='none') renderAhiDetalleDias();
+  renderAhiGrafico(cuenta, sym, saldoActual, treaMes, metodo);
 
   // ── Historial de TREA (más reciente primero) ──
   const hist=state.ahorroTREA[cuenta]||{};
@@ -8628,9 +8782,20 @@ function toggleMovBulkMode(){
   document.getElementById('mov-bulk-bar').style.display=movBulkMode?'flex':'none';
   renderMovimientos();
 }
+// «Selec. todos»: alterna la selección de los movimientos que se están viendo (respeta filtros y búsqueda)
+let _movVisibleIds=[];
+function selectAllMovBulk(){
+  const ids=_movVisibleIds||[];
+  if(!ids.length) return;
+  const marcar=!ids.every(id=>movBulkSelected.has(id));
+  ids.forEach(id=>{ if(marcar) movBulkSelected.add(id); else movBulkSelected.delete(id); });
+  renderMovimientos();
+}
 function onMovCheckToggle(id,checked){
   if(checked) movBulkSelected.add(id); else movBulkSelected.delete(id);
   document.getElementById('mov-bulk-count').textContent=movBulkSelected.size;
+  const _b=document.getElementById('mov-bulk-all-btn');
+  if(_b){ const ids=_movVisibleIds||[]; _b.textContent=(ids.length&&ids.every(i=>movBulkSelected.has(i)))?'Deselec. todos':'Selec. todos'; }
 }
 function applyMovBulkCat(){
   if(!movBulkSelected.size){alert('Selecciona al menos un movimiento.');return;}
@@ -8702,7 +8867,10 @@ function renderMovimientos(){
   if(searchQ) movs=movs.filter(m=>(m.desc||'').toLowerCase().includes(searchQ));
   movs=sortMovs(movs);
   updateMovSortIndicators();
+  _movVisibleIds=movs.map(m=>m.id);
   if(movBulkMode){
+    const _b=document.getElementById('mov-bulk-all-btn');
+    if(_b) _b.textContent=(_movVisibleIds.length&&_movVisibleIds.every(i=>movBulkSelected.has(i)))?'Deselec. todos':'Selec. todos';
     const catSel=document.getElementById('mov-bulk-cat');
     const cats=Object.keys(getAllCategorias());
     catSel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -14502,9 +14670,38 @@ function toggleTCPaid(movId, paid, el){
   const mov=movs&&movs.find(m=>m.id===movId);
   if(mov){
     const antes=mov.pagado;
+    // Desmarcar un consumo pagado con dinero: se pregunta si se devuelve a la cuenta.
+    // Se resta SOLO el monto de este consumo del movimiento de pago (si era el único, el pago se elimina).
+    let pagoRevertido=null;
+    if(antes && mov.metodoPago==='dinero'){
+      const pm=mov.pagoMovId ? (state.movimientos||[]).find(x=>x.id===mov.pagoMovId) : null;
+      if(pm){
+        const sym=pm.currency==='USD'?'$':'S/';
+        const monto=Math.abs(Number(mov.monto)||0);
+        const resto=Math.round((pm.amount-monto)*100)/100;
+        const queda = resto>0.004 ? 'El pago registrado quedará en '+sym+' '+resto.toFixed(2)+'.' : 'Como era el único consumo de ese pago, el pago se eliminará.';
+        if(!confirm('"'+mov.desc+'" se pagó desde la cuenta "'+pm.account+'" (pago "'+pm.desc+'", '+sym+' '+pm.amount.toFixed(2)+').\n\n¿Devolver '+sym+' '+monto.toFixed(2)+' a esa cuenta y volver a dejarlo pendiente?\n\n'+queda+'\nSolo se resta este consumo; los demás consumos del pago siguen pagados.')){
+          if(el) el.checked=true; // cancelado: sigue pagado
+          return;
+        }
+        const snapshot={...pm};
+        if(resto>0.004){ pm.amount=resto; pagoRevertido={id:pm.id, amountAntes:snapshot.amount, snapshot:null}; }
+        else { _movimientosBorradosExplicitamente.push(pm.id); state.movimientos=state.movimientos.filter(x=>x.id!==pm.id); pagoRevertido={id:pm.id, amountAntes:snapshot.amount, snapshot:snapshot}; }
+        clearSaldoCache();
+      } else {
+        // Pago anterior a esta mejora (sin vínculo) o ya borrado: no se puede devolver solo.
+        const sinVinculo=!mov.pagoMovId;
+        if(sinVinculo && !confirm('Este consumo se pagó antes de que la app guardara el vínculo con el movimiento de pago, así que NO se puede devolver el dinero automáticamente.\n\n¿Dejarlo pendiente de todos modos? (Si descontaste la plata de una cuenta, corrígelo a mano en Movimientos.)')){
+          if(el) el.checked=true;
+          return;
+        }
+      }
+    }
     mov.pagado=paid;
-    logActividad('tc_consumo_pagado', `${paid?'Marcado pagado':'Desmarcado pagado'}: ${mov.desc} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:currentTCId, monthKey:currentTCMonth, consumoId:movId, pagadoAntes:antes});
-    saveState(); renderTCDetail();
+    const metodoAntes=mov.metodoPago, pagoMovIdAntes=mov.pagoMovId;
+    if(!paid){ delete mov.pagoMovId; delete mov.metodoPago; }
+    logActividad('tc_consumo_pagado', `${paid?'Marcado pagado':'Desmarcado pagado'}: ${mov.desc} (${t.banco}${t.cat?' '+t.cat:''})${pagoRevertido?' — se devolvió a la cuenta':''}`, {tarjetaId:currentTCId, monthKey:currentTCMonth, consumoId:movId, pagadoAntes:antes, metodoPagoAntes:metodoAntes, pagoMovIdAntes:pagoMovIdAntes, pagoRevertido:pagoRevertido});
+    saveState(); renderTCDetail(); if(pagoRevertido) render();
   }
 }
 
@@ -14524,6 +14721,11 @@ function pagarSeleccionados(idsForzados){
   const selMovs=pendingPayMovIds.map(id=>movs.find(x=>x.id===id)).filter(m=>m&&!m.pagado);
   const {pen,usd}=sumTCByCurrency(selMovs, t&&t.currency);
   document.getElementById('tc-pago-monto').textContent=M(fmtTCMixed(pen,usd));
+  const _res=document.getElementById('tc-pago-resumen');
+  if(_res){
+    const _mostrar=selMovs.slice(0,6).map(m=>escapeHtml(m.desc||'')+' — '+((m.currency||(t&&t.currency)||'PEN')==='USD'?'$ ':'S/ ')+Number(m.monto).toFixed(2)).join('<br>');
+    _res.innerHTML='<b>'+selMovs.length+' consumo'+(selMovs.length===1?'':'s')+'</b>'+(selMovs.length?'<br>'+_mostrar+(selMovs.length>6?'<br>… y '+(selMovs.length-6)+' más':''):'');
+  }
   window._pagoSelPen=pen; window._pagoSelUsd=usd;
   document.getElementById('tc-pago-tipo').value='total';
   document.getElementById('tc-pago-parcial-field').style.display='none';
@@ -14568,7 +14770,7 @@ function confirmarPago(){
     // Puntos: mark as paid but DO NOT deduct from any account
     pendingPayMovIds.forEach(id=>{
       const m=movs.find(x=>x.id===id);
-      if(m){ m.pagado=true; m.metodoPago='puntos'; }
+      if(m){ m.pagado=true; m.metodoPago='puntos'; delete m.pagoMovId; }
     });
     saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas();
     return;
@@ -14579,6 +14781,7 @@ function confirmarPago(){
   const fechaLabel=new Date(hoy+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
   if(!state.movimientos) state.movimientos=[];
 
+  let idPagoP=null, idPagoU=null, idPagoParcial=null; // ids de los movimientos de pago (para poder revertir un consumo después)
   if(tipo==='total'){
     // El pago puede incluir consumos en soles Y dólares a la vez — se crea
     // UN movimiento real por cada moneda involucrada, para que el descuento
@@ -14589,12 +14792,14 @@ function confirmarPago(){
     const {pen,usd}=sumTCByCurrency(selMovs, t&&t.currency);
     const desc='Pago de tarjeta '+(t?t.banco+(t.cat?' '+t.cat:''):'')+' - '+fechaLabel;
     if(pen>0.004){
-      pushMovimiento({id:'pagoTC'+Date.now()+'p',type:'expense',desc,amount:pen,account:cuenta,date:hoy,currency:'PEN'});
+      idPagoP='pagoTC'+Date.now()+'p';
+      pushMovimiento({id:idPagoP,type:'expense',desc,amount:pen,account:cuenta,date:hoy,currency:'PEN'});
     }
     if(usd>0.004){
       // Mezcla soles+dólares → los dólares salen de la cuenta en dólares elegida aparte
       const cuentaUsd = (pen>0.004) ? (document.getElementById('tc-pago-cuenta-usd').value||cuenta) : cuenta;
-      pushMovimiento({id:'pagoTC'+Date.now()+'u',type:'expense',desc,amount:usd,account:cuentaUsd,date:hoy,currency:'USD'});
+      idPagoU='pagoTC'+Date.now()+'u';
+      pushMovimiento({id:idPagoU,type:'expense',desc,amount:usd,account:cuentaUsd,date:hoy,currency:'USD'});
     }
   } else {
     // Parcial: un solo monto en soles (según indica el campo del formulario)
@@ -14606,13 +14811,19 @@ function confirmarPago(){
     if(_s.usd>0.004){alert('Hay consumos en dólares seleccionados: usa pago Total o selecciona solo consumos en soles.');return;}
     if(Math.abs(_s.pen-montoAPagar)>0.01){alert('El monto parcial (S/ '+montoAPagar.toFixed(2)+') no coincide con la suma de los consumos seleccionados (S/ '+_s.pen.toFixed(2)+'). Selecciona los consumos que sumen ese monto, o usa pago Total.');return;}
     const desc='Pago de tarjeta '+(t?t.banco+(t.cat?' '+t.cat:''):'')+' - '+fechaLabel+' (parcial)';
-    pushMovimiento({id:'pagoTC'+Date.now(),type:'expense',desc,amount:montoAPagar,account:cuenta,date:hoy,currency:'PEN'});
+    idPagoParcial='pagoTC'+Date.now();
+    pushMovimiento({id:idPagoParcial,type:'expense',desc,amount:montoAPagar,account:cuenta,date:hoy,currency:'PEN'});
   }
 
   // Marcar movimientos como pagados
   pendingPayMovIds.forEach(id=>{
     const m=movs.find(x=>x.id===id);
-    if(m&&!m.pagado){ m.pagado=true; m.metodoPago='dinero'; }
+    if(m&&!m.pagado){
+      m.pagado=true; m.metodoPago='dinero';
+      const _cur=m.currency||(t&&t.currency)||'PEN';
+      const _pid=idPagoParcial||(_cur==='USD'?idPagoU:idPagoP);
+      if(_pid) m.pagoMovId=_pid; else delete m.pagoMovId;
+    }
   });
   saveState(); closePagoModal(); pendingPayMovIds=[]; renderTCDetail(); renderTarjetas(); render();
 }
@@ -27253,6 +27464,7 @@ if(state.projGoals){
     <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:14px">
       <div style="font-size:11px;color:var(--text2);margin-bottom:3px">Monto a pagar</div>
       <div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--red)" id="tc-pago-monto">S/ 0.00</div>
+      <div id="tc-pago-resumen" style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5"></div>
     </div>
     <div class="field"><label>Tipo de pago</label>
       <select id="tc-pago-tipo" onchange="onPagoTipoChange()">
