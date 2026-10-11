@@ -3419,7 +3419,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="btn" id="tc-sort-dir-btn" style="font-size:11px;padding:5px 8px" onclick="onTCSortDirToggle()" title="Cambiar dirección del orden">▼</button>
           </div>
           <button class="btn" style="font-size:11px" onclick="markSelectedPaid()">✓ Marcar selec. como pagado</button>
-          <button class="btn" style="font-size:11px" onclick="selectAllTCMov()">Selec. todos</button>
+          <button class="btn" id="tc-selall-btn" style="font-size:11px" onclick="selectAllTCMov()">Selec. todos</button>
         </div>
       </div>
       <div id="tc-mov-view-container"></div>
@@ -3765,9 +3765,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.61.0';
-const APP_VERSION_DATE = '11/10/26 - 13:52'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: los pagos e ingresos frecuentes aparecen solos en el Calendario (solo el nombre, sin monto), en el día y con la frecuencia que configuraste (mensual, semestral y anual). Los del período ya registrados se ven atenuados con ✅. Un toque lleva a la sección de Pagos/Ingresos Frecuentes.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.61.1';
+const APP_VERSION_DATE = '11/10/26 - 14:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mejora: el botón «Selec. todos» de Consumos de tarjeta ahora alterna: la primera vez marca todos los consumos NO pagados y al volver a presionarlo los desmarca (no toca los ya pagados). El botón cambia a «Deselec. todos» cuando ya están todos marcados.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -14420,6 +14420,7 @@ function renderTCDetail(){
   const allCb=document.getElementById('tc-check-all');
   if(allCb) allCb.checked=false;
   updateTCSelectionTotal();
+  actualizarBtnSelTodosTC();
 }
 
 function onTCSelChange(){
@@ -14432,6 +14433,7 @@ function onTCSelChange(){
   const allCb=document.getElementById('tc-check-all');
   if(allCb) allCb.checked=checked.length===cbs.length&&cbs.length>0;
   updateTCSelectionTotal();
+  actualizarBtnSelTodosTC();
 }
 
 function toggleAllTCMov(checked){
@@ -14439,7 +14441,24 @@ function toggleAllTCMov(checked){
   updateTCSelectionTotal();
 }
 
-function selectAllTCMov(){ toggleAllTCMov(true); }
+// Botón "Selec. todos": alterna SOLO los consumos no pagados (los ya pagados
+// no se tocan). Si todos los pendientes ya están marcados, los desmarca.
+function tcPendientesCbs(){
+  return [...document.querySelectorAll('.tc-sel-cb')].filter(c=>!c.closest('.paid-row'));
+}
+function selectAllTCMov(){
+  const pend=tcPendientesCbs();
+  if(!pend.length) return;
+  const marcar=!pend.every(c=>c.checked);
+  pend.forEach(c=>{ c.checked=marcar; });
+  onTCSelChange();
+}
+function actualizarBtnSelTodosTC(){
+  const btn=document.getElementById('tc-selall-btn');
+  if(!btn) return;
+  const pend=tcPendientesCbs();
+  btn.textContent=(pend.length && pend.every(c=>c.checked)) ? 'Deselec. todos' : 'Selec. todos';
+}
 
 function updateTCSelectionTotal(){
   const cbs=[...document.querySelectorAll('.tc-sel-cb:checked')];
