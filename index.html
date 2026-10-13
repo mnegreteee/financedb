@@ -1813,7 +1813,6 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           <div class="tab active" id="tab-todos" onclick="setTab('todos')">Todos</div>
           <div class="tab" id="tab-ingresos" onclick="setTab('ingresos')">Ingresos</div>
           <div class="tab" id="tab-gastos" onclick="setTab('gastos')">Gastos</div>
-          <div class="tab" id="tab-ahorro" onclick="setTab('ahorro')">Ahorro</div>
         </div>
         <select id="cat-filter" style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:11px;padding:4px 7px;cursor:pointer" onchange="renderMovimientos()">
           <option value="">Todas las categorías</option>
@@ -3793,9 +3792,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.9';
-const APP_VERSION_DATE = '12/10/26 - 21:05'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Editar consumo de tarjeta: ahora puedes elegir (o cambiar) si el gasto se descuenta de un pago frecuente y/o se carga a la deuda de una persona, aunque lo hayas olvidado al registrarlo.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.10';
+const APP_VERSION_DATE = '12/10/26 - 21:00'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Movimientos: se quitó la pestaña "Ahorro", que ya no se usaba (los movimientos antiguos de ahorro siguen apareciendo en "Todos").'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8837,7 +8836,7 @@ document.addEventListener('touchstart', function(ev){
 
 function setTab(t){
   state.currentTab=t;
-  ['todos','ingresos','gastos','ahorro'].forEach(id=>document.getElementById('tab-'+id).classList.toggle('active',id===t));
+  ['todos','ingresos','gastos'].forEach(id=>document.getElementById('tab-'+id).classList.toggle('active',id===t));
   renderMovimientos();
 }
 // ── Búsqueda y ordenamiento de movimientos ────────────
@@ -8907,14 +8906,12 @@ function applyMovBulkCat(){
 }
 
 function renderMovimientos(){
-  // La pestaña "Ahorro" solo existe si quedan movimientos de ahorro antiguos (Excel/histórico); ya no se crean nuevos.
-  const _hayAh=(state.movimientos||[]).some(m=>m.type==='ahorro');
-  const _tAh=document.getElementById('tab-ahorro'); if(_tAh) _tAh.style.display=_hayAh?'':'none';
-  if(!_hayAh && state.currentTab==='ahorro') state.currentTab='todos';
+  // La pestaña "Ahorro" ya no existe (los movimientos antiguos de ahorro se ven en "Todos").
+  if(state.currentTab==='ahorro') state.currentTab='todos';
   // Defensa extra: la pestaña resaltada (Todos/Ingresos/Gastos/Ahorro) SIEMPRE
   // debe reflejar el filtro que realmente se está aplicando (state.currentTab),
   // no solo cuando se hace clic — así nunca puede quedar un filtro "invisible".
-  ['todos','ingresos','gastos','ahorro'].forEach(id=>{
+  ['todos','ingresos','gastos'].forEach(id=>{
     const el=document.getElementById('tab-'+id);
     if(el) el.classList.toggle('active', id===(state.currentTab||'todos'));
   });
@@ -8924,7 +8921,6 @@ function renderMovimientos(){
   let movs=getMovs(state.currentYear,state.currentMonth).filter(m=>{
     if(state.currentTab==='ingresos') return m.type==='income' && !esTransferenciaInterna(m);
     if(state.currentTab==='gastos') return m.type==='expense' && !esTransferenciaInterna(m);
-    if(state.currentTab==='ahorro') return m.type==='ahorro';
     return true;
   });
 
