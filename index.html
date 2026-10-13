@@ -2726,6 +2726,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 
 <!-- MODAL: EDITAR/APROBAR PENDIENTE BANCARIO (crea el movimiento real) -->
+<div class="modal-overlay" id="pbq-overlay" onclick="if(event.target===this)cerrarAprobarRapidoModal()">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span>✅ Aprobar movimiento</span><button class="modal-close" onclick="cerrarAprobarRapidoModal()">✕</button></div>
+    <div id="pbq-resumen" style="font-size:12px;line-height:1.75;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:10px"></div>
+    <div id="pbq-duplicado-aviso" style="display:none;font-size:11px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px"></div>
+    <div class="field"><label>🏷️ ¿Qué categoría le pones?</label><select id="pbq-cat"></select>
+      <div id="pbq-cat-hint" style="font-size:10px;color:var(--text3);margin-top:4px"></div></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cerrarAprobarRapidoModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarAprobarRapido()">✅ Registrar</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="pbm-overlay" onclick="if(event.target===this)cerrarAprobarPendienteModal()">
   <div class="modal" style="width:380px">
     <div class="modal-title"><span id="pbm-title">Aprobar movimiento</span><button class="modal-close" onclick="cerrarAprobarPendienteModal()">✕</button></div>
@@ -2759,8 +2772,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <select id="pbm-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
     </div>
-    <div class="field"><label>Fecha</label><input id="pbm-fecha" type="date"></div>
-    <div class="field"><label>Categoría <small>(opcional)</small></label><select id="pbm-cat"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Fecha</label><input id="pbm-fecha" type="date"></div>
+      <div class="field"><label>Hora <small>(del correo)</small></label><input id="pbm-hora" type="time"></div>
+    </div>
+    <div class="field"><label>Categoría</label><select id="pbm-cat"></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarAprobarPendienteModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarAprobarPendiente()">✅ Registrar</button>
@@ -3777,9 +3793,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.6';
-const APP_VERSION_DATE = '11/10/26 - 18:02'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Ahorros e Intereses: el detalle de cada mes del gráfico ahora muestra ahorro del mes, saldo al inicio (cierre del mes anterior), interés y saldo al cierre; en los meses cerrados usa el interés registrado y el estimado queda como referencia.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.9';
+const APP_VERSION_DATE = '12/10/26 - 21:05'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Editar consumo de tarjeta: ahora puedes elegir (o cambiar) si el gasto se descuenta de un pago frecuente y/o se carga a la deuda de una persona, aunque lo hayas olvidado al registrarlo.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10748,17 +10764,30 @@ function deudasCargables(currency){
   const cur=currency==='USD'?'USD':'PEN';
   return (state.deudas||[]).filter(d=>(d.direccion||'me_deben')==='me_deben' && d.status==='pendiente' && (d.currency==='USD'?'USD':'PEN')===cur);
 }
-function refrescarDescPF(selId, wrapId, currency, visible, reset){
+// Qué pago frecuente / deuda tiene ya enlazado un gasto (por su id de origen).
+function vinculosPorOrigenWeb(origenId){
+  const r={pfId:'',deudaId:''}; if(!origenId) return r;
+  const pf=(state.pagosFrecuentes||[]).find(p=>(p.descuentosPendientes||[]).some(d=>d.origenId===origenId)); if(pf) r.pfId=pf.id;
+  const de=(state.deudas||[]).find(d=>(d.items||[]).some(it=>it.origenId===origenId)||(d.cargos||[]).some(c=>c.origenId===origenId)); if(de) r.deudaId=de.id;
+  return r;
+}
+function refrescarDescPF(selId, wrapId, currency, visible, reset, origenId){
   const sel=document.getElementById(selId), wrap=document.getElementById(wrapId); if(!sel||!wrap) return;
-  const lista=visible?pfsDescontables(currency):[];
-  const prev=reset?'':sel.value;
+  const vinc=vinculosPorOrigenWeb(origenId);
+  if(reset) sel.dataset.orig=vinc.pfId;
+  let lista=visible?pfsDescontables(currency):[];
+  // al editar, el pago frecuente ya enlazado siempre aparece (aunque sea de otra moneda)
+  if(visible&&vinc.pfId&&!lista.some(p=>p.id===vinc.pfId)){ const x=(state.pagosFrecuentes||[]).find(p=>p.id===vinc.pfId); if(x) lista=[x].concat(lista); }
+  const prev=reset?vinc.pfId:sel.value;
   sel.innerHTML='<option value="">No descontar</option>'+lista.map(p=>'<option value="'+escapeHtml(p.id)+'">➖ '+escapeHtml(p.nombre)+'</option>').join('');
   if(lista.some(p=>p.id===prev)) sel.value=prev;
   wrap.style.display=lista.length?'':'none';
   // 🤝 Cargar a la deuda de una persona (monto único o "voy sumando gastos") o crear una nueva
   const dsel=document.getElementById(selId.replace('descpf','deuda')), dwrap=document.getElementById(wrapId.replace('descpf','deuda')); if(!dsel||!dwrap) return;
-  const dl=visible?deudasCargables(currency):[];
-  const dprev=reset?'':dsel.value;
+  let dl=visible?deudasCargables(currency):[];
+  if(visible&&vinc.deudaId&&!dl.some(d=>d.id===vinc.deudaId)){ const x=(state.deudas||[]).find(d=>d.id===vinc.deudaId); if(x) dl=[x].concat(dl); }
+  if(reset) dsel.dataset.orig=vinc.deudaId;
+  const dprev=reset?vinc.deudaId:dsel.value;
   dsel.innerHTML='<option value="">No cargar a deuda</option>'+dl.map(d=>'<option value="'+escapeHtml(d.id)+'">🤝 '+escapeHtml(d.nombre)+(Array.isArray(d.items)?' (voy sumando gastos)':' (monto único)')+'</option>').join('')+(visible?'<option value="__new__">➕ Deuda nueva…</option>':'');
   if(dprev==='__new__'||dl.some(d=>d.id===dprev)) dsel.value=dprev;
   dwrap.style.display=visible?'':'none';
@@ -10775,7 +10804,7 @@ function validarDeudaNuevaWeb(dselId){
   return true;
 }
 function refrescarDescPFTC(reset){
-  refrescarDescPF('tc-m-descpf','tc-m-descpf-wrap',document.getElementById('tc-m-currency').value,!editingTCMovId,reset===true);
+  refrescarDescPF('tc-m-descpf','tc-m-descpf-wrap',document.getElementById('tc-m-currency').value,true,reset===true,editingTCMovId||'');
 }
 function refrescarDescPFTransfer(){
   const o=document.getElementById('tr-origen');
@@ -10783,6 +10812,9 @@ function refrescarDescPFTransfer(){
 }
 function aplicarDescuentoPF(selId, concepto, monto, origenId, fecha, currency){
   aplicarCargoDeudaWeb(selId, concepto, monto, origenId, fecha, currency);
+  aplicarSoloPFWeb(selId, concepto, monto, origenId, fecha, currency);
+}
+function aplicarSoloPFWeb(selId, concepto, monto, origenId, fecha, currency){
   const sel=document.getElementById(selId); const pfId=sel&&sel.value; if(!pfId||!(monto>0)) return;
   const pf=(state.pagosFrecuentes||[]).find(p=>p.id===pfId); if(!pf) return;
   if(!pf.descuentosPendientes) pf.descuentosPendientes=[];
@@ -10819,8 +10851,14 @@ function aplicarCargoDeudaWeb(selId, concepto, monto, origenId, fecha, currency)
   }
 }
 function quitarDescuentosPorOrigenWeb(ids){
+  quitarPFPorOrigenWeb(ids); quitarDeudaPorOrigenWeb(ids);
+}
+function quitarPFPorOrigenWeb(ids){
   ids=(ids||[]).filter(Boolean); if(!ids.length) return;
   (state.pagosFrecuentes||[]).forEach(p=>{ if(Array.isArray(p.descuentosPendientes)) p.descuentosPendientes=p.descuentosPendientes.filter(d=>!ids.includes(d.origenId)); });
+}
+function quitarDeudaPorOrigenWeb(ids){
+  ids=(ids||[]).filter(Boolean); if(!ids.length) return;
   // 🤝 también quita lo cargado a deudas; si la deuda se creó desde ese gasto y quedó vacía, se elimina
   if(!Array.isArray(state.deudas)) return;
   state.deudas.forEach(d=>{
@@ -10828,6 +10866,18 @@ function quitarDescuentosPorOrigenWeb(ids){
     if(Array.isArray(d.cargos)){ const q=d.cargos.filter(c=>ids.includes(c.origenId)); if(q.length){ d.monto=(Number(d.monto)||0)-q.reduce((s,c)=>s+c.monto,0); d.cargos=d.cargos.filter(c=>!ids.includes(c.origenId)); } }
   });
   state.deudas=state.deudas.filter(d=>!(d.creadaDesdeOrigen && ids.includes(d.creadaDesdeOrigen) && Array.isArray(d.items) && !d.items.length));
+}
+// Al editar un consumo: si cambiaste el pago frecuente y/o la deuda, quita el enlace anterior y crea el nuevo.
+function cambiarVinculosConsumoWeb(selId, concepto, monto, origenId, fecha, currency){
+  const sel=document.getElementById(selId), dsel=document.getElementById(selId.replace('descpf','deuda')); if(!sel||!dsel) return;
+  if((sel.value||'')!==(sel.dataset.orig||'')){
+    quitarPFPorOrigenWeb([origenId]);
+    if(sel.value) aplicarSoloPFWeb(selId, concepto, monto, origenId, fecha, currency);
+  }
+  if((dsel.value||'')!==(dsel.dataset.orig||'')){
+    quitarDeudaPorOrigenWeb([origenId]);
+    if(dsel.value) aplicarCargoDeudaWeb(selId, concepto, monto, origenId, fecha, currency);
+  }
 }
 function actualizarDescuentoPorOrigenWeb(id, monto){
   (state.pagosFrecuentes||[]).forEach(p=>(p.descuentosPendientes||[]).forEach(d=>{ if(d.origenId===id && monto>0) d.monto=monto; }));
@@ -13886,7 +13936,7 @@ function getAllCategorias(){
 function updateCategorySelects(){
   const cats = Object.keys(getAllCategorias());
   // f-cat y tc-m-cat sí permiten "Sin categoría"; bm-cat (presupuesto) no.
-  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat','srv-edit-cat','tcopc-cat','tcopv-cat','pbm-cat'].forEach(id=>{
+  ['f-cat','tc-m-cat','cf-cat','tr-cat','cpc-cat','srv-edit-cat','tcopc-cat','tcopv-cat'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const cur=sel.value;
     sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c}">${escapeHtml(c)}</option>`).join('');
@@ -15702,6 +15752,7 @@ function saveTCMov(){
       // Update the mov data
       foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat; foundMov.currency=currency;
       actualizarDescuentoPorOrigenWeb(foundMov.id,monto);
+      cambiarVinculosConsumoWeb('tc-m-descpf',desc,monto,foundMov.id,fecha,currency);
       if(hora) foundMov.hora=hora; else delete foundMov.hora;
       if(newMk!==foundInMonth){
         // Move to the new billing month
@@ -23021,7 +23072,7 @@ function renderAprobacionesBanco(){
           <span class="pb-quien">${escapeHtml(p.descripcion||'Sin nombre')}</span>
           <span class="cp-badge ${esIngreso?'entregado':'en-camino'}">${esIngreso?'Ingreso':'Gasto'}</span>
         </div>
-        <div class="pb-meta">${escapeHtml(p.banco||'')} · ${escapeHtml(p.tipoLabel||'')} · ${fmtFechaCorta(p.fecha)}${p.hora?' '+p.hora.slice(0,5):''}</div>
+        <div class="pb-meta">${escapeHtml(p.banco||'')} · ${escapeHtml(p.tipoLabel||'')} · ${fmtFechaCorta(p.fecha)}${horaPendienteTxt(p)?' '+horaPendienteTxt(p):''}</div>
         <div class="pb-meta" style="margin-top:2px">
           ${resuelto ? `Va a: <b>${escapeHtml(resuelto.label)}</b> ${resuelto.tipo==='tarjeta'?'(tarjeta)':'(cuenta)'}` : `<span style="color:var(--amber)">⚠ No se detectó a qué cuenta/tarjeta va — usa Editar</span>`}
           ${catSugerida?` · Categoría sugerida: <b>${escapeHtml(catSugerida)}</b>`:' · Sin categoría sugerida'}
@@ -23055,20 +23106,49 @@ function buscarPosibleDuplicado(fecha, monto){
 // Registra el movimiento real a partir de un pendiente + los valores ya
 // decididos (a mano en el modal, o auto-resueltos en el camino rápido) —
 // un solo lugar para las dos rutas, así no se puede desincronizar.
-function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat}){
+// Hora (HH:MM) que trajo el correo del banco; '' si no vino una válida.
+function horaDePendiente(p){
+  const m=/^(\d{1,2}):(\d{2})/.exec(String((p&&p.hora)||''));
+  return (m && +m[1]<24 && +m[2]<60) ? m[1].padStart(2,'0')+':'+m[2] : '';
+}
+// "14:32" o "14:32 (aprox.)" cuando la hora no salió del cuerpo del correo sino de la llegada.
+function horaPendienteTxt(p){
+  const h=horaDePendiente(p);
+  if(!h) return '';
+  return h+((p.horaOrigen && p.horaOrigen!=='correo')?' (aprox.)':'');
+}
+// Llena un desplegable de categoría OBLIGATORIO: arranca en "Elige una categoría"
+// (no se puede registrar así), con la sugerida del historial ya marcada si existe
+// y la opción explícita "Sin categoría" para quien de verdad no quiera ponerla.
+function _llenarSelectCatPendiente(id, sugerida){
+  const sel=document.getElementById(id); if(!sel) return;
+  const cats=Object.keys(getAllCategorias());
+  sel.innerHTML='<option value="" disabled>— Elige una categoría —</option><option value="__none__">Sin categoría</option>'
+    +cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  sel.value=(sugerida && cats.includes(sugerida)) ? sugerida : '';
+}
+// Convierte el valor del desplegable obligatorio: undefined = "Sin categoría"; null = no eligió.
+function _leerCatPendiente(id){
+  const v=document.getElementById(id).value;
+  if(!v) return null;
+  return v==='__none__' ? undefined : v;
+}
+function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora}){
   if(tipoMov==='ingreso' && destino.tipo==='tarjeta'){ alert('No se puede registrar un ingreso a una tarjeta de crédito — elige una cuenta.'); return false; }
   if(destino.tipo==='cuenta'){
-    pushMovimiento({
+    const mv={
       id:'pb-mov-'+Date.now(), type: tipoMov==='ingreso'?'income':'expense', desc, amount:monto,
       account:destino.id, date:fecha, currency, cat,
-    });
+    };
+    if(hora) mv.hora=hora; // hora real del correo; sin ella pushMovimiento usa la hora de la aprobación
+    pushMovimiento(mv);
   } else {
     const t=getTarjeta(destino.id);
     if(!t){ alert('Esa tarjeta ya no existe — selecciona otra.'); return false; }
     const monthKey=getBillingMonthKey(fecha, t);
     if(!t.movs) t.movs={};
     if(!t.movs[monthKey]) t.movs[monthKey]=[];
-    t.movs[monthKey].push({ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency });
+    t.movs[monthKey].push({ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency, hora:hora||horaLimaActual() });
   }
   logActividad('pendiente_banco_aprobado', `Aprobado desde correo del banco: ${desc} — ${currency==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`, {pendienteId:p.id});
   saveState();
@@ -23080,24 +23160,46 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
 // muestra un resumen completo antes de registrar (lo que pediste: poder
 // ver a qué cuenta/tarjeta va, si es ingreso o gasto, categoría, etc. antes
 // de confirmar) — si algo no calza, se cancela y se usa "Editar" en su lugar.
+let aprobarRapidoId=null;
 function aprobarRapido(id){
   const p=pendientesBanco.find(x=>x.id===id);
   if(!p) return;
   const resuelto=resolverCuentaOTarjeta(p);
   if(!resuelto){ alert('No se detectó a qué cuenta/tarjeta va este movimiento — usa "Editar" para elegirla a mano.'); return; }
-  const cat=suggestCategoriaForDesc(p.descripcion);
+  aprobarRapidoId=id;
   const sym=p.moneda==='USD'?'$':'S/';
+  const sug=suggestCategoriaForDesc(p.descripcion);
+  const hTxt=horaPendienteTxt(p);
+  document.getElementById('pbq-resumen').innerHTML=
+    `<div>${p.tipoMovimiento==='ingreso'?'⬆️ <b>Ingreso</b>':'⬇️ <b>Gasto</b>'} · ${escapeHtml(p.banco||'')}</div>`+
+    `<div>📝 ${escapeHtml(p.descripcion||'Sin nombre')}</div>`+
+    `<div>💰 <b>${sym} ${numFmt(p.monto)}</b></div>`+
+    `<div>${resuelto.tipo==='tarjeta'?'💳':'🏦'} Va a: <b>${escapeHtml(resuelto.label)}</b> ${resuelto.tipo==='tarjeta'?'(tarjeta)':'(cuenta)'}</div>`+
+    `<div>📅 ${fmtFechaCorta(p.fecha)}${hTxt?' · 🕐 '+escapeHtml(hTxt):''}</div>`;
   const dup=buscarPosibleDuplicado(p.fecha, p.monto);
-  const resumen = `¿Registrar este movimiento?\n\n`+
-    `Tipo: ${p.tipoMovimiento==='ingreso'?'Ingreso':'Gasto'}\n`+
-    `Descripción: ${p.descripcion}\n`+
-    `Monto: ${sym} ${numFmt(p.monto)}\n`+
-    `Va a: ${resuelto.label} (${resuelto.tipo==='tarjeta'?'tarjeta':'cuenta'})\n`+
-    `Categoría: ${cat||'(sin categoría)'}\n`+
-    `Fecha: ${fmtFechaCorta(p.fecha)}`+
-    (dup?`\n\n⚠ Ya existe "${dup}" el ${fmtFechaCorta(p.fecha)} por el mismo monto — revisa que no sea el mismo.`:'');
-  if(!confirm(resumen)) return;
-  _registrarDesdePendiente(p, {desc:p.descripcion, tipoMov:p.tipoMovimiento||'gasto', destino:resuelto, monto:p.monto, currency:p.moneda, fecha:p.fecha, cat});
+  const avisoEl=document.getElementById('pbq-duplicado-aviso');
+  avisoEl.style.display=dup?'block':'none';
+  if(dup) avisoEl.textContent=`⚠ Ya existe "${dup}" el ${fmtFechaCorta(p.fecha)} por el mismo monto — revisa que no sea el mismo.`;
+  _llenarSelectCatPendiente('pbq-cat', sug);
+  document.getElementById('pbq-cat-hint').innerHTML = sug
+    ? `Sugerida por tu historial: <b>${escapeHtml(sug)}</b> (puedes cambiarla)`
+    : 'Sin sugerencia para este comercio: elige una categoría (o «Sin categoría»).';
+  document.getElementById('pbq-overlay').classList.add('open');
+}
+function cerrarAprobarRapidoModal(){
+  document.getElementById('pbq-overlay').classList.remove('open');
+  aprobarRapidoId=null;
+}
+function confirmarAprobarRapido(){
+  const p=pendientesBanco.find(x=>x.id===aprobarRapidoId);
+  if(!p){ cerrarAprobarRapidoModal(); return; }
+  const resuelto=resolverCuentaOTarjeta(p);
+  if(!resuelto){ alert('Ya no se pudo resolver la cuenta/tarjeta — usa "Editar".'); return; }
+  const cat=_leerCatPendiente('pbq-cat');
+  if(cat===null){ alert('Elige una categoría (o «Sin categoría») antes de registrar.'); return; }
+  if(_registrarDesdePendiente(p, {desc:p.descripcion, tipoMov:p.tipoMovimiento||'gasto', destino:resuelto, monto:p.monto, currency:p.moneda, fecha:p.fecha, cat, hora:horaDePendiente(p)})){
+    cerrarAprobarRapidoModal();
+  }
 }
 let aprobarPendienteId=null;
 function abrirAprobarPendienteModal(id){
@@ -23128,8 +23230,8 @@ function abrirAprobarPendienteModal(id){
   document.getElementById('pbm-fecha').value = p.fecha||todayLocalISO();
   onAprobarPendienteMetodoChange();
   updateCategorySelects();
-  const sugerida = suggestCategoriaForDesc(p.descripcion);
-  document.getElementById('pbm-cat').value = sugerida || '';
+  _llenarSelectCatPendiente('pbm-cat', suggestCategoriaForDesc(p.descripcion));
+  document.getElementById('pbm-hora').value = horaDePendiente(p);
   const dup = p.monto>0 ? buscarPosibleDuplicado(p.fecha, p.monto) : null;
   const avisoEl = document.getElementById('pbm-duplicado-aviso');
   avisoEl.style.display = dup ? 'block' : 'none';
@@ -23164,10 +23266,12 @@ function confirmarAprobarPendiente(){
   const monto=parseFloat(document.getElementById('pbm-monto').value);
   const currency=document.getElementById('pbm-currency').value;
   const fecha=document.getElementById('pbm-fecha').value;
-  const cat=document.getElementById('pbm-cat').value||undefined;
+  const cat=_leerCatPendiente('pbm-cat');
+  const hora=document.getElementById('pbm-hora').value||'';
   if(!desc){ alert('Ingresa una descripción.'); return; }
   if(isNaN(monto)||monto<=0){ alert('Ingresa un monto válido.'); return; }
   if(!fecha){ alert('Ingresa una fecha.'); return; }
+  if(cat===null){ alert('Elige una categoría (o «Sin categoría») antes de registrar.'); return; }
   let destino;
   if(metodo==='cuenta'){
     const cuenta=document.getElementById('pbm-cuenta').value;
@@ -23178,7 +23282,7 @@ function confirmarAprobarPendiente(){
     if(!tarjetaId){ alert('Selecciona una tarjeta.'); return; }
     destino={tipo:'tarjeta', id:tarjetaId};
   }
-  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat})){
+  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora})){
     cerrarAprobarPendienteModal();
   }
 }
@@ -24882,16 +24986,29 @@ function _verAFecha(s){ // 'dd/mm/yy - hh:mm' -> número comparable
   const m=String(s||'').match(/(\d{2})\/(\d{2})\/(\d{2})\s*-\s*(\d{2}):(\d{2})/);
   return m?Number(m[3]+m[2]+m[1]+m[4]+m[5]):0;
 }
-let _avisoActDescartado=null, _ultimaBusquedaAct=0;
+let _avisoActDescartado=null, _ultimaBusquedaAct=0, _sigRemota=null; // _sigRemota: huella (ETag/Last-Modified) de la última versión descargada, para no volver a bajar el archivo completo si no cambió
 function cerrarAvisoActualizacion(){ const b=document.getElementById('update-banner'); if(b){ b.classList.remove('show'); } }
 async function buscarActualizacion(manual){
   try{
     if(!/^https?:$/.test(location.protocol)) { if(manual) toast('Solo disponible en la app publicada','info'); return; }
+    if(!manual && document.hidden) return; // pestaña en segundo plano: se revisa al volver (visibilitychange)
     if(!manual && Date.now()-_ultimaBusquedaAct<60000) return;
     _ultimaBusquedaAct=Date.now();
     const url=location.origin+location.pathname+'?_v='+Date.now();
+    const huella=(resp)=>resp.headers.get('etag')||resp.headers.get('last-modified')||null;
+    // Revisión liviana: una petición HEAD (sin descargar los ~1.6 MB). Si la huella del servidor
+    // es la misma que la de la última descarga, no hay nada nuevo y se termina aquí. Si no hay
+    // huella, falla o cambió, se hace la descarga completa de siempre. La búsqueda manual
+    // (botón «Buscar actualización») siempre descarga completo.
+    if(!manual && _sigRemota){
+      try{
+        const h=await fetch(url,{method:'HEAD',cache:'no-store'});
+        if(h.ok){ const sig=huella(h); if(sig && sig===_sigRemota) return; }
+      }catch(e){ /* sin HEAD: se cae a la descarga completa */ }
+    }
     const r=await fetch(url,{cache:'no-store'});
     if(!r.ok) throw new Error('HTTP '+r.status);
+    const sigNueva=huella(r); if(sigNueva) _sigRemota=sigNueva;
     const t=await r.text();
     const m=t.match(/const APP_VERSION_DATE = '([^']+)'/);
     if(!m) throw new Error('sin versión');
