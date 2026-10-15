@@ -3806,9 +3806,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.12';
-const APP_VERSION_DATE = '14/10/26 - 21:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Editar movimiento de cuenta: ahora puedes elegir o cambiar si el gasto se descuenta de un pago frecuente y/o se carga a la deuda de una persona, igual que en los consumos de tarjeta.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.13';
+const APP_VERSION_DATE = '15/10/26 - 07:58'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Chat IA: la barra superior del chat (AsisBot) ahora cambia al mismo color que elijas para el círculo del chat en Configuración.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5713,7 +5713,15 @@ function getChatIAColor(){
 }
 function aplicarChatIAColor(){
   const btn=document.getElementById('chatia-btn');
-  if(btn) btn.style.background = getChatIAColor();
+  const col=getChatIAColor();
+  if(btn) btn.style.background = col;
+  // La barra superior del chat (donde dice «AsisBot») usa el mismo color del círculo; el texto pasa a oscuro si el color es muy claro.
+  const hdr=document.getElementById('chatia-header');
+  if(hdr){
+    hdr.style.background = col;
+    const r=parseInt(col.slice(1,3),16), g=parseInt(col.slice(3,5),16), b=parseInt(col.slice(5,7),16);
+    hdr.style.color = ((r*299+g*587+b*114)/1000) > 170 ? '#10231a' : '#fff';
+  }
   const picker=document.getElementById('cfg-chatia-color');
   if(picker) picker.value = getChatIAColor();
 }
