@@ -2732,6 +2732,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div id="pbq-duplicado-aviso" style="display:none;font-size:11px;background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:8px 10px;margin-bottom:10px"></div>
     <div class="field"><label>🏷️ ¿Qué categoría le pones?</label><select id="pbq-cat"></select>
       <div id="pbq-cat-hint" style="font-size:10px;color:var(--text3);margin-top:4px"></div></div>
+    <div class="field" id="pbq-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
+      <select id="pbq-descpf"><option value="">No descontar</option></select>
+    </div>
+    <div class="field" id="pbq-deuda-wrap" style="display:none"><label>🤝 ¿Cargar a la deuda de una persona? <span style="font-size:10px;color:var(--text3)">(préstamos "me deben" en la misma moneda, o una deuda nueva)</span></label>
+      <select id="pbq-deuda" onchange="onDeudaCargoChange('pbq-deuda')"><option value="">No cargar a deuda</option></select>
+      <input id="pbq-deuda-new" type="text" placeholder="Nombre de la persona" style="display:none;margin-top:6px">
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarAprobarRapidoModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarAprobarRapido()">✅ Registrar</button>
@@ -2768,7 +2775,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="field-row">
       <div class="field"><label>Monto</label><input id="pbm-monto" type="number" step="0.01" placeholder="0.00"></div>
       <div class="field"><label>Moneda</label>
-        <select id="pbm-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
+        <select id="pbm-currency" onchange="refrescarDescPFPend()"><option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option></select>
       </div>
     </div>
     <div class="field-row">
@@ -2776,6 +2783,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="field"><label>Hora <small>(del correo)</small></label><input id="pbm-hora" type="time"></div>
     </div>
     <div class="field"><label>Categoría</label><select id="pbm-cat"></select></div>
+    <div class="field" id="pbm-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
+      <select id="pbm-descpf"><option value="">No descontar</option></select>
+    </div>
+    <div class="field" id="pbm-deuda-wrap" style="display:none"><label>🤝 ¿Cargar a la deuda de una persona? <span style="font-size:10px;color:var(--text3)">(préstamos "me deben" en la misma moneda, o una deuda nueva)</span></label>
+      <select id="pbm-deuda" onchange="onDeudaCargoChange('pbm-deuda')"><option value="">No cargar a deuda</option></select>
+      <input id="pbm-deuda-new" type="text" placeholder="Nombre de la persona" style="display:none;margin-top:6px">
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
       <button class="btn" onclick="cerrarAprobarPendienteModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarAprobarPendiente()">✅ Registrar</button>
@@ -3792,9 +3806,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.10';
-const APP_VERSION_DATE = '12/10/26 - 21:00'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Movimientos: se quitó la pestaña "Ahorro", que ya no se usaba (los movimientos antiguos de ahorro siguen apareciendo en "Todos").'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.11';
+const APP_VERSION_DATE = '14/10/26 - 21:10'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Aprobaciones: al aprobar o editar un gasto del banco ahora puedes descontarlo de un pago frecuente o cargarlo a la deuda de una persona (igual que al registrar un gasto o consumo).'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -23129,7 +23143,7 @@ function _leerCatPendiente(id){
   if(!v) return null;
   return v==='__none__' ? undefined : v;
 }
-function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora}){
+function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId}){
   if(tipoMov==='ingreso' && destino.tipo==='tarjeta'){ alert('No se puede registrar un ingreso a una tarjeta de crédito — elige una cuenta.'); return false; }
   if(destino.tipo==='cuenta'){
     const mv={
@@ -23138,13 +23152,16 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
     };
     if(hora) mv.hora=hora; // hora real del correo; sin ella pushMovimiento usa la hora de la aprobación
     pushMovimiento(mv);
+    if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, mv.id, fecha, currency);
   } else {
     const t=getTarjeta(destino.id);
     if(!t){ alert('Esa tarjeta ya no existe — selecciona otra.'); return false; }
     const monthKey=getBillingMonthKey(fecha, t);
     if(!t.movs) t.movs={};
     if(!t.movs[monthKey]) t.movs[monthKey]=[];
-    t.movs[monthKey].push({ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency, hora:hora||horaLimaActual() });
+    const nuevoTc={ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency, hora:hora||horaLimaActual() };
+    t.movs[monthKey].push(nuevoTc);
+    if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, nuevoTc.id, fecha, currency);
   }
   logActividad('pendiente_banco_aprobado', `Aprobado desde correo del banco: ${desc} — ${currency==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`, {pendienteId:p.id});
   saveState();
@@ -23177,6 +23194,7 @@ function aprobarRapido(id){
   avisoEl.style.display=dup?'block':'none';
   if(dup) avisoEl.textContent=`⚠ Ya existe "${dup}" el ${fmtFechaCorta(p.fecha)} por el mismo monto — revisa que no sea el mismo.`;
   _llenarSelectCatPendiente('pbq-cat', sug);
+  refrescarDescPF('pbq-descpf','pbq-descpf-wrap',p.moneda,p.tipoMovimiento!=='ingreso'&&p.monto>0,true);
   document.getElementById('pbq-cat-hint').innerHTML = sug
     ? `Sugerida por tu historial: <b>${escapeHtml(sug)}</b> (puedes cambiarla)`
     : 'Sin sugerencia para este comercio: elige una categoría (o «Sin categoría»).';
@@ -23193,7 +23211,8 @@ function confirmarAprobarRapido(){
   if(!resuelto){ alert('Ya no se pudo resolver la cuenta/tarjeta — usa "Editar".'); return; }
   const cat=_leerCatPendiente('pbq-cat');
   if(cat===null){ alert('Elige una categoría (o «Sin categoría») antes de registrar.'); return; }
-  if(_registrarDesdePendiente(p, {desc:p.descripcion, tipoMov:p.tipoMovimiento||'gasto', destino:resuelto, monto:p.monto, currency:p.moneda, fecha:p.fecha, cat, hora:horaDePendiente(p)})){
+  if(!validarDeudaNuevaWeb('pbq-deuda')) return;
+  if(_registrarDesdePendiente(p, {desc:p.descripcion, tipoMov:p.tipoMovimiento||'gasto', destino:resuelto, monto:p.monto, currency:p.moneda, fecha:p.fecha, cat, hora:horaDePendiente(p), descSelId:'pbq-descpf'})){
     cerrarAprobarRapidoModal();
   }
 }
@@ -23228,6 +23247,7 @@ function abrirAprobarPendienteModal(id){
   updateCategorySelects();
   _llenarSelectCatPendiente('pbm-cat', suggestCategoriaForDesc(p.descripcion));
   document.getElementById('pbm-hora').value = horaDePendiente(p);
+  refrescarDescPFPend(true);
   const dup = p.monto>0 ? buscarPosibleDuplicado(p.fecha, p.monto) : null;
   const avisoEl = document.getElementById('pbm-duplicado-aviso');
   avisoEl.style.display = dup ? 'block' : 'none';
@@ -23252,6 +23272,12 @@ function onAprobarPendienteMetodoChange(){
     const t=getTarjeta(document.getElementById('pbm-tarjeta').value);
     if(t) document.getElementById('pbm-currency').value=t.currency||'PEN';
   }
+  refrescarDescPFPend();
+}
+// ➖/🤝 en el modal de editar pendiente: solo para gastos; depende de la moneda elegida.
+function refrescarDescPFPend(reset){
+  const tipo=document.getElementById('pbm-tipo-mov'), cur=document.getElementById('pbm-currency'); if(!tipo||!cur) return;
+  refrescarDescPF('pbm-descpf','pbm-descpf-wrap',cur.value,tipo.value!=='ingreso',reset===true);
 }
 function confirmarAprobarPendiente(){
   const p=pendientesBanco.find(x=>x.id===aprobarPendienteId);
@@ -23278,7 +23304,8 @@ function confirmarAprobarPendiente(){
     if(!tarjetaId){ alert('Selecciona una tarjeta.'); return; }
     destino={tipo:'tarjeta', id:tarjetaId};
   }
-  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora})){
+  if(tipoMov!=='ingreso' && !validarDeudaNuevaWeb('pbm-deuda')) return;
+  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId:'pbm-descpf'})){
     cerrarAprobarPendienteModal();
   }
 }
