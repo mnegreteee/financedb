@@ -3806,9 +3806,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.11';
-const APP_VERSION_DATE = '14/10/26 - 21:10'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Aprobaciones: al aprobar o editar un gasto del banco ahora puedes descontarlo de un pago frecuente o cargarlo a la deuda de una persona (igual que al registrar un gasto o consumo).'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.12';
+const APP_VERSION_DATE = '14/10/26 - 21:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Editar movimiento de cuenta: ahora puedes elegir o cambiar si el gasto se descuenta de un pago frecuente y/o se carga a la deuda de una persona, igual que en los consumos de tarjeta.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10393,7 +10393,7 @@ function setType(t){
 // tipo es "Ahorro", solo las de ahorro). preservar = cuenta que debe seguir
 // apareciendo (ej. al editar un movimiento viejo).
 function refrescarCuentasMov(preservar){
-  refrescarDescPF('f-descpf','f-descpf-wrap',document.getElementById('f-currency').value,currentType==='expense'&&!state.editId);
+  refrescarDescPF('f-descpf','f-descpf-wrap',document.getElementById('f-currency').value,currentType==='expense',false,state.editId||'');
   const sel=document.getElementById('f-account'); if(!sel) return;
   const mon=document.getElementById('f-currency').value==='USD'?'USD':'PEN';
   const soloAh=(currentType==='ahorro');
@@ -10433,6 +10433,8 @@ function editMovimiento(id){
   setType(m.type);
   refrescarCuentasMov(m.account);
   document.getElementById('f-account').value=m.account;
+  // ➖/🤝 preselecciona el pago frecuente / la deuda que ya tenga enlazado este gasto
+  refrescarDescPF('f-descpf','f-descpf-wrap',m.currency||'PEN',m.type==='expense',true,id);
   document.getElementById('modal-overlay').classList.add('open');
 }
 function revertAccount(m){
@@ -10946,7 +10948,11 @@ function saveMovimiento(){
   const esNuevoMov=!state.editId;
   pushMovimiento(mov);
   if(esNuevoMov && currentType==='expense') aplicarDescuentoPF('f-descpf',desc,amount,mov.id,date,currency);
-  else if(!esNuevoMov) actualizarDescuentoPorOrigenWeb(mov.id,amount);
+  else if(!esNuevoMov){
+    actualizarDescuentoPorOrigenWeb(mov.id,amount);
+    if(currentType==='expense') cambiarVinculosConsumoWeb('f-descpf',desc,amount,mov.id,date,currency);
+    else quitarDescuentosPorOrigenWeb([mov.id]); // un ingreso/ahorro no descuenta de pagos ni se carga a deudas
+  }
   if(esNuevoMov){
     const sym=currency==='USD'?'$':'S/';
     logActividad('movimiento', `${desc} — ${sym} ${numFmtSigned(amount,2)} (${account})`, {movId:mov.id});
