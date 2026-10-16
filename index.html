@@ -2009,11 +2009,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="section-header"><div class="section-title">Meta de ahorro</div></div>
     <div class="proj-goal-row">
       <div style="font-size:13px;color:var(--text2);flex:1">Meta en Soles (S/)</div>
-      <input class="proj-goal-input" id="proj-goal-soles" type="number" placeholder="20000" oninput="renderProyeccion()">
+      <input class="proj-goal-input" id="proj-goal-soles" type="number" placeholder="20000" oninput="setProjGoal(false)" onchange="setProjGoal(true)">
     </div>
     <div class="proj-goal-row" style="border-bottom:none">
       <div style="font-size:13px;color:var(--text2);flex:1">Meta en Dólares ($)</div>
-      <input class="proj-goal-input" id="proj-goal-dolar" type="number" placeholder="3000" oninput="renderProyeccion()">
+      <input class="proj-goal-input" id="proj-goal-dolar" type="number" placeholder="3000" oninput="setProjGoal(false)" onchange="setProjGoal(true)">
     </div>
   </div>
   <div class="mid-grid">
@@ -3814,9 +3814,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.14';
-const APP_VERSION_DATE = '16/10/26 - 07:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Diseño en el teléfono: los formularios (consumos, movimientos, etc.) ya no tienen los recuadros pegados o encimados; más espacio entre campos, campos más altos y fáciles de tocar, y sin desbordes de fecha/hora.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.15';
+const APP_VERSION_DATE = '16/10/26 - 13:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Correcciones de la auditoría: una transferencia o compra "Sin categoría" ya no puede trabar la subida de movimientos a la nube, y las metas de Proyección ya no se pisan con los valores por defecto al entrar a esa página.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4864,6 +4864,9 @@ function todayLocalISO(){
 // así TODOS quedan con hora, sin tener que acordarse de ponerla en cada sitio.
 function pushMovimiento(mov){
   if(!mov.hora) mov.hora = horaLimaActual();
+  // Firestore rechaza cualquier campo con valor undefined (p. ej. "cat" cuando se elige "Sin categoría" en una
+  // transferencia o compra): si uno se colara, fallaría la subida de TODOS los movimientos pendientes. Se quitan acá.
+  Object.keys(mov).forEach(k=>{ if(mov[k]===undefined) delete mov[k]; });
   state.movimientos.push(mov);
 }
 
@@ -11678,12 +11681,26 @@ function renderCierreProyeccion(){
     }
   });
 }
+// Meta de ahorro editada a mano: se guarda en state y, al terminar de editar (onchange), en la nube.
+function setProjGoal(guardar){
+  if(!state.projGoals) state.projGoals={soles:20000,dolar:3000};
+  const vS=parseFloat(document.getElementById('proj-goal-soles').value), vD=parseFloat(document.getElementById('proj-goal-dolar').value);
+  if(vS>0) state.projGoals.soles=vS;
+  if(vD>0) state.projGoals.dolar=vD;
+  renderProyeccion();
+  if(guardar) saveState();
+}
 function renderProyeccion(){
   renderCierreProyeccion();
   renderMetasAhorro();
-  const goalS=parseFloat(document.getElementById('proj-goal-soles').value)||20000;
-  const goalD=parseFloat(document.getElementById('proj-goal-dolar').value)||3000;
-  if(state.projGoals){state.projGoals.soles=goalS;state.projGoals.dolar=goalD;}
+  // Las metas guardadas mandan: los inputs se rellenan desde state (antes era al revés y, al entrar a esta
+  // página antes de que cargara la nube, las metas guardadas se pisaban con 20000/3000).
+  if(!state.projGoals) state.projGoals={soles:20000,dolar:3000};
+  const goalS=parseFloat(state.projGoals.soles)||20000;
+  const goalD=parseFloat(state.projGoals.dolar)||3000;
+  const _iS=document.getElementById('proj-goal-soles'), _iD=document.getElementById('proj-goal-dolar');
+  if(_iS&&document.activeElement!==_iS) _iS.value=goalS;
+  if(_iD&&document.activeElement!==_iD) _iD.value=goalD;
 
   // Helper: ¿esta cuenta es de ahorro en la moneda indicada? (incluye las
   // cuentas por defecto y las personalizadas tipo "ahorro")
@@ -25193,6 +25210,8 @@ function initFirebase(){
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    // Red de seguridad: si algún objeto llega con un campo undefined, Firestore lo omite en vez de rechazar la escritura completa.
+    try{ db.settings({ignoreUndefinedProperties:true}); }catch(e){ console.warn('No se pudo aplicar ignoreUndefinedProperties:', e); }
     DOC_REF = db.collection('users').doc('mnegreteee');
   } catch(e){ console.warn('Firebase init error:',e); }
 
