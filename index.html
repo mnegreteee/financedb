@@ -3814,9 +3814,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.15';
-const APP_VERSION_DATE = '16/10/26 - 13:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Correcciones de la auditoría: una transferencia o compra "Sin categoría" ya no puede trabar la subida de movimientos a la nube, y las metas de Proyección ya no se pisan con los valores por defecto al entrar a esa página.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.16';
+const APP_VERSION_DATE = '16/10/26 - 14:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Menos escrituras en Firestore: lastUpdated y editId ya no se suben como secciones en cada guardado, y el latido del historial de sesiones pasa de cada 5 min a cada 30 min y solo si usaste la app.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3904,7 +3904,10 @@ let _lastSyncedMeta = null;
 // — nunca se sincronizan ni se fusionan entre dispositivos (si Device B
 // adoptara el mes que Device A estaba viendo, saltaría de mes solo, sin
 // que nadie lo pidiera).
-const TC_KEYS_LOCALES_NO_SYNC = new Set(['currentYear','currentMonth','currentTab']);
+// lastUpdated y editId son datos locales de la sesión: antes se escribían como secciones en cada guardado
+// (lastUpdated cambiaba SIEMPRE, y editId en cada edición) y disparaban en el otro dispositivo el aviso
+// "Actualizado con cambios de otro dispositivo" sin que hubiera ningún dato real distinto.
+const TC_KEYS_LOCALES_NO_SYNC = new Set(['currentYear','currentMonth','currentTab','lastUpdated','editId']);
 // Extrae "meta" (state sin movimientos) de forma consistente — se usa
 // tanto al guardar como al capturar la foto de sincronización.
 function _snapshotMeta(){
@@ -10673,10 +10676,16 @@ async function registrarNuevaSesion(){
     if(document.getElementById('seguridad-overlay').classList.contains('open')) renderHistorialSesiones();
   }
 }
-function actualizarUltimaActividadSesion(){
+// Latido de la sesión: antes escribía en la nube cada 5 minutos mientras la pestaña estuviera abierta (~288
+// escrituras al día por pestaña), aunque no se tocara nada. Ahora: cada 30 minutos y solo si hubo interacción
+// desde el último latido; al ocultar/cerrar la pestaña se guarda igual (forzar=true).
+let _ultimaInteraccionMs=Date.now(), _ultimoLatidoMs=0;
+['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{ _ultimaInteraccionMs=Date.now(); },{passive:true,capture:true}));
+function actualizarUltimaActividadSesion(forzar){
   if(!sesionActualId||!state.historialSesiones) return;
+  if(!forzar && _ultimaInteraccionMs<_ultimoLatidoMs) return; // nadie tocó la app desde el último latido
   const s=state.historialSesiones.find(x=>x.id===sesionActualId);
-  if(s){ s.ultimaActividad=new Date().toISOString(); guardarSesionesEnLaNubeSinRiesgo(); }
+  if(s){ s.ultimaActividad=new Date().toISOString(); _ultimoLatidoMs=Date.now(); guardarSesionesEnLaNubeSinRiesgo(); }
 }
 // Variante específica para el historial de sesiones (línea abajo) — antes
 // tenía el MISMO nombre que tiempoRelativo() de arriba, y al ser la
@@ -13076,8 +13085,9 @@ function executeDeleteMonths(){
 // ── AUTENTICACIÓN REAL (Firebase Auth) ────────────────
 // Ya no se guardan contraseñas ni hashes en Firestore/HTML — Firebase Auth
 // verifica las credenciales del lado del servidor. Las reglas de Firestore
-// exigen request.auth != null, así que sin sesión iniciada no se puede leer
-// ni escribir nada (ver README de reglas).
+// exigen sesión iniciada Y que el correo sea exactamente el del dueño de la app
+// (request.auth.token.email == '…'), así que ninguna otra cuenta del proyecto
+// puede leer ni escribir estos datos (reglas verificadas el 16/10/26).
 let currentUser = null;
 let inactivityMinutes = parseInt(localStorage.getItem('miguel_mf_inactivity')||'5');
 let inactivityTimer = null;
@@ -25189,9 +25199,9 @@ loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();renderReloj
 // pestaña esté abierta, y también justo antes de que se oculte/cierre (el
 // mejor esfuerzo posible, ya que no existe un evento 100% confiable de
 // "el usuario se fue" en la web).
-setInterval(actualizarUltimaActividadSesion, 5*60*1000);
-document.addEventListener('visibilitychange', ()=>{ if(document.hidden) actualizarUltimaActividadSesion(); });
-window.addEventListener('beforeunload', actualizarUltimaActividadSesion);
+setInterval(()=>actualizarUltimaActividadSesion(false), 30*60*1000);
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden) actualizarUltimaActividadSesion(true); });
+window.addEventListener('beforeunload', ()=>actualizarUltimaActividadSesion(true));
 (function(){
   const el = document.getElementById('app-version-label');
   if(el) el.textContent = 'Versión '+APP_VERSION_DATE;
