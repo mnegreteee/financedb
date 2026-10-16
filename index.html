@@ -704,7 +704,16 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
   .sum-val{font-size:18px;}
   /* Modales */
   .modal,.modal-lg{width:95vw!important;max-height:92vh;}
-  .field-row{flex-direction:column;gap:0;}
+  /* Formularios en el teléfono: antes este bloque ponía gap:0 a una grilla de 2 columnas (flex-direction no hace nada en una grilla),
+     por eso Fecha/Hora, Moneda/Estado, etc. quedaban pegados o uno encima del otro. Ahora: separación real, sin desbordes y objetivos táctiles cómodos. */
+  .modal{padding:20px 18px;}
+  .field{margin-bottom:16px;}
+  .field label{margin-bottom:6px;line-height:1.35;}
+  .field-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;}
+  .field-row>.field{min-width:0;}
+  .field-row>.field:only-child{grid-column:1/-1;}
+  .field input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),.field select,.field textarea{font-size:16px;padding:11px 12px;min-height:46px;max-width:100%;min-width:0;}
+  .field input[type=date],.field input[type=time],.field input[type=month]{-webkit-appearance:none;appearance:none;display:block;text-align:left;}
   /* Config dropdown en móvil: anclado a la PANTALLA (position:fixed), no al
      botón — así nunca se abre fuera de la vista sin importar dónde esté el
      botón "Config" dentro de la nav. El "top" exacto lo calcula toggleConfig()
@@ -738,7 +747,6 @@ body.compact-mode .main-grid{grid-template-columns:1fr 1fr!important;}
 body.compact-mode .container{padding:12px!important;}
 body.compact-mode .tc-grid{grid-template-columns:1fr!important;}
 body.compact-mode .modal,.modal-lg{width:95vw!important;}
-body.compact-mode .field-row{flex-direction:column!important;}
 body.compact-mode .nav-right .last-updated{display:none!important;}
 body.compact-mode .anual-table{font-size:11px;}
 
@@ -3806,9 +3814,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.64.13';
-const APP_VERSION_DATE = '15/10/26 - 07:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Chat IA: la barra superior del chat (AsisBot) ahora cambia al mismo color que elijas para el círculo del chat en Configuración.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.64.14';
+const APP_VERSION_DATE = '16/10/26 - 07:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Diseño en el teléfono: los formularios (consumos, movimientos, etc.) ya no tienen los recuadros pegados o encimados; más espacio entre campos, campos más altos y fáciles de tocar, y sin desbordes de fecha/hora.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
