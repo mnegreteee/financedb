@@ -1035,6 +1035,14 @@ body.compact-mode .anual-table{font-size:11px;}
 .tc-pl-mc i{display:block;width:calc(var(--w)*.13);height:calc(var(--w)*.13);border-radius:50%;background:#eb001b;opacity:.95;}
 .tc-pl-mc i+i{background:#f79e1b;margin-left:calc(var(--w)*-.06);mix-blend-mode:normal;opacity:.92;}
 
+/* ══ Ubicación del consumo (mapa) ══ */
+.ubic-pin{background:none;border:0;padding:0 2px;margin-left:5px;cursor:pointer;vertical-align:middle;line-height:1;color:var(--accent);display:inline-flex;}
+.ubic-pin svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+#ubic-map{height:300px;border-radius:10px;overflow:hidden;background:var(--bg3);border:1px solid var(--border2);}
+.ubic-marker{background:none;border:0;}
+.ubic-res{display:block;width:100%;text-align:left;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;padding:8px 10px;margin-bottom:4px;cursor:pointer;font-family:inherit;}
+.ubic-res:hover{border-color:var(--accent);}
+
 /* ══ DASHBOARD: Próximos eventos (cuenta regresiva) ══ */
 .dash-event-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
 .dash-event-row:last-child{border-bottom:none;}
@@ -3577,6 +3585,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
     </div>
     <div class="field"><label>Nota (opcional)</label><textarea id="f-note" placeholder="Agrega un comentario o detalle..."></textarea></div>
+    <div class="field" id="mov-ubic"></div>
     <div class="field" id="f-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="f-descpf"><option value="">No descontar</option></select>
     </div>
@@ -3847,9 +3856,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.66.2';
-const APP_VERSION_DATE = '16/10/26 - 22:22'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Movimientos: el gráfico de barras ahora crece para igualar la altura de la lista y ya no queda espacio vacío debajo (en pantallas anchas).'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.67.0';
+const APP_VERSION_DATE = '17/10/26 - 13:23'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: mapa del consumo. Cada movimiento o consumo de tarjeta puede guardar su lugar (📍): ver en mapa, abrir en Google Maps, cambiar lugar, buscar dirección y sugerencia automática por comercio.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9051,7 +9060,7 @@ function renderMovimientos(){
       <div class="swipe-delete-bg" onclick="deleteMovimiento('${m.id}',event)">🗑 Eliminar</div>
       <div class="mov-item ${cls} swipe-target" ${clickHandler} ontouchstart="swipeStart(event,this)" ontouchmove="swipeMove(event,this)" ontouchend="swipeEnd(event,this,'${m.id}')">
       <div class="mov-left">${checkbox}<div class="mov-dot ${cls}">${ic}</div>
-        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}</div>${noteHtml}</div>
+        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}${ubicPinHtml('mov',m.id,m.ubicacion)}</div>${noteHtml}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;margin-left:8px">
         <div class="mov-amount ${cls}">${M(amtStr)}</div>
@@ -10405,6 +10414,7 @@ function closeTCModal(){document.getElementById('tc-modal-overlay').classList.re
 // ── MOVIMIENTO MODAL ──────────────────────────────────
 function openModal(){
   state.editId=null;
+  ubicTmp.mov=null; ubicPintarCampo('mov');
   document.getElementById('modal-title-text').textContent='Nuevo movimiento';
   ['f-desc','f-note'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-amount').value='';
@@ -10478,6 +10488,7 @@ function onMovAccountChange(){
 function editMovimiento(id){
   const m=state.movimientos.find(x=>x.id===id);if(!m)return;
   state.editId=id;
+  ubicTmp.mov=ubicLimpia(m.ubicacion); ubicPintarCampo('mov');
   document.getElementById('modal-title-text').textContent='Editar movimiento';
   document.getElementById('f-desc').value=m.desc;
   document.getElementById('f-amount').value=m.amount;
@@ -11006,6 +11017,7 @@ function saveMovimiento(){
   if(cat) mov.cat=cat;
   if(note) mov.note=note;
   if(hora) mov.hora=hora;
+  { const _ub=ubicLimpia(ubicTmp.mov); if(_ub) mov.ubicacion=_ub; else delete mov.ubicacion; }
   // País: solo si YA se detectó en segundo plano (caché lista) — nunca se
   // espera a que termine, para no demorar el guardado ni un segundo.
   if(!state.editId){
@@ -14668,7 +14680,7 @@ function tcMovTableRow(m, cardCur){
   const mFmt=tcMovAmountFmt(m,cardCur);
   return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
+    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}${ubicPinHtml('tc',m.id,m.ubicacion)}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
     <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked,this)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
@@ -14693,7 +14705,7 @@ function tcMovCardHtml(m, cardCur){
   return `<div class="tc-mov-card ${m.pagado?'paid-row':''}" id="tc-row-${m.id}" style="--catcolor:${catColor}">
     <input type="checkbox" class="tc-check tc-sel-cb" id="tc-cb-${m.id}" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">
     <div class="tc-mov-card-body" onclick="document.getElementById('tc-cb-${m.id}').click()">
-      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
+      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}${ubicPinHtml('tc',m.id,m.ubicacion)}</div>
       <div class="tc-mov-card-meta">
         <span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span>
         <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>
@@ -15732,6 +15744,7 @@ function onConsumoTarjetaChange(){
 }
 function openAddMovTC(){
   editingTCMovId=null;
+  ubicTmp.tcm=null;
   populateConsumoTarjetaSelect(currentTCId);
   document.getElementById('tc-m-tarjeta').disabled=false;
   const t=getTarjeta(currentTCId);
@@ -15751,6 +15764,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-tea').value='';
   onEsCuotaChange();
   refrescarDescPFTC(true);
+  ubicPintarCampo('tcm');
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15760,6 +15774,7 @@ function openAddMovTC(){
 function openAddMovTCFromList(){
   if(!(state.tarjetas||[]).length){ alert('Primero agrega una tarjeta con "+ Agregar tarjeta".'); return; }
   editingTCMovId=null;
+  ubicTmp.tcm=null;
   populateConsumoTarjetaSelect(null);
   document.getElementById('tc-m-tarjeta').disabled=false;
   document.getElementById('tc-mov-modal-title').textContent='Agregar consumo';
@@ -15778,6 +15793,7 @@ function openAddMovTCFromList(){
   onEsCuotaChange();
   onConsumoTarjetaChange(); // fija la moneda según la primera tarjeta seleccionada
   refrescarDescPFTC(true);
+  ubicPintarCampo('tcm');
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15787,6 +15803,7 @@ function editTCMov(movId){
   const m=movs.find(x=>x.id===movId); if(!m) return;
   const t=getTarjeta(currentTCId);
   editingTCMovId=movId;
+  ubicTmp.tcm=ubicLimpia(m.ubicacion);
   document.getElementById('tc-mov-modal-title').textContent='Editar consumo';
   populateConsumoTarjetaSelect(currentTCId);
   document.getElementById('tc-m-tarjeta').disabled=true; // no se reasigna de tarjeta al editar, solo al crear
@@ -15802,6 +15819,7 @@ function editTCMov(movId){
   document.getElementById('tc-m-es-cuota').closest('.field').style.display='none'; // no se puede "convertir a cuotas" algo que ya existe, solo al crear
   onEsCuotaChange();
   refrescarDescPFTC(true);
+  ubicPintarCampo('tcm');
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -15893,6 +15911,7 @@ function saveTCMov(){
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
       foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat; foundMov.currency=currency;
+      { const _ub=ubicLimpia(ubicTmp.tcm); if(_ub) foundMov.ubicacion=_ub; else delete foundMov.ubicacion; }
       actualizarDescuentoPorOrigenWeb(foundMov.id,monto);
       cambiarVinculosConsumoWeb('tc-m-descpf',desc,monto,foundMov.id,fecha,currency);
       if(hora) foundMov.hora=hora; else delete foundMov.hora;
@@ -15914,6 +15933,7 @@ function saveTCMov(){
     if(!t.movs[newMk]) t.movs[newMk]=[];
     const nuevoMov={id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat,currency};
     if(hora) nuevoMov.hora=hora;
+    { const _ub=ubicLimpia(ubicTmp.tcm); if(_ub) nuevoMov.ubicacion=_ub; }
     const paisCache=getPaisCache();
     if(paisCache){ nuevoMov.pais=paisCache.pais; nuevoMov.paisCode=paisCache.code; }
     t.movs[newMk].push(nuevoMov);
@@ -21765,6 +21785,217 @@ function tcPlasticoHTML(t,ancho){
     +`</div>`;
 }
 
+// ══════════════════════════════════════════════════════
+//  UBICACIÓN DEL CONSUMO (mapa)
+//  Cada movimiento / consumo de tarjeta puede llevar `ubicacion`:
+//  {lat, lng, nombre, prec (m), fuente, ts}. Mapa: Leaflet + OpenStreetMap
+//  (gratis, sin clave). Nombre del lugar: Nominatim (gratis). El botón
+//  "Abrir en Google Maps" es un simple enlace con las coordenadas.
+// ══════════════════════════════════════════════════════
+const UBIC_PIN_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/></svg>';
+const ubicTmp={mov:null,tcm:null};
+function ubicLimpia(u){
+  if(!u||typeof u!=='object') return null;
+  const lat=Number(u.lat), lng=Number(u.lng);
+  if(!isFinite(lat)||!isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180||(lat===0&&lng===0)) return null;
+  const o={lat:+lat.toFixed(6), lng:+lng.toFixed(6)};
+  if(u.nombre) o.nombre=String(u.nombre).slice(0,160);
+  const pr=Number(u.prec); if(isFinite(pr)&&pr>0) o.prec=Math.round(pr);
+  if(u.fuente) o.fuente=String(u.fuente).slice(0,20);
+  if(u.ts) o.ts=String(u.ts).slice(0,32);
+  return o;
+}
+function ubicUrlMaps(u){ return 'https://www.google.com/maps?q='+encodeURIComponent(u.lat+','+u.lng); }
+function ubicFuenteTxt(f){
+  return ({atajo:'GPS del iPhone al pagar',telegram:'enviada por Telegram',gps:'GPS de este dispositivo',manual:'puesta a mano',sugerida:'recordada de este comercio'})[f]||'lugar guardado';
+}
+function ubicNormComercio(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9áéíóúñü ]+/g,' ').replace(/\s+/g,' ').trim(); }
+// Último lugar guardado para un comercio con el mismo nombre (sugerencia, no certeza: una cadena tiene varios locales).
+function ubicSugerida(desc){
+  const k=ubicNormComercio(desc); if(!k) return null;
+  let best=null, bestKey='';
+  const ver=(d,h,u,nombre)=>{
+    if(!u||ubicNormComercio(nombre)!==k) return;
+    const lu=ubicLimpia(u); if(!lu) return;
+    const key=String(d||'')+' '+String(h||'');
+    if(!best||key>bestKey){ best=lu; bestKey=key; }
+  };
+  (state.movimientos||[]).forEach(m=>ver(m.date,m.hora,m.ubicacion,m.desc));
+  (state.tarjetas||[]).forEach(t=>Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>ver(m.fecha,m.hora,m.ubicacion,m.desc))));
+  return best;
+}
+function ubicPinHtml(kind,id,u){
+  if(!ubicLimpia(u)) return '';
+  return `<button type="button" class="ubic-pin" onclick="event.stopPropagation();ubicVerDe('${kind}','${String(id).replace(/'/g,'')}')" title="Ver dónde fue" aria-label="Ver ubicación">${UBIC_PIN_SVG}</button>`;
+}
+function ubicVerDe(kind,id){
+  let u=null, titulo='';
+  if(kind==='mov'){ const m=(state.movimientos||[]).find(x=>x.id===id); if(m){ u=m.ubicacion; titulo=m.desc; } }
+  else if(kind==='tc'){ (state.tarjetas||[]).forEach(t=>Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>{ if(m.id===id){ u=m.ubicacion; titulo=m.desc; } }))); }
+  else if(kind==='pb'){ const p=(typeof pendientesBanco!=='undefined'?pendientesBanco:[]).find(x=>x.id===id); if(p){ u=p.ubicacion; titulo=p.descripcion; } }
+  u=ubicLimpia(u); if(u) ubicVer(u,titulo);
+}
+function ubicTemaOscuro(){
+  const m=(getComputedStyle(document.body).backgroundColor||'').match(/\d+/g);
+  if(!m||m.length<3) return true;
+  return (0.299*m[0]+0.587*m[1]+0.114*m[2])<128;
+}
+function ubicCargarLeaflet(){
+  return new Promise((res,rej)=>{
+    if(window.L&&window.L.map) return res(window.L);
+    if(!document.getElementById('leaflet-css')){
+      const l=document.createElement('link'); l.id='leaflet-css'; l.rel='stylesheet';
+      l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(l);
+    }
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload=()=>window.L?res(window.L):rej(new Error('Leaflet no disponible'));
+    s.onerror=()=>rej(new Error('No se pudo cargar el mapa (¿sin internet?)'));
+    document.head.appendChild(s);
+  });
+}
+let _ubicMapa=null,_ubicMarker=null,_ubicSel=null,_ubicCtx=null,_ubicModo='ver',_ubicRevTimer=null,_ubicRes=[],_ubicSug=null;
+function ubicIconoMarcador(){
+  return L.divIcon({className:'ubic-marker',iconSize:[30,40],iconAnchor:[15,38],
+    html:'<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 38C13 31 3 25 3 14a12 12 0 0 1 24 0c0 11-10 17-12 24z" fill="#5b8def" stroke="#fff" stroke-width="2"/><circle cx="15" cy="14" r="4.5" fill="#fff"/></svg>'});
+}
+function ubicMapaCrear(lat,lng,zoom,editable){
+  return ubicCargarLeaflet().then(L=>{
+    if(_ubicMapa){ _ubicMapa.remove(); _ubicMapa=null; _ubicMarker=null; }
+    _ubicMapa=L.map(document.getElementById('ubic-map')).setView([lat,lng],zoom);
+    const osc=ubicTemaOscuro();
+    L.tileLayer(osc?'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png':'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {maxZoom:19,subdomains:osc?'abcd':'abc',attribution:'© OpenStreetMap'+(osc?' © CARTO':'')}).addTo(_ubicMapa);
+    if(editable){
+      _ubicMapa.on('click',e=>{ ubicMover(e.latlng.lat,e.latlng.lng,'manual'); });
+    }
+    setTimeout(()=>{ if(_ubicMapa) _ubicMapa.invalidateSize(); },80);
+    return L;
+  });
+}
+function ubicPonerMarcador(lat,lng,editable){
+  if(!_ubicMapa) return;
+  if(_ubicMarker){ _ubicMarker.setLatLng([lat,lng]); return; }
+  _ubicMarker=L.marker([lat,lng],{draggable:!!editable,icon:ubicIconoMarcador()}).addTo(_ubicMapa);
+  if(editable) _ubicMarker.on('dragend',()=>{ const p=_ubicMarker.getLatLng(); ubicMover(p.lat,p.lng,'manual'); });
+}
+function ubicInfoPintar(){
+  const el=document.getElementById('ubic-info'); const a=document.getElementById('ubic-gmaps'); const g=document.getElementById('ubic-guardar');
+  const u=_ubicSel;
+  if(!u){ el.textContent=_ubicModo==='elegir'?'Busca un lugar, usa tu ubicación o toca el mapa para poner el pin.':''; a.style.display='none'; if(g) g.disabled=true; return; }
+  a.style.display=''; a.href=ubicUrlMaps(u); if(g) g.disabled=false;
+  el.innerHTML=`<div style="color:var(--text);font-weight:600">${escapeHtml(u.nombre||'Buscando el nombre del lugar…')}</div>`
+    +`<div style="font-size:11px;color:var(--text3)">${escapeHtml(ubicFuenteTxt(u.fuente))}${u.prec?' · precisión ±'+u.prec+' m':''} · ${u.lat.toFixed(5)}, ${u.lng.toFixed(5)}</div>`;
+}
+async function ubicNombreInverso(lat,lng){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=es`);
+    const d=await r.json(); const a=d.address||{};
+    const lugar=d.name||a.shop||a.amenity||a.building||a.tourism||a.leisure||'';
+    const via=[a.road,a.house_number].filter(Boolean).join(' ');
+    const zona=a.suburb||a.neighbourhood||a.city_district||a.city||a.town||'';
+    return [lugar,via,zona].filter((x,i,arr)=>x&&arr.indexOf(x)===i).join(', ')||String(d.display_name||'').split(',').slice(0,3).join(',').trim();
+  }catch(e){ return ''; }
+}
+function ubicMover(lat,lng,fuente,prec,nombre){
+  _ubicSel={lat:+(+lat).toFixed(6),lng:+(+lng).toFixed(6),fuente:fuente||'manual'};
+  if(prec) _ubicSel.prec=Math.round(prec);
+  if(nombre) _ubicSel.nombre=nombre;
+  ubicPonerMarcador(_ubicSel.lat,_ubicSel.lng,true);
+  if(_ubicMapa) _ubicMapa.panTo([_ubicSel.lat,_ubicSel.lng]);
+  ubicInfoPintar();
+  if(!nombre){
+    clearTimeout(_ubicRevTimer);
+    const ref=_ubicSel;
+    _ubicRevTimer=setTimeout(async()=>{
+      const n=await ubicNombreInverso(ref.lat,ref.lng);
+      if(_ubicSel===ref){ if(n) ref.nombre=n; else ref.nombre='Lugar sin nombre'; ubicInfoPintar(); }
+    },700);
+  }
+}
+function ubicAbrirOverlay(titulo,modo){
+  _ubicModo=modo;
+  document.getElementById('ubic-title').textContent=titulo;
+  document.getElementById('ubic-buscar-wrap').style.display=modo==='elegir'?'block':'none';
+  document.getElementById('ubic-guardar').style.display=modo==='elegir'?'inline-flex':'none';
+  document.getElementById('ubic-resultados').innerHTML='';
+  document.getElementById('ubic-overlay').classList.add('open');
+}
+function ubicVer(u,titulo){
+  u=ubicLimpia(u); if(!u) return;
+  _ubicSel={...u}; _ubicCtx=null;
+  ubicAbrirOverlay('📍 '+(titulo||'Ubicación'),'ver');
+  ubicInfoPintar();
+  ubicMapaCrear(u.lat,u.lng,17,false).then(()=>ubicPonerMarcador(u.lat,u.lng,false))
+    .catch(e=>{ document.getElementById('ubic-map').innerHTML='<div style="padding:30px;text-align:center;color:var(--text3);font-size:12px">'+escapeHtml(e.message||'No se pudo cargar el mapa')+'<br>Aún puedes abrirlo en Google Maps con el botón de abajo.</div>'; });
+}
+function ubicAbrirPicker(ctx){
+  _ubicCtx=ctx;
+  const actual=ubicTmp[ctx]; _ubicSel=actual?{...actual}:null;
+  const desc=(document.getElementById(ctx==='mov'?'f-desc':'tc-m-desc')||{}).value||'';
+  _ubicSug=actual?null:ubicSugerida(desc);
+  ubicAbrirOverlay('📍 Ubicación del consumo','elegir');
+  const sb=document.getElementById('ubic-sug-btn');
+  if(_ubicSug){ sb.style.display='inline-flex'; sb.textContent='↺ Usar el lugar de la última vez'+(_ubicSug.nombre?': '+_ubicSug.nombre.slice(0,40):''); } else sb.style.display='none';
+  document.getElementById('ubic-q').value=desc;
+  ubicInfoPintar();
+  const c=_ubicSel||{lat:-12.0464,lng:-77.0428};
+  ubicMapaCrear(c.lat,c.lng,_ubicSel?17:12,true).then(()=>{ if(_ubicSel) ubicPonerMarcador(_ubicSel.lat,_ubicSel.lng,true); })
+    .catch(e=>{ document.getElementById('ubic-map').innerHTML='<div style="padding:30px;text-align:center;color:var(--text3);font-size:12px">'+escapeHtml(e.message||'No se pudo cargar el mapa')+'</div>'; });
+}
+function ubicUsarSugerida(){ if(_ubicSug) { ubicMover(_ubicSug.lat,_ubicSug.lng,'sugerida',_ubicSug.prec,_ubicSug.nombre); if(_ubicMapa) _ubicMapa.setView([_ubicSug.lat,_ubicSug.lng],17); } }
+function ubicUsarMiUbicacion(){
+  if(!navigator.geolocation){ alert('Este dispositivo no permite obtener la ubicación.'); return; }
+  document.getElementById('ubic-info').textContent='Obteniendo tu ubicación…';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude,longitude,accuracy}=pos.coords;
+    ubicMover(latitude,longitude,'gps',accuracy);
+    if(_ubicMapa) _ubicMapa.setView([latitude,longitude],17);
+  },err=>{
+    ubicInfoPintar();
+    alert(err&&err.code===1?'No diste permiso de ubicación. Actívalo en el navegador y vuelve a intentar.':'No se pudo obtener tu ubicación. Prueba de nuevo o búscala en el mapa.');
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+async function ubicBuscar(){
+  const q=(document.getElementById('ubic-q').value||'').trim(); if(q.length<3) return;
+  const box=document.getElementById('ubic-resultados'); box.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Buscando…</div>';
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&accept-language=es&q=${encodeURIComponent(q)}`);
+    _ubicRes=await r.json();
+    if(!_ubicRes.length){ box.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Sin resultados. Prueba con otra palabra o toca el mapa.</div>'; return; }
+    box.innerHTML=_ubicRes.map((x,i)=>`<button type="button" class="ubic-res" onclick="ubicElegirResultado(${i})">${escapeHtml(String(x.display_name||'').split(',').slice(0,4).join(','))}</button>`).join('');
+  }catch(e){ box.innerHTML='<div style="font-size:11px;color:var(--red);margin-bottom:6px">No se pudo buscar (¿sin internet?).</div>'; }
+}
+function ubicElegirResultado(i){
+  const x=_ubicRes[i]; if(!x) return;
+  const nombre=String(x.display_name||'').split(',').slice(0,3).join(',').trim();
+  ubicMover(parseFloat(x.lat),parseFloat(x.lon),'manual',null,nombre);
+  if(_ubicMapa) _ubicMapa.setView([parseFloat(x.lat),parseFloat(x.lon)],17);
+  document.getElementById('ubic-resultados').innerHTML='';
+}
+function ubicGuardar(){
+  if(!_ubicSel||!_ubicCtx) return;
+  const u=ubicLimpia({..._ubicSel,ts:new Date().toISOString()}); if(!u){ alert('Ubicación no válida.'); return; }
+  ubicTmp[_ubicCtx]=u; ubicPintarCampo(_ubicCtx); ubicCerrar();
+}
+function ubicCerrar(){
+  clearTimeout(_ubicRevTimer);
+  document.getElementById('ubic-overlay').classList.remove('open');
+  if(_ubicMapa){ try{ _ubicMapa.remove(); }catch(e){} _ubicMapa=null; _ubicMarker=null; }
+}
+function ubicQuitar(ctx){ ubicTmp[ctx]=null; ubicPintarCampo(ctx); }
+function ubicVerCampo(ctx){ const u=ubicTmp[ctx]; if(u) ubicVer(u,'Ubicación del consumo'); }
+function ubicPintarCampo(ctx){
+  const el=document.getElementById(ctx+'-ubic'); if(!el) return;
+  const u=ubicTmp[ctx];
+  if(!u){
+    el.innerHTML=`<label>📍 Ubicación <span style="font-size:10px;color:var(--text3)">(opcional — dónde fue el consumo)</span></label><div><button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicAbrirPicker('${ctx}')">＋ Agregar ubicación</button></div>`;
+    return;
+  }
+  el.innerHTML=`<label>📍 Ubicación</label><div style="font-size:12px;margin-bottom:6px">${escapeHtml(u.nombre||'Lugar guardado')} <span style="color:var(--text3)">· ${escapeHtml(ubicFuenteTxt(u.fuente))}</span></div>`
+    +`<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicVerCampo('${ctx}')">Ver mapa</button><button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicAbrirPicker('${ctx}')">Cambiar</button><button type="button" class="config-action-btn danger" style="font-size:11px" onclick="ubicQuitar('${ctx}')">Quitar</button></div>`;
+}
+
 // ── RENDER CALENDARIO ──────────────────────────────────
 
 function renderCalendario(){
@@ -23343,7 +23574,7 @@ function renderAprobacionesBanco(){
       <div class="pb-info">
         <div class="pb-info-top">
           <span class="pb-monto" style="color:${esIngreso?'var(--green)':'var(--text)'}">${sym} ${numFmt(p.monto)}</span>
-          <span class="pb-quien">${escapeHtml(p.descripcion||'Sin nombre')}</span>
+          <span class="pb-quien">${escapeHtml(p.descripcion||'Sin nombre')}${ubicPinHtml('pb',p.id,p.ubicacion)}</span>
           <span class="cp-badge ${esIngreso?'entregado':'en-camino'}">${esIngreso?'Ingreso':'Gasto'}</span>
         </div>
         <div class="pb-meta">${escapeHtml(p.banco||'')} · ${escapeHtml(p.tipoLabel||'')} · ${fmtFechaCorta(p.fecha)}${horaPendienteTxt(p)?' '+horaPendienteTxt(p):''}</div>
@@ -23409,12 +23640,16 @@ function _leerCatPendiente(id){
 }
 function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId}){
   if(tipoMov==='ingreso' && destino.tipo==='tarjeta'){ alert('No se puede registrar un ingreso a una tarjeta de crédito — elige una cuenta.'); return false; }
+  // Ubicación: la que mandó el bot / el atajo del iPhone, o (si no hay) el último lugar de ese comercio.
+  let ubPend=ubicLimpia(p&&p.ubicacion);
+  if(!ubPend){ const sg=tipoMov==='ingreso'?null:ubicSugerida(desc); if(sg) ubPend={...sg,fuente:'sugerida'}; }
   if(destino.tipo==='cuenta'){
     const mv={
       id:'pb-mov-'+Date.now(), type: tipoMov==='ingreso'?'income':'expense', desc, amount:monto,
       account:destino.id, date:fecha, currency, cat,
     };
     if(hora) mv.hora=hora; // hora real del correo; sin ella pushMovimiento usa la hora de la aprobación
+    if(ubPend) mv.ubicacion=ubPend;
     pushMovimiento(mv);
     if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, mv.id, fecha, currency);
   } else {
@@ -23424,6 +23659,7 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
     if(!t.movs) t.movs={};
     if(!t.movs[monthKey]) t.movs[monthKey]=[];
     const nuevoTc={ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency, hora:hora||horaLimaActual() };
+    if(ubPend) nuevoTc.ubicacion=ubPend;
     t.movs[monthKey].push(nuevoTc);
     if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, nuevoTc.id, fecha, currency);
   }
@@ -27690,6 +27926,34 @@ if(state.projGoals){
   </div>
 </div>
 
+<!-- MODAL UBICACIÓN DEL CONSUMO -->
+<div class="modal-overlay" id="ubic-overlay" onclick="if(event.target===this)ubicCerrar()">
+  <div class="modal" style="width:580px">
+    <div class="modal-title"><span id="ubic-title">📍 Ubicación</span><button class="modal-close" onclick="ubicCerrar()">✕</button></div>
+    <div id="ubic-buscar-wrap" style="display:none">
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input id="ubic-q" type="text" placeholder="Buscar lugar o dirección…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();ubicBuscar();}">
+        <button type="button" class="btn" onclick="ubicBuscar()">Buscar</button>
+      </div>
+      <div id="ubic-resultados"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicUsarMiUbicacion()">📍 Usar mi ubicación actual</button>
+        <button type="button" class="config-action-btn neutral" id="ubic-sug-btn" style="font-size:11px;display:none" onclick="ubicUsarSugerida()"></button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Toca el mapa o arrastra el pin para ajustar el punto exacto.</div>
+    </div>
+    <div id="ubic-map"></div>
+    <div id="ubic-info" style="font-size:12px;margin-top:10px;line-height:1.5;color:var(--text2)"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <a id="ubic-gmaps" class="btn" href="#" target="_blank" rel="noopener" style="text-decoration:none;font-size:12px">Abrir en Google Maps</a>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn" onclick="ubicCerrar()">Cerrar</button>
+        <button type="button" class="btn btn-primary" id="ubic-guardar" style="display:none" onclick="ubicGuardar()">Guardar lugar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONFIG TARJETA -->
 <div class="modal-overlay" id="tc-config-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeTCConfigModal')">
   <div class="modal" style="width:480px">
@@ -27935,6 +28199,7 @@ if(state.projGoals){
         <option value="📦 Otros">📦 Otros</option>
       </select>
     </div>
+    <div class="field" id="tcm-ubic"></div>
     <div class="field" id="tc-m-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="tc-m-descpf"><option value="">No descontar</option></select>
     </div>
