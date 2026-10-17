@@ -1006,6 +1006,29 @@ body.compact-mode .anual-table{font-size:11px;}
   .cal-dow{font-size:8px;padding:3px 0;}
 }
 
+
+/* ══ Logos de pagos frecuentes + tarjeta dibujada ══ */
+.cal-logos{display:flex;flex-wrap:wrap;gap:3px;}
+.cal-logo{position:relative;width:24px;height:24px;border-radius:50%;overflow:hidden;background:var(--bg3);border:1px solid var(--border2);cursor:pointer;flex-shrink:0;display:inline-flex;}
+.cal-logo img{width:100%;height:100%;object-fit:contain;display:block;}
+.cal-logo.hecho img{opacity:.4;}
+.cal-logo.hecho::after{content:'✅';position:absolute;right:-1px;bottom:-1px;font-size:9px;line-height:1;}
+@media(max-width:700px){.cal-logo{width:19px;height:19px;}.cal-logo.hecho::after{font-size:7px;}}
+.pf-logo-prev{width:44px;height:44px;border-radius:50%;background:var(--bg3);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:18px;flex-shrink:0;}
+.pf-logo-prev img{width:100%;height:100%;object-fit:contain;}
+.pf-logo-mini{width:20px;height:20px;border-radius:50%;object-fit:contain;vertical-align:middle;background:var(--bg3);}
+.tc-plastic{--w:96px;position:relative;width:var(--w);aspect-ratio:1.586;border-radius:calc(var(--w)*.08);overflow:hidden;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.35);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);}
+.tc-plastic.pl-claro{color:#1a1a1a;text-shadow:none;}
+.tc-plastic img.pl-foto{width:100%;height:100%;object-fit:cover;display:block;}
+.tc-plastic::before{content:'';position:absolute;right:-20%;top:-40%;width:80%;height:120%;border-radius:50%;background:rgba(255,255,255,.10);pointer-events:none;}
+.tc-pl-banco{position:absolute;left:8%;top:9%;right:8%;font-size:calc(var(--w)*.1);font-weight:800;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tc-pl-chip{position:absolute;left:8%;top:38%;width:calc(var(--w)*.17);height:calc(var(--w)*.125);border-radius:calc(var(--w)*.02);background:linear-gradient(135deg,#f6dc8c,#c9a13e);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);}
+.tc-pl-num{position:absolute;left:8%;bottom:9%;font-size:calc(var(--w)*.075);letter-spacing:.08em;font-weight:600;}
+.tc-pl-marca{position:absolute;right:8%;bottom:7%;font-size:calc(var(--w)*.12);font-weight:800;font-style:italic;line-height:1;}
+.tc-pl-mc{display:inline-flex;}
+.tc-pl-mc i{display:block;width:calc(var(--w)*.13);height:calc(var(--w)*.13);border-radius:50%;background:#eb001b;opacity:.95;}
+.tc-pl-mc i+i{background:#f79e1b;margin-left:calc(var(--w)*-.06);mix-blend-mode:normal;opacity:.92;}
+
 /* ══ DASHBOARD: Próximos eventos (cuenta regresiva) ══ */
 .dash-event-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
 .dash-event-row:last-child{border-bottom:none;}
@@ -3422,6 +3445,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div id="tc-detail-view" style="display:none">
     <div class="tc-detail-header">
       <button class="tc-back-btn" onclick="closeTCDetail()">← Volver</button>
+      <span id="tc-detail-plastic"></span>
       <div>
         <div class="tc-detail-title" id="tc-detail-title">BCP Visa</div>
         <div class="tc-detail-sub" id="tc-detail-sub">Ciclo: — | Pago: —</div>
@@ -3817,9 +3841,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.65.0';
-const APP_VERSION_DATE = '16/10/26 - 14:45'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Auditoría (bloques C–G): borrar o editar una transferencia afecta sus dos movimientos; editar un movimiento conserva país y datos del bot; importar JSON valida el archivo y pide confirmación; nombres de cuentas y categorías protegidos; fechas de kilometraje sin desfase; Escape cierra modales; búsqueda y metas con menos redibujos; botón ✕ más grande en el teléfono.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.66.0';
+const APP_VERSION_DATE = '16/10/26 - 20:14'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Calendario con logos: sube una imagen en cada pago frecuente y se ve en su día del calendario. Tarjetas de crédito con imagen de tarjeta dibujada (color del banco, marca y últimos 4 dígitos) o tu propia foto.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -14464,10 +14488,10 @@ function buildTCCard(t, idx, total){
   return `<div class="tc-card-item" id="tc-card-${t.id}" draggable="true" data-tid="${t.id}" ondragstart="tcDragStart(event)" ondragover="tcDragOver(event)" ondrop="tcDrop(event)" ondragend="tcDragEnd(event)" onclick="openTCDetail('${t.id}')" style="--tc-color:${col}">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col};border-radius:var(--radius) var(--radius) 0 0"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
-      <div>
+      <div style="display:flex;gap:10px;align-items:center;min-width:0">${tcPlasticoHTML(t,96)}<div style="min-width:0">
         <div class="tc-bank-label">${escapeHtml(t.banco)||'—'}${t.nota&&t.nota.trim()?` <span title="${escapeHtml(t.nota.trim())}" style="font-size:11px;cursor:help">📌</span>`:''}</div>
-        <div class="tc-cat-label">${t.cat||'—'}</div>
-      </div>
+        <div class="tc-cat-label" style="margin-bottom:0">${escapeHtml(t.cat||'—')}</div>
+      </div></div>
       <div style="display:flex;align-items:center;gap:6px">
         <span style="display:flex;flex-direction:column;line-height:1">
           <span onclick="event.stopPropagation();moverTarjeta(${idx},-1)" style="cursor:pointer;color:var(--text3);font-size:9px;${idx===0?'visibility:hidden':''}" title="Mover a la izquierda">◀</span>
@@ -14503,6 +14527,7 @@ function openTCDetail(tid, forceMonthKey){
   document.getElementById('tc-list-view').style.display='none';
   document.getElementById('tc-detail-view').style.display='block';
   document.getElementById('tc-detail-title').textContent=t.banco+' '+t.cat;
+  { const _pl=document.getElementById('tc-detail-plastic'); if(_pl) _pl.innerHTML=tcPlasticoHTML(t,84); }
   document.getElementById('tc-detail-sub').textContent=`Ciclo: ${t.inicio} al ${t.cierre} de cada mes | Pago: día ${t.pago}`;
   const notaEl=document.getElementById('tc-detail-nota');
   if(t.nota&&t.nota.trim()){ notaEl.textContent='📌 '+t.nota.trim(); notaEl.style.display='block'; }
@@ -15992,6 +16017,9 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-currency').value=t.currency||'PEN';
     document.getElementById('tc-f-color').value=t.color||'#5b8def';
     document.getElementById('tc-f-nota').value=t.nota||'';
+    document.getElementById('tc-f-marca').value=t.marca||'';
+    document.getElementById('tc-f-ult4').value=t.ult4||'';
+    tcImgTmp=imgSegura(t.imagen);
     document.getElementById('tc-delete-btn').style.display='inline-flex';
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
@@ -15999,8 +16027,10 @@ function openTCConfigModal(tid){
     ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-nota'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
+    document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
     document.getElementById('tc-delete-btn').style.display='none';
   }
+  tcImgPintar();
   document.getElementById('tc-config-overlay').classList.add('open');
 }
 
@@ -16028,14 +16058,17 @@ function saveTCCard(){
     linea:parseFloat(document.getElementById('tc-f-linea').value)||0,
     currency:document.getElementById('tc-f-currency').value||'PEN',
     color:document.getElementById('tc-f-color').value||'#5b8def',
-    nota:(document.getElementById('tc-f-nota').value||'').trim()
+    nota:(document.getElementById('tc-f-nota').value||'').trim(),
+    marca:document.getElementById('tc-f-marca').value||'',
+    ult4:(document.getElementById('tc-f-ult4').value||'').replace(/\D/g,'').slice(-4)
   };
+  if(imgSegura(tcImgTmp)) data.imagen=tcImgTmp; else data.imagen='';
   if(!state.tarjetas) state.tarjetas=[];
   const delBtn=document.getElementById('tc-delete-btn');
   const existingId=delBtn.style.display!=='none'?delBtn.dataset.id:null;
   if(existingId){
     const t=getTarjeta(existingId);
-    const antesT=t?{...t}:null;
+    const antesT=t?{...t}:null; if(antesT) delete antesT.imagen;
     if(t) Object.assign(t,data);
     logActividad('tarjeta_editada', `Tarjeta editada: ${data.banco}${data.cat?' '+data.cat:''}`, {tarjetaId:existingId, snapshotAntes:antesT});
   } else {
@@ -18053,6 +18086,7 @@ function openPagoFrecuenteModal(id){
     if(!pf) return;
     document.getElementById('pf-modal-title').textContent='Editar';
     document.getElementById('pf-nombre').value=pf.nombre;
+    pfLogoTmp=imgSegura(pf.logo);
     document.getElementById('pf-tipo').value=pf.tipo||'gasto';
     document.getElementById('pf-frecuencia').value=pf.frecuencia||'mensual';
     document.getElementById('pf-mes-inicio').value=pf.mesInicio||'';
@@ -18076,6 +18110,7 @@ function openPagoFrecuenteModal(id){
   } else {
     document.getElementById('pf-modal-title').textContent='Nuevo';
     document.getElementById('pf-nombre').value='';
+    pfLogoTmp='';
     document.getElementById('pf-tipo').value='gasto';
     document.getElementById('pf-frecuencia').value='mensual';
     // Por defecto, el mes de inicio es el mes actual — el usuario lo puede cambiar
@@ -18096,6 +18131,7 @@ function openPagoFrecuenteModal(id){
     togglePfDiaPagoUltimo();
     delBtn.style.display='none';
   }
+  pfLogoPintar();
   onPFTipoChange();
   onPFFrecuenciaChange();
   onPFTipoMontoChange();
@@ -18230,12 +18266,14 @@ function savePagoFrecuente(){
   if(editingPFId){
     const pf=state.pagosFrecuentes.find(p=>p.id===editingPFId);
     if(pf){
-      const antes={...pf};
+      const antes={...pf}; delete antes.logo;
       Object.assign(pf,{nombre,tipo,frecuencia,mesInicio,duracionMeses,fechaAnual,meses,tipoMonto,montoFijo,currency,metodoPago,destino,categoria,diaPago,textoCorreo});
+      if(imgSegura(pfLogoTmp)) pf.logo=pfLogoTmp; else delete pf.logo;
       logActividad('pago_frecuente_editado', `Pago frecuente editado: ${nombre}`, {pfId:pf.id, snapshotAntes:antes});
     }
   } else {
     const nuevoPF={id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, duracionMeses, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, textoCorreo, pagosRegistrados:{}, descuentosPendientes:[]};
+    if(imgSegura(pfLogoTmp)) nuevoPF.logo=pfLogoTmp;
     state.pagosFrecuentes.push(nuevoPF);
     logActividad('pago_frecuente_nuevo', `Pago frecuente nuevo: ${nombre}`, {pfId:nuevoPF.id});
   }
@@ -18412,7 +18450,7 @@ function renderPagosFrecuentes(){
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${esIngreso?'💰':'💸'} ${escapeHtml(pf.nombre)}${esAnual?' <span style="font-size:9px;color:var(--text3);font-weight:400">(anual)</span>':''}${esSemestral?' <span style="font-size:9px;color:var(--text3);font-weight:400">(semestral)</span>':''}</div>
+          <div style="font-size:13px;font-weight:600">${imgSegura(pf.logo)?`<img class="pf-logo-mini" src="${pf.logo}" alt="">`:(esIngreso?'💰':'💸')} ${escapeHtml(pf.nombre)}${esAnual?' <span style="font-size:9px;color:var(--text3);font-weight:400">(anual)</span>':''}${esSemestral?' <span style="font-size:9px;color:var(--text3);font-weight:400">(semestral)</span>':''}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">${montoLabel} · ${destinoLabel}${pf.categoria?' · '+escapeHtml(pf.categoria):''}${inicioLabel}</div>
         </div>
         ${esBaseDesc
@@ -21576,7 +21614,8 @@ function getOcurrenciasFrecuentesMes(year, month){
         titulo:pf.nombre,
         tipo: pf.tipo==='ingreso' ? 'pf_ingreso' : 'pf_gasto',
         auto:true, origenPage:'deudas',
-        hecho:hecho, icono: hecho ? '✅' : null
+        hecho:hecho, icono: hecho ? '✅' : null,
+        logo: imgSegura(pf.logo)||null
       }
     });
   });
@@ -21605,6 +21644,114 @@ function getEventOccurrencesForMonth(year, month){
   });
   getOcurrenciasFrecuentesMes(year,month).forEach(o=>occurrences.push(o));
   return occurrences;
+}
+
+
+// ══════════════════════════════════════════════════════
+//  IMÁGENES CHICAS: logo de pago frecuente + foto de tarjeta
+//  Se reducen en el navegador y se guardan como texto (data URI) dentro
+//  del mismo pago frecuente / tarjeta: sin servicios externos y sin
+//  lecturas extra de Firestore.
+// ══════════════════════════════════════════════════════
+function imgSegura(s){
+  return (typeof s==='string' && s.length<250000 && /^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(s)) ? s : '';
+}
+function reducirImagenArchivo(file, ancho, alto, modo){
+  return new Promise((res,rej)=>{
+    if(!file || !/^image\//.test(file.type||'')) return rej(new Error('El archivo no es una imagen.'));
+    const fr=new FileReader();
+    fr.onerror=()=>rej(new Error('No se pudo leer el archivo.'));
+    fr.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>rej(new Error('No se pudo abrir la imagen.'));
+      img.onload=()=>{
+        try{
+          const c=document.createElement('canvas'); c.width=ancho; c.height=alto;
+          const cx=c.getContext('2d');
+          const esLogo=(modo==='contain');
+          if(!esLogo){ cx.fillStyle='#ffffff'; cx.fillRect(0,0,ancho,alto); }
+          const esc=esLogo ? Math.min(ancho/img.width, alto/img.height) : Math.max(ancho/img.width, alto/img.height);
+          const w=img.width*esc, h=img.height*esc;
+          cx.drawImage(img,(ancho-w)/2,(alto-h)/2,w,h);
+          let out;
+          if(esLogo){
+            out=c.toDataURL('image/webp',0.9);
+            if(!out.startsWith('data:image/webp')) out=c.toDataURL('image/png');
+          } else {
+            out=c.toDataURL('image/jpeg',0.82);
+          }
+          if(!imgSegura(out)) return rej(new Error('La imagen quedó demasiado pesada.'));
+          res(out);
+        }catch(e){ rej(e); }
+      };
+      img.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+let pfLogoTmp='';
+function pfLogoPintar(){
+  const p=document.getElementById('pf-logo-prev'); const q=document.getElementById('pf-logo-quitar');
+  if(!p) return;
+  const src=imgSegura(pfLogoTmp);
+  p.innerHTML = src ? `<img src="${src}" alt="">` : '🖼';
+  if(q) q.style.display = src ? 'inline-flex' : 'none';
+}
+async function pfLogoElegido(inp){
+  const f=inp && inp.files && inp.files[0]; if(!f) return;
+  try{ pfLogoTmp=await reducirImagenArchivo(f,96,96,'contain'); pfLogoPintar(); }
+  catch(e){ alert(e.message||'No se pudo cargar la imagen.'); }
+  inp.value='';
+}
+function pfLogoQuitar(){ pfLogoTmp=''; pfLogoPintar(); }
+
+let tcImgTmp='';
+function tcImgPintar(){
+  const p=document.getElementById('tc-f-img-prev'); const q=document.getElementById('tc-f-img-quitar');
+  if(!p) return;
+  const src=imgSegura(tcImgTmp);
+  p.innerHTML = src ? `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:10px;color:var(--text3)">Dibujada</span>';
+  if(q) q.style.display = src ? 'inline-flex' : 'none';
+}
+async function tcImgElegida(inp){
+  const f=inp && inp.files && inp.files[0]; if(!f) return;
+  try{ tcImgTmp=await reducirImagenArchivo(f,400,252,'cover'); tcImgPintar(); }
+  catch(e){ alert(e.message||'No se pudo cargar la imagen.'); }
+  inp.value='';
+}
+function tcImgQuitar(){ tcImgTmp=''; tcImgPintar(); }
+
+// Tarjeta "de plástico" dibujada con el color del banco (o la foto subida).
+function tcLuminancia(hex){
+  const m=/^#?([0-9a-f]{6})$/i.exec(hex||''); if(!m) return 0;
+  const n=parseInt(m[1],16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  return (0.299*r+0.587*g+0.114*b)/255;
+}
+function tcAjustarColor(hex,f){
+  const m=/^#?([0-9a-f]{6})$/i.exec(hex||''); if(!m) return '#5b8def';
+  const n=parseInt(m[1],16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  const t=f<0?0:255, p=Math.abs(f);
+  r=Math.round((t-r)*p+r); g=Math.round((t-g)*p+g); b=Math.round((t-b)*p+b);
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function tcPlasticoHTML(t,ancho){
+  const foto=imgSegura(t.imagen);
+  const w=ancho||96;
+  if(foto) return `<div class="tc-plastic" style="--w:${w}px"><img class="pl-foto" src="${foto}" alt=""></div>`;
+  const col=/^#[0-9a-f]{6}$/i.test(t.color||'') ? t.color : '#5b8def';
+  const claro=tcLuminancia(col)>0.72;
+  const marca=String(t.marca||'');
+  let marcaHtml='';
+  if(marca==='Visa') marcaHtml='VISA';
+  else if(marca==='Mastercard') marcaHtml='<span class="tc-pl-mc"><i></i><i></i></span>';
+  else if(marca==='Amex') marcaHtml='AMEX';
+  else if(marca==='Diners') marcaHtml='Diners';
+  const ult=String(t.ult4||'').replace(/\D/g,'').slice(-4);
+  return `<div class="tc-plastic${claro?' pl-claro':''}" style="--w:${w}px;background:linear-gradient(135deg,${tcAjustarColor(col,.28)} 0%,${col} 50%,${tcAjustarColor(col,-.32)} 100%)">`
+    +`<div class="tc-pl-banco">${escapeHtml(t.banco||'')}</div><div class="tc-pl-chip"></div>`
+    +(ult?`<div class="tc-pl-num">•••• ${ult}</div>`:'')
+    +(marcaHtml?`<div class="tc-pl-marca">${marcaHtml}</div>`:'')
+    +`</div>`;
 }
 
 // ── RENDER CALENDARIO ──────────────────────────────────
@@ -21664,15 +21811,21 @@ function renderCalendario(){
     const isToday = dateStr===today;
     const dayEvents = bySDay[cell.day] || [];
     const maxShow = 3;
-    const chips = dayEvents.slice(0,maxShow).map(o=>{
+    const _logoEv = dayEvents.filter(o=>o.event.logo);
+    const _txtEv = dayEvents.filter(o=>!o.event.logo);
+    const logosHtml = _logoEv.map(o=>{
+      const clickL = o.event.auto ? `showPage('${o.event.origenPage}')` : `openCalEventModal('${o.event.id}')`;
+      return `<span class="cal-logo${o.event.hecho?' hecho':''}" onclick="event.stopPropagation();${clickL}" title="${escapeHtml(o.event.titulo)}${o.event.hecho?' — ya registrado':''}"><img src="${o.event.logo}" alt=""></span>`;
+    }).join('');
+    const chips = _txtEv.slice(0,maxShow).map(o=>{
       const t = CAL_TIPOS[o.event.tipo] || CAL_TIPOS.otro;
       const clickAccion = o.event.auto ? `showPage('${o.event.origenPage}')` : `openCalEventModal('${o.event.id}')`;
       return `<div class="cal-event-chip" style="background:${t.color}${o.event.hecho?';opacity:.5':''}" onclick="event.stopPropagation();${clickAccion}" title="${escapeHtml(o.event.titulo)}${o.event.hecho?' — ya registrado':''}${o.event.auto?' (automático — toca para ver el detalle)':''}">${o.event.icono||t.icon} ${escapeHtml(o.event.titulo)}</div>`;
     }).join('');
-    const more = dayEvents.length>maxShow ? `<div class="cal-event-more">+${dayEvents.length-maxShow} más</div>` : '';
+    const more = _txtEv.length>maxShow ? `<div class="cal-event-more">+${_txtEv.length-maxShow} más</div>` : '';
     return `<div class="cal-day ${isToday?'cal-today':''}" onclick="openCalEventModal(null,'${dateStr}')">
       <div class="cal-day-num">${cell.day}</div>
-      ${chips}${more}
+      ${logosHtml?`<div class="cal-logos">${logosHtml}</div>`:''}${chips}${more}
     </div>`;
   }).join('');
 }
@@ -27122,6 +27275,13 @@ if(state.projGoals){
     <div class="field"><label>Nombre <span style="font-size:10px;color:var(--text3)">(incluye el emoji si quieres)</span></label>
       <input id="pf-nombre" type="text" placeholder="Ej. 📱 Teléfono">
     </div>
+    <div class="field"><label>Logo <span style="font-size:10px;color:var(--text3)">(opcional — se ve en el Calendario)</span></label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div id="pf-logo-prev" class="pf-logo-prev">🖼</div>
+        <label class="config-action-btn neutral" style="cursor:pointer;font-size:11px;margin:0">📤 Subir imagen<input type="file" accept="image/*" style="display:none" onchange="pfLogoElegido(this)"></label>
+        <button type="button" class="config-action-btn danger" id="pf-logo-quitar" style="font-size:11px;display:none" onclick="pfLogoQuitar()">Quitar</button>
+      </div>
+    </div>
     <div class="field"><label>Tipo</label>
       <select id="pf-tipo" onchange="onPFTipoChange()">
         <option value="gasto">💸 Gasto (luz, teléfono, streaming...)</option>
@@ -27555,6 +27715,19 @@ if(state.projGoals){
         <div class="tc-color-opt" style="background:#f0a53c" onclick="selectTCColor('#f0a53c')"></div>
         <div class="tc-color-opt" style="background:#a78bfa" onclick="selectTCColor('#a78bfa')"></div>
         <div class="tc-color-opt" style="background:#2dd4bf" onclick="selectTCColor('#2dd4bf')"></div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Marca <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+        <select id="tc-f-marca"><option value="">—</option><option>Visa</option><option>Mastercard</option><option>Amex</option><option>Diners</option></select>
+      </div>
+      <div class="field"><label>Últimos 4 dígitos <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-f-ult4" type="text" inputmode="numeric" maxlength="4" placeholder="1234"></div>
+    </div>
+    <div class="field"><label>Foto de la tarjeta <span style="font-size:10px;color:var(--text3)">(opcional — si no subes nada, se dibuja con el color de arriba)</span></label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div id="tc-f-img-prev" class="tc-plastic" style="--w:96px;display:flex;align-items:center;justify-content:center;background:var(--bg3);box-shadow:none;border:1px solid var(--border2)"></div>
+        <label class="config-action-btn neutral" style="cursor:pointer;font-size:11px;margin:0">📤 Subir imagen<input type="file" accept="image/*" style="display:none" onchange="tcImgElegida(this)"></label>
+        <button type="button" class="config-action-btn danger" id="tc-f-img-quitar" style="font-size:11px;display:none" onclick="tcImgQuitar()">Quitar</button>
       </div>
     </div>
     <div class="field"><label>Nota / Comentario <span style="font-size:10px;color:var(--text3)">(opcional — ej. "Llamar en octubre a pedir exoneración de membresía")</span></label>
