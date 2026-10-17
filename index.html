@@ -3841,9 +3841,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.66.0';
-const APP_VERSION_DATE = '16/10/26 - 20:14'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Calendario con logos: sube una imagen en cada pago frecuente y se ve en su día del calendario. Tarjetas de crédito con imagen de tarjeta dibujada (color del banco, marca y últimos 4 dígitos) o tu propia foto.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.66.1';
+const APP_VERSION_DATE = '16/10/26 - 22:07'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Tarjetas de crédito: ahora puedes cambiar el color de la imagen de la tarjeta sin tocar el color de los gráficos y líneas.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16018,6 +16018,8 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-color').value=t.color||'#5b8def';
     document.getElementById('tc-f-nota').value=t.nota||'';
     document.getElementById('tc-f-marca').value=t.marca||'';
+    document.getElementById('tc-f-color-plastico').value=t.colorTarjeta||t.color||'#5b8def';
+    document.getElementById('tc-f-color-igual').checked=!t.colorTarjeta;
     document.getElementById('tc-f-ult4').value=t.ult4||'';
     tcImgTmp=imgSegura(t.imagen);
     document.getElementById('tc-delete-btn').style.display='inline-flex';
@@ -16028,6 +16030,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
+    document.getElementById('tc-f-color-plastico').value='#5b8def'; document.getElementById('tc-f-color-igual').checked=true;
     document.getElementById('tc-delete-btn').style.display='none';
   }
   tcImgPintar();
@@ -16060,6 +16063,7 @@ function saveTCCard(){
     color:document.getElementById('tc-f-color').value||'#5b8def',
     nota:(document.getElementById('tc-f-nota').value||'').trim(),
     marca:document.getElementById('tc-f-marca').value||'',
+    colorTarjeta:document.getElementById('tc-f-color-igual').checked ? '' : (document.getElementById('tc-f-color-plastico').value||''),
     ult4:(document.getElementById('tc-f-ult4').value||'').replace(/\D/g,'').slice(-4)
   };
   if(imgSegura(tcImgTmp)) data.imagen=tcImgTmp; else data.imagen='';
@@ -21738,7 +21742,8 @@ function tcPlasticoHTML(t,ancho){
   const foto=imgSegura(t.imagen);
   const w=ancho||96;
   if(foto) return `<div class="tc-plastic" style="--w:${w}px"><img class="pl-foto" src="${foto}" alt=""></div>`;
-  const col=/^#[0-9a-f]{6}$/i.test(t.color||'') ? t.color : '#5b8def';
+  const _cp=/^#[0-9a-f]{6}$/i.test(t.colorTarjeta||'') ? t.colorTarjeta : t.color;
+  const col=/^#[0-9a-f]{6}$/i.test(_cp||'') ? _cp : '#5b8def';
   const claro=tcLuminancia(col)>0.72;
   const marca=String(t.marca||'');
   let marcaHtml='';
@@ -27706,7 +27711,7 @@ if(state.projGoals){
         <div style="font-size:11px;color:var(--text2);padding-bottom:8px">La moneda afecta cómo se muestran los montos y el cálculo del total.</div>
       </div>
     </div>
-    <div class="field"><label>Color</label>
+    <div class="field"><label>Color en gráficos y líneas <span style="font-size:10px;color:var(--text3)">(barra superior, etiqueta de mes, gráficos de deuda)</span></label>
       <input id="tc-f-color" type="color" value="#5b8def" style="width:70px;height:38px;padding:2px;cursor:pointer">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" id="tc-color-picker">
         <div class="tc-color-opt" style="background:#5b8def" onclick="selectTCColor('#5b8def')"></div>
@@ -27715,6 +27720,12 @@ if(state.projGoals){
         <div class="tc-color-opt" style="background:#f0a53c" onclick="selectTCColor('#f0a53c')"></div>
         <div class="tc-color-opt" style="background:#a78bfa" onclick="selectTCColor('#a78bfa')"></div>
         <div class="tc-color-opt" style="background:#2dd4bf" onclick="selectTCColor('#2dd4bf')"></div>
+      </div>
+    </div>
+    <div class="field"><label>Color de la imagen de la tarjeta</label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <input id="tc-f-color-plastico" type="color" value="#5b8def" style="width:70px;height:38px;padding:2px;cursor:pointer" oninput="document.getElementById('tc-f-color-igual').checked=false">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:0;text-transform:none;letter-spacing:0;font-weight:400"><input id="tc-f-color-igual" type="checkbox" style="width:auto;margin:0" checked> Usar el mismo color de los gráficos</label>
       </div>
     </div>
     <div class="field-row">
