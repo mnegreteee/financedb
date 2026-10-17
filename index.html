@@ -319,6 +319,12 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 .chart-tab{padding:4px 11px;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);transition:all .12s;}
 .chart-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .chart-wrap{position:relative;height:190px;width:100%;}
+/* Gráfico principal de Movimientos: crece para igualar la altura de la lista (escritorio) */
+@media(min-width:901px){
+  #card-graficos-mov{display:flex;flex-direction:column;}
+  #card-graficos-mov .chart-wrap-fill{flex:1 1 190px;height:auto;min-height:190px;}
+  #card-graficos-mov .chart-wrap-fill canvas{position:absolute;left:0;top:0;}
+}
 .chart-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
 .chart-summary-card{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;}
 .chart-summary-card.wide{grid-column:span 2;}
@@ -1882,7 +1888,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div id="mov-filter-info" style="display:none;margin-bottom:6px"><div class="filter-badge"><span id="mov-filter-text"></span><span style="cursor:pointer;margin-left:4px" onclick="clearAccountFilter()">✕</span></div></div>
       <div class="mov-list" id="mov-list"></div>
     </div>
-    <div class="card" style="padding:18px">
+    <div class="card" id="card-graficos-mov" style="padding:18px">
       <div class="section-header"><div class="section-title">Gráficos</div></div>
       <div class="chart-tabs">
         <div class="chart-tab active" id="ct0" onclick="setChartTab(0)">Ing/Gas</div>
@@ -1894,7 +1900,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div class="chart-tab" id="ct6" onclick="setChartTab(6)">Tendencia</div>
         <div class="chart-tab" id="ct7" onclick="setChartTab(7)">Patrimonio Neto</div>
       </div>
-      <div class="chart-wrap"><canvas id="main-chart"></canvas></div>
+      <div class="chart-wrap chart-wrap-fill"><canvas id="main-chart"></canvas></div>
       <div id="chart-legend" style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text2);flex-wrap:wrap"></div>
       <div id="chart-summary" class="chart-summary"></div>
     </div>
@@ -3841,9 +3847,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.66.1';
-const APP_VERSION_DATE = '16/10/26 - 22:07'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas de crédito: ahora puedes cambiar el color de la imagen de la tarjeta sin tocar el color de los gráficos y líneas.'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
+const APP_VERSION = 'v1.66.2';
+const APP_VERSION_DATE = '16/10/26 - 22:22'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Movimientos: el gráfico de barras ahora crece para igualar la altura de la lista y ya no queda espacio vacío debajo (en pantallas anchas).'; // anterior v1.57.0: 'Firebase: nuevo contador de movimientos y lecturas en Configuración → Datos, y el listener en tiempo real ahora solo escucha el mes actual y el anterior (menos lecturas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
