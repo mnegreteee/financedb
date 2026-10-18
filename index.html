@@ -3077,6 +3077,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="month-nav" style="margin-bottom:6px">
     <h1>⛽ Control de Combustible</h1>
+    <button class="config-action-btn neutral" style="font-size:11px;padding:5px 12px" onclick="exportarCombustibleExcel()" title="Descargar un Excel con todas las recargas de GLP y gasolina">⬇ Exportar Excel</button>
   </div>
 
   <!-- MANTENIMIENTO DEL AUTO — proyección basada en el kilometraje registrado -->
@@ -3861,9 +3862,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.67.2';
-const APP_VERSION_DATE = '17/10/26 - 22:09'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Insights y reporte PDF: las deudas que tú debes ya no se cuentan como «préstamos por cobrar» (se muestran aparte). Además: Consumos Frecuentes contraíble.';
+const APP_VERSION = 'v1.68.0';
+const APP_VERSION_DATE = '17/10/26 - 23:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Combustible: botón «Exportar Excel» con todas las recargas de GLP y gasolina (una hoja por combustible, con totales).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20273,6 +20274,57 @@ function guardarRegistrarMantenimiento(){
   renderMantenimiento();
   toast(item.nombre+' registrado — el contador se reinició');
 }
+// Descarga un Excel con TODAS las recargas: una hoja por combustible, con las
+// mismas columnas que se ven en la app (y que acepta "Cargar histórico").
+function exportarCombustibleExcel(){
+  if(typeof XLSX==='undefined'){ alert('No se pudo cargar la librería de Excel. Revisa tu conexión e intenta de nuevo.'); return; }
+  const lite=(typeof APP_LITE!=='undefined' && APP_LITE);
+  const serial=iso=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso||'')); if(!m) return ''; return (Date.UTC(+m[1],+m[2]-1,+m[3])-Date.UTC(1899,11,30))/86400000; };
+  const num=(v,dec)=>{ const n=parseFloat(v); if(v===''||v===null||v===undefined||isNaN(n)) return ''; return dec===undefined?n:Math.round(n*Math.pow(10,dec))/Math.pow(10,dec); };
+  const gastoTxt=r=>{ const g=r.gastoRegistrado; if(!g) return 'Sin registrar';
+    if(g.tipo==='cuenta') return 'Cuenta: '+(typeof accLabel==='function'?accLabel(g.cuenta||''):(g.cuenta||''));
+    if(g.tipo==='tarjeta'){ const t=getTarjeta(g.tarjetaId); return 'Tarjeta: '+(t?(t.banco+(t.cat?' '+t.cat:'')):''); }
+    return 'Registrado aparte'; };
+  const hoja=(key, esGas)=>{
+    const gnv=lite && !esGas;
+    const cab=['F. INICIAL','F. FINAL','KM INICIAL','KM FINAL','KM USADO','DÍAS','KM DIARIOS',
+      gnv?'M3':'GALONES', gnv?'KM/M3':'KXG', gnv?'PXM3':'PXG', gnv?'PRECIO SOLO GNV':'PRECIO', 'MONTO DIARIO'];
+    if(gnv) cab.push('RECAUDO','GNV + RECAUDO');
+    cab.push('% PRECIO','RENDIMIENTO','GASTO');
+    const rows=computeFuelRows(state[key]||[]);
+    const data=[cab];
+    let tKm=0,tCant=0,tTot=0,tRec=0;
+    rows.forEach(r=>{
+      const fila=[serial(r.fInicial), serial(r.fFinal), num(r.kmInicial), num(r.kmFinal), r.kmUsado!==null?r.kmUsado:'', r.dt!==null?r.dt:'',
+        r.kmDiarios!==null?num(r.kmDiarios,1):'', num(r.galones,3), r.kxg!==null?num(r.kxg,2):'', num(r.pxg,4), r.totalGlp!==null?num(r.totalGlp,2):'',
+        r.montoDiario!==null?num(r.montoDiario,2):''];
+      if(gnv) fila.push(r.recaudo>0?num(r.recaudo,2):0, r.totalPagado!==null?num(r.totalPagado,2):'');
+      fila.push(r.pxgVar!==null?num(r.pxgVar,1):'', r.sinRendimiento?'NO':'SI', gastoTxt(r));
+      data.push(fila);
+      if(r.kmUsado!==null&&r.kmUsado>0) tKm+=r.kmUsado;
+      tCant+=parseFloat(r.galones)||0; tTot+=r.totalGlp||0; if(gnv) tRec+=r.recaudo||0;
+    });
+    if(rows.length){
+      const tot=['TOTAL','','','',tKm,'','',num(tCant,3),'','',num(tTot,2),''];
+      if(gnv) tot.push(num(tRec,2), num(tTot+tRec,2));
+      tot.push('','','');
+      data.push([]); data.push(tot);
+    }
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    // Las 2 primeras columnas son fechas (número de serie de Excel) → formato dd/mm/aaaa
+    for(let R=1;R<data.length;R++) for(let C=0;C<2;C++){ const a=XLSX.utils.encode_cell({r:R,c:C}); if(ws[a]&&ws[a].t==='n') ws[a].z='dd/mm/yyyy'; }
+    ws['!cols']=cab.map(c=>({wch:Math.max(10, c.length+2)}));
+    if(ws['!cols'][cab.length-1]) ws['!cols'][cab.length-1].wch=24;
+    return {ws, n:rows.length};
+  };
+  const wb=XLSX.utils.book_new();
+  const a=hoja('combustibleGlp', false), b=hoja('combustibleGas', true);
+  if(!a.n && !b.n){ alert('Todavía no hay recargas para exportar.'); return; }
+  XLSX.utils.book_append_sheet(wb, a.ws, lite?'GNV':'GLP');
+  XLSX.utils.book_append_sheet(wb, b.ws, 'Gasolina');
+  XLSX.writeFile(wb, 'combustible_'+todayLocalISO()+'.xlsx');
+  toast(`Excel descargado: ${a.n} recarga${a.n===1?'':'s'} de ${lite?'GNV':'GLP'} y ${b.n} de gasolina`);
+}
 function computeFuelRows(rows){
   return rows.map((row,i)=>{
     const r={...row};
@@ -25388,6 +25440,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.68.0",
+  "fecha": "17/10/26",
+  "cambios": [
+   "Combustible: botón «⬇ Exportar Excel» que descarga todas las recargas (una hoja para GLP y otra para gasolina, con totales)."
+  ]
+ },
  {
   "v": "v1.67.2",
   "fecha": "17/10/26",
