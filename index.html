@@ -3861,9 +3861,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.67.1';
-const APP_VERSION_DATE = '17/10/26 - 21:57'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas: la sección «Consumos Frecuentes» ahora se puede contraer y expandir tocando su título (se recuerda en cada dispositivo).';
+const APP_VERSION = 'v1.67.2';
+const APP_VERSION_DATE = '17/10/26 - 22:09'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Insights y reporte PDF: las deudas que tú debes ya no se cuentan como «préstamos por cobrar» (se muestran aparte). Además: Consumos Frecuentes contraíble.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12431,7 +12431,7 @@ function generarReporteMensualPDF(y,m){
   }
 
   // ── Deudas (préstamos por cobrar) — estado ACTUAL, no histórico del mes ──
-  const deudasPend=(state.deudas||[]).filter(d=>d.status==='pendiente');
+  const deudasPend=(state.deudas||[]).filter(d=>d.status==='pendiente'&&d.direccion!=='yo_debo');
   if(deudasPend.length){
     const rate=state.tc?.venta||3.45;
     const totalPend=deudasPend.reduce((s,d)=>s+(d.currency==='USD'?d.monto*rate:d.monto),0);
@@ -25389,6 +25389,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.67.2",
+  "fecha": "17/10/26",
+  "cambios": [
+   "Insights (Resumen y Deudas) y reporte PDF: las deudas que tú debes ya no se cuentan como «préstamos por cobrar»; se muestran aparte."
+  ]
+ },
+ {
   "v": "v1.67.1",
   "fecha": "17/10/26",
   "cambios": [
@@ -26864,7 +26871,7 @@ function insDash(){
   try{ ['PEN','USD'].forEach(cu=>{ const ms=(state.metasAhorro||[]).filter(g=>!g.esMetaGrande&&insCu(g.currency)===cu&&g.montoObjetivo>0&&typeof g.montoActual==='number'&&g.montoActual<g.montoObjetivo).map(g=>({g,p:g.montoActual/g.montoObjetivo*100})).sort((x,z)=>z.p-x.p);
     if(ms.length) out.push({ico:'🎯',tono:'neu',cu,txt:`Tu meta más avanzada en ${insNomCu(cu)}: ${b(escapeHtml(ms[0].g.nombre))} al ${b(ms[0].p.toFixed(0)+'%')} (${insMon(ms[0].g.montoActual,cu)} de ${insMon(ms[0].g.montoObjetivo,cu)})${ms.length>1?` · luego ${escapeHtml(ms[1].g.nombre)} (${ms[1].p.toFixed(0)}%)`:''}.`}); }); }catch(e){ console.warn('Cálculo omitido por error:', e&&e.message); }
   // préstamos por cobrar viejos
-  try{ ['PEN','USD'].forEach(cu=>{ const v=(state.deudas||[]).filter(x=>x.status==='pendiente'&&insCu(x.currency)===cu&&x.fecha&&(Date.now()-new Date(x.fecha+'T12:00:00'))/864e5>30);
+  try{ ['PEN','USD'].forEach(cu=>{ const v=(state.deudas||[]).filter(x=>x.status==='pendiente'&&x.direccion!=='yo_debo'&&insCu(x.currency)===cu&&x.fecha&&(Date.now()-new Date(x.fecha+'T12:00:00'))/864e5>30);
     if(v.length) out.push({ico:'🤝',tono:'neu',cu,txt:`${b(v.length+' préstamo'+(v.length===1?'':'s'))} sin cobrar hace más de 30 días (${insMon(v.reduce((a,x)=>a+x.monto,0),cu)}).`}); }); }catch(e){ console.warn('Cálculo omitido por error:', e&&e.message); }
   return out.slice(0,12);
 }
@@ -26913,7 +26920,9 @@ function insTarj(){
 function insDeudas(){
   const out=[], hoy=new Date(), b=insB;
   ['PEN','USD'].forEach(cu=>{
-    const pend=(state.deudas||[]).filter(x=>x.status==='pendiente'&&insCu(x.currency)===cu);
+    const debo=(state.deudas||[]).filter(x=>x.status==='pendiente'&&x.direccion==='yo_debo'&&insCu(x.currency)===cu);
+    if(debo.length) out.push({ico:'🔴',tono:'neu',cu,txt:`Debes ${b(insMon(debo.reduce((a,x)=>a+x.monto,0),cu))} en ${b(debo.length+' deuda'+(debo.length===1?'':'s'))}${debo.length<=3?' ('+debo.map(x=>escapeHtml(x.nombre||'—')).join(', ')+')':''}.`});
+    const pend=(state.deudas||[]).filter(x=>x.status==='pendiente'&&x.direccion!=='yo_debo'&&insCu(x.currency)===cu);
     if(pend.length){ out.push({ico:'🤝',tono:'neu',cu,txt:`Tienes ${b(pend.length+' préstamo'+(pend.length===1?'':'s'))} por cobrar en ${insNomCu(cu)}: ${b(insMon(pend.reduce((a,x)=>a+x.monto,0),cu))}.`});
       const dias=x=>x.fecha?Math.floor((hoy-new Date(x.fecha+'T12:00:00'))/864e5):0, v=[...pend].sort((a,z)=>dias(z)-dias(a))[0];
       if(v&&dias(v)>=15) out.push({ico:'⏳',tono:dias(v)>60?'warn':'neu',cu,txt:`El más antiguo es ${b(escapeHtml(v.nombre||'—'))} (${insMon(v.monto,cu)}), pendiente hace ${b(dias(v)+' días')}. Quizá sea momento de recordárselo.`}); }
