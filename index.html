@@ -590,6 +590,17 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 .tc-global-table td{padding:8px;border-bottom:1px solid var(--border);font-size:12px;font-family:var(--mono);}
 .tc-global-table td:first-child{font-family:var(--font);font-size:13px;}
 .tc-global-table tr:last-child td{border-bottom:none;}
+@media(max-width:640px){
+  .tc-global-table{min-width:0;}
+  .tc-global-table thead{display:none;}
+  .tc-global-table,.tc-global-table tbody{display:block;width:100%;}
+  .tc-global-table tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;padding:11px 0;border-bottom:1px solid var(--border);}
+  .tc-global-table tr:last-child{border-bottom:none;}
+  .tc-global-table td{display:block;border:none!important;padding:0;font-size:12px;min-width:0;overflow-wrap:anywhere;}
+  .tc-global-table td:first-child{grid-column:1/-1;font-weight:700;font-size:14px;}
+  .tc-global-table td.tcg-pct{grid-column:1/-1;}
+  .tc-global-table td[data-l]::before{content:attr(data-l);display:block;font-family:var(--font);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:2px;}
+}
 
 /* Pago parcial modal */
 .pago-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:400px;max-width:95vw;}
@@ -824,6 +835,31 @@ body.compact-mode .anual-table{font-size:11px;}
 .fuel-chart-tabs{display:flex;gap:6px;margin-bottom:14px;}
 .fuel-chart-tab{padding:4px 12px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);transition:all .12s;}
 .fuel-chart-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.fuel-chart-rango{display:flex;gap:5px;flex-wrap:wrap;margin:-6px 0 12px;}
+.fuel-chart-rango .fuel-chart-tab{padding:3px 9px;font-size:10px;}
+.fuel-chart-vacio{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:12px;color:var(--text3);}
+.fuel-table tr.fuel-row-ultima td{background:rgba(91,141,239,.13);font-weight:600;}
+.fuel-table tr.fuel-row-ultima td:first-child{box-shadow:inset 4px 0 0 var(--accent);position:relative;}
+.fuel-table tr.fuel-row-ultima td:last-child{box-shadow:inset -4px 0 0 var(--accent);}
+.fuel-ultima-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.4px;color:#fff;background:var(--accent);border-radius:10px;padding:1px 7px;margin-bottom:3px;white-space:nowrap;}
+.fuel-vista{display:inline-flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px}
+.fuel-vista button{border:none;background:var(--bg2);color:var(--text2);font-size:11px;font-weight:600;padding:6px 12px;cursor:pointer;font-family:var(--font)}
+.fuel-vista button.on{background:var(--accent);color:#fff}
+.fuel-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(330px,100%),1fr));gap:12px}
+.fuel-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;box-shadow:var(--card-shadow);transition:transform .15s,box-shadow .15s;text-align:left;min-width:0}
+.fuel-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.12)}
+.fuel-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fuel-card.ultima{border:2px solid var(--accent)}
+.fuel-card .fc-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.fuel-card .fc-tit{font-size:14px;font-weight:700}
+.fuel-card .fc-km{font-family:var(--mono);font-size:12px;color:var(--text2)}
+.fuel-card .fc-tot{font-family:var(--mono);font-size:17px;font-weight:700;white-space:nowrap}
+.fuel-card .fc-rec{font-size:11px;color:var(--text3);margin-top:2px}
+.fuel-card .fc-met{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.fuel-card .fc-k{font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text3)}
+.fuel-card .fc-v{font-family:var(--mono);font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+.fuel-tramo{border:2px dashed var(--accent);background:rgba(91,141,239,.08);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
+.fuel-vermas{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text3);margin-top:8px;}
 .fuel-highlight{background:rgba(240,165,60,.08)!important;}
 @media(max-width:600px){.fuel-summary{grid-template-columns:repeat(2,1fr);}}
 
@@ -3161,7 +3197,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="fuel-chart-tab" onclick="setFuelChart('glp',2,this)">Total</button>
         <button class="fuel-chart-tab" onclick="setFuelChart('glp',3,this)">KM Diarios</button>
       </div>
-      <div style="height:180px"><canvas id="fuel-chart-glp"></canvas></div>
+      <div class="fuel-chart-rango" id="frango-glp">
+        <button class="fuel-chart-tab" data-r="semana" onclick="setFuelRango('glp','semana')">Esta semana</button>
+        <button class="fuel-chart-tab" data-r="mes" onclick="setFuelRango('glp','mes')">Este mes</button>
+        <button class="fuel-chart-tab" data-r="3m" onclick="setFuelRango('glp','3m')">Últimos 3 meses</button>
+        <button class="fuel-chart-tab" data-r="6m" onclick="setFuelRango('glp','6m')">Últimos 6 meses</button>
+        <button class="fuel-chart-tab" data-r="anio" onclick="setFuelRango('glp','anio')">Este año</button>
+        <button class="fuel-chart-tab" data-r="12m" onclick="setFuelRango('glp','12m')">Último año</button>
+        <button class="fuel-chart-tab active" data-r="todo" onclick="setFuelRango('glp','todo')">Todo</button>
+      </div>
+      <div style="height:180px;position:relative"><canvas id="fuel-chart-glp"></canvas><div class="fuel-chart-vacio" id="fuel-chart-vacio-glp">Sin recargas en este periodo</div></div>
     </div>
     <div class="fuel-table-wrap">
       <table class="fuel-table"><thead><tr>
@@ -3173,6 +3218,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <th>MONTO<br>DIARIO</th><th>TOTAL GLP</th><th>%PxG</th><th>GASTO</th><th></th>
       </tr></thead><tbody id="fuel-tbody-glp"></tbody></table>
     </div>
+    <div id="fuel-cards-glp"></div>
+    <div class="fuel-vermas" id="fuel-vermas-glp"></div>
   </div>
 
   <!-- ══ SECCIÓN GASOLINA ══ -->
@@ -3195,7 +3242,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="fuel-chart-tab" onclick="setFuelChart('gas',2,this)">Total</button>
         <button class="fuel-chart-tab" onclick="setFuelChart('gas',3,this)">KM Diarios</button>
       </div>
-      <div style="height:180px"><canvas id="fuel-chart-gas"></canvas></div>
+      <div class="fuel-chart-rango" id="frango-gas">
+        <button class="fuel-chart-tab" data-r="semana" onclick="setFuelRango('gas','semana')">Esta semana</button>
+        <button class="fuel-chart-tab" data-r="mes" onclick="setFuelRango('gas','mes')">Este mes</button>
+        <button class="fuel-chart-tab" data-r="3m" onclick="setFuelRango('gas','3m')">Últimos 3 meses</button>
+        <button class="fuel-chart-tab" data-r="6m" onclick="setFuelRango('gas','6m')">Últimos 6 meses</button>
+        <button class="fuel-chart-tab" data-r="anio" onclick="setFuelRango('gas','anio')">Este año</button>
+        <button class="fuel-chart-tab" data-r="12m" onclick="setFuelRango('gas','12m')">Último año</button>
+        <button class="fuel-chart-tab active" data-r="todo" onclick="setFuelRango('gas','todo')">Todo</button>
+      </div>
+      <div style="height:180px;position:relative"><canvas id="fuel-chart-gas"></canvas><div class="fuel-chart-vacio" id="fuel-chart-vacio-gas">Sin recargas en este periodo</div></div>
     </div>
     <div class="fuel-table-wrap">
       <table class="fuel-table"><thead><tr>
@@ -3207,6 +3263,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <th>MONTO<br>DIARIO</th><th>TOTAL GAS</th><th>%PxG</th><th>GASTO</th><th></th>
       </tr></thead><tbody id="fuel-tbody-gas"></tbody></table>
     </div>
+    <div id="fuel-cards-gas"></div>
+    <div class="fuel-vermas" id="fuel-vermas-gas"></div>
   </div>
 
 </div>
@@ -3710,6 +3768,40 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 </div>
 
+<!-- MODAL: NUEVA / EDITAR RECARGA (vista de tarjetas) -->
+<div class="modal-overlay" id="fre-overlay" onclick="if(event.target===this)cerrarEditarRecarga()">
+  <div class="modal" style="width:440px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title"><span id="fre-title">⛽ Recarga</span><button class="modal-close" onclick="cerrarEditarRecarga()">✕</button></div>
+    <div class="field-row">
+      <div class="field"><label>Fecha de la recarga</label><input id="fre-ffinal" type="date" oninput="freCalc()"></div>
+      <div class="field"><label>Km del odómetro</label><input id="fre-kmfinal" type="text" inputmode="numeric" placeholder="Km" oninput="freCalc()"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label id="fre-cant-lbl">Cantidad</label><input id="fre-cant" type="number" step="0.001" min="0" placeholder="0.00" oninput="freCalc()"></div>
+      <div class="field"><label id="fre-pxg-lbl">Precio</label><input id="fre-pxg" type="number" step="0.0001" min="0" placeholder="S/" oninput="freCalc()"></div>
+    </div>
+    <div class="field" id="fre-rec-wrap"><label>Recaudo de la instalación (S/) <small>(0 si no tuvo)</small></label><input id="fre-rec" type="number" step="0.01" min="0" placeholder="0.00" oninput="freCalc()"></div>
+    <div id="fre-calc" style="background:var(--bg3);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6"></div>
+    <details id="fre-tramo" style="margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--text2)">Inicio del tramo (fecha y km inicial)</summary>
+      <div style="font-size:11px;color:var(--text3);margin:6px 0">Normalmente es la recarga anterior. Cámbialo solo si este tramo empezó en otra fecha o km.</div>
+      <div class="field-row">
+        <div class="field"><label>F. inicial</label><input id="fre-finicial" type="date" oninput="freCalc()"></div>
+        <div class="field"><label>Km inicial</label><input id="fre-kminicial" type="text" inputmode="numeric" placeholder="Km" oninput="freCalc()"></div>
+      </div>
+    </details>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:6px;cursor:pointer"><input type="checkbox" id="fre-sinrend" style="margin-top:2px" onchange="freCalc()"><span>No llené el tanque <span style="color:var(--text3)">(esta recarga no cuenta para el rendimiento)</span></span></label>
+    <div id="fre-gasto" style="font-size:12px;margin:8px 0"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <button class="config-action-btn danger" id="fre-del" style="font-size:11px;padding:5px 10px" onclick="eliminarDesdeEditarRecarga()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarEditarRecarga()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarEditarRecarga()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: DETALLE DE UN DÍA DEL MAPA DE CONSUMOS DE TARJETA -->
 <div class="modal-overlay" id="tc-heatmap-day-overlay" onclick="if(event.target===this)closeTCHeatmapDayModal()">
   <div class="modal" style="width:440px;max-height:80vh;overflow-y:auto">
@@ -3862,9 +3954,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.68.0';
-const APP_VERSION_DATE = '17/10/26 - 23:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Combustible: botón «Exportar Excel» con todas las recargas de GLP y gasolina (una hoja por combustible, con totales).';
+const APP_VERSION = 'v1.69.0';
+const APP_VERSION_DATE = '18/10/26 - 08:19'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Combustible: recargas en tarjetas (como la app de papá) con tramo en curso y formulario; filtros de tiempo en el gráfico, últimas 12 y la última resaltada. La tabla sigue con el botón Tabla.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16443,10 +16535,10 @@ function renderTCGlobal(){
     chartData.push({mk,mesLabel,porTarjeta,total:totalDeudaEnSoles});
     return `<tr>
       <td>${mesLabel}</td>
-      <td style="color:var(--red)">${M(fmtTCMixed(deudaPen,deudaUsd))}</td>
-      <td style="color:var(--green)">${M(fmtTCMixed(pagadoPen,pagadoUsd))}</td>
-      <td style="color:${(pendientePen>0||pendienteUsd>0)?'var(--amber)':'var(--text3)'}">${M(fmtTCMixed(pendientePen,pendienteUsd))}</td>
-      <td>${pctBars||'—'}</td>
+      <td data-l="Deuda total" style="color:var(--red)">${M(fmtTCMixed(deudaPen,deudaUsd))}</td>
+      <td data-l="Pagado" style="color:var(--green)">${M(fmtTCMixed(pagadoPen,pagadoUsd))}</td>
+      <td data-l="Pendiente" style="color:${(pendientePen>0||pendienteUsd>0)?'var(--amber)':'var(--text3)'}">${M(fmtTCMixed(pendientePen,pendienteUsd))}</td>
+      <td class="tcg-pct">${pctBars||'—'}</td>
     </tr>`;
   }).join('');
 
@@ -19474,6 +19566,32 @@ function confirmarCompensacion(){
 // ══════════════════════════════════════════════════════
 let fuelCharts = {glp:null, gas:null};
 let fuelChartIdx = {glp:0, gas:0};
+let fuelChartRango = {glp:'todo', gas:'todo'};
+let fuelVerTodo = {glp:false, gas:false};
+// Vista de recargas: 'tarjetas' (por defecto, como la app anterior) o 'tabla'. Se recuerda en el dispositivo.
+function _fuelEsGnv(t){ return t==='glp' && typeof APP_LITE!=='undefined' && APP_LITE; }
+function _fuelNombre(t){ return t==='glp'?(_fuelEsGnv(t)?'GNV':'GLP'):'Gasolina'; }
+const _FUEL_VISTA_KEY=((typeof APP_LITE!=='undefined'&&APP_LITE)?'papalite':'miguel')+'_fuel_vista';
+let fuelVista = (()=>{ try{ return JSON.parse(localStorage.getItem(_FUEL_VISTA_KEY))||{glp:'tarjetas', gas:'tarjetas'}; }catch(e){ return {glp:'tarjetas', gas:'tarjetas'}; } })();
+function setFuelVista(type, v){ fuelVista[type]=v; try{ localStorage.setItem(_FUEL_VISTA_KEY, JSON.stringify(fuelVista)); }catch(e){ console.warn('No se pudo guardar la vista:', e&&e.message); } renderFuelSection(type); }
+const FUEL_FILAS_VISIBLES = 12;
+// Fecha desde la que se muestran las recargas en el gráfico (YYYY-MM-DD), o '' = todo
+function fuelRangoDesde(r){
+  const h=new Date(); const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  if(r==='semana'){ const d=new Date(h); const dw=(d.getDay()+6)%7; d.setDate(d.getDate()-dw); return iso(d); } // desde el lunes
+  if(r==='mes') return iso(new Date(h.getFullYear(), h.getMonth(), 1));
+  if(r==='3m') return iso(new Date(h.getFullYear(), h.getMonth()-3, h.getDate()));
+  if(r==='6m') return iso(new Date(h.getFullYear(), h.getMonth()-6, h.getDate()));
+  if(r==='anio') return iso(new Date(h.getFullYear(), 0, 1));
+  if(r==='12m') return iso(new Date(h.getFullYear()-1, h.getMonth(), h.getDate()));
+  return '';
+}
+function setFuelRango(type, r){
+  fuelChartRango[type]=r;
+  document.querySelectorAll('#frango-'+type+' .fuel-chart-tab').forEach(b=>b.classList.toggle('active', b.dataset.r===r));
+  renderFuelChart(type, computeFuelRows(state[fuelStateKey(type)]||[]));
+}
+function toggleFuelVerTodo(type){ fuelVerTodo[type]=!fuelVerTodo[type]; renderFuelSection(type); }
 let activeFuelType = 'glp'; // currently visible tab
 
 // ── TYPE SWITCH ───────────────────────────────────────
@@ -20325,6 +20443,169 @@ function exportarCombustibleExcel(){
   XLSX.writeFile(wb, 'combustible_'+todayLocalISO()+'.xlsx');
   toast(`Excel descargado: ${a.n} recarga${a.n===1?'':'s'} de ${lite?'GNV':'GLP'} y ${b.n} de gasolina`);
 }
+function _fFecha(d){ if(!d) return '—'; const p=String(d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
+function renderFuelCards(type, rows){
+  const cont=document.getElementById('fuel-cards-'+type); if(!cont) return;
+  const tbody=document.getElementById('fuel-tbody-'+type);
+  const tbl=tbody?tbody.closest('.fuel-table-wrap'):null;
+  const vista=fuelVista[type]||'tarjetas';
+  const sw=`<div class="fuel-vista" role="group" aria-label="Vista de recargas"><button class="${vista==='tarjetas'?'on':''}" onclick="setFuelVista('${type}','tarjetas')">🗂 Tarjetas</button><button class="${vista==='tabla'?'on':''}" onclick="setFuelVista('${type}','tabla')">📋 Tabla</button></div>`;
+  if(vista==='tabla'){ if(tbl) tbl.style.display=''; cont.innerHTML=sw; return; }
+  if(tbl) tbl.style.display='none';
+  const gnv=_fuelEsGnv(type), u=gnv?'m³':'gal';
+  if(!rows.length){
+    cont.innerHTML=sw+`<div class="card" style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Sin recargas de ${type==='glp'?_fuelNombre(type):'gasolina'} todavía.<br>Toca «+ Nueva recarga» después de cargar en el grifo.${typeof abrirImportFuel==='function'?'<br>Para subir recargas antiguas: ⚙ Config → Datos → Histórico combustible.':''}</div>`;
+    return;
+  }
+  const inv=rows.slice().reverse();
+  const lista=fuelVerTodo[type]?inv:inv.slice(0,FUEL_FILAS_VISIBLES);
+  const ult=rows[rows.length-1];
+  let h=sw;
+  if(ult && ult.fFinal){
+    const dias=Math.max(0,fuelDaysBetween(ult.fFinal, todayLocalISO()));
+    const kmI=parseFloat(ult.kmFinal);
+    const ac=(typeof getKmActualVehiculo==='function')?getKmActualVehiculo():null;
+    const kmAct=ac&&ac.km>kmI?ac.km:null;
+    const rec=kmAct!==null?kmAct-kmI:null;
+    h+=`<div class="fuel-tramo">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:15px;font-weight:700">${_fFecha(ult.fFinal)} → hoy</div><span style="font-size:10px;font-weight:700;background:var(--accent);color:#fff;border-radius:10px;padding:2px 9px;white-space:nowrap">TRAMO EN CURSO</span></div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--text2);margin-top:3px">${isNaN(kmI)?'':fuelInputFmt(kmI)+' km'} → ${kmAct!==null?fuelInputFmt(kmAct)+' km (última lectura)':'? km'}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px">
+        <div><div style="font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text3)">Llevas</div><div style="font-family:var(--mono);font-size:13px">${dias} día${dias===1?'':'s'}</div></div>
+        <div><div style="font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text3)">Recorrido</div><div style="font-family:var(--mono);font-size:13px;color:var(--teal)">${rec!==null?fuelFmt(rec,0)+' km':'—'}</div></div>
+        <div><div style="font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text3)">Km/día</div><div style="font-family:var(--mono);font-size:13px">${rec!==null&&dias>0?fuelFmt(rec/dias,1):'—'}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Se cierra cuando registres la próxima recarga: empezará el ${_fFecha(ult.fFinal)}${isNaN(kmI)?'':' en '+fuelInputFmt(kmI)+' km'}.</div>
+      <button class="btn btn-primary" style="width:100%;margin-top:10px;font-size:12px" onclick="abrirEditarRecarga('${type}',null)">+ Registrar la recarga que cierra este tramo</button></div>`;
+  }
+  h+=`<div class="fuel-cards">`+lista.map(r=>{
+    const g=r.gastoRegistrado;
+    const pago=g?(g.tipo==='cuenta'?escapeHtml(accLabel(g.cuenta||'')):g.tipo==='tarjeta'?'💳 '+escapeHtml((getTarjeta(g.tarjetaId)||{}).banco||'Tarjeta'):'<span style="color:var(--text3)">Registrado</span>'):'<span style="color:var(--amber);font-weight:700">Sin registrar</span>';
+    const esU=r.id===ult.id;
+    const tramo=r.fInicial?`${_fFecha(r.fInicial)} → ${_fFecha(r.fFinal)}`:`Recarga del ${_fFecha(r.fFinal)}`;
+    const kmTxt=(r.kmUsado!==null)?`${fuelInputFmt(r.kmInicial)} → ${fuelInputFmt(r.kmFinal)} km`:(r.kmFinal!==''&&r.kmFinal!=null?fuelInputFmt(r.kmFinal)+' km':'Sin km');
+    const alerta=(r.kmUsado!==null&&r.kmUsado<0)?`<div style="margin-top:8px;font-size:11px;color:var(--red)">⚠️ El km es menor que el de la recarga anterior. Revisa los datos.</div>`:'';
+    return `<div class="fuel-card${esU?' ultima':''}" role="button" tabindex="0" id="fuel-card-${type}-${r.id}" onclick="abrirEditarRecarga('${type}','${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirEditarRecarga('${type}','${r.id}')}" title="Tocar para ver o editar">
+      ${esU?'<div class="fuel-ultima-tag">⭐ ÚLTIMA RECARGA</div>':''}
+      <div class="fc-row"><span class="fc-tit">${tramo}</span><span style="font-size:11px;color:var(--text3);white-space:nowrap">${r.dt!==null?r.dt+' día'+(r.dt===1?'':'s'):''}</span></div>
+      <div class="fc-row" style="margin-top:3px"><span class="fc-km">${kmTxt}</span><span class="fc-tot">${r.totalGlp!==null?'S/ '+fuelFmt(r.totalGlp,2):'—'}</span></div>
+      ${gnv&&r.recaudo>0?`<div class="fc-row fc-rec"><span>+ recaudo instalación S/ ${fuelFmt(r.recaudo,2)}</span><span>pagado <b>S/ ${fuelFmt(r.totalPagado,2)}</b></span></div>`:''}
+      <div class="fc-met">
+        <div><div class="fc-k">Recorrido</div><div class="fc-v" style="color:var(--teal)">${r.kmUsado!==null?fuelFmt(r.kmUsado,0)+' km':'—'}</div></div>
+        <div><div class="fc-k">${gnv?'m³':'Galones'}</div><div class="fc-v">${parseFloat(r.galones)>0?fuelFmt(parseFloat(r.galones),2):'—'}</div></div>
+        <div><div class="fc-k">Km/${u}</div><div class="fc-v" style="color:var(--purple)">${r.kxg!==null?fuelFmt(r.kxg,1):(r.sinRendimiento?'<span style="font-size:10px;color:var(--text3)">no cuenta</span>':'—')}</div></div>
+        <div><div class="fc-k">Precio/${u}</div><div class="fc-v">${parseFloat(r.pxg)>0?'S/ '+fuelFmt(parseFloat(r.pxg),2):'—'}</div></div>
+        <div><div class="fc-k">Km/día</div><div class="fc-v">${r.kmDiarios!==null?fuelFmt(r.kmDiarios,1):'—'}</div></div>
+        <div><div class="fc-k">Pagó con</div><div class="fc-v" style="font-family:var(--font);font-size:12px">${pago}</div></div>
+      </div>${alerta}</div>`;
+  }).join('')+`</div>`;
+  cont.innerHTML=h;
+}
+
+// ── Formulario de recarga (vista de tarjetas) ──
+let freCtx=null; // {type, id|null}
+function abrirEditarRecarga(type, id){
+  const key=fuelStateKey(type), arr=state[key]||[];
+  const rows=computeFuelRows(arr);
+  const idx=id?arr.findIndex(r=>r.id===id):-1;
+  if(id && idx<0) return;
+  const r=idx>=0?rows[idx]:null, raw=idx>=0?arr[idx]:null;
+  const prev=idx>=0?(idx>0?arr[idx-1]:null):(arr.length?arr[arr.length-1]:null);
+  freCtx={type, id:id||null, prevFFinal:prev?(prev.fFinal||''):'', prevKmFinal:prev?(prev.kmFinal||''):''};
+  const gnv=_fuelEsGnv(type);
+  document.getElementById('fre-title').textContent=(id?'✏️ Editar recarga de ':'⛽ Nueva recarga de ')+_fuelNombre(type);
+  document.getElementById('fre-cant-lbl').textContent=gnv?'Metros cúbicos (m³)':'Galones';
+  document.getElementById('fre-pxg-lbl').textContent=gnv?'Precio por m³ (S/)':'Precio por galón (S/)';
+  document.getElementById('fre-rec-wrap').style.display=gnv?'':'none';
+  document.getElementById('fre-ffinal').value=raw?(raw.fFinal||''):todayLocalISO();
+  document.getElementById('fre-kmfinal').value=raw&&raw.kmFinal!==''&&raw.kmFinal!=null?String(raw.kmFinal):'';
+  document.getElementById('fre-cant').value=raw&&raw.galones!==''&&raw.galones!=null?raw.galones:'';
+  document.getElementById('fre-pxg').value=raw&&raw.pxg!==''&&raw.pxg!=null?raw.pxg:(prev&&prev.pxg?prev.pxg:'');
+  document.getElementById('fre-rec').value=raw&&parseFloat(raw.recaudo)>0?raw.recaudo:'';
+  document.getElementById('fre-finicial').value=r?(r.fInicial||''):freCtx.prevFFinal;
+  document.getElementById('fre-kminicial').value=r&&r.kmInicial!==''&&r.kmInicial!=null?String(r.kmInicial):String(freCtx.prevKmFinal||'');
+  document.getElementById('fre-tramo').open=!!(raw&&(raw.fInicialManual||raw.kmInicialManual));
+  document.getElementById('fre-sinrend').checked=!!(raw&&raw.sinRendimiento);
+  document.getElementById('fre-del').style.display=id?'':'none';
+  const gEl=document.getElementById('fre-gasto');
+  const g=raw&&raw.gastoRegistrado;
+  if(!id) gEl.innerHTML='<span style="color:var(--text3)">Después de guardar podrás registrar el gasto en una cuenta o tarjeta.</span>';
+  else if(g) gEl.innerHTML=`<span style="color:var(--green)">✅ Gasto registrado</span>${g.tipo==='cuenta'?' en '+escapeHtml(accLabel(g.cuenta||'')):g.tipo==='tarjeta'?' con tarjeta '+escapeHtml((getTarjeta(g.tarjetaId)||{}).banco||''):' (aparte)'}${g.tipo==='manual'?` · <span style="cursor:pointer;color:var(--red)" onclick="cerrarEditarRecarga();desmarcarFuelManual('${type}','${id}')">quitar marca</span>`:''}`;
+  else gEl.innerHTML=`<span style="color:var(--amber);font-weight:700">Gasto sin registrar</span> · <button class="config-action-btn neutral" style="font-size:11px;padding:3px 9px" onclick="registrarGastoDesdeEditarRecarga()">+ Registrar gasto</button>`;
+  freCalc();
+  document.getElementById('fre-overlay').classList.add('open');
+}
+function cerrarEditarRecarga(){ document.getElementById('fre-overlay').classList.remove('open'); freCtx=null; }
+function _freNum(id){ const v=String(document.getElementById(id).value||'').replace(/,/g,'').trim(); return v===''?NaN:parseFloat(v); }
+function freCalc(){
+  if(!freCtx) return;
+  const gnv=_fuelEsGnv(freCtx.type), u=gnv?'m³':'gal';
+  const cant=_freNum('fre-cant'), pxg=_freNum('fre-pxg'), rec=gnv?(_freNum('fre-rec')||0):0;
+  const kmF=_freNum('fre-kmfinal'), kmI=_freNum('fre-kminicial');
+  const fF=document.getElementById('fre-ffinal').value, fI=document.getElementById('fre-finicial').value;
+  const tot=cant>0&&pxg>0?cant*pxg:null, kmU=!isNaN(kmF)&&!isNaN(kmI)?kmF-kmI:null, dt=fI&&fF?fuelDaysBetween(fI,fF):null;
+  const sinR=document.getElementById('fre-sinrend').checked;
+  const l=[];
+  l.push(tot!==null?`${fuelFmt(cant,2)} ${u} × S/ ${fuelFmt(pxg,2)} = <b>S/ ${fuelFmt(tot,2)}</b>${rec>0?` + recaudo S/ ${fuelFmt(rec,2)} → pagado en el grifo <b>S/ ${fuelFmt(tot+rec,2)}</b>`:''}`:'Completa la cantidad y el precio para ver el total.');
+  if(kmU!==null) l.push(`Tramo: ${fI?_fFecha(fI):'?'} → ${fF?_fFecha(fF):'?'} · <b>${fuelFmt(kmU,0)} km</b>${dt!==null?' en '+dt+' día'+(dt===1?'':'s'):''}${kmU>0&&cant>0&&!sinR?` · <b>${fuelFmt(kmU/cant,1)} km/${u}</b>`:''}`);
+  if(kmU!==null&&kmU<0) l.push('<span style="color:var(--red)">⚠️ El km es menor que el inicial. Revisa los datos.</span>');
+  document.getElementById('fre-calc').innerHTML=l.join('<br>');
+}
+function guardarEditarRecarga(){
+  if(!freCtx) return;
+  const {type,id}=freCtx, gnv=_fuelEsGnv(type), key=fuelStateKey(type);
+  if(!state[key]) state[key]=[];
+  const arr=state[key];
+  const fF=document.getElementById('fre-ffinal').value;
+  const kmF=_freNum('fre-kmfinal'), cant=_freNum('fre-cant'), pxg=_freNum('fre-pxg');
+  if(!fF){ alert('Pon la fecha de la recarga.'); return; }
+  if(isNaN(kmF)||kmF<0){ alert('Pon el kilometraje del odómetro.'); return; }
+  if(!(cant>0)||!(pxg>0)){ alert('Completa la cantidad y el precio.'); return; }
+  const fI=document.getElementById('fre-finicial').value, kmIraw=document.getElementById('fre-kminicial').value.replace(/,/g,'').trim();
+  let row=id?arr.find(r=>r.id===id):null;
+  const nueva=!row;
+  if(nueva){ row={id:'fuel-'+Date.now()}; arr.push(row); }
+  const antesFFinal=row.fFinal, antesKmFinal=row.kmFinal;
+  row.fFinal=fF; row.kmFinal=String(kmF); row.galones=String(cant); row.pxg=String(pxg);
+  // Inicio del tramo: manual solo si es distinto al final de la recarga anterior
+  const i=arr.indexOf(row), p=i>0?arr[i-1]:null;
+  const pF=p?(p.fFinal||''):'', pK=p?String(p.kmFinal||''):'';
+  if(fI && (!p || fI!==pF)){ row.fInicial=fI; if(p) row.fInicialManual=true; else delete row.fInicialManual; } else { row.fInicial=pF||fI||''; delete row.fInicialManual; }
+  if(kmIraw!=='' && (!p || parseFloat(kmIraw)!==parseFloat(pK))){ row.kmInicial=kmIraw; if(p) row.kmInicialManual=true; else delete row.kmInicialManual; } else { row.kmInicial=pK||kmIraw||''; delete row.kmInicialManual; }
+  if(document.getElementById('fre-sinrend').checked) row.sinRendimiento=true; else delete row.sinRendimiento;
+  // La siguiente recarga empieza donde termina esta (si no tiene un inicio propio)
+  const n=arr[i+1];
+  if(n){ if(!n.fInicialManual && antesFFinal!==fF) n.fInicial=fF; if(!n.kmInicialManual && String(antesKmFinal)!==String(kmF)) n.kmInicial=String(kmF); }
+  let dif=0;
+  if(gnv){
+    const rec=Math.round((_freNum('fre-rec')||0)*100)/100;
+    const recAntes=parseFloat(row.recaudo)||0;
+    if(rec>0) row.recaudo=rec; else delete row.recaudo;
+    if(Math.abs(rec-recAntes)>0.004) actualizarGastoRecaudoGnv(row);
+    dif=sincronizarRecaudoGnv(row);
+  }
+  saveState();
+  const nuevoId=row.id;
+  cerrarEditarRecarga();
+  renderFuelSection(type);
+  toast((nueva?'Recarga guardada':'Recarga actualizada')+(gnv&&deudaGnv()&&Math.abs(dif)>0.004?` · deuda de la instalación: ${dif>0?'−':'+'}S/ ${fuelFmt(Math.abs(dif),2)}`:''));
+  if(nueva && !row.gastoRegistrado){
+    setTimeout(()=>{ if(confirm('¿Registrar ahora el gasto de esta recarga en una cuenta o tarjeta?')) openFuelGastoModal(type, nuevoId); }, 150);
+  }
+}
+function registrarGastoDesdeEditarRecarga(){
+  if(!freCtx||!freCtx.id) return;
+  const {type,id}=freCtx;
+  cerrarEditarRecarga();
+  openFuelGastoModal(type,id);
+}
+function eliminarDesdeEditarRecarga(){
+  if(!freCtx||!freCtx.id) return;
+  const {type,id}=freCtx;
+  const n=(state[fuelStateKey(type)]||[]).length;
+  deleteFuelRow(type,id);
+  if((state[fuelStateKey(type)]||[]).length<n) cerrarEditarRecarga();
+}
 function computeFuelRows(rows){
   return rows.map((row,i)=>{
     const r={...row};
@@ -20372,12 +20653,14 @@ function renderFuelSection(type){
     tbody.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">
       Sin recargas de ${type==='glp'?'GLP':'Gasolina'}. Agrega la primera con el botón de arriba.</td></tr>`;
   } else {
-    tbody.innerHTML=rows.map((r,i)=>{
+    const _ini=(fuelVerTodo[type]||rows.length<=FUEL_FILAS_VISIBLES)?0:rows.length-FUEL_FILAS_VISIBLES;
+    tbody.innerHTML=rows.slice(_ini).map((r,_j)=>{
+      const i=_ini+_j;
       const isLast=i===rows.length-1;
       const pxgCol=r.pxgVar===null?'fuel-pxg-nt':r.pxgVar>0?'fuel-pxg-up':'fuel-pxg-dn';
       const pxgStr=r.pxgVar===null?'—':(r.pxgVar>0?'+':'')+fuelFmt(r.pxgVar,1)+'%';
-      return `<tr id="fuel-row-${type}-${r.id}" style="${isLast?'background:rgba(91,141,239,.04)':''}">
-        <td><input class="fuel-inp date-inp" type="date" value="${r.fInicial||''}" onchange="updateFuelField('${type}','${r.id}','fInicial',this.value)" title="F. Inicial (editable, por defecto hereda del F. Final anterior)"></td>
+      return `<tr id="fuel-row-${type}-${r.id}" class="${isLast?'fuel-row-ultima':''}" title="${isLast?'Última recarga':''}">
+        <td>${isLast?'<div class="fuel-ultima-tag">⭐ ÚLTIMA RECARGA</div>':''}<input class="fuel-inp date-inp" type="date" value="${r.fInicial||''}" onchange="updateFuelField('${type}','${r.id}','fInicial',this.value)" title="F. Inicial (editable, por defecto hereda del F. Final anterior)"></td>
         <td><input class="fuel-inp date-inp" type="date" value="${r.fFinal||''}" onchange="updateFuelField('${type}','${r.id}','fFinal',this.value)"></td>
         <td><input class="fuel-inp" type="text" inputmode="numeric" value="${fuelInputFmt(r.kmInicial)}" onchange="updateFuelField('${type}','${r.id}','kmInicial',this.value.replace(/,/g,''))" style="width:75px" placeholder="KM" title="KM Inicial (editable, por defecto hereda del KM Final anterior)"></td>
         <td><input class="fuel-inp" type="text" inputmode="numeric" value="${fuelInputFmt(r.kmFinal)}" onchange="updateFuelField('${type}','${r.id}','kmFinal',this.value.replace(/,/g,''))" style="width:75px" placeholder="KM"></td>
@@ -20394,6 +20677,16 @@ function renderFuelSection(type){
         <td><button onclick="deleteFuelRow('${type}','${r.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 5px">✕</button></td>
       </tr>`;
     }).join('');
+  }
+  renderFuelCards(type, rows);
+  const _vm=document.getElementById('fuel-vermas-'+type);
+  if(_vm){
+    if(rows.length>FUEL_FILAS_VISIBLES){
+      _vm.innerHTML=fuelVerTodo[type]
+        ? `<span>Mostrando las ${rows.length} recargas</span><button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="toggleFuelVerTodo('${type}')">▴ Ver solo las últimas ${FUEL_FILAS_VISIBLES}</button>`
+        : `<span>Mostrando las últimas ${FUEL_FILAS_VISIBLES} de ${rows.length} recargas</span><button class="config-action-btn neutral" style="font-size:11px;padding:4px 10px" onclick="toggleFuelVerTodo('${type}')">▾ Ver todo el historial (${rows.length})</button>`;
+      _vm.style.display='flex';
+    } else { _vm.innerHTML=''; _vm.style.display='none'; }
   }
   renderFuelSummary(type, rows);
   renderFuelChart(type, rows);
@@ -20441,11 +20734,15 @@ function renderFuelChart(type, rows){
     {key:'kmDiarios',label:'KM Diarios',          color:'#3ec96e',           fmt:v=>fuelFmt(v,1)+' km'},
   ];
   const cfg=configs[fuelChartIdx[type]||0];
+  const _desde=fuelRangoDesde(fuelChartRango[type]||'todo');
+  if(_desde) rows=rows.filter(r=>(r.fFinal||r.fInicial||'')>=_desde);
   const valid=rows.filter(r=>{
     const v=cfg.key==='pxg'?parseFloat(r.pxg):r[cfg.key];
     return v!==null&&v!==undefined&&!isNaN(v)&&v>0;
   });
   if(fuelCharts[type]){fuelCharts[type].destroy();fuelCharts[type]=null;}
+  const _vacio=document.getElementById('fuel-chart-vacio-'+type);
+  if(_vacio) _vacio.style.display=valid.length?'none':'flex';
   if(!valid.length) return;
   const labels=valid.map(r=>fuelDateLabel(r.fFinal||r.fInicial)||'—');
   const data  =valid.map(r=>cfg.key==='pxg'?parseFloat(r.pxg):r[cfg.key]);
@@ -20465,6 +20762,7 @@ function renderFuelChart(type, rows){
 
 // ── CRUD ──────────────────────────────────────────────
 function addFuelRow(type){
+  if((fuelVista[type]||'tarjetas')==='tarjetas'){ abrirEditarRecarga(type, null); return; }
   const key=fuelStateKey(type);
   if(!state[key]) state[key]=[];
   const arr=state[key];
@@ -25440,6 +25738,23 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.69.0",
+  "fecha": "18/10/26",
+  "cambios": [
+   "Combustible (GLP y Gasolina): las recargas se ven como tarjetas, la más reciente primero y resaltada, con el «Tramo en curso» arriba.",
+   "Al tocar una tarjeta se abre un formulario para editar la recarga, registrar su gasto o eliminarla; «+ Nueva recarga» también abre el formulario.",
+   "Gráfico de combustible con filtros: Esta semana, Este mes, Últimos 3 y 6 meses, Este año, Último año y Todo.",
+   "Se muestran las últimas 12 recargas con opción de ver todo; el botón Tarjetas / Tabla permite volver a la tabla."
+  ]
+ },
+ {
+  "v": "v1.68.1",
+  "fecha": "18/10/26",
+  "cambios": [
+   "Tarjetas: en el celular, la tabla «Resumen Global — Todas las tarjetas» se adapta a la pantalla: cada mes es un bloque con Deuda total, Pagado y Pendiente, sin desplazarse a la derecha."
+  ]
+ },
  {
   "v": "v1.68.0",
   "fecha": "17/10/26",
