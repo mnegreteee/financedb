@@ -386,6 +386,26 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 /* ── COMPARATIVO ── */
 .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .compare-selectors{display:flex;gap:10px;margin-bottom:16px;}
+.fuel-sum-sub{font-size:10px;color:var(--text3);margin-top:3px;line-height:1.35;}
+.mg-filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+.mg-filtros select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:13px;padding:8px 10px;min-height:40px;max-width:100%;}
+.mg-resumen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+.mg-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;}
+.mg-kpi span{display:block;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin-bottom:3px;}
+.mg-kpi b{font-family:var(--mono);font-size:16px;}
+#mg-mapa{height:460px;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;background:var(--bg3);}
+.mg-lugar{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;}
+.mg-lugar:hover{background:var(--bg3);}
+.mg-lugar:last-child{border-bottom:none;}
+.mg-rank{font-family:var(--mono);font-size:12px;color:var(--text3);text-align:center;}
+.mg-nom{font-size:13px;font-weight:600;overflow-wrap:anywhere;}
+.mg-sub{font-size:11px;color:var(--text3);overflow-wrap:anywhere;}
+.mg-tot{text-align:right;font-family:var(--mono);font-size:13px;font-weight:700;white-space:nowrap;}
+.mg-tot small{display:block;font-size:10px;font-weight:400;color:var(--text3);}
+.mg-vacio{padding:28px 16px;text-align:center;color:var(--text3);font-size:13px;line-height:1.6;}
+.mg-pop b{font-size:13px;}
+.mg-pop div{font-size:11px;margin-top:2px;}
+@media(max-width:600px){#mg-mapa{height:360px;}}
 .compare-selectors select{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:13px;padding:7px 10px;}
 .compare-row{display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
 .compare-row:last-child{border-bottom:none;}
@@ -813,7 +833,7 @@ body.compact-mode .anual-table{font-size:11px;}
 
 
 /* ══ COMBUSTIBLE ══ */
-.fuel-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px;}
+.fuel-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:20px;}
 .fuel-sum-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;border-top:2px solid var(--accent);}
 .fuel-sum-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);margin-bottom:3px;}
 .fuel-sum-val{font-family:var(--mono);font-size:17px;font-weight:500;}
@@ -1341,6 +1361,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-proyeccion" onclick="showPage('proyeccion')">📈 Proyección</button>
         <button class="nav-dropdown-item" id="nav-comparativo" onclick="showPage('comparativo')">⚖️ Comparativo</button>
         <button class="nav-dropdown-item" id="nav-anio" onclick="showPage('anio')">🗓️ Año Completo</button>
+        <button class="nav-dropdown-item" id="nav-mapagastos" onclick="showPage('mapagastos')">🗺️ Mapa de gastos</button>
       </div>
     </div>
 
@@ -2121,6 +2142,29 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button class="btn" style="font-size:11px" onclick="compararVsAnioAnterior()">📅 Este mes vs. año pasado</button>
   </div>
   <div id="compare-content"></div>
+</div>
+</div>
+
+<!-- ══ PAGE: MAPA DE GASTOS ══ -->
+<div class="page" id="page-mapagastos">
+<div class="container">
+  <div class="month-nav"><h1>🗺️ Mapa de gastos</h1></div>
+  <div class="mg-filtros">
+    <select id="mg-mes" onchange="mgCambiarFiltro()" aria-label="Mes"></select>
+    <select id="mg-cat" onchange="mgCambiarFiltro()" aria-label="Categoría"></select>
+    <div class="cp-view-toggle" id="mg-cur" style="display:none">
+      <button data-c="PEN" class="active" onclick="mgSetMoneda('PEN')">S/</button>
+      <button data-c="USD" onclick="mgSetMoneda('USD')">$</button>
+    </div>
+    <div class="cp-view-toggle" id="mg-vista">
+      <button data-v="mapa" class="active" onclick="mgSetVista('mapa')">🗺️ Mapa</button>
+      <button data-v="lugares" onclick="mgSetVista('lugares')">🏆 Lugares</button>
+    </div>
+  </div>
+  <div class="mg-resumen" id="mg-resumen"></div>
+  <div id="mg-mapa-wrap"><div id="mg-mapa"></div></div>
+  <div class="card" id="mg-lugares" style="display:none;padding:4px 0"></div>
+  <div id="mg-nota" style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5"></div>
 </div>
 </div>
 
@@ -3189,6 +3233,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="fuel-sum-card" style="border-top-color:var(--amber)"><div class="fuel-sum-label">Total Gastado</div><div class="fuel-sum-val" id="fs-glp-gasto" style="color:var(--amber)">—</div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--purple)"><div class="fuel-sum-label">Galones Total</div><div class="fuel-sum-val" id="fs-glp-gal" style="color:var(--purple)">—</div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--green)"><div class="fuel-sum-label">PxG Actual</div><div class="fuel-sum-val" id="fs-glp-pxg" style="color:var(--green)">—</div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--red)"><div class="fuel-sum-label">Costo por km</div><div class="fuel-sum-val" id="fs-glp-ckm" style="color:var(--red)">—</div><div class="fuel-sum-sub" id="fs-glp-ckm-sub"></div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--teal)"><div class="fuel-sum-label">Próxima recarga</div><div class="fuel-sum-val" id="fs-glp-prox" style="color:var(--teal);font-size:15px">—</div><div class="fuel-sum-sub" id="fs-glp-prox-sub"></div></div>
     </div>
     <div class="fuel-chart-wrap">
       <div class="fuel-chart-tabs" id="ftabs-glp">
@@ -3234,6 +3280,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="fuel-sum-card" style="border-top-color:var(--amber)"><div class="fuel-sum-label">Total Gastado</div><div class="fuel-sum-val" id="fs-gas-gasto" style="color:var(--amber)">—</div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--purple)"><div class="fuel-sum-label">Galones Total</div><div class="fuel-sum-val" id="fs-gas-gal" style="color:var(--purple)">—</div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--green)"><div class="fuel-sum-label">PxG Actual</div><div class="fuel-sum-val" id="fs-gas-pxg" style="color:var(--green)">—</div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--red)"><div class="fuel-sum-label">Costo por km</div><div class="fuel-sum-val" id="fs-gas-ckm" style="color:var(--red)">—</div><div class="fuel-sum-sub" id="fs-gas-ckm-sub"></div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--teal)"><div class="fuel-sum-label">Próxima recarga</div><div class="fuel-sum-val" id="fs-gas-prox" style="color:var(--teal);font-size:15px">—</div><div class="fuel-sum-sub" id="fs-gas-prox-sub"></div></div>
     </div>
     <div class="fuel-chart-wrap">
       <div class="fuel-chart-tabs" id="ftabs-gas">
@@ -3332,6 +3380,17 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="deuda-grid" id="deuda-grid">
     <div class="empty"><div class="empty-icon">🤝</div>Sin préstamos registrados.</div>
+  </div>
+
+  <!-- ══ EVOLUCIÓN DE LA DEUDA TOTAL ══ -->
+  <div class="card" id="deuda-evo-card" style="margin-top:28px;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">📉 Evolución de lo que debo</div>
+      <div id="deuda-evo-total" style="font-family:var(--mono);font-size:22px;font-weight:700;margin-top:4px">—</div>
+      <div id="deuda-evo-var" style="font-size:12px;margin-top:2px"></div></div>
+    </div>
+    <div style="position:relative;height:230px"><canvas id="deuda-evo-chart"></canvas></div>
+    <div id="deuda-evo-nota" style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5"></div>
   </div>
 
   <!-- ══ SECCIÓN: DEUDAS MAYORES ══ -->
@@ -3954,9 +4013,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.69.1';
-const APP_VERSION_DATE = '18/10/26 - 10:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mapa del consumo: corregido el fondo del mapa, que salía con una marca de clave requerida.';
+const APP_VERSION = 'v1.70.0';
+const APP_VERSION_DATE = '23/10/26 - 12:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo Mapa de gastos con ranking de lugares, costo por km y próxima recarga en Combustible, y evolución de la deuda total.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -3997,6 +4056,7 @@ let state={
   ],
   tcTracker:[],            // [{id,fecha,rates:{empresaId:{compra,venta}}}]
   deudasMayores:[],        // [{id,tipo,nombre,currency,...,cuotas:[]}]
+  deudaHistorial:{},       // {'2026-10':{tc,dm,yd,total}} foto mensual de lo que debo (S/)
   calendarEvents:[],       // [{id,titulo,fecha,tipo,recurrente,notas}]
   currentTab:'todos',editId:null
 };
@@ -5551,6 +5611,7 @@ function migrateState(){
   if(!Array.isArray(state.deudas))         state.deudas=[];
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
+  if(!state.deudaHistorial||typeof state.deudaHistorial!=='object'||Array.isArray(state.deudaHistorial)) state.deudaHistorial={};
   if(!Array.isArray(state.calendarEvents)) state.calendarEvents=[];
   if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
     {id:'kambista',   nombre:'Kambista',   color:'#2f6fd1'},
@@ -6722,8 +6783,9 @@ function showPage(name){
   if(name==='proyeccion') renderProyeccion();
   if(name==='comparativo') renderComparativo();
   if(name==='anio') renderAnioCompleto();
+  if(name==='mapagastos') renderMapaGastos();
   if(name==='tarjetas')   renderTarjetas();
-  if(name==='deudas')     { renderDeudas(); renderDeudasMayores(); renderPagosFrecuentes(); renderMetasGrandesEnDeudas(); }
+  if(name==='deudas')     { renderDeudas(); renderDeudasMayores(); renderDeudaEvolucion(); renderPagosFrecuentes(); renderMetasGrandesEnDeudas(); }
   if(name==='combustible') renderCombustible();
   if(name==='tc-tracker')  renderTCTracker();
   if(name==='inversiones') renderInversiones();
@@ -7878,7 +7940,7 @@ function render(){
   if(active('proyeccion')) renderProyeccion();
   if(active('servicios'))  renderServicios();
   if(active('tarjetas'))   renderTarjetas();
-  if(active('deudas'))     { renderDeudas(); renderDeudasMayores(); renderPagosFrecuentes(); renderMetasGrandesEnDeudas(); }
+  if(active('deudas'))     { renderDeudas(); renderDeudasMayores(); renderDeudaEvolucion(); renderPagosFrecuentes(); renderMetasGrandesEnDeudas(); }
   if(active('combustible')) renderCombustible();
   if(active('tc-tracker'))  renderTCTracker();
   if(active('inversiones')) renderInversiones();
@@ -20708,6 +20770,32 @@ function renderFuelSummary(type, rows){
   set(`fs-${type}-gasto`, gasTotal>0?'S/ '+fuelFmt(gasTotal,2):'—');
   set(`fs-${type}-gal`,   galTotal>0?fuelFmt(galTotal,2)+' gal':'—');
   set(`fs-${type}-pxg`,   lastPxg?'S/ '+fuelFmt(parseFloat(lastPxg.pxg),2):'—');
+  fuelCostoYProxima(type, rows);
+}
+
+// Costo por km (lo gastado ÷ km recorridos, solo recargas con ambos datos) y estimación de la próxima recarga
+// según el ritmo de tus últimas recargas (días entre recargas y km por día).
+function fuelCostoYProxima(type, rows){
+  const txt=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  const compl=rows.filter(r=>r.kmUsado>0&&r.totalGlp>0);
+  const kmC=compl.reduce((s,r)=>s+r.kmUsado,0), gC=compl.reduce((s,r)=>s+r.totalGlp,0);
+  txt(`fs-${type}-ckm`, kmC>0?'S/ '+fuelFmt(gC/kmC,3):'—');
+  const ult=compl.slice(-3), kmU=ult.reduce((s,r)=>s+r.kmUsado,0), gU=ult.reduce((s,r)=>s+r.totalGlp,0);
+  txt(`fs-${type}-ckm-sub`, kmC>0?(ult.length>=2&&kmU>0?`Últimas ${ult.length}: S/ ${fuelFmt(gU/kmU,3)}/km · `:'')+`≈ S/ ${fuelFmt(gC/kmC*100,2)} cada 100 km`:'Falta KM y precio');
+  // próxima recarga: promedio de las últimas 4 recargas con fechas
+  const conDias=rows.filter(r=>r.dt>0).slice(-4);
+  const ultima=[...rows].reverse().find(r=>r.fFinal);
+  if(!conDias.length||!ultima){ txt(`fs-${type}-prox`,'—'); txt(`fs-${type}-prox-sub`,'Necesito al menos una recarga con fechas'); return; }
+  const dias=conDias.reduce((s,r)=>s+r.dt,0)/conDias.length;
+  const kmDia=(()=>{const c=conDias.filter(r=>r.kmDiarios>0);return c.length?c.reduce((s,r)=>s+r.kmDiarios,0)/c.length:null;})();
+  const [y,m,d]=ultima.fFinal.split('-').map(Number);
+  const est=new Date(y,m-1,d+Math.round(dias));
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const faltan=Math.round((est-hoy)/86400000);
+  const iso=est.getFullYear()+'-'+String(est.getMonth()+1).padStart(2,'0')+'-'+String(est.getDate()).padStart(2,'0');
+  txt(`fs-${type}-prox`, fuelDateLabel(iso));
+  const cuando=faltan>1?`en ${faltan} días`:faltan===1?'mañana':faltan===0?'hoy':`hace ${-faltan} día${faltan===-1?'':'s'} (ya tocaba)`;
+  txt(`fs-${type}-prox-sub`, `${cuando} · cada ~${fuelFmt(dias,0)} días${kmDia?` · ~${fuelFmt(kmDia,0)} km/día`:''}`);
 }
 
 // ── CHART ─────────────────────────────────────────────
@@ -22365,6 +22453,235 @@ function ubicPintarCampo(ctx){
   }
   el.innerHTML=`<label>📍 Ubicación</label><div style="font-size:12px;margin-bottom:6px">${escapeHtml(u.nombre||'Lugar guardado')} <span style="color:var(--text3)">· ${escapeHtml(ubicFuenteTxt(u.fuente))}</span></div>`
     +`<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicVerCampo('${ctx}')">Ver mapa</button><button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicAbrirPicker('${ctx}')">Cambiar</button><button type="button" class="config-action-btn danger" style="font-size:11px" onclick="ubicQuitar('${ctx}')">Quitar</button></div>`;
+}
+
+
+// ══════════════════════════════════════════════════════
+//  🗺️ MAPA DE GASTOS — todos tus gastos con lugar guardado (📍) en un solo mapa, y el ranking de lugares.
+//  Soles y dólares nunca se mezclan: se elige la moneda arriba. Los lugares cercanos (≤ 120 m) se agrupan.
+// ══════════════════════════════════════════════════════
+let _mgMapa=null,_mgCapa=null,_mgGrupos=[],_mgMarkers=[],_mgVistaSel='mapa',_mgVerTodos=false;
+const _mgFiltro={mes:'todo',cat:'',cur:'PEN'};
+function mgDistM(a,b){
+  const R=6371000,r=x=>x*Math.PI/180,dLat=r(b.lat-a.lat),dLng=r(b.lng-a.lng);
+  const h=Math.sin(dLat/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+// Todos los gastos (movimientos de cuenta + consumos de tarjeta), sin transferencias internas.
+function mgTodosLosGastos(){
+  const out=[];
+  (state.movimientos||[]).forEach(m=>{
+    if(m.type!=='expense'||esTransferenciaInterna(m)) return;
+    out.push({fecha:m.date||'',monto:Number(m.amount)||0,cur:m.currency==='USD'?'USD':'PEN',cat:m.cat||'',desc:m.desc||'',ub:m.ubicacion});
+  });
+  (state.tarjetas||[]).forEach(t=>{
+    Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(c=>{
+      out.push({fecha:c.fecha||'',monto:Number(c.monto)||0,cur:c.currency==='USD'?'USD':'PEN',cat:c.cat||'',desc:c.desc||'',ub:c.ubicacion});
+    }));
+  });
+  return out.filter(x=>x.monto>0&&x.fecha);
+}
+function mgConLugar(x){ const u=x.ub; return !!(u&&isFinite(Number(u.lat))&&isFinite(Number(u.lng))); }
+function mgPrepararFiltros(todos){
+  const mesSel=document.getElementById('mg-mes'), catSel=document.getElementById('mg-cat');
+  const meses=[...new Set(todos.filter(mgConLugar).map(x=>x.fecha.slice(0,7)))].sort().reverse();
+  const nomMes=k=>{const [y,m]=k.split('-');return tcMesesLong()[parseInt(m,10)-1]+' '+y;};
+  mesSel.innerHTML='<option value="todo">📅 Todo el tiempo</option>'+meses.map(k=>`<option value="${k}">${nomMes(k)}</option>`).join('');
+  if(_mgFiltro.mes!=='todo'&&!meses.includes(_mgFiltro.mes)) _mgFiltro.mes='todo';
+  mesSel.value=_mgFiltro.mes;
+  const cats=[...new Set(todos.filter(mgConLugar).map(x=>x.cat||'(Sin categoría)'))].sort((a,b)=>a.localeCompare(b,'es'));
+  catSel.innerHTML='<option value="">🏷️ Todas las categorías</option>'+cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if(_mgFiltro.cat&&!cats.includes(_mgFiltro.cat)) _mgFiltro.cat='';
+  catSel.value=_mgFiltro.cat;
+  const hayUsd=todos.some(x=>mgConLugar(x)&&x.cur==='USD');
+  const curBox=document.getElementById('mg-cur'); curBox.style.display=hayUsd?'flex':'none';
+  if(!hayUsd) _mgFiltro.cur='PEN';
+  curBox.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.c===_mgFiltro.cur));
+}
+function mgCambiarFiltro(){
+  _mgFiltro.mes=document.getElementById('mg-mes').value;
+  _mgFiltro.cat=document.getElementById('mg-cat').value;
+  _mgVerTodos=false;
+  renderMapaGastos(true);
+}
+function mgSetMoneda(c){ _mgFiltro.cur=c; _mgVerTodos=false; renderMapaGastos(true); }
+function mgSetVista(v){
+  _mgVistaSel=v;
+  document.getElementById('mg-mapa-wrap').style.display=v==='mapa'?'block':'none';
+  document.getElementById('mg-lugares').style.display=v==='lugares'?'block':'none';
+  document.querySelectorAll('#mg-vista button').forEach(b=>b.classList.toggle('active',b.dataset.v===v));
+  if(v==='mapa'&&_mgMapa) setTimeout(()=>{ _mgMapa.invalidateSize(); },60);
+}
+// Agrupa por cercanía (≤ 120 m): el "lugar" se llama como el comercio más repetido y la dirección del GPS.
+function mgAgrupar(items){
+  const grupos=[];
+  items.slice().sort((a,b)=>b.monto-a.monto).forEach(x=>{
+    const p={lat:Number(x.ub.lat),lng:Number(x.ub.lng)};
+    let g=grupos.find(q=>mgDistM(q.c,p)<=120);
+    if(!g){ g={c:p,items:[],_sl:0,_sg:0}; grupos.push(g); }
+    g.items.push(x); g._sl+=p.lat; g._sg+=p.lng; g.c={lat:g._sl/g.items.length,lng:g._sg/g.items.length};
+  });
+  grupos.forEach(g=>{
+    const cuenta=(arr)=>{const m={};arr.forEach(v=>{ if(v) m[v]=(m[v]||0)+1; });return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(e=>e[0]);};
+    g.nombre=(cuenta(g.items.map(i=>(i.desc||'').trim()))[0])||'Sin nombre';
+    const dir=cuenta(g.items.map(i=>i.ub&&i.ub.nombre))[0]||'';
+    g.dir=dir;
+    g.total=g.items.reduce((s,i)=>s+i.monto,0);
+    g.visitas=g.items.length;
+    g.ultimo=g.items.map(i=>i.fecha).sort().pop();
+  });
+  return grupos.sort((a,b)=>b.total-a.total);
+}
+function mgMoney(n,cur){ return M(cur==='USD'?fmtD(n):fmtS(n)); }
+function renderMapaGastos(soloFiltros){
+  const todos=mgTodosLosGastos();
+  if(!soloFiltros) mgPrepararFiltros(todos);
+  const f=_mgFiltro;
+  const enFiltro=todos.filter(x=>x.cur===f.cur&&(f.mes==='todo'||x.fecha.slice(0,7)===f.mes)&&(!f.cat||(x.cat||'(Sin categoría)')===f.cat));
+  const conLugar=enFiltro.filter(mgConLugar), sinLugar=enFiltro.length-conLugar.length;
+  const grupos=mgAgrupar(conLugar); _mgGrupos=grupos;
+  const total=conLugar.reduce((s,x)=>s+x.monto,0), totalTodo=enFiltro.reduce((s,x)=>s+x.monto,0);
+  document.getElementById('mg-resumen').innerHTML=
+    `<div class="mg-kpi"><span>Gastos con lugar</span><b>${conLugar.length}</b></div>`+
+    `<div class="mg-kpi"><span>Total en el mapa</span><b>${mgMoney(total,f.cur)}</b></div>`+
+    `<div class="mg-kpi"><span>Lugares distintos</span><b>${grupos.length}</b></div>`+
+    `<div class="mg-kpi"><span>Cobertura</span><b>${enFiltro.length?Math.round(conLugar.length/enFiltro.length*100):0}%</b></div>`;
+  document.getElementById('mg-nota').innerHTML=
+    (sinLugar>0?`${sinLugar} gasto${sinLugar===1?'':'s'} de este filtro no tienen lugar guardado (${mgMoney(totalTodo-total,f.cur)}). Puedes agregarlo desde el 📍 de cada movimiento o consumo. `:'')+
+    'Los lugares a menos de 120 m se juntan en uno. © OpenStreetMap.';
+  mgPintarLugares(grupos);
+  mgSetVista(_mgVistaSel);
+  const wrap=document.getElementById('mg-mapa');
+  if(!grupos.length){
+    if(_mgMapa){ _mgMapa.remove(); _mgMapa=null; _mgCapa=null; }
+    wrap.innerHTML='<div class="mg-vacio">Todavía no hay gastos con lugar en este filtro.<br>Guarda el 📍 al registrar un consumo (desde el bot o la app) y aparecerá aquí.</div>';
+    return;
+  }
+  ubicCargarLeaflet().then(L=>{
+    if(!_mgMapa||_mgMapa._container!==wrap){
+      wrap.innerHTML='';
+      if(_mgMapa){ _mgMapa.remove(); }
+      _mgMapa=L.map(wrap,{scrollWheelZoom:true}).setView([grupos[0].c.lat,grupos[0].c.lng],13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,subdomains:'abc',attribution:'© OpenStreetMap'}).addTo(_mgMapa);
+      _mgCapa=L.layerGroup().addTo(_mgMapa);
+    }
+    _mgCapa.clearLayers(); _mgMarkers=[];
+    const max=Math.max(...grupos.map(g=>g.total),1);
+    grupos.forEach((g,i)=>{
+      const r=9+17*Math.sqrt(g.total/max);
+      const mk=L.circleMarker([g.c.lat,g.c.lng],{radius:r,color:'#fff',weight:2,fillColor:'#5b8def',fillOpacity:.72}).addTo(_mgCapa);
+      const ult=g.items.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,4).map(it=>`<div>${escapeHtml(fmtFechaCorta(it.fecha))} · ${escapeHtml(it.desc||'—')} · ${mgMoney(it.monto,f.cur)}</div>`).join('');
+      mk.bindPopup(`<div class="mg-pop"><b>${escapeHtml(g.nombre)}</b><div>${g.visitas} ${g.visitas===1?'visita':'visitas'} · ${mgMoney(g.total,f.cur)}</div>${g.dir?`<div style="color:#667">${escapeHtml(g.dir)}</div>`:''}<div style="margin-top:6px;border-top:1px solid #ddd;padding-top:4px">${ult}</div><div style="margin-top:6px"><a href="https://www.google.com/maps?q=${g.c.lat},${g.c.lng}" target="_blank" rel="noopener">Abrir en Google Maps</a></div></div>`);
+      _mgMarkers[i]=mk;
+    });
+    const pts=grupos.map(g=>[g.c.lat,g.c.lng]);
+    if(pts.length===1) _mgMapa.setView(pts[0],16); else _mgMapa.fitBounds(pts,{padding:[40,40],maxZoom:16});
+    setTimeout(()=>{ if(_mgMapa) _mgMapa.invalidateSize(); },80);
+  }).catch(e=>{ wrap.innerHTML=`<div class="mg-vacio">${escapeHtml(e&&e.message||'No se pudo cargar el mapa')}. Mira la pestaña 🏆 Lugares: funciona sin internet.</div>`; _mgMapa=null; });
+}
+function mgPintarLugares(grupos){
+  const box=document.getElementById('mg-lugares'), cur=_mgFiltro.cur;
+  if(!grupos.length){ box.innerHTML='<div class="mg-vacio">Sin lugares en este filtro.</div>'; return; }
+  const lista=_mgVerTodos?grupos:grupos.slice(0,15);
+  box.innerHTML=lista.map((g,i)=>`<div class="mg-lugar" onclick="mgIrALugar(${i})">
+      <div class="mg-rank">${i+1}</div>
+      <div><div class="mg-nom">${escapeHtml(g.nombre)}</div><div class="mg-sub">${g.visitas} ${g.visitas===1?'visita':'visitas'} · promedio ${mgMoney(g.total/g.visitas,cur)} · último ${escapeHtml(fmtFechaCorta(g.ultimo))}${g.dir?'<br>📍 '+escapeHtml(g.dir):''}</div></div>
+      <div class="mg-tot">${mgMoney(g.total,cur)}</div></div>`).join('')+
+    (grupos.length>15?`<div style="text-align:center;padding:10px"><button class="btn" style="font-size:11px" onclick="_mgVerTodos=!_mgVerTodos;mgPintarLugares(_mgGrupos)">${_mgVerTodos?'Ver solo los 15 primeros':'Ver todos ('+grupos.length+')'}</button></div>`:'');
+}
+function mgIrALugar(i){
+  const g=_mgGrupos[i]; if(!g) return;
+  mgSetVista('mapa');
+  if(_mgMapa){ _mgMapa.setView([g.c.lat,g.c.lng],17); setTimeout(()=>{ if(_mgMarkers[i]) _mgMarkers[i].openPopup(); },120); }
+  const el=document.getElementById('mg-mapa'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+
+// ══════════════════════════════════════════════════════
+//  📉 EVOLUCIÓN DE LO QUE DEBO (todo en soles, USD al TC de venta)
+//  Deuda = consumos de tarjeta sin pagar + saldo de Deudas Mayores + préstamos que yo debo (pendientes).
+//  Cada mes se guarda una foto al abrir la pantalla (el último valor del mes queda). Los meses anteriores
+//  a la primera foto se estiman solo con Deudas Mayores (las tarjetas no guardan fecha de pago).
+// ══════════════════════════════════════════════════════
+let deudaEvoChart=null;
+function deudaTotalAhora(){
+  const rate=state.tc?.venta||3.45;
+  let tc=0;
+  (state.tarjetas||[]).forEach(t=>{
+    const x=sumTCByCurrency(Object.values(t.movs||{}).flat().filter(m=>!m.pagado),t.currency||'PEN');
+    tc+=x.pen+x.usd*rate;
+  });
+  let dm=0;
+  (state.deudasMayores||[]).forEach(d=>{ if(!(d.cuotas||[]).length) return; dm+=getDMResumen(d).saldoPendiente*(d.currency==='USD'?rate:1); });
+  let yd=0;
+  (state.deudas||[]).forEach(d=>{ if(d.direccion==='yo_debo'&&d.status==='pendiente') yd+=(Number(d.monto)||0)*(d.currency==='USD'?rate:1); });
+  const r2=n=>Math.round(n*100)/100;
+  return {tc:r2(tc),dm:r2(dm),yd:r2(yd),total:r2(tc+dm+yd)};
+}
+function deudaMayorAlCierre(d,eom,rate){
+  const cs=d.cuotas||[]; if(!cs.length) return 0;
+  const primera=cs.map(c=>c.fecha).filter(Boolean).sort()[0];
+  if(!primera) return 0;
+  const lim=new Date(eom+'T12:00:00'); lim.setDate(lim.getDate()+35);
+  if(primera>lim.toISOString().slice(0,10)) return 0; // el préstamo aún no existía (la 1ª cuota cae ~1 mes después de tomarlo)
+  const pagadaA=c=>c.pagado&&c.fecha&&c.fecha<=eom;
+  let saldo=d.tipo==='fijo'
+    ? cs.filter(c=>!pagadaA(c)).reduce((s,c)=>s+(c.monto||0),0)
+    : (d.importe||0)-cs.filter(pagadaA).reduce((s,c)=>s+(c.amort||0),0);
+  if(saldo<0.005) saldo=0;
+  return saldo*(d.currency==='USD'?rate:1);
+}
+function renderDeudaEvolucion(){
+  const cv=document.getElementById('deuda-evo-chart'); if(!cv) return;
+  const rate=state.tc?.venta||3.45, now=new Date();
+  const mkAhora=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const ahora=deudaTotalAhora();
+  const h=state.deudaHistorial||(state.deudaHistorial={});
+  const prev=h[mkAhora];
+  if(!demoMode&&(!prev||Math.abs(prev.total-ahora.total)>0.5||Math.abs((prev.tc||0)-ahora.tc)>0.5)){
+    h[mkAhora]=ahora; try{ saveState(); }catch(e){}
+  }
+  const claves=Object.keys(h).sort();
+  const primera=claves[0]||mkAhora;
+  const meses=[]; // últimos 12 meses hasta el actual
+  for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); meses.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
+  let estimados=0;
+  const filas=meses.map(mk=>{
+    if(h[mk]) return {mk,tc:h[mk].tc||0,dm:h[mk].dm||0,yd:h[mk].yd||0,est:false};
+    if(mk<primera){
+      const [y,m]=mk.split('-').map(Number), eom=new Date(y,m,0), iso=eom.getFullYear()+'-'+String(eom.getMonth()+1).padStart(2,'0')+'-'+String(eom.getDate()).padStart(2,'0');
+      const dm=(state.deudasMayores||[]).reduce((s,d)=>s+deudaMayorAlCierre(d,iso,rate),0);
+      if(dm>0){ estimados++; return {mk,tc:0,dm:Math.round(dm*100)/100,yd:0,est:true}; }
+    }
+    return null;
+  });
+  const util=filas.filter(Boolean);
+  const nomMes=mk=>{const [y,m]=mk.split('-');return tcMesesLong()[parseInt(m,10)-1].slice(0,3)+' '+y.slice(2);};
+  const tot=(f)=>f.tc+f.dm+f.yd;
+  document.getElementById('deuda-evo-total').textContent=M(fmtS(ahora.total));
+  const vEl=document.getElementById('deuda-evo-var');
+  const anterior=util.filter(f=>f.mk<mkAhora).slice(-1)[0];
+  if(anterior&&!anterior.est){
+    const dif=ahora.total-tot(anterior);
+    vEl.innerHTML=Math.abs(dif)<0.5?'<span style="color:var(--text3)">Sin cambios vs '+nomMes(anterior.mk)+(anterior.est?' (estimado)':'')+'</span>'
+      :`<span style="color:var(--${dif<0?'green':'red'})">${dif<0?'▼ Bajó':'▲ Subió'} ${M(fmtS(Math.abs(dif)))}</span> <span style="color:var(--text3)">vs ${nomMes(anterior.mk)}${anterior.est?' (estimado)':''}</span>`;
+  } else vEl.innerHTML='<span style="color:var(--text3)">La comparación con el mes anterior aparece desde el próximo mes</span>';
+  document.getElementById('deuda-evo-nota').textContent=
+    'Incluye tarjetas sin pagar, Deudas Mayores y lo que yo debo (en soles).'+(estimados?` ${estimados} mes${estimados===1?'':'es'} anterior${estimados===1?'':'es'} estimado${estimados===1?'':'s'} solo con Deudas Mayores (barras más tenues).`:'')+' El mes se actualiza solo cada vez que abres esta pantalla.';
+  if(deudaEvoChart){ deudaEvoChart.destroy(); deudaEvoChart=null; }
+  if(typeof Chart==='undefined') return;
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  const tick=isDark?'#e0e0e2':'#3a3b44';
+  const lab=[],dTc=[],dDm=[],dYd=[],dTot=[];
+  meses.forEach((mk,i)=>{ const f=filas[i]; lab.push(nomMes(mk)); dTc.push(f?f.tc:null); dDm.push(f?f.dm:null); dYd.push(f?f.yd:null); dTot.push(f?tot(f):null); });
+  const tenue=(c,arr)=>ctx=>{ const f=filas[ctx.dataIndex]; return f&&f.est?c+'66':c; };
+  deudaEvoChart=new Chart(cv.getContext('2d'),{type:'bar',data:{labels:lab,datasets:[
+    {label:'Tarjetas',data:dTc,backgroundColor:tenue('#5b8def'),stack:'d'},
+    {label:'Deudas Mayores',data:dDm,backgroundColor:tenue('#f0a53c'),stack:'d'},
+    {label:'Yo debo',data:dYd,backgroundColor:tenue('#e0556a'),stack:'d'}
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:tick,boxWidth:10,font:{size:11}}},tooltip:{callbacks:{footer:items=>{const t=dTot[items[0].dataIndex];return t==null?'':'Total: S/ '+t.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});},label:c=>c.dataset.label+': S/ '+(c.parsed.y||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}}},
+    scales:{x:{stacked:true,ticks:{color:tick,font:{size:10}},grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{color:tick,font:{size:10},callback:v=>v>=1000?(v/1000).toFixed(v%1000?1:0)+'k':v},grid:{color:isDark?'#ffffff14':'#00000010'}}}}});
 }
 
 // ── RENDER CALENDARIO ──────────────────────────────────
@@ -25739,6 +26056,16 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.70.0",
+  "fecha": "23/10/26",
+  "cambios": [
+   "Nuevo Mapa de gastos (Análisis): todos tus gastos con lugar guardado en un solo mapa, con filtro por mes, categoría y moneda; los puntos más grandes son donde más gastas.",
+   "Lugares frecuentes: ranking de los sitios donde más gastas, con total, visitas, promedio y último gasto; al tocar uno se abre en el mapa.",
+   "Combustible: nuevo costo por km (total y de las últimas recargas) y fecha estimada de la próxima recarga según tus días y km promedio, en GLP y gasolina.",
+   "Deudas: gráfico de la evolución de lo que debes mes a mes (tarjetas, Deudas Mayores y lo que debes a otros)."
+  ]
+ },
  {
   "v": "v1.69.1",
   "fecha": "18/10/26",
