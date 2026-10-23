@@ -4016,9 +4016,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.70.3';
-const APP_VERSION_DATE = '23/10/26 - 14:09'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mapa de gastos: cuando no encuentra gastos con lugar, ahora muestra cuántos hay guardados para ayudar a revisar.';
+const APP_VERSION = 'v1.70.4';
+const APP_VERSION_DATE = '23/10/26 - 14:27'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'En Gastos, los consumos con ubicación guardada ahora muestran un 📍 para ver el mapa de dónde fueron.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6162,7 +6162,7 @@ function gsItems(y,m){
     if(String(mv.id||'').startsWith('pagoTC') || /^Pago de tarjeta/i.test(mv.desc||'')) return; // el pago del estado ya está en los consumos de la tarjeta
     if(esTransferenciaInterna(mv)) return; // transferencia entre tus cuentas (no es un gasto)
     const cur=mv.currency||'PEN';
-    out.push({id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.amount,cur,pen:gsPen(mv.amount,cur),fecha:mv.date,hora:mv.hora||'',cat:mv.cat||'',tipo:'cuenta',origen:mv.account||'—',estado:'Pagado',cuota:null,color:'var(--teal)'});
+    out.push({ub:mv.ubicacion,id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.amount,cur,pen:gsPen(mv.amount,cur),fecha:mv.date,hora:mv.hora||'',cat:mv.cat||'',tipo:'cuenta',origen:mv.account||'—',estado:'Pagado',cuota:null,color:'var(--teal)'});
   });
   const pref=y+'-'+String(m+1).padStart(2,'0');
   (state.tarjetas||[]).forEach(t=>{
@@ -6170,7 +6170,7 @@ function gsItems(y,m){
       (arr||[]).forEach(mv=>{
         if(!mv||typeof mv.fecha!=='string'||mv.fecha.slice(0,7)!==pref) return;
         const cur=mv.currency||t.currency||'PEN';
-        out.push({id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.monto,cur,pen:gsPen(mv.monto,cur),fecha:mv.fecha,hora:mv.hora||'',cat:mv.cat||'',tipo:'tarjeta',origen:((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta',estado:mv.pagado?'Pagado':'Pendiente',cuota:mv.cuotaNumero?(mv.cuotaNumero+'/'+mv.cuotaTotal):null,color:t.color||'var(--purple)',tid:t.id,mk});
+        out.push({ub:mv.ubicacion,id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.monto,cur,pen:gsPen(mv.monto,cur),fecha:mv.fecha,hora:mv.hora||'',cat:mv.cat||'',tipo:'tarjeta',origen:((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta',estado:mv.pagado?'Pagado':'Pendiente',cuota:mv.cuotaNumero?(mv.cuotaNumero+'/'+mv.cuotaTotal):null,color:t.color||'var(--purple)',tid:t.id,mk});
       });
     });
   });
@@ -6553,7 +6553,7 @@ function gsRenderLista(items){
     return `<div class="gs-row" onclick="gsAbrir('${i.tipo}','${String(i.id).replace(/'/g,"\\'")}'${i.tid?`,'${i.tid}','${i.mk}'`:''})">
       <div class="gs-ic" style="background:${col}22">${gsCatEmoji(i.cat)}</div>
       <div class="gs-main"><div class="gs-desc">${escapeHtml(i.desc)}</div>
-        <div class="gs-sub"><span>${i.cat?escapeHtml(i.cat.replace(/^\S+\s/,'')):'Sin categoría'}</span><span>· ${fch}${i.hora?' '+escapeHtml(i.hora):''}</span>
+        <div class="gs-sub"><span>${i.cat?escapeHtml(i.cat.replace(/^\S+\s/,'')):'Sin categoría'}</span>${ubicPinCatHtml(i.tipo==='tarjeta'?'tc':'mov',i.id,i.ub)}<span>· ${fch}${i.hora?' '+escapeHtml(i.hora):''}</span>
         <span class="gs-pill ${i.tipo==='tarjeta'?'t':'c'}">${i.tipo==='tarjeta'?'💳':'🏦'} ${escapeHtml(i.origen)}</span>
         ${i.cuota?`<span class="gs-pill cu">cuota ${i.cuota}</span>`:''}
         ${i.tipo==='tarjeta'?`<span class="gs-pill ${i.estado==='Pagado'?'ok':'p'}">${i.estado}</span>`:''}</div></div>
@@ -26067,6 +26067,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.70.4",
+  "fecha": "23/10/26",
+  "cambios": [
+   "Gastos: los consumos y movimientos con ubicación guardada muestran un 📍 junto a la categoría; al tocarlo ves el mapa de dónde fueron."
+  ]
+ },
  {
   "v": "v1.70.3",
   "fecha": "23/10/26",
