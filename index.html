@@ -448,6 +448,7 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 
 /* ── MODALS ── */
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;}
+#ubic-overlay{z-index:2000;} /* el selector de ubicación se abre desde otros modales (Editar consumo, etc.) y debe quedar encima */
 .modal-overlay.open{display:flex;}
 .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;}
 .modal-sm{width:340px;}
@@ -1093,6 +1094,8 @@ body.compact-mode .anual-table{font-size:11px;}
 
 /* ══ Ubicación del consumo (mapa) ══ */
 .ubic-pin{background:none;border:0;padding:0 2px;margin-left:5px;cursor:pointer;vertical-align:middle;line-height:1;color:var(--accent);display:inline-flex;}
+.ubic-pin-cat{background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:1px 7px;margin-left:5px;cursor:pointer;font-size:11px;line-height:1.4;vertical-align:middle;color:inherit;font-family:inherit;}
+.ubic-pin-cat:hover{border-color:var(--accent);}
 .ubic-pin svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 #ubic-map{height:300px;border-radius:10px;overflow:hidden;background:var(--bg3);border:1px solid var(--border2);}
 .ubic-marker{background:none;border:0;}
@@ -4013,9 +4016,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.70.0';
-const APP_VERSION_DATE = '23/10/26 - 12:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo Mapa de gastos con ranking de lugares, costo por km y próxima recarga en Combustible, y evolución de la deuda total.';
+const APP_VERSION = 'v1.70.2';
+const APP_VERSION_DATE = '23/10/26 - 14:07'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Ahora el 📍 aparece junto a la categoría de cada consumo y movimiento; tócalo para ver el mapa de dónde fue.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9220,7 +9223,7 @@ function renderMovimientos(){
       <div class="swipe-delete-bg" onclick="deleteMovimiento('${m.id}',event)">🗑 Eliminar</div>
       <div class="mov-item ${cls} swipe-target" ${clickHandler} ontouchstart="swipeStart(event,this)" ontouchmove="swipeMove(event,this)" ontouchend="swipeEnd(event,this,'${m.id}')">
       <div class="mov-left">${checkbox}<div class="mov-dot ${cls}">${ic}</div>
-        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}${ubicPinHtml('mov',m.id,m.ubicacion)}</div>${noteHtml}</div>
+        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}${ubicPinCatHtml('mov',m.id,m.ubicacion)}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}</div>${noteHtml}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;margin-left:8px">
         <div class="mov-amount ${cls}">${M(amtStr)}</div>
@@ -14855,9 +14858,9 @@ function tcMovTableRow(m, cardCur){
   const mFmt=tcMovAmountFmt(m,cardCur);
   return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}${ubicPinHtml('tc',m.id,m.ubicacion)}</td>
+    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
-    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}</td>
+    <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}${ubicPinCatHtml('tc',m.id,m.ubicacion)}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked,this)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
     <td style="text-align:right;font-family:var(--mono);color:${m.monto<0?'var(--green)':'inherit'}">${m.monto<0?'- ':''}${M(mFmt)}</td>
     <td>
@@ -14880,10 +14883,10 @@ function tcMovCardHtml(m, cardCur){
   return `<div class="tc-mov-card ${m.pagado?'paid-row':''}" id="tc-row-${m.id}" style="--catcolor:${catColor}">
     <input type="checkbox" class="tc-check tc-sel-cb" id="tc-cb-${m.id}" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">
     <div class="tc-mov-card-body" onclick="document.getElementById('tc-cb-${m.id}').click()">
-      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}${ubicPinHtml('tc',m.id,m.ubicacion)}</div>
+      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
       <div class="tc-mov-card-meta">
         <span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span>
-        <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>
+        <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>${ubicPinCatHtml('tc',m.id,m.ubicacion)}
         ${m.pagado?'<span class="tc-mov-pill" style="color:var(--green);border-color:var(--green)">✓ Pagado</span>':''}
         ${m.metodoPago==='puntos'?'<span title="Pagado con puntos">🎁</span>':''}
       </div>
@@ -22286,6 +22289,11 @@ function ubicPinHtml(kind,id,u){
   if(!ubicLimpia(u)) return '';
   return `<button type="button" class="ubic-pin" onclick="event.stopPropagation();ubicVerDe('${kind}','${String(id).replace(/'/g,'')}')" title="Ver dónde fue" aria-label="Ver ubicación">${UBIC_PIN_SVG}</button>`;
 }
+// 📍 junto a la categoría: toca para ver el mapa de dónde fue el gasto
+function ubicPinCatHtml(kind,id,u){
+  if(!ubicLimpia(u)) return '';
+  return `<button type="button" class="ubic-pin-cat" onclick="event.stopPropagation();ubicVerDe('${kind}','${String(id).replace(/'/g,'')}')" title="Ver dónde fue" aria-label="Ver ubicación">📍</button>`;
+}
 function ubicVerDe(kind,id){
   let u=null, titulo='';
   if(kind==='mov'){ const m=(state.movimientos||[]).find(x=>x.id===id); if(m){ u=m.ubicacion; titulo=m.desc; } }
@@ -26056,6 +26064,20 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.70.2",
+  "fecha": "23/10/26",
+  "cambios": [
+   "El 📍 ahora aparece junto a la categoría de cada consumo de tarjeta y movimiento de cuenta; al tocarlo ves en el mapa dónde fue el gasto."
+  ]
+ },
+ {
+  "v": "v1.70.1",
+  "fecha": "23/10/26",
+  "cambios": [
+   "Corregido: el selector de ubicación (Agregar ubicación) se abría por detrás de la ventana de Editar consumo."
+  ]
+ },
  {
   "v": "v1.70.0",
   "fecha": "23/10/26",
