@@ -4016,9 +4016,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.70.2';
-const APP_VERSION_DATE = '23/10/26 - 14:07'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Ahora el 📍 aparece junto a la categoría de cada consumo y movimiento; tócalo para ver el mapa de dónde fue.';
+const APP_VERSION = 'v1.70.3';
+const APP_VERSION_DATE = '23/10/26 - 14:09'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mapa de gastos: cuando no encuentra gastos con lugar, ahora muestra cuántos hay guardados para ayudar a revisar.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22554,7 +22554,10 @@ function renderMapaGastos(soloFiltros){
     `<div class="mg-kpi"><span>Total en el mapa</span><b>${mgMoney(total,f.cur)}</b></div>`+
     `<div class="mg-kpi"><span>Lugares distintos</span><b>${grupos.length}</b></div>`+
     `<div class="mg-kpi"><span>Cobertura</span><b>${enFiltro.length?Math.round(conLugar.length/enFiltro.length*100):0}%</b></div>`;
+  const _pbConUb=(typeof pendientesBanco!=='undefined'?pendientesBanco:[]).filter(p=>p&&ubicLimpia(p.ubicacion)).length;
+  const _movsConUb=(state.movimientos||[]).filter(m=>m&&m.ubicacion).length, _tcConUb=(state.tarjetas||[]).reduce((n,t)=>n+Object.values(t.movs||{}).flat().filter(c=>c&&c.ubicacion).length,0);
   document.getElementById('mg-nota').innerHTML=
+    (conLugar.length===0?`<div style="margin-bottom:6px;color:var(--amber)">Con lugar guardado en total: ${_movsConUb} movimientos de cuenta y ${_tcConUb} consumos de tarjeta.${_pbConUb?` Además ${_pbConUb} aviso${_pbConUb===1?'':'s'} de banco sin aprobar (esos aún no cuentan: el lugar pasa al consumo cuando lo apruebas).`:''}</div>`:'')+
     (sinLugar>0?`${sinLugar} gasto${sinLugar===1?'':'s'} de este filtro no tienen lugar guardado (${mgMoney(totalTodo-total,f.cur)}). Puedes agregarlo desde el 📍 de cada movimiento o consumo. `:'')+
     'Los lugares a menos de 120 m se juntan en uno. © OpenStreetMap.';
   mgPintarLugares(grupos);
@@ -26064,6 +26067,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.70.3",
+  "fecha": "23/10/26",
+  "cambios": [
+   "Mapa de gastos: si no encuentra gastos con lugar, muestra cuántos movimientos y consumos tienen ubicación guardada y cuántos avisos del banco sin aprobar la tienen."
+  ]
+ },
  {
   "v": "v1.70.2",
   "fecha": "23/10/26",
