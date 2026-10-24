@@ -3844,14 +3844,27 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
 <!-- MODAL: REGISTRAR MANTENIMIENTO HECHO -->
 <div class="modal-overlay" id="mant-registrar-overlay" onclick="if(event.target===this)cerrarRegistrarMantenimiento()">
-  <div class="modal" style="width:380px">
+  <div class="modal" style="width:420px;max-height:92vh;overflow-y:auto">
     <div class="modal-title"><span id="mant-reg-title">✅ Registrar Mantenimiento</span><button class="modal-close" onclick="cerrarRegistrarMantenimiento()">✕</button></div>
     <div class="field"><label>Kilometraje al momento del mantenimiento</label><input id="mant-reg-km" type="number" min="0" step="1"></div>
     <div class="field"><label>Fecha</label><input id="mant-reg-fecha" type="date"></div>
     <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="mant-reg-nota" type="text" placeholder="Ej. Se usó aceite 5W-30"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn" onclick="cerrarRegistrarMantenimiento()">Cancelar</button>
-      <button class="btn btn-primary" onclick="guardarRegistrarMantenimiento()">Registrar</button>
+    <div class="field">
+      <label>💰 Detalle de costos <span style="font-size:10px;color:var(--text3)">(opcional — repuestos, mano de obra, etc.)</span></label>
+      <div id="mant-reg-items" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="config-action-btn neutral" style="font-size:10px;padding:4px 8px" onclick="mantRegAgregarItem('')">+ Concepto</button>
+        <button type="button" class="config-action-btn neutral" style="font-size:10px;padding:4px 8px" onclick="mantRegAgregarItem('Mano de obra')">👷 Mano de obra</button>
+        <select id="mant-reg-rep" onchange="mantRegAgregarDesdeRepuesto(this)" style="font-size:11px;padding:4px 6px;max-width:190px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text)"><option value="">🧩 + Desde mis repuestos…</option></select>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;border-top:1px solid var(--border);padding-top:6px"><span style="color:var(--text3)">Total</span><b id="mant-reg-total" style="font-family:var(--mono)">S/ 0.00</b></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between">
+      <button class="config-action-btn danger" id="mant-reg-del" style="display:none;font-size:11px" onclick="eliminarRegistroMantenimiento()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarRegistrarMantenimiento()">Cancelar</button>
+        <button class="btn btn-primary" id="mant-reg-ok" onclick="guardarRegistrarMantenimiento()">Registrar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -4073,9 +4086,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.72.0';
-const APP_VERSION_DATE = '24/10/26 - 13:14'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva sección Repuestos en Combustible: guarda cada pieza con su código, descripción, tienda y precio.';
+const APP_VERSION = 'v1.74.0';
+const APP_VERSION_DATE = '24/10/26 - 14:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mantenimiento: cada registro ahora puede llevar el detalle de costos (repuestos, mano de obra, etc.), con el monto junto a la fecha.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20457,13 +20470,30 @@ function renderMantenimiento(){
       }
       node.querySelector('[data-role="nota"]').textContent=nota;
     }
-    const hist=(item.historial||[]).slice().reverse().slice(0,5);
+    const todos=(item.historial||[]).slice().sort((x,y)=>(x.fecha===y.fecha)?0:(x.fecha<y.fecha?1:-1));
+    const verTodo=mantVerTodoHist.has(item.id);
+    const hist=verTodo?todos:todos.slice(0,5);
+    const invertido=todos.reduce((t,r)=>t+mantTotalRegistro(r),0);
     const histEl=node.querySelector('[data-role="historial"]');
-    histEl.innerHTML = hist.length ? ('<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Historial</div>'+
-      hist.map(h=>`<div style="display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-top:1px solid var(--border)">
-        <span>${escapeHtml(h.nota||'Realizado')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
-        <span style="color:var(--text3)">${fmtFechaCorta(h.fecha)}</span>
-      </div>`).join('')) : '';
+    histEl.innerHTML = todos.length ? (
+      `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text3);margin-bottom:4px"><span>Historial</span>${invertido>0?`<span>💰 Total invertido: <b style="color:var(--text2)">${mantMonto(invertido)}</b></span>`:''}</div>`+
+      hist.map(h=>{
+        const tot=mantTotalRegistro(h), abierto=mantDetalleAbierto.has(h.id), hayDetalle=(h.items||[]).length>0;
+        return `<div style="border-top:1px solid var(--border);padding:4px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px">
+            <span style="min-width:0;overflow-wrap:anywhere">${escapeHtml(h.nota||'Realizado')} — ${Math.round(h.km).toLocaleString('es-PE')} km</span>
+            <span style="display:flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0">
+              ${tot>0?`<b style="font-family:var(--mono)">${mantMonto(tot)}</b>`:''}
+              <span style="color:var(--text3)">${fmtFechaCorta(h.fecha)}</span>
+              ${hayDetalle?`<button type="button" class="config-action-btn neutral" style="font-size:10px;padding:2px 7px" onclick="mantToggleDetalle('${h.id}')">${abierto?'▴ Ocultar':'▾ Detalle'}</button>`:''}
+              <button type="button" class="config-action-btn neutral" style="font-size:10px;padding:2px 7px" onclick="abrirEditarRegistroMant('${item.id}','${h.id}')" title="${hayDetalle?'Editar':'Agregar detalle de costos'}">${hayDetalle?'✏️':'💰 Costos'}</button>
+            </span>
+          </div>
+          ${hayDetalle&&abierto?`<div style="margin:6px 0 2px 8px;padding:6px 8px;background:var(--bg2);border-radius:6px">${h.items.map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:2px 0"><span style="overflow-wrap:anywhere">${escapeHtml(i.concepto)}</span><span style="font-family:var(--mono);white-space:nowrap">${mantMonto(i.monto)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;font-size:11px;border-top:1px solid var(--border);margin-top:3px;padding-top:3px"><b>Total</b><b style="font-family:var(--mono)">${mantMonto(tot)}</b></div></div>`:''}
+        </div>`;
+      }).join('')+
+      (todos.length>5?`<div style="text-align:center;padding-top:4px"><button type="button" class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="mantToggleVerTodo('${item.id}')">${verTodo?'▴ Ver solo los últimos 5':'▾ Ver todos ('+todos.length+')'}</button></div>`:'')
+    ) : '';
     listaEl.appendChild(node);
   });
 }
@@ -20587,19 +20617,76 @@ function eliminarTipoMantenimiento(){
   renderMantenimiento();
   toast('Tipo de mantenimiento eliminado','info');
 }
-let registrandoMantId=null;
+let registrandoMantId=null, editandoRegId=null, mantRegItems=[];
+const mantDetalleAbierto=new Set(); // ids de registros con el detalle de costos desplegado
+const mantVerTodoHist=new Set();    // ids de tipos con el historial completo visible
+function mantMonto(n){ return M(fmtS(Number(n)||0)); }
+function mantTotalRegistro(r){ return (r.items||[]).reduce((t,i)=>t+(Number(i.monto)||0),0); }
+function mantRegPintarItems(){
+  const cont=document.getElementById('mant-reg-items'); if(!cont) return;
+  cont.innerHTML=mantRegItems.map((it,i)=>`<div style="display:flex;gap:6px;align-items:center">
+      <input type="text" value="${escapeHtml(it.concepto||'')}" placeholder="Concepto (ej. Filtro de aire)" oninput="mantRegItems[${i}].concepto=this.value" style="flex:1;min-width:0;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px">
+      <input type="number" min="0" step="0.01" value="${Number(it.monto)>0?it.monto:''}" placeholder="S/" oninput="mantRegItems[${i}].monto=this.value;mantRegPintarTotal()" style="width:80px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px">
+      <span onclick="mantRegQuitarItem(${i})" style="cursor:pointer;color:var(--red);padding:0 4px" title="Quitar">✕</span></div>`).join('');
+  mantRegPintarTotal();
+}
+function mantRegPintarTotal(){
+  const t=mantRegItems.reduce((a,i)=>a+(parseFloat(i.monto)||0),0);
+  const e=document.getElementById('mant-reg-total'); if(e) e.textContent='S/ '+t.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function mantRegAgregarItem(concepto,monto){ mantRegItems.push({concepto:concepto||'',monto:monto||''}); mantRegPintarItems(); const inp=document.querySelectorAll('#mant-reg-items input[type=text]'); if(inp.length&&!concepto) inp[inp.length-1].focus(); }
+function mantRegQuitarItem(i){ mantRegItems.splice(i,1); mantRegPintarItems(); }
+function mantRegAgregarDesdeRepuesto(sel){
+  const r=(state.repuestos||[]).find(x=>x.id===sel.value); sel.value='';
+  if(!r) return;
+  mantRegAgregarItem(r.nombre+(r.codigo?' ('+r.codigo+')':''), Number(r.precio)>0?r.precio:'');
+}
+function mantRegPrepararSelectRepuestos(){
+  const sel=document.getElementById('mant-reg-rep'); if(!sel) return;
+  sel.innerHTML='<option value="">🧩 + Desde mis repuestos…</option>'+(state.repuestos||[]).map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.nombre+(r.codigo?' — '+r.codigo:''))}</option>`).join('');
+  sel.style.display=(state.repuestos||[]).length?'':'none';
+}
 function abrirRegistrarMantenimiento(id){
   const item=(state.mantenimientos||[]).find(x=>x.id===id);
   if(!item) return;
-  registrandoMantId=id;
+  registrandoMantId=id; editandoRegId=null; mantRegItems=[];
   document.getElementById('mant-reg-title').textContent='✅ '+item.nombre;
+  document.getElementById('mant-reg-ok').textContent='Registrar';
+  document.getElementById('mant-reg-del').style.display='none';
   const proy=getProyeccionMantenimientoItem(item);
   document.getElementById('mant-reg-km').value = (proy&&proy.kmActual!=null) ? Math.round(proy.kmActual) : '';
   document.getElementById('mant-reg-fecha').value = todayLocalISO();
   document.getElementById('mant-reg-nota').value='';
+  mantRegPrepararSelectRepuestos(); mantRegPintarItems();
   document.getElementById('mant-registrar-overlay').classList.add('open');
 }
-function cerrarRegistrarMantenimiento(){ document.getElementById('mant-registrar-overlay').classList.remove('open'); registrandoMantId=null; }
+// Abre un registro YA hecho para agregarle/editar el detalle de costos, la fecha, el km o la nota.
+function abrirEditarRegistroMant(itemId,regId){
+  const item=(state.mantenimientos||[]).find(x=>x.id===itemId);
+  const r=item&&(item.historial||[]).find(h=>h.id===regId);
+  if(!r) return;
+  registrandoMantId=itemId; editandoRegId=regId;
+  mantRegItems=(r.items||[]).map(i=>({concepto:i.concepto||'',monto:i.monto||''}));
+  document.getElementById('mant-reg-title').textContent='✏️ '+item.nombre;
+  document.getElementById('mant-reg-ok').textContent='Guardar';
+  document.getElementById('mant-reg-del').style.display='inline-flex';
+  document.getElementById('mant-reg-km').value=r.km;
+  document.getElementById('mant-reg-fecha').value=r.fecha;
+  document.getElementById('mant-reg-nota').value=r.nota||'';
+  mantRegPrepararSelectRepuestos(); mantRegPintarItems();
+  document.getElementById('mant-registrar-overlay').classList.add('open');
+}
+function cerrarRegistrarMantenimiento(){ document.getElementById('mant-registrar-overlay').classList.remove('open'); registrandoMantId=null; editandoRegId=null; mantRegItems=[]; }
+function mantRegItemsLimpios(){
+  return mantRegItems.map(i=>({concepto:String(i.concepto||'').trim(), monto:Math.round((parseFloat(i.monto)||0)*100)/100}))
+    .filter(i=>i.concepto||i.monto>0).map(i=>({concepto:i.concepto||'Sin concepto', monto:i.monto}));
+}
+// El último registro (por fecha) manda sobre kmUltimo/fechaUltimo: de ahí se cuenta el siguiente mantenimiento.
+function mantSincronizarUltimo(item){
+  const h=(item.historial||[]).map((r,idx)=>({r,idx})).sort((a,b)=>(a.r.fecha===b.r.fecha)?a.idx-b.idx:(a.r.fecha<b.r.fecha?-1:1));
+  const u=h.length?h[h.length-1].r:null;
+  if(u){ item.kmUltimo=u.km; item.fechaUltimo=u.fecha; }
+}
 function guardarRegistrarMantenimiento(){
   const item=(state.mantenimientos||[]).find(x=>x.id===registrandoMantId);
   if(!item) return;
@@ -20607,9 +20694,19 @@ function guardarRegistrarMantenimiento(){
   const fecha=document.getElementById('mant-reg-fecha').value;
   const nota=(document.getElementById('mant-reg-nota').value||'').trim();
   if(isNaN(km)||km<0||!fecha){alert('Completa el kilometraje y la fecha.');return;}
+  const items=mantRegItemsLimpios();
+  const total=Math.round(items.reduce((t,i)=>t+i.monto,0)*100)/100;
   if(!item.historial) item.historial=[];
+  if(editandoRegId){
+    const r=item.historial.find(h=>h.id===editandoRegId);
+    if(!r) return;
+    Object.assign(r,{km,fecha,nota,items,total});
+    mantSincronizarUltimo(item);
+    saveState(); cerrarRegistrarMantenimiento(); renderMantenimiento();
+    toast('Registro actualizado'); return;
+  }
   const snapshotAntes={kmUltimo:item.kmUltimo, fechaUltimo:item.fechaUltimo, proximosPlanificados:[...(item.proximosPlanificados||[])]};
-  const nuevoRegistro={id:'mreg-'+Date.now(), km, fecha, nota};
+  const nuevoRegistro={id:'mreg-'+Date.now(), km, fecha, nota, items, total};
   item.historial.push(nuevoRegistro);
   item.kmUltimo=km; // reinicia el contador de ESTE tipo desde este punto
   item.fechaUltimo=fecha; // y el plazo por tiempo
@@ -20618,12 +20715,23 @@ function guardarRegistrarMantenimiento(){
   if(Array.isArray(item.proximosPlanificados)){
     item.proximosPlanificados=item.proximosPlanificados.filter(k=>k>km);
   }
-  logActividad('mantenimiento_registrado', `${item.nombre} registrado: ${km} km`, {mantId:item.id, mantRegistroId:nuevoRegistro.id, snapshotAntes});
+  logActividad('mantenimiento_registrado', `${item.nombre} registrado: ${km} km${total>0?' — S/ '+total.toFixed(2):''}`, {mantId:item.id, mantRegistroId:nuevoRegistro.id, snapshotAntes});
   saveState();
   cerrarRegistrarMantenimiento();
   renderMantenimiento();
   toast(item.nombre+' registrado — el contador se reinició');
 }
+function eliminarRegistroMantenimiento(){
+  const item=(state.mantenimientos||[]).find(x=>x.id===registrandoMantId);
+  const r=item&&(item.historial||[]).find(h=>h.id===editandoRegId);
+  if(!r) return;
+  if(!confirm('¿Eliminar este registro del '+fmtFechaCorta(r.fecha)+'? El próximo mantenimiento se contará desde el registro anterior.')) return;
+  item.historial=item.historial.filter(h=>h.id!==editandoRegId);
+  mantSincronizarUltimo(item);
+  saveState(); cerrarRegistrarMantenimiento(); renderMantenimiento(); toast('Registro eliminado');
+}
+function mantToggleDetalle(regId){ if(mantDetalleAbierto.has(regId)) mantDetalleAbierto.delete(regId); else mantDetalleAbierto.add(regId); renderMantenimiento(); }
+function mantToggleVerTodo(itemId){ if(mantVerTodoHist.has(itemId)) mantVerTodoHist.delete(itemId); else mantVerTodoHist.add(itemId); renderMantenimiento(); }
 // Descarga un Excel con TODAS las recargas: una hoja por combustible, con las
 // mismas columnas que se ven en la app (y que acepta "Cargar histórico").
 function exportarCombustibleExcel(){
@@ -22091,6 +22199,7 @@ const CAL_TIPOS = {
   evento:        {icon:'📌', label:'Evento importante',    color:'#a78bfa'},
   cuota_tc:      {icon:'💳', label:'Cuota de tarjeta',      color:'#2dd4bf'},
   deuda_mayor:   {icon:'🏛️', label:'Cuota deuda mayor',     color:'#f472b6'},
+  mantenimiento: {icon:'🔧', label:'Mantenimiento del auto', color:'#fb923c'},
   pf_gasto:      {icon:'💸', label:'Pago frecuente',        color:'#f08a7e'},
   pf_ingreso:    {icon:'💵', label:'Ingreso frecuente',     color:'#34d399'},
   otro:          {icon:'📝', label:'Otro',                 color:'#6b7280'},
@@ -22153,6 +22262,27 @@ function getEventosAutomaticos(){
       fecha:r.proximaFecha,
       tipo:'deuda_mayor',
       auto:true, origenPage:'deudas',
+    });
+  });
+  // 🔧 Próximo mantenimiento de cada tipo (por km, por tiempo o lo que llegue primero) — se mueve solo
+  // cuando cambia el kilometraje actual, el promedio diario o se marca un mantenimiento como hecho.
+  (state.mantenimientos||[]).forEach(item=>{
+    const p=getProyeccionMantenimientoItem(item);
+    if(!p) return;
+    const hoyD=new Date(); hoyD.setHours(0,0,0,0);
+    let fecha=p.vencido?hoyD:(p.fechaEstimada||null);
+    if(!fecha) return; // por km y todavía sin promedio de uso: aún no hay fecha que mostrar
+    const iso=fecha.getFullYear()+'-'+String(fecha.getMonth()+1).padStart(2,'0')+'-'+String(fecha.getDate()).padStart(2,'0');
+    let detalle='';
+    if(p.vencido) detalle=' — ya toca';
+    else if(p.vencePor==='tiempo') detalle=' — por tiempo';
+    else if(p.kmFaltan!==null) detalle=` — faltan ~${Math.round(p.kmFaltan).toLocaleString('es-PE')} km`;
+    autos.push({
+      id:'auto-mant-'+item.id,
+      titulo:`${item.icono||'🔧'} ${item.nombre}${detalle}`,
+      fecha:iso,
+      tipo:'mantenimiento',
+      auto:true, origenPage:'combustible',
     });
   });
   return autos;
@@ -26305,6 +26435,22 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.74.0",
+  "fecha": "24/10/26",
+  "cambios": [
+   "Mantenimiento: al registrar un mantenimiento (o editar uno ya hecho) puedes agregar el detalle de costos: repuestos, mano de obra, etc. El monto total aparece junto a la fecha y puedes ver el detalle con un toque.",
+   "También puedes traer un repuesto de tu lista de Repuestos con su precio, editar la fecha, el km o la nota de un registro, y eliminarlo. Cada tipo muestra el total invertido.",
+   "El historial ahora puede verse completo (antes solo los últimos 5)."
+  ]
+ },
+ {
+  "v": "v1.73.0",
+  "fecha": "24/10/26",
+  "cambios": [
+   "Calendario: cada tipo de mantenimiento aparece automáticamente en la fecha estimada en que te toca (por km, por tiempo o lo que llegue primero) y se mueve solo cuando cambia tu kilometraje o marcas un mantenimiento como hecho."
+  ]
+ },
  {
   "v": "v1.72.0",
   "fecha": "24/10/26",
