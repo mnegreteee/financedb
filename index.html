@@ -1107,6 +1107,13 @@ body.compact-mode .anual-table{font-size:11px;}
 .ubic-pin svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 #ubic-map{height:300px;border-radius:10px;overflow:hidden;background:var(--bg3);border:1px solid var(--border2);}
 .ubic-marker{background:none;border:0;}
+.lug-chip{display:inline-flex;align-items:stretch;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;overflow:hidden;margin:0 6px 6px 0;}
+.lug-chip button{background:none;border:0;color:var(--text);font-size:12px;padding:5px 10px;cursor:pointer;font-family:inherit;}
+.lug-chip button.x{padding:5px 8px;color:var(--text3);border-left:1px solid var(--border2);font-size:11px;}
+.lug-chip:hover{border-color:var(--accent);}
+.lug-rapido{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:6px;font-size:10px;color:var(--text3);}
+.lug-rapido button{background:var(--bg3);border:1px solid var(--border2);border-radius:20px;color:var(--text);font-size:11px;padding:2px 9px;cursor:pointer;font-family:inherit;}
+.lug-rapido button:hover{border-color:var(--accent);}
 .ubic-res{display:block;width:100%;text-align:left;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;padding:8px 10px;margin-bottom:4px;cursor:pointer;font-family:inherit;}
 .ubic-res:hover{border-color:var(--accent);}
 
@@ -4086,9 +4093,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.74.0';
-const APP_VERSION_DATE = '24/10/26 - 14:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Mantenimiento: cada registro ahora puede llevar el detalle de costos (repuestos, mano de obra, etc.), con el monto junto a la fecha.';
+const APP_VERSION = 'v1.75.0';
+const APP_VERSION_DATE = '24/10/26 - 17:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: Mis lugares — guarda tu casa, trabajo, etc. como marcadores y úsalos con un toque al poner la ubicación de un consumo o pendiente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4129,6 +4136,7 @@ let state={
   ],
   tcTracker:[],            // [{id,fecha,rates:{empresaId:{compra,venta}}}]
   deudasMayores:[],        // [{id,tipo,nombre,currency,...,cuotas:[]}]
+  lugaresGuardados:[],     // [{id,nombre,lat,lng,dir}] marcadores: casa, trabajo, etc.
   repuestos:[],            // [{id,nombre,codigo,desc,tienda,precio,nota,mantId}] repuestos y códigos del auto
   deudaHistorial:{},       // {'2026-10':{tc,dm,yd,total}} foto mensual de lo que debo (S/)
   calendarEvents:[],       // [{id,titulo,fecha,tipo,recurrente,notas}]
@@ -5686,6 +5694,7 @@ function migrateState(){
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
   if(!Array.isArray(state.repuestos))      state.repuestos=[];
+  if(!Array.isArray(state.lugaresGuardados)) state.lugaresGuardados=[];
   if(!state.deudaHistorial||typeof state.deudaHistorial!=='object'||Array.isArray(state.deudaHistorial)) state.deudaHistorial={};
   if(!Array.isArray(state.calendarEvents)) state.calendarEvents=[];
   if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
@@ -22552,7 +22561,8 @@ function tcPlasticoHTML(t,ancho){
 //  "Abrir en Google Maps" es un simple enlace con las coordenadas.
 // ══════════════════════════════════════════════════════
 const UBIC_PIN_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/></svg>';
-const ubicTmp={mov:null,tcm:null};
+const ubicTmp={mov:null,tcm:null,pb:null};
+let _ubicPbId=null;
 function ubicLimpia(u){
   if(!u||typeof u!=='object') return null;
   const lat=Number(u.lat), lng=Number(u.lng);
@@ -22566,7 +22576,7 @@ function ubicLimpia(u){
 }
 function ubicUrlMaps(u){ return 'https://www.google.com/maps?q='+encodeURIComponent(u.lat+','+u.lng); }
 function ubicFuenteTxt(f){
-  return ({atajo:'GPS del iPhone al pagar',telegram:'enviada por Telegram',gps:'GPS de este dispositivo',manual:'puesta a mano',sugerida:'recordada de este comercio'})[f]||'lugar guardado';
+  return ({atajo:'GPS del iPhone al pagar',telegram:'enviada por Telegram',gps:'GPS de este dispositivo',manual:'puesta a mano',sugerida:'recordada de este comercio',guardado:'de Mis lugares'})[f]||'lugar guardado';
 }
 function ubicNormComercio(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9áéíóúñü ]+/g,' ').replace(/\s+/g,' ').trim(); }
 // Último lugar guardado para un comercio con el mismo nombre (sugerencia, no certeza: una cadena tiene varios locales).
@@ -22647,8 +22657,9 @@ function ubicPonerMarcador(lat,lng,editable){
 function ubicInfoPintar(){
   const el=document.getElementById('ubic-info'); const a=document.getElementById('ubic-gmaps'); const g=document.getElementById('ubic-guardar');
   const u=_ubicSel;
-  if(!u){ el.textContent=_ubicModo==='elegir'?'Busca un lugar, usa tu ubicación o toca el mapa para poner el pin.':''; a.style.display='none'; if(g) g.disabled=true; return; }
+  if(!u){ el.textContent=_ubicModo==='elegir'?'Busca un lugar, usa tu ubicación o toca el mapa para poner el pin.':''; a.style.display='none'; if(g) g.disabled=true; { const fb=document.getElementById('ubic-fav-btn'); if(fb) fb.style.display='none'; } return; }
   a.style.display=''; a.href=ubicUrlMaps(u); if(g) g.disabled=false;
+  { const fb=document.getElementById('ubic-fav-btn'); if(fb) fb.style.display=_ubicModo==='elegir'?'inline-flex':'none'; }
   el.innerHTML=`<div style="color:var(--text);font-weight:600">${escapeHtml(u.nombre||'Buscando el nombre del lugar…')}</div>`
     +`<div style="font-size:11px;color:var(--text3)">${escapeHtml(ubicFuenteTxt(u.fuente))}${u.prec?' · precisión ±'+u.prec+' m':''} · ${u.lat.toFixed(5)}, ${u.lng.toFixed(5)}</div>`;
 }
@@ -22694,15 +22705,19 @@ function ubicVer(u,titulo){
   ubicMapaCrear(u.lat,u.lng,17,false).then(()=>ubicPonerMarcador(u.lat,u.lng,false))
     .catch(e=>{ document.getElementById('ubic-map').innerHTML='<div style="padding:30px;text-align:center;color:var(--text3);font-size:12px">'+escapeHtml(e.message||'No se pudo cargar el mapa')+'<br>Aún puedes abrirlo en Google Maps con el botón de abajo.</div>'; });
 }
-function ubicAbrirPicker(ctx){
+function ubicAbrirPicker(ctx,pbId){
   _ubicCtx=ctx;
+  if(ctx==='pb'){ _ubicPbId=pbId; const pp=pendientesBanco.find(x=>x.id===pbId); ubicTmp.pb=ubicLimpia(pp&&pp.ubicacion); }
   const actual=ubicTmp[ctx]; _ubicSel=actual?{...actual}:null;
-  const desc=(document.getElementById(ctx==='mov'?'f-desc':'tc-m-desc')||{}).value||'';
+  let desc;
+  if(ctx==='pb'){ const pp=pendientesBanco.find(x=>x.id===pbId); desc=(pp&&pp.descripcion)||''; }
+  else desc=(document.getElementById(ctx==='mov'?'f-desc':'tc-m-desc')||{}).value||'';
   _ubicSug=actual?null:ubicSugerida(desc);
   ubicAbrirOverlay('📍 Ubicación del consumo','elegir');
   const sb=document.getElementById('ubic-sug-btn');
   if(_ubicSug){ sb.style.display='inline-flex'; sb.textContent='↺ Usar el lugar de la última vez'+(_ubicSug.nombre?': '+_ubicSug.nombre.slice(0,40):''); } else sb.style.display='none';
   document.getElementById('ubic-q').value=desc;
+  ubicLugaresPintar();
   ubicInfoPintar();
   const c=_ubicSel||{lat:-12.0464,lng:-77.0428};
   ubicMapaCrear(c.lat,c.lng,_ubicSel?17:12,true).then(()=>{ if(_ubicSel) ubicPonerMarcador(_ubicSel.lat,_ubicSel.lng,true); })
@@ -22741,7 +22756,64 @@ function ubicElegirResultado(i){
 function ubicGuardar(){
   if(!_ubicSel||!_ubicCtx) return;
   const u=ubicLimpia({..._ubicSel,ts:new Date().toISOString()}); if(!u){ alert('Ubicación no válida.'); return; }
+  if(_ubicCtx==='pb'){ ubicAsignarPend(_ubicPbId,u); ubicCerrar(); return; }
   ubicTmp[_ubicCtx]=u; ubicPintarCampo(_ubicCtx); ubicCerrar();
+}
+
+// ══════════ ⭐ MIS LUGARES (marcadores: casa, trabajo, gimnasio…) ══════════
+function ubicLugaresPintar(){
+  const box=document.getElementById('ubic-lugares'); if(!box) return;
+  const L=state.lugaresGuardados||[];
+  if(!L.length){ box.innerHTML='<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Aún no tienes lugares. Pon un pin en el mapa y toca “⭐ Guardar como mi lugar” (ej. 🏠 Casa).</div>'; return; }
+  box.innerHTML=L.map(l=>`<span class="lug-chip"><button type="button" onclick="ubicUsarLugar('${l.id}')">${escapeHtml(l.nombre)}</button><button type="button" class="x" title="Renombrar" onclick="ubicRenombrarLugar('${l.id}')">✏</button><button type="button" class="x" title="Quitar de Mis lugares" onclick="ubicBorrarLugar('${l.id}')">✕</button></span>`).join('');
+}
+function ubicUsarLugar(id){
+  const l=(state.lugaresGuardados||[]).find(x=>x.id===id); if(!l) return;
+  ubicMover(l.lat,l.lng,'guardado',null,l.nombre);
+  if(_ubicMapa) _ubicMapa.setView([l.lat,l.lng],17);
+  const q=document.getElementById('ubic-resultados'); if(q) q.innerHTML='';
+}
+function ubicGuardarLugar(){
+  if(!_ubicSel){ alert('Primero pon el pin en el mapa.'); return; }
+  const L=state.lugaresGuardados||(state.lugaresGuardados=[]);
+  const sug=L.some(x=>/casa/i.test(x.nombre))?'':'🏠 Casa';
+  const nombre=(prompt('Nombre del lugar (puedes empezar con un emoji). Ej: 🏠 Casa, 💼 Trabajo, 🏋 Gimnasio',sug)||'').trim().slice(0,40);
+  if(!nombre) return;
+  const dir=(_ubicSel.nombre&&_ubicSel.nombre!==nombre)?String(_ubicSel.nombre).slice(0,160):'';
+  const ya=L.find(x=>x.nombre.toLowerCase()===nombre.toLowerCase());
+  if(ya){ if(!confirm('Ya tienes "'+ya.nombre+'". ¿Reemplazar su ubicación por este pin?')) return; ya.lat=_ubicSel.lat; ya.lng=_ubicSel.lng; ya.dir=dir; }
+  else L.push({id:'lug-'+Date.now()+Math.random().toString(36).slice(2,5),nombre,lat:_ubicSel.lat,lng:_ubicSel.lng,dir});
+  saveState(); ubicLugaresPintar(); toast('⭐ "'+nombre+'" guardado en Mis lugares');
+}
+function ubicRenombrarLugar(id){
+  const l=(state.lugaresGuardados||[]).find(x=>x.id===id); if(!l) return;
+  const n=(prompt('Nuevo nombre del lugar',l.nombre)||'').trim().slice(0,40); if(!n) return;
+  l.nombre=n; saveState(); ubicLugaresPintar(); if(typeof renderAprobacionesBanco==='function') try{renderAprobacionesBanco();}catch(e){}
+}
+function ubicBorrarLugar(id){
+  const l=(state.lugaresGuardados||[]).find(x=>x.id===id); if(!l) return;
+  if(!confirm('¿Quitar "'+l.nombre+'" de Mis lugares? (Los consumos que ya lo usan no cambian)')) return;
+  state.lugaresGuardados=state.lugaresGuardados.filter(x=>x.id!==id);
+  saveState(); ubicLugaresPintar(); if(typeof renderAprobacionesBanco==='function') try{renderAprobacionesBanco();}catch(e){}
+}
+// Asigna un lugar a un pendiente del banco (se guarda en Firestore y se usa al aprobar)
+function ubicAsignarPend(id,u){
+  const p=pendientesBanco.find(x=>x.id===id); if(!p) return;
+  u=ubicLimpia(u); if(!u) return;
+  p.ubicacion=u;
+  try{ DOC_REF.collection('pendientesBanco').doc(id).update({ubicacion:u}).catch(e=>console.warn('No se pudo guardar la ubicación del pendiente:',e)); }catch(e){}
+  try{ renderAprobacionesBanco(); }catch(e){}
+  toast('📍 Ubicación agregada al pendiente');
+}
+function ubicPendLugar(id,lugId){
+  const l=(state.lugaresGuardados||[]).find(x=>x.id===lugId); if(!l) return;
+  ubicAsignarPend(id,{lat:l.lat,lng:l.lng,nombre:l.nombre,fuente:'guardado',ts:new Date().toISOString()});
+}
+function ubicRapidoPendHtml(p){
+  const L=state.lugaresGuardados||[];
+  const chips=L.slice(0,5).map(l=>`<button type="button" onclick="ubicPendLugar('${p.id}','${l.id}')">${escapeHtml(l.nombre)}</button>`).join('');
+  const tiene=!!ubicLimpia(p.ubicacion);
+  return `<div class="lug-rapido"><span>📍 ${tiene?'Lugar:':'Agregar lugar:'}</span>${chips}<button type="button" onclick="ubicAbrirPicker('pb','${p.id}')">${tiene?'Cambiar…':(L.length?'Otro…':'Elegir en el mapa…')}</button></div>`;
 }
 function ubicCerrar(){
   clearTimeout(_ubicRevTimer);
@@ -24649,6 +24721,7 @@ function renderAprobacionesBanco(){
           ${resuelto ? `Va a: <b>${escapeHtml(resuelto.label)}</b> ${resuelto.tipo==='tarjeta'?'(tarjeta)':'(cuenta)'}` : `<span style="color:var(--amber)">⚠ No se detectó a qué cuenta/tarjeta va — usa Editar</span>`}
           ${catSugerida?` · Categoría sugerida: <b>${escapeHtml(catSugerida)}</b>`:' · Sin categoría sugerida'}
         </div>
+        ${ubicRapidoPendHtml(p)}
       </div>
       <div class="pb-actions">
         <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
@@ -26435,6 +26508,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.75.0",
+  "fecha": "24/10/26",
+  "cambios": [
+   "Nuevo: ⭐ Mis lugares. En el selector de ubicación pon un pin y toca “Guardar como mi lugar” (ej. 🏠 Casa, 💼 Trabajo). Luego tus lugares aparecen como botones para usarlos con un toque; puedes renombrarlos o quitarlos.",
+   "En Aprobaciones, cada consumo pendiente del banco muestra tus lugares como botones rápidos (1 toque para asignar la ubicación) y la opción de elegir otro en el mapa."
+  ]
+ },
  {
   "v": "v1.74.0",
   "fecha": "24/10/26",
@@ -29121,6 +29202,8 @@ if(state.projGoals){
         <button type="button" class="btn" onclick="ubicBuscar()">Buscar</button>
       </div>
       <div id="ubic-resultados"></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">⭐ Mis lugares <span style="font-size:10px">(toca uno para usarlo al instante)</span></div>
+      <div id="ubic-lugares" style="margin-bottom:4px"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
         <button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="ubicUsarMiUbicacion()">📍 Usar mi ubicación actual</button>
         <button type="button" class="config-action-btn neutral" id="ubic-sug-btn" style="font-size:11px;display:none" onclick="ubicUsarSugerida()"></button>
@@ -29132,6 +29215,7 @@ if(state.projGoals){
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">
       <a id="ubic-gmaps" class="btn" href="#" target="_blank" rel="noopener" style="text-decoration:none;font-size:12px">Abrir en Google Maps</a>
       <div style="display:flex;gap:8px">
+        <button type="button" class="btn" id="ubic-fav-btn" style="display:none" onclick="ubicGuardarLugar()">⭐ Guardar como mi lugar</button>
         <button type="button" class="btn" onclick="ubicCerrar()">Cerrar</button>
         <button type="button" class="btn btn-primary" id="ubic-guardar" style="display:none" onclick="ubicGuardar()">Guardar lugar</button>
       </div>
