@@ -386,6 +386,14 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 /* ── COMPARATIVO ── */
 .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
 .compare-selectors{display:flex;gap:10px;margin-bottom:16px;}
+.rep-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}
+.rep-item{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0;}
+.rep-item h4{margin:0;font-size:13px;font-weight:600;overflow-wrap:anywhere;}
+.rep-code{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;max-width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-family:var(--mono);font-size:12px;overflow-wrap:anywhere;}
+.rep-code button{background:none;border:0;cursor:pointer;color:var(--accent);font-size:12px;padding:0;}
+.rep-meta{font-size:11px;color:var(--text2);overflow-wrap:anywhere;line-height:1.4;}
+.rep-tag{font-size:10px;color:var(--text3);}
+.rep-vacio{grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);font-size:12px;line-height:1.6;}
 .fuel-sum-sub{font-size:10px;color:var(--text3);margin-top:3px;line-height:1.35;}
 .mg-filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
 .mg-filtros select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:13px;padding:8px 10px;min-height:40px;max-width:100%;}
@@ -3188,6 +3196,16 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div id="mant-lista" style="display:flex;flex-direction:column;gap:12px"></div>
   </div>
 
+  <!-- REPUESTOS — qué repuesto lleva el auto y su código -->
+  <div class="card" id="rep-card" style="padding:18px;margin-bottom:20px">
+    <div class="section-header">
+      <div class="section-title">🧩 Repuestos <span style="font-size:10px;color:var(--text3);font-weight:400">(código y descripción de cada pieza)</span></div>
+      <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirRepuesto()">+ Agregar repuesto</button>
+    </div>
+    <input id="rep-buscar" type="search" placeholder="🔍 Buscar por nombre, código, marca o tienda…" oninput="renderRepuestos()" style="width:100%;margin-bottom:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px;font-family:var(--font)">
+    <div id="rep-lista" class="rep-lista"></div>
+  </div>
+
   <!-- Plantilla de una tarjeta de tipo de mantenimiento (se clona por JS) -->
   <template id="mant-item-template">
     <div class="mant-item-card" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:14px">
@@ -3199,10 +3217,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:10px">
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div><div data-role="km-actual" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Próximo a los</div><div data-role="km-proximo" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div><div data-role="km-proximo-tag" style="font-size:9px;color:var(--text3)"></div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Te faltan</div><div data-role="km-faltan" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
-        <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Fecha estimada</div><div data-role="fecha-est" style="font-size:13px;font-weight:600">—</div></div>
+        <div data-cell="kmactual"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Km actual</div><div data-role="km-actual" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
+        <div data-cell="kmprox"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Próximo a los</div><div data-role="km-proximo" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div><div data-role="km-proximo-tag" style="font-size:9px;color:var(--text3)"></div></div>
+        <div data-cell="kmfalt"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Te faltan</div><div data-role="km-faltan" style="font-size:14px;font-weight:700;font-family:var(--mono)">—</div></div>
+        <div data-cell="fecha"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Fecha estimada</div><div data-role="fecha-est" style="font-size:13px;font-weight:600">—</div></div>
+        <div data-cell="tiempo" style="display:none"><div style="font-size:9px;color:var(--text3);text-transform:uppercase">Por tiempo vence</div><div data-role="tiempo" style="font-size:13px;font-weight:700"></div><div data-role="tiempo-sub" style="font-size:9px;color:var(--text3)"></div></div>
       </div>
       <div style="background:var(--bg2);border-radius:8px;height:8px;overflow:hidden;margin-bottom:5px">
         <div data-role="barra" style="height:100%;background:var(--accent);width:0%;transition:width .3s"></div>
@@ -3759,27 +3778,65 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="field" style="flex:1"><label>Nombre</label><input id="mant-nombre" type="text" placeholder="Ej. Cambio de aceite"></div>
     </div>
     <div class="field">
-      <label>Km del último cambio realizado <span style="font-size:10px;color:var(--text3)">(0 si nunca lo has hecho)</span></label>
-      <input id="mant-km-base" type="number" min="0" step="1" placeholder="Ej. 1000">
+      <label>¿Cómo se controla este mantenimiento?</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;text-transform:none;letter-spacing:0;font-weight:500;color:var(--text)"><input type="checkbox" id="mant-usa-km" onchange="mantToggleModos()"> 📏 Por kilometraje</label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;text-transform:none;letter-spacing:0;font-weight:500;color:var(--text)"><input type="checkbox" id="mant-usa-tiempo" onchange="mantToggleModos()"> 📅 Por tiempo</label>
+      <div style="font-size:10px;color:var(--text3)">Si activas los dos, toca lo que llegue primero (ej. cada 10,000 km o 12 meses).</div>
     </div>
-    <div class="field">
-      <label>Próximos ya planificados <span style="font-size:10px;color:var(--text3)">(opcional — ej. auto nuevo: primero a los 10,000, después ya entra al patrón normal)</span></label>
-      <div id="mant-planificados-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
-      <div style="display:flex;gap:6px">
-        <input id="mant-nuevo-planificado" type="number" min="0" step="1" placeholder="Ej. 10000" style="flex:1">
-        <button class="btn" style="font-size:11px;white-space:nowrap" onclick="agregarKmPlanificado()">+ Agregar</button>
+    <div id="mant-bloque-km">
+      <div class="field">
+        <label>Km del último cambio realizado <span style="font-size:10px;color:var(--text3)">(0 si nunca lo has hecho)</span></label>
+        <input id="mant-km-base" type="number" min="0" step="1" placeholder="Ej. 1000">
       </div>
+      <div class="field">
+        <label>Próximos ya planificados <span style="font-size:10px;color:var(--text3)">(opcional — ej. auto nuevo: primero a los 10,000, después ya entra al patrón normal)</span></label>
+        <div id="mant-planificados-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+        <div style="display:flex;gap:6px">
+          <input id="mant-nuevo-planificado" type="number" min="0" step="1" placeholder="Ej. 10000" style="flex:1">
+          <button class="btn" style="font-size:11px;white-space:nowrap" onclick="agregarKmPlanificado()">+ Agregar</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Cada cuántos km, una vez agotados los planificados de arriba</label>
+        <input id="mant-intervalo" type="number" min="100" step="100" placeholder="Ej. 10000">
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Si hay algún planificado pendiente (mayor al km del último), se usa ese como próximo objetivo. Si no queda ninguno, se usa km del último + el intervalo.</div>
     </div>
-    <div class="field">
-      <label>Cada cuántos km, una vez agotados los planificados de arriba</label>
-      <input id="mant-intervalo" type="number" min="100" step="100" placeholder="Ej. 5000">
+    <div id="mant-bloque-tiempo">
+      <div class="field-row">
+        <div class="field"><label>Cada cuántos meses</label><input id="mant-intervalo-meses" type="number" min="1" step="1" placeholder="Ej. 12"></div>
+        <div class="field"><label>Fecha del último cambio</label><input id="mant-fecha-base" type="date"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px">El plazo se cuenta desde la fecha del último cambio. Al marcar ✅ Hecho se reinicia con la fecha que pongas ahí.</div>
     </div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:10px">Si hay algún planificado pendiente (mayor al km del último), se usa ese como próximo objetivo. Si no queda ninguno, se usa km del último + el intervalo.</div>
     <div style="display:flex;gap:8px;justify-content:space-between">
       <button class="config-action-btn danger" id="mant-delete-btn" style="display:none;font-size:11px" onclick="eliminarTipoMantenimiento()">🗑 Eliminar</button>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn" onclick="cerrarConfigMantenimiento()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarConfigMantenimiento()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: REPUESTO -->
+<div class="modal-overlay" id="rep-overlay" onclick="if(event.target===this)cerrarRepuesto()">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><span id="rep-title">🧩 Repuesto</span><button class="modal-close" onclick="cerrarRepuesto()">✕</button></div>
+    <div class="field"><label>Repuesto</label><input id="rep-nombre" type="text" placeholder="Ej. Filtro de aire"></div>
+    <div class="field"><label>Código / referencia</label><input id="rep-codigo" type="text" placeholder="Ej. 17801-0C010" autocapitalize="characters"></div>
+    <div class="field"><label>Descripción <span style="font-size:10px;color:var(--text3)">(marca, medida, especificación…)</span></label><input id="rep-desc" type="text" placeholder="Ej. Toyota original, para Hilux 2.8"></div>
+    <div class="field-row">
+      <div class="field"><label>Dónde comprarlo <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="rep-tienda" type="text" placeholder="Ej. Casa Toyota"></div>
+      <div class="field" style="flex:0 0 110px"><label>Precio S/ <span style="font-size:10px;color:var(--text3)">(opc.)</span></label><input id="rep-precio" type="number" min="0" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="field"><label>Se usa en <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><select id="rep-mant"><option value="">—</option></select></div>
+    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="rep-nota" type="text" placeholder="Ej. Cambiar junto con el filtro de cabina"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between">
+      <button class="config-action-btn danger" id="rep-delete-btn" style="display:none;font-size:11px" onclick="eliminarRepuesto()">🗑 Eliminar</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn" onclick="cerrarRepuesto()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarRepuesto()">Guardar</button>
       </div>
     </div>
   </div>
@@ -4016,9 +4073,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.70.4';
-const APP_VERSION_DATE = '23/10/26 - 14:27'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'En Gastos, los consumos con ubicación guardada ahora muestran un 📍 para ver el mapa de dónde fueron.';
+const APP_VERSION = 'v1.72.0';
+const APP_VERSION_DATE = '24/10/26 - 13:14'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva sección Repuestos en Combustible: guarda cada pieza con su código, descripción, tienda y precio.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4059,6 +4116,7 @@ let state={
   ],
   tcTracker:[],            // [{id,fecha,rates:{empresaId:{compra,venta}}}]
   deudasMayores:[],        // [{id,tipo,nombre,currency,...,cuotas:[]}]
+  repuestos:[],            // [{id,nombre,codigo,desc,tienda,precio,nota,mantId}] repuestos y códigos del auto
   deudaHistorial:{},       // {'2026-10':{tc,dm,yd,total}} foto mensual de lo que debo (S/)
   calendarEvents:[],       // [{id,titulo,fecha,tipo,recurrente,notas}]
   currentTab:'todos',editId:null
@@ -4999,7 +5057,7 @@ function eliminarActividad(logId){
       const item=(state.mantenimientos||[]).find(x=>x.id===ref.mantId);
       if(item){
         item.historial=(item.historial||[]).filter(h=>h.id!==ref.mantRegistroId);
-        if(ref.snapshotAntes){ item.kmUltimo=ref.snapshotAntes.kmUltimo; item.proximosPlanificados=ref.snapshotAntes.proximosPlanificados; }
+        if(ref.snapshotAntes){ item.kmUltimo=ref.snapshotAntes.kmUltimo; if(ref.snapshotAntes.fechaUltimo) item.fechaUltimo=ref.snapshotAntes.fechaUltimo; else delete item.fechaUltimo; item.proximosPlanificados=ref.snapshotAntes.proximosPlanificados; }
       }
     }
   }catch(err){
@@ -5614,6 +5672,7 @@ function migrateState(){
   if(!Array.isArray(state.deudas))         state.deudas=[];
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
+  if(!Array.isArray(state.repuestos))      state.repuestos=[];
   if(!state.deudaHistorial||typeof state.deudaHistorial!=='object'||Array.isArray(state.deudaHistorial)) state.deudaHistorial={};
   if(!Array.isArray(state.calendarEvents)) state.calendarEvents=[];
   if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
@@ -8219,11 +8278,11 @@ function checkBrowserNotifications(forzar){
   (state.mantenimientos||[]).forEach(item=>{
     const proyMant=getProyeccionMantenimientoItem(item);
     if(!proyMant) return;
-    const cercaPorKm = proyMant.kmFaltan<=1000;
+    const cercaPorKm = proyMant.usaKm && proyMant.kmFaltan<=1000;
     const cercaPorDias = proyMant.diasFaltan!==null && proyMant.diasFaltan<=15;
-    if(cercaPorKm || cercaPorDias){
+    if(proyMant.vencido || cercaPorKm || cercaPorDias){
       const fechaTxt=proyMant.fechaEstimada?(' — estimado '+String(proyMant.fechaEstimada.getDate()).padStart(2,'0')+'/'+String(proyMant.fechaEstimada.getMonth()+1).padStart(2,'0')):'';
-      mensajes.push(`🔧 ${item.nombre} en ~${Math.round(proyMant.kmFaltan)} km${fechaTxt}`);
+      mensajes.push(`🔧 ${item.nombre} ${mantTextoProximo(item,proyMant)}${proyMant.vencePor==='tiempo'?'':fechaTxt}`);
     }
   });
 
@@ -18056,8 +18115,8 @@ function renderNuevosWidgetsDashboard(){
     });
     const proyMant=(state.mantenimientos||[])
       .map(item=>({item, proy:getProyeccionMantenimientoItem(item)}))
-      .filter(x=>x.proy).sort((a,b)=>a.proy.kmFaltan-b.proy.kmFaltan)[0];
-    if(proyMant) lineas.push(`<div style="font-size:12px;padding:4px 0">${proyMant.item.icono||'🔧'} Próximo: ${proyMant.item.nombre} en ~${Math.round(proyMant.proy.kmFaltan)} km</div>`);
+      .filter(x=>x.proy).sort((a,b)=>mantUrgencia(a.proy)-mantUrgencia(b.proy))[0];
+    if(proyMant) lineas.push(`<div style="font-size:12px;padding:4px 0">${proyMant.item.icono||'🔧'} Próximo: ${proyMant.item.nombre} ${mantTextoProximo(proyMant.item,proyMant.proy)}</div>`);
     combEl.innerHTML = lineas.length ? lineas.join('') : '<div class="dash-empty"><div class="dash-empty-icon">⛽</div>Sin registros de combustible.</div>';
   }
 
@@ -20259,22 +20318,80 @@ function getProximoKmObjetivo(item, kmReferencia){
   if(pendientes.length) return {km:pendientes[0], esPlanificado:true};
   return {km:kmReferencia+(item.intervaloKm||5000), esPlanificado:false};
 }
+// ── Fechas de mantenimiento por TIEMPO ──
+function mantSumarMeses(iso,n){
+  const [y,m,d]=String(iso).split('-').map(Number);
+  const base=new Date(y,m-1+n,1), ult=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();
+  base.setDate(Math.min(d,ult)); base.setHours(0,0,0,0); return base;
+}
+// Fecha del último cambio: la guardada, o (si es un tipo viejo) la del último registro del historial.
+function getFechaUltimoMant(item){
+  if(item.fechaUltimo && /^\d{4}-\d{2}-\d{2}$/.test(item.fechaUltimo)) return item.fechaUltimo;
+  const h=(item.historial||[]).map(x=>x.fecha).filter(Boolean).sort();
+  return h.length?h[h.length-1]:null;
+}
+// Cada tipo se controla por km, por tiempo, o por AMBOS (toca lo que llegue primero).
 function getProyeccionMantenimientoItem(item){
-  if(item.kmUltimo===null || item.kmUltimo===undefined) return null;
+  const kmU=(item.kmUltimo===null||item.kmUltimo===undefined||item.kmUltimo==='')?NaN:Number(item.kmUltimo);
+  const usaKm=isFinite(kmU)&&Number(item.intervaloKm)>0;
+  const fUlt=getFechaUltimoMant(item);
+  const meses=Number(item.intervaloMeses)||0;
+  const usaTiempo=meses>0&&!!fUlt;
+  if(!usaKm&&!usaTiempo) return null;
+  const hoy=new Date(); hoy.setHours(0,0,0,0);
   const actual=getKmActualVehiculo();
-  const kmActual=actual ? actual.km : item.kmUltimo;
-  const objetivo=getProximoKmObjetivo(item, item.kmUltimo);
-  const kmProximo=objetivo.km;
-  const kmFaltan=Math.max(0,kmProximo-kmActual);
-  const promDiario=getKmPromedioDiario();
-  let fechaEstimada=null, diasFaltan=null;
-  if(promDiario && promDiario>0){
-    diasFaltan=Math.ceil(kmFaltan/promDiario);
-    fechaEstimada=new Date(); fechaEstimada.setHours(0,0,0,0); fechaEstimada.setDate(fechaEstimada.getDate()+diasFaltan);
+  const out={usaKm,usaTiempo,kmActual:actual?actual.km:(usaKm?kmU:null),kmProximo:null,kmFaltan:null,promDiario:getKmPromedioDiario(),
+    diasFaltan:null,fechaEstimada:null,avance:0,sinDatosKm:!actual,esPlanificado:false,
+    fechaLimite:null,diasTiempo:null,mesesIntervalo:meses,vencePor:null,vencido:false};
+  let diasKm=null, avKm=0, avT=0;
+  if(usaKm){
+    const kmActual=actual?actual.km:kmU;
+    const objetivo=getProximoKmObjetivo({...item,kmUltimo:kmU}, kmU);
+    out.kmProximo=objetivo.km; out.esPlanificado=objetivo.esPlanificado;
+    out.kmFaltan=Math.max(0,objetivo.km-kmActual);
+    if(out.promDiario&&out.promDiario>0){
+      diasKm=Math.ceil(out.kmFaltan/out.promDiario);
+      const d=new Date(hoy); d.setDate(d.getDate()+diasKm); out.fechaEstimadaKm=d;
+    }
+    const tramo=Math.max(1,objetivo.km-kmU);
+    avKm=Math.min(100,Math.max(0,((kmActual-kmU)/tramo)*100));
   }
-  const tramoTotal=Math.max(1,kmProximo-item.kmUltimo);
-  const avance=Math.min(100,Math.max(0,((kmActual-item.kmUltimo)/tramoTotal)*100));
-  return {kmActual, kmProximo, kmFaltan, promDiario, diasFaltan, fechaEstimada, avance, sinDatosKm:!actual, esPlanificado:objetivo.esPlanificado};
+  if(usaTiempo){
+    out.fechaLimite=mantSumarMeses(fUlt,meses);
+    out.diasTiempo=Math.round((out.fechaLimite-hoy)/86400000);
+    const ini=new Date(fUlt+'T00:00:00'); const total=Math.max(1,Math.round((out.fechaLimite-ini)/86400000));
+    avT=Math.min(100,Math.max(0,((total-out.diasTiempo)/total)*100));
+  }
+  out.avance=Math.max(avKm,avT);
+  // ¿qué llega primero?
+  const kmVence=usaKm&&out.kmFaltan<=0, tVence=usaTiempo&&out.diasTiempo<=0;
+  out.vencido=kmVence||tVence;
+  if(usaKm&&usaTiempo){
+    if(tVence&&!kmVence) out.vencePor='tiempo';
+    else if(kmVence&&!tVence) out.vencePor='km';
+    else if(kmVence&&tVence) out.vencePor='ambos';
+    else if(diasKm!==null) out.vencePor=out.diasTiempo<=diasKm?'tiempo':'km';
+    else out.vencePor='tiempo'; // sin promedio de km no se puede comparar: la fecha es lo único seguro
+  } else out.vencePor=usaTiempo?'tiempo':'km';
+  // fecha/días efectivos = lo que llegue primero
+  if(usaTiempo&&(out.vencePor==='tiempo'||out.vencePor==='ambos')){ out.fechaEstimada=out.fechaLimite; out.diasFaltan=Math.max(0,out.diasTiempo); }
+  else if(usaKm){ out.fechaEstimada=out.fechaEstimadaKm||null; out.diasFaltan=diasKm; }
+  if(usaTiempo&&usaKm&&out.vencePor==='km'&&out.fechaEstimadaKm){ out.fechaEstimada=out.fechaEstimadaKm; out.diasFaltan=diasKm; }
+  return out;
+}
+// Para ordenar/avisar: días (o km convertidos a días) que faltan, lo menor = más urgente.
+function mantUrgencia(proy){
+  if(!proy) return 99999;
+  if(proy.vencido) return -1;
+  if(proy.diasFaltan!==null) return proy.diasFaltan;
+  return proy.kmFaltan!==null?proy.kmFaltan/30:99999;
+}
+function mantTextoProximo(item,proy){
+  if(proy.vencePor==='tiempo'||(proy.vencePor==='ambos')){
+    const d=proy.diasTiempo;
+    return d<=0?`venció por tiempo${d<0?` hace ${-d} día${d===-1?'':'s'}`:' hoy'}`:`vence por tiempo en ${d} día${d===1?'':'s'}`;
+  }
+  return `en ~${Math.round(proy.kmFaltan)} km`;
 }
 function renderMantenimiento(){
   renderKmManualUltimo();
@@ -20298,25 +20415,46 @@ function renderMantenimiento(){
     node.querySelector('[data-role="btn-editar"]').onclick=()=>abrirEditarTipoMantenimiento(item.id);
     node.querySelector('[data-role="btn-hecho"]').onclick=()=>abrirRegistrarMantenimiento(item.id);
     const proy=getProyeccionMantenimientoItem(item);
+    const celda=k=>node.querySelector('[data-cell="'+k+'"]');
     if(!proy){
       node.querySelector('[data-role="km-actual"]').textContent='—';
       node.querySelector('[data-role="km-proximo"]').textContent='Sin configurar';
-      node.querySelector('[data-role="nota"]').textContent='Toca ⚙️ para poner el km del último cambio.';
+      node.querySelector('[data-role="nota"]').textContent='Toca ⚙️ para configurar cada cuántos km o meses toca y cuándo fue el último cambio.';
     } else {
-      node.querySelector('[data-role="km-actual"]').textContent=Math.round(proy.kmActual).toLocaleString('es-PE')+' km';
-      node.querySelector('[data-role="km-proximo"]').textContent=Math.round(proy.kmProximo).toLocaleString('es-PE')+' km';
-      node.querySelector('[data-role="km-proximo-tag"]').textContent=proy.esPlanificado?'📌 hito planificado':'patrón habitual';
-      const colorUrgencia = proy.kmFaltan<=200 ? 'var(--red)' : proy.kmFaltan<=500 ? 'var(--amber)' : 'var(--accent)';
-      const faltEl=node.querySelector('[data-role="km-faltan"]');
-      faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
-      faltEl.style.color=colorUrgencia;
+      // columnas según cómo se controle: km, tiempo o ambos
+      ['kmactual','kmprox','kmfalt'].forEach(k=>{ celda(k).style.display=proy.usaKm?'':'none'; });
+      celda('tiempo').style.display=proy.usaTiempo?'':'none';
+      const rojoKm=proy.usaKm&&proy.kmFaltan<=200, ambKm=proy.usaKm&&proy.kmFaltan<=500;
+      const rojoT=proy.usaTiempo&&proy.diasTiempo<=7, ambT=proy.usaTiempo&&proy.diasTiempo<=30;
+      const colorUrgencia=(rojoKm||rojoT)?'var(--red)':(ambKm||ambT)?'var(--amber)':'var(--accent)';
+      if(proy.usaKm){
+        node.querySelector('[data-role="km-actual"]').textContent=Math.round(proy.kmActual).toLocaleString('es-PE')+' km';
+        node.querySelector('[data-role="km-proximo"]').textContent=Math.round(proy.kmProximo).toLocaleString('es-PE')+' km';
+        node.querySelector('[data-role="km-proximo-tag"]').textContent=proy.esPlanificado?'📌 hito planificado':'patrón habitual';
+        const faltEl=node.querySelector('[data-role="km-faltan"]');
+        faltEl.textContent=Math.round(proy.kmFaltan).toLocaleString('es-PE')+' km';
+        faltEl.style.color=(rojoKm)?'var(--red)':(ambKm)?'var(--amber)':'var(--accent)';
+      }
+      if(proy.usaTiempo){
+        const tEl=node.querySelector('[data-role="tiempo"]');
+        tEl.textContent=proy.fechaLimite.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
+        tEl.style.color=rojoT?'var(--red)':ambT?'var(--amber)':'inherit';
+        const d=proy.diasTiempo;
+        node.querySelector('[data-role="tiempo-sub"]').textContent=(d<0?`vencido hace ${-d} día${d===-1?'':'s'}`:d===0?'vence hoy':`en ${d} día${d===1?'':'s'}`)+` · cada ${proy.mesesIntervalo} mes${proy.mesesIntervalo===1?'':'es'}`;
+      }
       node.querySelector('[data-role="fecha-est"]').textContent = proy.fechaEstimada ? proy.fechaEstimada.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
       const barra=node.querySelector('[data-role="barra"]');
       barra.style.width=proy.avance.toFixed(0)+'%';
       barra.style.background=colorUrgencia;
       let nota='';
-      if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga ni lectura manual con kilometraje registrado.';
-      else if(!proy.promDiario) nota='Registra 2+ lecturas de km (recarga o manual) para estimar la fecha.';
+      if(proy.vencido){
+        const porT=(proy.vencePor==='tiempo'||proy.vencePor==='ambos');
+        nota=porT?`⚠️ Ya toca por tiempo (pasaron ${proy.mesesIntervalo} mes${proy.mesesIntervalo===1?'':'es'} desde el último)${proy.usaKm?` — llevas ${Math.round(proy.kmActual-Number(item.kmUltimo)).toLocaleString('es-PE')} km de ${Number(item.intervaloKm).toLocaleString('es-PE')}`:''}.`:'⚠️ Ya toca por kilometraje.';
+      } else if(proy.usaKm&&proy.usaTiempo) nota=`Toca lo que llegue primero: ${Number(item.intervaloKm).toLocaleString('es-PE')} km o ${proy.mesesIntervalo} mes${proy.mesesIntervalo===1?'':'es'}. ${proy.promDiario?`Ahora va por ${proy.vencePor==='km'?'kilometraje':'tiempo'}.`:''}`;
+      if(proy.usaKm&&!proy.vencido){
+        if(proy.sinDatosKm) nota='⚠️ Aún no tienes ninguna recarga ni lectura manual con kilometraje registrado.'+(nota?' '+nota:'');
+        else if(!proy.promDiario) nota=(nota?nota+' ':'')+'Registra 2+ lecturas de km (recarga o manual) para estimar la fecha por km.';
+      }
       node.querySelector('[data-role="nota"]').textContent=nota;
     }
     const hist=(item.historial||[]).slice().reverse().slice(0,5);
@@ -20338,6 +20476,11 @@ function abrirNuevoTipoMantenimiento(){
   document.getElementById('mant-nombre').value='';
   document.getElementById('mant-intervalo').value='';
   document.getElementById('mant-km-base').value='';
+  document.getElementById('mant-usa-km').checked=true;
+  document.getElementById('mant-usa-tiempo').checked=false;
+  document.getElementById('mant-intervalo-meses').value='';
+  document.getElementById('mant-fecha-base').value='';
+  mantToggleModos();
   mantPlanificadosTemp=[];
   renderPlanificadosLista();
   document.getElementById('mant-delete-btn').style.display='none';
@@ -20352,10 +20495,20 @@ function abrirEditarTipoMantenimiento(id){
   document.getElementById('mant-nombre').value=item.nombre;
   document.getElementById('mant-intervalo').value=item.intervaloKm||'';
   document.getElementById('mant-km-base').value=item.kmUltimo ?? '';
+  document.getElementById('mant-usa-km').checked=Number(item.intervaloKm)>0;
+  document.getElementById('mant-usa-tiempo').checked=Number(item.intervaloMeses)>0;
+  document.getElementById('mant-intervalo-meses').value=item.intervaloMeses||'';
+  document.getElementById('mant-fecha-base').value=getFechaUltimoMant(item)||'';
+  mantToggleModos();
   mantPlanificadosTemp=[...(item.proximosPlanificados||[])].sort((a,b)=>a-b);
   renderPlanificadosLista();
   document.getElementById('mant-delete-btn').style.display='inline-flex';
   document.getElementById('mant-config-overlay').classList.add('open');
+}
+function mantToggleModos(){
+  const km=document.getElementById('mant-usa-km').checked, t=document.getElementById('mant-usa-tiempo').checked;
+  document.getElementById('mant-bloque-km').style.display=km?'':'none';
+  document.getElementById('mant-bloque-tiempo').style.display=t?'':'none';
 }
 function renderPlanificadosLista(){
   const cont=document.getElementById('mant-planificados-lista');
@@ -20388,21 +20541,34 @@ function cerrarConfigMantenimiento(){ document.getElementById('mant-config-overl
 function guardarConfigMantenimiento(){
   const nombre=(document.getElementById('mant-nombre').value||'').trim();
   const icono=(document.getElementById('mant-icono').value||'🔧').trim()||'🔧';
+  const usaKm=document.getElementById('mant-usa-km').checked, usaTiempo=document.getElementById('mant-usa-tiempo').checked;
   const intervalo=parseFloat(document.getElementById('mant-intervalo').value);
-  const kmBase=parseFloat(document.getElementById('mant-km-base').value);
+  const kmBaseRaw=parseFloat(document.getElementById('mant-km-base').value);
+  const meses=parseInt(document.getElementById('mant-intervalo-meses').value,10);
+  const fechaBase=document.getElementById('mant-fecha-base').value;
   if(!nombre){alert('Ponle un nombre a este tipo de mantenimiento (ej. "Cambio de aceite").');return;}
-  if(isNaN(intervalo)||intervalo<=0){alert('Ingresa cada cuántos km toca (mayor a 0).');return;}
-  if(isNaN(kmBase)||kmBase<0){alert('Ingresa el km del último cambio (usa 0 si nunca lo has hecho).');return;}
+  if(!usaKm&&!usaTiempo){alert('Elige cómo se controla: por kilometraje, por tiempo, o los dos.');return;}
+  if(usaKm){
+    if(isNaN(intervalo)||intervalo<=0){alert('Ingresa cada cuántos km toca (mayor a 0).');return;}
+    if(isNaN(kmBaseRaw)||kmBaseRaw<0){alert('Ingresa el km del último cambio (usa 0 si nunca lo has hecho).');return;}
+  }
+  if(usaTiempo){
+    if(isNaN(meses)||meses<=0){alert('Ingresa cada cuántos meses toca (mayor a 0).');return;}
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(fechaBase)){alert('Ingresa la fecha del último cambio, para contar los meses desde ahí.');return;}
+  }
+  const kmBase=usaKm?kmBaseRaw:(isNaN(kmBaseRaw)?null:kmBaseRaw);
+  const campos={nombre, icono, intervaloKm:usaKm?intervalo:0, kmUltimo:kmBase, intervaloMeses:usaTiempo?meses:0, proximosPlanificados:usaKm?[...mantPlanificadosTemp]:[]};
+  if(fechaBase) campos.fechaUltimo=fechaBase;
   if(!state.mantenimientos) state.mantenimientos=[];
   if(editingMantId){
     const item=state.mantenimientos.find(x=>x.id===editingMantId);
     if(item){
       const antes={...item};
-      Object.assign(item,{nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp]});
+      Object.assign(item,campos);
       logActividad('mantenimiento_editado', `Mantenimiento editado: ${nombre}`, {mantId:editingMantId, snapshotAntes:antes});
     }
   } else {
-    const nuevoMant={id:'mant-'+Date.now(), nombre, icono, intervaloKm:intervalo, kmUltimo:kmBase, proximosPlanificados:[...mantPlanificadosTemp], historial:[]};
+    const nuevoMant={id:'mant-'+Date.now(), ...campos, historial:[]};
     state.mantenimientos.push(nuevoMant);
     logActividad('mantenimiento_nuevo', `Tipo de mantenimiento nuevo: ${nombre}`, {mantId:nuevoMant.id});
   }
@@ -20428,7 +20594,7 @@ function abrirRegistrarMantenimiento(id){
   registrandoMantId=id;
   document.getElementById('mant-reg-title').textContent='✅ '+item.nombre;
   const proy=getProyeccionMantenimientoItem(item);
-  document.getElementById('mant-reg-km').value = proy ? Math.round(proy.kmActual) : '';
+  document.getElementById('mant-reg-km').value = (proy&&proy.kmActual!=null) ? Math.round(proy.kmActual) : '';
   document.getElementById('mant-reg-fecha').value = todayLocalISO();
   document.getElementById('mant-reg-nota').value='';
   document.getElementById('mant-registrar-overlay').classList.add('open');
@@ -20442,10 +20608,11 @@ function guardarRegistrarMantenimiento(){
   const nota=(document.getElementById('mant-reg-nota').value||'').trim();
   if(isNaN(km)||km<0||!fecha){alert('Completa el kilometraje y la fecha.');return;}
   if(!item.historial) item.historial=[];
-  const snapshotAntes={kmUltimo:item.kmUltimo, proximosPlanificados:[...(item.proximosPlanificados||[])]};
+  const snapshotAntes={kmUltimo:item.kmUltimo, fechaUltimo:item.fechaUltimo, proximosPlanificados:[...(item.proximosPlanificados||[])]};
   const nuevoRegistro={id:'mreg-'+Date.now(), km, fecha, nota};
   item.historial.push(nuevoRegistro);
   item.kmUltimo=km; // reinicia el contador de ESTE tipo desde este punto
+  item.fechaUltimo=fecha; // y el plazo por tiempo
   // Cualquier hito planificado de ESTE tipo que ya se haya alcanzado o
   // pasado se retira — los demás tipos no se ven afectados en absoluto.
   if(Array.isArray(item.proximosPlanificados)){
@@ -20704,6 +20871,7 @@ function renderCombustible(){
   renderFuelSection('glp');
   renderFuelSection('gas');
   renderMantenimiento();
+  renderRepuestos();
 }
 
 function renderFuelSection(type){
@@ -22693,6 +22861,76 @@ function renderDeudaEvolucion(){
   ]},options:{responsive:true,maintainAspectRatio:false,
     plugins:{legend:{labels:{color:tick,boxWidth:10,font:{size:11}}},tooltip:{callbacks:{footer:items=>{const t=dTot[items[0].dataIndex];return t==null?'':'Total: S/ '+t.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});},label:c=>c.dataset.label+': S/ '+(c.parsed.y||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}}},
     scales:{x:{stacked:true,ticks:{color:tick,font:{size:10}},grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{color:tick,font:{size:10},callback:v=>v>=1000?(v/1000).toFixed(v%1000?1:0)+'k':v},grid:{color:isDark?'#ffffff14':'#00000010'}}}}});
+}
+
+
+// ══════════════════════════════════════════════════════
+//  🧩 REPUESTOS — qué pieza lleva el auto, su código y descripción (se puede buscar y copiar el código)
+// ══════════════════════════════════════════════════════
+let editingRepId=null;
+function renderRepuestos(){
+  const cont=document.getElementById('rep-lista'); if(!cont) return;
+  const q=(document.getElementById('rep-buscar')?.value||'').trim().toLowerCase();
+  const todos=state.repuestos||[];
+  const mantNombre=id=>{ const m=(state.mantenimientos||[]).find(x=>x.id===id); return m?((m.icono||'🔧')+' '+m.nombre):''; };
+  const lista=todos.filter(r=>!q||[r.nombre,r.codigo,r.desc,r.tienda,r.nota,mantNombre(r.mantId)].some(v=>String(v||'').toLowerCase().includes(q)))
+    .sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
+  if(!todos.length){ cont.innerHTML='<div class="rep-vacio">Aún no tienes repuestos guardados.<br>Agrega por ejemplo “Filtro de aire” con su código, para tenerlo a mano cuando toque comprarlo.<br><button class="btn btn-primary" style="font-size:11px;margin-top:8px" onclick="abrirRepuesto()">+ Agregar el primero</button></div>'; return; }
+  if(!lista.length){ cont.innerHTML='<div class="rep-vacio">Nada coincide con tu búsqueda.</div>'; return; }
+  cont.innerHTML=lista.map(r=>{
+    const mn=mantNombre(r.mantId), precio=Number(r.precio)>0?'S/ '+Number(r.precio).toFixed(2):'';
+    return `<div class="rep-item">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><h4>${escapeHtml(r.nombre||'Repuesto')}</h4>
+        <button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" onclick="abrirRepuesto('${r.id}')" title="Editar">⚙️</button></div>
+      ${r.codigo?`<div class="rep-code"><span>${escapeHtml(r.codigo)}</span><button type="button" onclick="copiarCodigoRepuesto('${r.id}')" title="Copiar código" aria-label="Copiar código">📋</button></div>`:'<div class="rep-tag">Sin código</div>'}
+      ${r.desc?`<div class="rep-meta">${escapeHtml(r.desc)}</div>`:''}
+      ${(r.tienda||precio)?`<div class="rep-meta">${r.tienda?'🏪 '+escapeHtml(r.tienda):''}${r.tienda&&precio?' · ':''}${precio?'💰 '+precio:''}</div>`:''}
+      ${mn?`<div class="rep-tag">Se usa en: ${escapeHtml(mn)}</div>`:''}
+      ${r.nota?`<div class="rep-tag">📝 ${escapeHtml(r.nota)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function copiarCodigoRepuesto(id){
+  const r=(state.repuestos||[]).find(x=>x.id===id); if(!r||!r.codigo) return;
+  const ok=()=>toast('Código copiado: '+r.codigo);
+  try{ navigator.clipboard.writeText(r.codigo).then(ok,()=>{ prompt('Copia el código:',r.codigo); }); }catch(e){ prompt('Copia el código:',r.codigo); }
+}
+function abrirRepuesto(id){
+  editingRepId=id||null;
+  const r=id?(state.repuestos||[]).find(x=>x.id===id):null;
+  if(id&&!r) return;
+  const sel=document.getElementById('rep-mant');
+  sel.innerHTML='<option value="">—</option>'+(state.mantenimientos||[]).map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml((m.icono||'🔧')+' '+m.nombre)}</option>`).join('');
+  document.getElementById('rep-title').textContent=r?'🧩 '+(r.nombre||'Repuesto'):'+ Nuevo repuesto';
+  document.getElementById('rep-nombre').value=r?r.nombre||'':'';
+  document.getElementById('rep-codigo').value=r?r.codigo||'':'';
+  document.getElementById('rep-desc').value=r?r.desc||'':'';
+  document.getElementById('rep-tienda').value=r?r.tienda||'':'';
+  document.getElementById('rep-precio').value=r&&Number(r.precio)>0?r.precio:'';
+  sel.value=r?r.mantId||'':'';
+  document.getElementById('rep-nota').value=r?r.nota||'':'';
+  document.getElementById('rep-delete-btn').style.display=r?'inline-flex':'none';
+  document.getElementById('rep-overlay').classList.add('open');
+}
+function cerrarRepuesto(){ document.getElementById('rep-overlay').classList.remove('open'); editingRepId=null; }
+function guardarRepuesto(){
+  const v=id=>(document.getElementById(id).value||'').trim();
+  const nombre=v('rep-nombre'), codigo=v('rep-codigo'), desc=v('rep-desc');
+  if(!nombre){ alert('Ponle un nombre al repuesto (ej. "Filtro de aire").'); return; }
+  if(!codigo&&!desc){ alert('Agrega al menos el código o una descripción del producto.'); return; }
+  const precio=parseFloat(document.getElementById('rep-precio').value);
+  const datos={nombre, codigo, desc, tienda:v('rep-tienda'), precio:isNaN(precio)||precio<=0?0:precio, mantId:document.getElementById('rep-mant').value||'', nota:v('rep-nota')};
+  if(!Array.isArray(state.repuestos)) state.repuestos=[];
+  if(editingRepId){ const r=state.repuestos.find(x=>x.id===editingRepId); if(r) Object.assign(r,datos); }
+  else state.repuestos.push({id:'rep-'+Date.now()+Math.random().toString(36).slice(2,6), ...datos});
+  saveState(); cerrarRepuesto(); renderRepuestos();
+  toast(editingRepId?'Repuesto actualizado':'Repuesto agregado');
+}
+function eliminarRepuesto(){
+  const r=(state.repuestos||[]).find(x=>x.id===editingRepId); if(!r) return;
+  if(!confirm('¿Eliminar "'+(r.nombre||'este repuesto')+'"?')) return;
+  state.repuestos=state.repuestos.filter(x=>x.id!==editingRepId);
+  saveState(); cerrarRepuesto(); renderRepuestos(); toast('Repuesto eliminado');
 }
 
 // ── RENDER CALENDARIO ──────────────────────────────────
@@ -26067,6 +26305,23 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.72.0",
+  "fecha": "24/10/26",
+  "cambios": [
+   "Nueva sección 🧩 Repuestos (Combustible): guarda cada pieza del auto con su código o referencia, descripción, dónde comprarla, precio y el mantenimiento donde se usa.",
+   "Se puede buscar por nombre, código o marca, y copiar el código con un toque."
+  ]
+ },
+ {
+  "v": "v1.71.0",
+  "fecha": "24/10/26",
+  "cambios": [
+   "Mantenimiento del auto: cada tipo ahora se puede controlar por kilometraje, por tiempo (cada X meses) o por ambos; si activas los dos, toca lo que llegue primero (ej. cada 10,000 km o 12 meses).",
+   "Se muestra la fecha límite por tiempo, los días que faltan (o cuántos lleva vencido) y los recordatorios consideran también el plazo en meses.",
+   "Al marcar ✅ Hecho se reinicia tanto el kilometraje como la fecha del último cambio."
+  ]
+ },
  {
   "v": "v1.70.4",
   "fecha": "23/10/26",
