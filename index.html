@@ -2847,6 +2847,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="section-title">🔔 Aprobaciones</div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirCorreosImportantesModal()">📬 Correos importantes</button>
+      <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirCorreosIgnoradosModal()">🚫 Correos ignorados</button>
       <button id="btn-vaciar-pendientes" class="config-action-btn danger" style="font-size:10px;display:none" onclick="vaciarTodosPendientes()">🗑 Vaciar todos</button>
     </div>
   </div>
@@ -4093,9 +4094,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.75.0';
-const APP_VERSION_DATE = '24/10/26 - 17:52'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: Mis lugares — guarda tu casa, trabajo, etc. como marcadores y úsalos con un toque al poner la ubicación de un consumo o pendiente.';
+const APP_VERSION = 'v1.76.0';
+const APP_VERSION_DATE = '26/10/26 - 19:02'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: puedes ignorar ciertos correos para que ya no lleguen a Aprobaciones ni al bot (botón 🚫 Ignorar y lista de Correos ignorados).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4136,6 +4137,7 @@ let state={
   ],
   tcTracker:[],            // [{id,fecha,rates:{empresaId:{compra,venta}}}]
   deudasMayores:[],        // [{id,tipo,nombre,currency,...,cuotas:[]}]
+  correosIgnorados:[],     // [{id,remitente,clave,asunto,ts}] correos que NO quiero en Aprobaciones/Telegram
   lugaresGuardados:[],     // [{id,nombre,lat,lng,dir}] marcadores: casa, trabajo, etc.
   repuestos:[],            // [{id,nombre,codigo,desc,tienda,precio,nota,mantId}] repuestos y códigos del auto
   deudaHistorial:{},       // {'2026-10':{tc,dm,yd,total}} foto mensual de lo que debo (S/)
@@ -5695,6 +5697,7 @@ function migrateState(){
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
   if(!Array.isArray(state.repuestos))      state.repuestos=[];
   if(!Array.isArray(state.lugaresGuardados)) state.lugaresGuardados=[];
+  if(!Array.isArray(state.correosIgnorados)) state.correosIgnorados=[];
   if(!state.deudaHistorial||typeof state.deudaHistorial!=='object'||Array.isArray(state.deudaHistorial)) state.deudaHistorial={};
   if(!Array.isArray(state.calendarEvents)) state.calendarEvents=[];
   if(!Array.isArray(state.tcEmpresas)||!state.tcEmpresas.length) state.tcEmpresas=[
@@ -24699,6 +24702,7 @@ function renderAprobacionesBanco(){
         </div>
         <div class="pb-actions">
           <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
+          <button class="config-action-btn neutral" style="font-size:10px" onclick="ignorarCorreoPendiente('${p.id}')" title="No volver a mostrar correos como este">🚫 Ignorar</button>
           <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar</button>
         </div>
       </div>`;
@@ -24725,6 +24729,7 @@ function renderAprobacionesBanco(){
       </div>
       <div class="pb-actions">
         <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
+        <button class="config-action-btn neutral" style="font-size:10px" onclick="ignorarCorreoPendiente('${p.id}')" title="No volver a mostrar correos como este">🚫 Ignorar</button>
         <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar</button>
         <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="aprobarRapido('${p.id}')" ${resuelto?'':'disabled title="Primero usa Editar para elegir cuenta/tarjeta"'}>✅ Aprobar</button>
       </div>
@@ -24949,6 +24954,30 @@ function confirmarAprobarPendiente(){
     cerrarAprobarPendienteModal();
   }
 }
+
+// ── 🚫 Correos ignorados: el bot no crea el pendiente ni avisa por Telegram si coincide remitente + asunto ──
+function claveAsuntoCorreo(a){ return String(a||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[0-9]+/g,' ').replace(/[^a-z\s]/g,' ').replace(/\s+/g,' ').trim().slice(0,100); }
+function emailDeRemitente(r){ const t=String(r||'').trim(); const m=t.match(/<([^>]+)>/); return (m?m[1]:t).trim().toLowerCase().slice(0,120); }
+function ignorarCorreoPendiente(id){
+  const p=pendientesBanco.find(x=>x.id===id); if(!p) return;
+  const asunto=p.asunto||p.descripcion||''; const clave=claveAsuntoCorreo(asunto);
+  if(!clave){ alert('Este aviso no trae un asunto para reconocerlo. Usa Eliminar.'); return; }
+  const rem=emailDeRemitente(p.remitente);
+  if(!confirm('¿Ignorar los correos'+(rem?' de '+rem:'')+' con asunto "'+String(asunto).slice(0,70)+'"?\n\nYa no te llegarán a Aprobaciones ni al bot. Puedes revertirlo en "🚫 Correos ignorados".')) return;
+  if(!Array.isArray(state.correosIgnorados)) state.correosIgnorados=[];
+  if(!state.correosIgnorados.some(x=>x.clave===clave&&(x.remitente||'')===rem)) state.correosIgnorados.push({id:'ign-'+Date.now(),remitente:rem,clave,asunto:String(asunto).slice(0,100),ts:Date.now()});
+  saveState();
+  quitarPendientesBanco([id],'eliminado');
+  toast('🚫 Ignorado — no volverá a aparecer');
+}
+function abrirCorreosIgnoradosModal(){ ignRender(); document.getElementById('ign-overlay').classList.add('open'); }
+function cerrarCorreosIgnoradosModal(){ document.getElementById('ign-overlay').classList.remove('open'); }
+function ignRender(){
+  const cont=document.getElementById('ign-list'); const L=state.correosIgnorados||[];
+  if(!L.length){ cont.innerHTML='<div class="dash-empty" style="margin:0">No tienes correos ignorados. Usa el botón 🚫 Ignorar en un aviso de Aprobaciones.</div>'; return; }
+  cont.innerHTML=L.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:9px 12px"><div style="min-width:0;font-size:12px"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">"${escapeHtml(x.asunto||x.clave)}"</div><div style="font-size:11px;color:var(--text3)">${escapeHtml(x.remitente||'cualquier remitente')}</div></div><button class="config-action-btn neutral" style="font-size:10px;white-space:nowrap" onclick="ignQuitar('${x.id}')">✅ Volver a recibir</button></div>`).join('');
+}
+function ignQuitar(id){ state.correosIgnorados=(state.correosIgnorados||[]).filter(x=>x.id!==id); saveState(); ignRender(); toast('✅ Volverás a recibir esos correos'); }
 // ── 📬 Correos importantes (no bancarios, ej. boleta de pago) ──────────────
 // La lista vive en state.correosImportantes (se sincroniza como cualquier otra
 // sección, en users/{uid}/secciones/correosImportantes). El bot la entrega al
@@ -26508,6 +26537,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.76.0",
+  "fecha": "26/10/26",
+  "cambios": [
+   "Nuevo: 🚫 Ignorar. En Aprobaciones, cada aviso de correo tiene el botón 🚫 Ignorar: ese tipo de correo (mismo remitente y asunto) ya no llega a Aprobaciones ni te avisa el bot.",
+   "Nuevo botón 🚫 Correos ignorados en Aprobaciones: ves la lista y puedes volver a recibir cualquiera. El bot también tiene el botón 🚫 en cada aviso y el comando /correosignorados."
+  ]
+ },
  {
   "v": "v1.75.0",
   "fecha": "24/10/26",
@@ -28897,6 +28934,13 @@ if(state.projGoals){
       <button class="btn" onclick="cerrarCorreosImportantesModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarCorreosImportantes()">Guardar</button>
     </div>
+  </div>
+</div>
+<div class="modal-overlay" id="ign-overlay" onclick="if(event.target===this)cerrarCorreosIgnoradosModal()">
+  <div class="modal" style="width:520px;max-width:96vw;max-height:90vh;overflow:auto">
+    <div class="modal-title"><span>🚫 Correos ignorados</span><button class="modal-close" onclick="cerrarCorreosIgnoradosModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">Los correos que coinciden con esta lista ya no llegan a Aprobaciones ni te avisa el bot por Telegram. Quita uno para volver a recibirlo.</div>
+    <div id="ign-list" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
 </div>
 <div class="modal-overlay" id="pf-registrar-overlay" onclick="if(event.target===this)confirmAndClose(this,'closePFRegistrar')">
