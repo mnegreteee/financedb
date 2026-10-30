@@ -3464,6 +3464,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div class="dm-sum-card" style="border-top:2px solid var(--purple)"><div class="dm-sum-label">Próximo Pago</div><div class="dm-sum-val" id="dm-sum-proximo" style="color:var(--purple);font-size:13px">—</div></div>
       </div>
 
+      <div id="dm-pf-link"></div>
       <div class="dm-table-wrap">
         <table class="dm-table">
           <thead id="dm-detail-thead"></thead>
@@ -4094,9 +4095,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.77.0';
-const APP_VERSION_DATE = '30/10/26 - 08:23'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Aprobaciones: reconoce tus pagos e ingresos frecuentes, explica por qué no se registró solo y permite registrarlos con un botón.';
+const APP_VERSION = 'v1.78.0';
+const APP_VERSION_DATE = '30/10/26 - 11:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Deudas Mayores: ahora puedes vincular una deuda con un pago frecuente (ej. Cochera): al registrar uno se marca el otro.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4705,6 +4706,7 @@ function eliminarActividad(logId){
       _revertirMovOConsumo(ref);
       const pf=(state.pagosFrecuentes||[]).find(p=>p.id===ref.pfId);
       if(pf && pf.pagosRegistrados) delete pf.pagosRegistrados[ref.periodoKey];
+      (state.deudasMayores||[]).forEach(dm=>{ if(dm.pfId!==ref.pfId) return; (dm.cuotas||[]).forEach(c=>{ if(c.viaPF===ref.periodoKey){ c.pagado=false; delete c.viaPF; } }); });
     } else if(entry.tipo==='combustible_gasto'){
       _revertirMovOConsumo(ref);
       const arr=state[ref.fuelTipo==='glp'?'combustibleGlp':'combustibleGas']||[];
@@ -4981,7 +4983,8 @@ function eliminarActividad(logId){
     } else if(entry.tipo==='deuda_mayor_cuota'){
       const d=(state.deudasMayores||[]).find(x=>x.id===ref.deudaMayorId);
       const c=d && d.cuotas && d.cuotas.find(x=>x.numero==ref.cuotaNumero);
-      if(c) c.pagado=ref.pagadoAntes;
+      if(c){ c.pagado=ref.pagadoAntes; delete c.viaPF; }
+      if(ref.pfMarcaId){ const pfx=(state.pagosFrecuentes||[]).find(p=>p.id===ref.pfMarcaId); const rr=pfx&&pfx.pagosRegistrados&&pfx.pagosRegistrados[ref.pfMarcaMk]; if(rr&&rr.viaDM) delete pfx.pagosRegistrados[ref.pfMarcaMk]; }
     } else if(entry.tipo==='tc_manual'){
       if(!state.tc) state.tc={};
       if(ref.tcValorAntes===undefined || ref.tcValorAntes===null) delete state.tc[ref.tcField];
@@ -18452,6 +18455,7 @@ function togglePfDiaPagoUltimo(){
   if(chk) inp.value='';
 }
 function closePagoFrecuenteModal(){
+  _pfVincularDM=null;
   document.getElementById('pago-frecuente-modal-overlay').classList.remove('open');
 }
 function onPFTipoMontoChange(){
@@ -18567,6 +18571,7 @@ function savePagoFrecuente(){
     const nuevoPF={id:'pf-'+Date.now(), nombre, tipo, frecuencia, mesInicio, duracionMeses, fechaAnual, meses, tipoMonto, montoFijo, currency, metodoPago, destino, categoria, diaPago, textoCorreo, pagosRegistrados:{}, descuentosPendientes:[]};
     if(imgSegura(pfLogoTmp)) nuevoPF.logo=pfLogoTmp;
     state.pagosFrecuentes.push(nuevoPF);
+    if(_pfVincularDM){ const dmv=(state.deudasMayores||[]).find(x=>x.id===_pfVincularDM); if(dmv){ dmv.pfId=nuevoPF.id; const mkAct=mesActualKey(); if(!nuevoPF.pagosRegistrados) nuevoPF.pagosRegistrados={}; (dmv.cuotas||[]).filter(c=>c.pagado).forEach(c=>{ if(dmMesPFDeCuota(nuevoPF,c)===mkAct && !nuevoPF.pagosRegistrados[mkAct]) nuevoPF.pagosRegistrados[mkAct]={monto:Number(c.monto)||0,fecha:c.fecha||todayISO(),viaDM:true}; }); } _pfVincularDM=null; }
     logActividad('pago_frecuente_nuevo', `Pago frecuente nuevo: ${nombre}`, {pfId:nuevoPF.id});
   }
   saveState();
@@ -19026,10 +19031,12 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
       t.movs[newMk].push(consumo);
       refActividad={tarjetaId:t.id, monthKey:newMk, consumoId:consumo.id};
     }
+    const dmLink=pfMarcarCuotaDM(pf,mk);
     if(refActividad){
       const symPf=pf.currency==='USD'?'$':'S/';
       logActividad('pago_frecuente', `${pf.nombre} — ${symPf} ${numFmtSigned(monto,2)}`, {...refActividad, pfId:pf.id, periodoKey:mk});
     }
+    if(dmLink) setTimeout(()=>toast('🏛️ Cuota #'+dmLink.cuota+' de «'+dmLink.dmNombre+'» marcada como pagada'),1800);
   }
   if(!pf.pagosRegistrados) pf.pagosRegistrados={};
   pf.pagosRegistrados[mk]=detalle ? {monto, fecha:hoy, montoBase:detalle.montoBase, deducciones:detalle.deducciones} : {monto, fecha:hoy};
@@ -22149,6 +22156,7 @@ function closeDMDetail(){
 function renderDMDetail(){
   const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
   if(!d) return;
+  dmPintarVinculo(d);
   const r = getDMResumen(d);
 
   document.getElementById('dm-sum-saldo').textContent = dmFmt(r.saldoPendiente, d.currency);
@@ -22185,15 +22193,123 @@ function renderDMDetail(){
   }
 }
 
+
+// ══════════════════════════════════════════════════════
+//  🔗 DEUDA MAYOR ↔ PAGO FRECUENTE
+//  La deuda guarda `pfId`. Al registrar el pago frecuente se marca la cuota correspondiente como pagada, y al marcar una cuota
+//  se marca el mes correspondiente del pago frecuente. La cuota que se marcó "sola" lleva `viaPF` (= mes del pago) para poder
+//  deshacerla; el mes del pago frecuente marcado desde la cuota lleva `viaDM`. Ninguna marca crea movimientos por sí sola.
+//  Emparejamiento por fechas: la cuota se empareja con el mes del pago frecuente cuyo vencimiento es el último ≤ fecha de la cuota
+//  (+20 días de margen), así "Préstamo Ripley" (vence fin de mes) ↔ cuota del día 5 del mes siguiente.
+// ══════════════════════════════════════════════════════
+let _pfVincularDM=null;
+function dmPFDe(d){ return d&&d.pfId?(state.pagosFrecuentes||[]).find(p=>p.id===d.pfId):null; }
+function dmDelPF(pfId){ return pfId?(state.deudasMayores||[]).find(d=>d.pfId===pfId):null; }
+function pfFechaVence(pf,y,m0){
+  const dim=new Date(y,m0+1,0).getDate(); const dp=pf.diaPago;
+  const d=(dp==='ultimo'||!dp)?dim:Math.min(parseInt(dp,10)||dim,dim);
+  return new Date(y,m0,d,12);
+}
+function dmMesPFDeCuota(pf,c){
+  if(!pf||!c||!c.fecha||(pf.frecuencia||'mensual')!=='mensual') return null;
+  const F=new Date(c.fecha+'T12:00:00'); if(isNaN(F)) return null;
+  const lim=F.getTime()+20*864e5; let mejor=null;
+  for(let off=-2;off<=1;off++){
+    const t=new Date(F.getFullYear(),F.getMonth()+off,1);
+    const D=pfFechaVence(pf,t.getFullYear(),t.getMonth());
+    if(D.getTime()<=lim && (!mejor||D>mejor.D)) mejor={D,y:t.getFullYear(),m:t.getMonth(),mk:t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')};
+  }
+  if(!mejor||!pfActivoEnMes(pf,mejor.y,mejor.m)) return null;
+  return mejor.mk;
+}
+function dmCuotaDePFMes(dm,pf,mk){
+  const [y,mo]=String(mk).split('-').map(Number); if(!y||!mo) return null;
+  const D=pfFechaVence(pf,y,mo-1).getTime();
+  const c=(dm.cuotas||[]).filter(x=>!x.pagado&&x.fecha).sort((a,b)=>a.numero-b.numero).find(x=>new Date(x.fecha+'T12:00:00').getTime()>=D-20*864e5);
+  if(!c||new Date(c.fecha+'T12:00:00').getTime()>D+40*864e5) return null;
+  return c;
+}
+// Pago frecuente registrado (mes mk) → tilda la cuota de la deuda vinculada
+function pfMarcarCuotaDM(pf,mk){
+  try{
+    if(!pf||(pf.frecuencia||'mensual')!=='mensual') return null;
+    const dm=dmDelPF(pf.id); if(!dm) return null;
+    const c=dmCuotaDePFMes(dm,pf,mk); if(!c) return null;
+    c.pagado=true; c.viaPF=mk;
+    return {dmId:dm.id,dmNombre:dm.nombre,cuota:c.numero};
+  }catch(e){ console.warn('pfMarcarCuotaDM:',e); return null; }
+}
+// Cuota tildada/destildada en Deudas Mayores → mes del pago frecuente vinculado
+function dmSyncPFDesdeCuota(d,c,checked){
+  const pf=dmPFDe(d); if(!pf) return null;
+  const mk=dmMesPFDeCuota(pf,c); if(!mk) return null;
+  if(!pf.pagosRegistrados) pf.pagosRegistrados={};
+  const r=pf.pagosRegistrados[mk];
+  if(checked){
+    if(r) return null;
+    pf.pagosRegistrados[mk]={monto:Number(c.monto)||0,fecha:todayISO(),viaDM:true};
+    return {pfMarcaId:pf.id,pfMarcaMk:mk,pfNombre:pf.nombre};
+  }
+  if(r&&r.viaDM){ delete pf.pagosRegistrados[mk]; return null; }
+  if(r) toast('El pago frecuente «'+pf.nombre+'» sigue marcado: tiene un gasto registrado (deshaz ese pago desde Actividad).');
+  return null;
+}
+function dmPintarVinculo(d){
+  const box=document.getElementById('dm-pf-link'); if(!box) return;
+  const pfs=(state.pagosFrecuentes||[]).filter(p=>p.id===d.pfId||(p.tipo!=='ingreso'&&(p.frecuencia||'mensual')==='mensual'));
+  const _nt=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const sug=!d.pfId?pfs.find(p=>{ const a=_nt(p.nombre), b=_nt(d.nombre); return a.length>=4&&b.length>=4&&(a.includes(b)||b.includes(a)); }):null;
+  box.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">
+    <span>🔗 <b>Pago frecuente vinculado:</b></span>
+    <select id="dm-pf-sel" onchange="dmVincularPF(this.value)" style="font-size:12px;padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);max-width:230px">
+      <option value="">— Ninguno —</option>${pfs.map(p=>`<option value="${p.id}" ${p.id===d.pfId?'selected':''}>${escapeHtml(p.nombre)}</option>`).join('')}
+    </select>
+    ${d.pfId?'':`<button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="dmCrearPF()">＋ Crear pago frecuente para esta deuda</button>`}
+    ${sug?`<span style="font-size:11px;color:var(--amber)">💡 ¿Es «${escapeHtml(sug.nombre)}»? <button type="button" class="config-action-btn neutral" style="font-size:10px" onclick="dmVincularPF('${sug.id}')">Vincular</button></span>`:''}
+    <div style="flex-basis:100%;font-size:11px;color:var(--text3);line-height:1.5">${d.pfId?'Al registrar ese pago frecuente se marca la cuota de aquí, y al marcar una cuota aquí se marca el mes en el pago frecuente. No se crean gastos por marcar.':'Vincúlala para que un solo registro marque las dos cosas.'}</div></div>`;
+}
+function dmVincularPF(pfId){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  if(pfId){
+    const otra=dmDelPF(pfId);
+    if(otra&&otra.id!==d.id){ if(!confirm('«'+otra.nombre+'» ya usa ese pago frecuente. ¿Pasarlo a «'+d.nombre+'»?')){ dmPintarVinculo(d); return; } delete otra.pfId; }
+    d.pfId=pfId;
+    // Sincronización inicial SOLO del mes en curso (no toca el historial): si la cuota de este mes ya está pagada, marca el mes del pago frecuente.
+    const pf=dmPFDe(d);
+    if(pf){ if(!pf.pagosRegistrados) pf.pagosRegistrados={}; const mkAct=mesActualKey();
+      (d.cuotas||[]).filter(c=>c.pagado&&!c.viaPF).forEach(c=>{ if(dmMesPFDeCuota(pf,c)===mkAct && !pf.pagosRegistrados[mkAct]) pf.pagosRegistrados[mkAct]={monto:Number(c.monto)||0,fecha:c.fecha||todayISO(),viaDM:true}; }); }
+    toast('🔗 Vinculado con «'+((pf&&pf.nombre)||'pago frecuente')+'»');
+  } else { delete d.pfId; toast('Vínculo quitado'); }
+  saveState(); renderDMDetail(); try{ renderPagosFrecuentes(); }catch(e){}
+}
+function dmCrearPF(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  _pfVincularDM=d.id;
+  openPagoFrecuenteModal();
+  const sig=(d.cuotas||[]).filter(c=>!c.pagado&&c.fecha).sort((a,b)=>a.numero-b.numero)[0]||(d.cuotas||[]).slice(-1)[0];
+  document.getElementById('pf-modal-title').textContent='Nuevo — vinculado a '+d.nombre;
+  document.getElementById('pf-nombre').value=d.nombre;
+  document.getElementById('pf-tipo').value='gasto';
+  document.getElementById('pf-frecuencia').value='mensual';
+  document.getElementById('pf-tipo-monto').value='fijo';
+  document.getElementById('pf-monto').value=sig?Number(sig.monto)||'':(d.montoCuota||'');
+  document.getElementById('pf-currency').value=d.currency==='USD'?'USD':'PEN';
+  if(sig&&sig.fecha){ const dt=new Date(sig.fecha+'T12:00:00'); const ult=dt.getDate()===new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate();
+    document.getElementById('pf-dia-pago-ultimo').checked=ult; document.getElementById('pf-dia-pago').value=ult?'':dt.getDate(); }
+  try{ onPFTipoChange(); onPFFrecuenciaChange(); onPFTipoMontoChange(); poblarPFCuentas(); togglePfDiaPagoUltimo(); onPFMetodoChange(); }catch(e){}
+}
 function toggleDMCuotaPagado(numero, checked){
   const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
   if(!d) return;
   const c = d.cuotas.find(x=>x.numero==numero);
   if(c){
     const antes=c.pagado;
-    c.pagado=checked;
-    logActividad('deuda_mayor_cuota', `${checked?'Cuota marcada pagada':'Cuota desmarcada'}: ${d.nombre} #${numero}`, {deudaMayorId:currentDMId, cuotaNumero:numero, pagadoAntes:antes});
+    c.pagado=checked; delete c.viaPF;
+    const pfInfo=dmSyncPFDesdeCuota(d,c,checked);
+    logActividad('deuda_mayor_cuota', `${checked?'Cuota marcada pagada':'Cuota desmarcada'}: ${d.nombre} #${numero}`, {deudaMayorId:currentDMId, cuotaNumero:numero, pagadoAntes:antes, ...(pfInfo||{})});
     saveState(); renderDMDetail();
+    if(pfInfo) toast('✅ También marcado como pagado en «'+pfInfo.pfNombre+'» ('+pfInfo.pfMarcaMk+')');
+    try{ renderPagosFrecuentes(); }catch(e){}
   }
 }
 
@@ -24872,6 +24988,7 @@ function pfMarcarTrasAprobar(p, destino, tipoMov, monto, currency, fecha){
     const pf=ok[0].pf;
     if(!pf.pagosRegistrados) pf.pagosRegistrados={};
     pf.pagosRegistrados[ok[0].mk]={monto:Number(monto),fecha};
+    pfMarcarCuotaDM(pf,ok[0].mk);
     return pf.nombre;
   }catch(err){ console.warn('pfMarcarTrasAprobar:',err); return ''; }
 }
@@ -26631,6 +26748,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.78.0",
+  "fecha": "30/10/26",
+  "cambios": [
+   "Deudas Mayores: cada deuda puede vincularse con un pago frecuente (o crear uno nuevo con un botón, ya con el monto, la moneda y el día de la cuota). Al registrar el pago frecuente, la cuota de la deuda se marca como pagada; y al marcar una cuota, el mes queda pagado en el pago frecuente.",
+   "Deshacer el pago frecuente (o desmarcar la cuota) también revierte la marca del otro lado. Marcar no crea gastos duplicados."
+  ]
+ },
  {
   "v": "v1.77.0",
   "fecha": "30/10/26",
