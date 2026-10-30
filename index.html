@@ -4094,9 +4094,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.76.0';
-const APP_VERSION_DATE = '26/10/26 - 19:02'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: puedes ignorar ciertos correos para que ya no lleguen a Aprobaciones ni al bot (botón 🚫 Ignorar y lista de Correos ignorados).';
+const APP_VERSION = 'v1.77.0';
+const APP_VERSION_DATE = '30/10/26 - 08:23'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Aprobaciones: reconoce tus pagos e ingresos frecuentes, explica por qué no se registró solo y permite registrarlos con un botón.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -18997,7 +18997,7 @@ function confirmarPFRegistrar(){
 // Si el tipo es "base con descuentos", `detalle` trae el desglose (monto
 // base + cada concepto descontado) para poder mostrarlo luego en el
 // historial — el movimiento en sí solo guarda el monto FINAL ya calculado.
-function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual){
+function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual, extra){
   const hoy=fechaManual || todayISO();
   const esAnualFreq=pf.frecuencia==='anual';
   const mk = esAnualFreq
@@ -19010,16 +19010,19 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
       if(!state.movimientos) state.movimientos=[];
       const mov={id:'pf-mov-'+Date.now(), type:esIngreso?'income':'expense', desc:pf.nombre, amount:monto, account:pf.destino, date:hoy, currency:pf.currency};
       if(pf.categoria) mov.cat=pf.categoria;
+      if(extra&&extra.hora) mov.hora=extra.hora;
+      if(extra&&extra.ubicacion) mov.ubicacion=extra.ubicacion;
       pushMovimiento(mov);
       refActividad={movId:mov.id};
     } else {
       const t=getTarjeta(pf.destino);
-      if(!t){ alert('La tarjeta configurada ya no existe. Edita este pago frecuente para elegir otra.'); return; }
+      if(!t){ alert('La tarjeta configurada ya no existe. Edita este pago frecuente para elegir otra.'); return false; }
       if(!t.movs) t.movs={};
       const newMk=getBillingMonthKey(hoy, t);
       if(!t.movs[newMk]) t.movs[newMk]=[];
-      const consumo={id:'pf-tcm-'+Date.now(), desc:pf.nombre, fecha:hoy, monto, pagado:false, currency:pf.currency, hora:horaLimaActual()};
+      const consumo={id:'pf-tcm-'+Date.now(), desc:pf.nombre, fecha:hoy, monto, pagado:false, currency:pf.currency, hora:(extra&&extra.hora)||horaLimaActual()};
       if(pf.categoria) consumo.cat=pf.categoria;
+      if(extra&&extra.ubicacion) consumo.ubicacion=extra.ubicacion;
       t.movs[newMk].push(consumo);
       refActividad={tarjetaId:t.id, monthKey:newMk, consumoId:consumo.id};
     }
@@ -19037,6 +19040,7 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
   renderPagosFrecuentes();
   render();
   toast(pf.nombre+' registrado');
+  return true;
 }
 
 
@@ -24725,6 +24729,7 @@ function renderAprobacionesBanco(){
           ${resuelto ? `Va a: <b>${escapeHtml(resuelto.label)}</b> ${resuelto.tipo==='tarjeta'?'(tarjeta)':'(cuenta)'}` : `<span style="color:var(--amber)">⚠ No se detectó a qué cuenta/tarjeta va — usa Editar</span>`}
           ${catSugerida?` · Categoría sugerida: <b>${escapeHtml(catSugerida)}</b>`:' · Sin categoría sugerida'}
         </div>
+        ${pfPendienteHtml(p)}
         ${ubicRapidoPendHtml(p)}
       </div>
       <div class="pb-actions">
@@ -24783,6 +24788,93 @@ function _leerCatPendiente(id){
   if(!v) return null;
   return v==='__none__' ? undefined : v;
 }
+
+// ── 💡 Pagos/ingresos frecuentes vs. avisos del banco (Aprobaciones) ──
+// Mismas reglas que el bot (autoRegistrarPagoFrecuenteDesdeCorreo_): FIJO = mismo monto (y el "Texto del correo" si lo tiene);
+// VARIABLE = el "Texto del correo" aparece en la descripción. `motivo` = qué impide reconocerlo/registrarlo solo;
+// `bloqueo` = tampoco se puede registrar con el botón (otra moneda, ya pagado ese mes…).
+function pfEvaluarPendienteApp(p, destinoElegido){
+  if(!p||p.noReconocido||!(Number(p.monto)>0)||!p.fecha) return [];
+  const esIngreso=p.tipoMovimiento==='ingreso';
+  const monto=Number(p.monto), moneda=p.moneda==='USD'?'USD':'PEN', sym=moneda==='USD'?'$':'S/';
+  const [y,mo]=String(p.fecha).split('-').map(Number); if(!y||!mo) return [];
+  const mk=y+'-'+String(mo).padStart(2,'0');
+  const resuelto=destinoElegido||resolverCuentaOTarjeta(p);
+  const bancoNorm=_normTexto(p.banco||'');
+  const hints=[p.tarjetaHint,p.cuentaHint].filter(Boolean).join(',').split(',').map(_normTexto).filter(Boolean);
+  const descNorm=_normTexto(p.descripcion||'');
+  const hintGenerico=hints.every(h=>h===bancoNorm||bancoNorm.includes(h)||h.includes(bancoNorm));
+  const labelDest=pf=>{ if(pf.tipo!=='ingreso'&&pf.metodoPago!=='cuenta'){ const t=getTarjeta(pf.destino); return t?t.banco+(t.cat?' '+t.cat:''):'(una tarjeta que ya no existe)'; } return pf.destino||''; };
+  return (state.pagosFrecuentes||[]).filter(pf=>(pf.tipo==='ingreso')===esIngreso).map(pf=>{
+    const palabras=String(pf.textoCorreo||'').split(/[,;\n]/).map(_normTexto).filter(w=>w.length>=3);
+    const textoCalza=palabras.some(w=>descNorm.includes(w));
+    const montoIgual=pf.tipoMonto==='fijo'&&Math.round(Number(pf.montoFijo)*100)===Math.round(monto*100);
+    const relevante=pf.tipoMonto==='fijo'?(palabras.length?textoCalza:montoIgual):(palabras.length>0&&textoCalza);
+    const out={pf,mk,relevante,motivo:null,bloqueo:false};
+    if(!relevante) return out;
+    const fail=(m,b)=>{ out.motivo=m; out.bloqueo=!!b; return out; };
+    if((pf.frecuencia||'mensual')!=='mensual') return fail('es un pago '+pf.frecuencia+' (regístralo desde Pagos frecuentes)',true);
+    if((pf.currency||'PEN')!==moneda) return fail('su moneda es '+(pf.currency||'PEN')+' y el aviso es en '+moneda,true);
+    if(pf.tipoMonto!=='fijo'&&pf.tipoMonto!=='variable') return fail('es "base con descuentos" (regístralo desde Pagos frecuentes para aplicar los descuentos)',true);
+    if(!pfActivoEnMes(pf,y,mo-1)) return fail('no le corresponde '+mk+' (fuera de su duración)',true);
+    if(pf.pagosRegistrados&&pf.pagosRegistrados[mk]) return fail('ya figura como pagado en '+mk,true);
+    if(pf.tipoMonto==='fijo'&&!montoIgual) return fail('su monto fijo es '+sym+' '+numFmt(pf.montoFijo)+' y el aviso trae '+sym+' '+numFmt(monto));
+    if(!pf.destino) return fail('no tiene cuenta o tarjeta configurada',true);
+    const porTarjeta=!esIngreso&&pf.metodoPago!=='cuenta';
+    const porTexto=palabras.length>0&&textoCalza;
+    if(resuelto&&!(porTexto&&hintGenerico)){
+      if(resuelto.tipo===(porTarjeta?'tarjeta':'cuenta')&&resuelto.id===pf.destino) return out;
+      return fail('el aviso apunta a '+(resuelto.label||resuelto.id)+' pero este pago usa '+labelDest(pf));
+    }
+    let label='';
+    if(porTarjeta){ const t=getTarjeta(pf.destino); label=t?_normTexto(t.banco+' '+(t.cat||'')):''; } else label=_normTexto(getBanco(pf.destino)||pf.destino);
+    if(!label) return fail('su cuenta o tarjeta ya no existe (edítalo en Pagos frecuentes)',true);
+    if(!((bancoNorm&&label.includes(bancoNorm))||hints.some(h=>label.includes(h)))) return fail('el aviso es de '+(p.banco||'otro banco')+' y este pago usa '+labelDest(pf));
+    return out;
+  });
+}
+// Línea + botones en la tarjeta del aviso (Aprobaciones)
+function pfPendienteHtml(p){
+  try{
+    const ev=pfEvaluarPendienteApp(p).filter(e=>e.relevante);
+    if(!ev.length) return '';
+    const ok=ev.filter(e=>!e.motivo);
+    const btn=(e)=>`<button type="button" class="config-action-btn neutral" style="font-size:10px;margin:4px 6px 0 0" onclick="registrarComoPFPendiente('${p.id}','${e.pf.id}')">💡 Registrar como «${escapeHtml(String(e.pf.nombre).slice(0,24))}»</button>`;
+    let h='';
+    if(ok.length===1) h+=`<div style="font-size:11px;color:var(--green);margin-top:4px">💡 Coincide con tu ${ok[0].pf.tipo==='ingreso'?'ingreso':'pago'} frecuente <b>${escapeHtml(ok[0].pf.nombre)}</b> — al aprobar se marca como pagado ${escapeHtml(ok[0].mk)}.</div>`+btn(ok[0]);
+    else if(ok.length>1) h+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">💡 Calza con varios pagos frecuentes (${ok.map(e=>'«'+escapeHtml(e.pf.nombre)+'»').join(', ')}): elige cuál es.</div>`+ok.map(btn).join('');
+    else ev.forEach(e=>{ h+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">💡 Parece tu pago frecuente <b>${escapeHtml(e.pf.nombre)}</b>, pero ${escapeHtml(e.motivo)}.</div>`+(e.bloqueo?'':btn(e)); });
+    return h;
+  }catch(err){ console.warn('pfPendienteHtml:',err); return ''; }
+}
+// 💡 Registrar el aviso como pago/ingreso frecuente (crea el movimiento/consumo con el nombre y la categoría del frecuente y marca el mes)
+function registrarComoPFPendiente(pendId, pfId){
+  const p=pendientesBanco.find(x=>x.id===pendId); if(!p) return;
+  const e=pfEvaluarPendienteApp(p).find(x=>x.pf.id===pfId);
+  const pf=(state.pagosFrecuentes||[]).find(x=>x.id===pfId);
+  if(!pf||!e){ alert('Ese pago frecuente ya no existe.'); return; }
+  if(e.bloqueo||(pf.tipoMonto!=='fijo'&&pf.tipoMonto!=='variable')){ alert('No se puede registrar como «'+pf.nombre+'»: '+(e.motivo||'tipo no compatible')+'.'); return; }
+  if((pf.frecuencia||'mensual')!=='mensual'){ alert('Ese pago frecuente no es mensual: regístralo desde Pagos frecuentes.'); return; }
+  const dup=buscarPosibleDuplicado(p.fecha,p.monto);
+  if(dup && !confirm('Ya existe «'+dup+'» el '+fmtFechaCorta(p.fecha)+' por el mismo monto.\n\n¿Registrar igual como «'+pf.nombre+'»? (si ya lo habías registrado a mano, se duplicaría)')) return;
+  const [y,mo]=p.fecha.split('-').map(Number);
+  const ub=ubicLimpia(p.ubicacion);
+  const ok=ejecutarPagoFrecuente(pf, Number(p.monto), y, mo-1, undefined, p.fecha, {hora:horaDePendiente(p)||undefined, ubicacion:ub||undefined});
+  if(ok===false) return; // alert ya mostrado (tarjeta inexistente): el aviso se queda
+  quitarPendientesBanco([p.id],'aprobado');
+}
+// Al aprobar un aviso a mano: si calza sin ambigüedad con un pago frecuente (con la cuenta/tarjeta elegida), también marca ese mes como pagado.
+function pfMarcarTrasAprobar(p, destino, tipoMov, monto, currency, fecha){
+  try{
+    const pseudo={...p, tipoMovimiento:tipoMov==='ingreso'?'ingreso':'gasto', monto, moneda:currency, fecha, descripcion:p.descripcion||''};
+    const ok=pfEvaluarPendienteApp(pseudo,destino).filter(e=>e.relevante&&!e.motivo);
+    if(ok.length!==1) return '';
+    const pf=ok[0].pf;
+    if(!pf.pagosRegistrados) pf.pagosRegistrados={};
+    pf.pagosRegistrados[ok[0].mk]={monto:Number(monto),fecha};
+    return pf.nombre;
+  }catch(err){ console.warn('pfMarcarTrasAprobar:',err); return ''; }
+}
 function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId}){
   if(tipoMov==='ingreso' && destino.tipo==='tarjeta'){ alert('No se puede registrar un ingreso a una tarjeta de crédito — elige una cuenta.'); return false; }
   // Ubicación: la que mandó el bot / el atajo del iPhone, o (si no hay) el último lugar de ese comercio.
@@ -24809,9 +24901,11 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
     if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, nuevoTc.id, fecha, currency);
   }
   logActividad('pendiente_banco_aprobado', `Aprobado desde correo del banco: ${desc} — ${currency==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`, {pendienteId:p.id});
+  const pfMarcado=pfMarcarTrasAprobar(p,destino,tipoMov,monto,currency,fecha);
   saveState();
   quitarPendientesBanco([p.id],'aprobado');
-  toast('✅ Movimiento registrado');
+  toast(pfMarcado?('✅ Movimiento registrado · 💡 marcado como pagado en «'+pfMarcado+'»'):'✅ Movimiento registrado');
+  try{ if(pfMarcado&&typeof renderPagosFrecuentes==='function') renderPagosFrecuentes(); }catch(e){}
   return true;
 }
 // Camino rápido: usa tal cual lo que se detectó/sugirió, pero SIEMPRE
@@ -26537,6 +26631,15 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.77.0",
+  "fecha": "30/10/26",
+  "cambios": [
+   "Aprobaciones: cada aviso del banco se compara con tus pagos e ingresos frecuentes. Si coincide, lo indica y al aprobarlo también marca ese mes como pagado.",
+   "Nuevo botón 💡 Registrar como «…» en el aviso: lo registra como tu pago/ingreso frecuente (con su nombre y categoría) y marca el mes. Si no coincide, te explica el motivo (texto del correo, otra tarjeta, monto distinto, ya pagado, posible duplicado…).",
+   "En el bot de Telegram pasa lo mismo: botón 🔁 ¿Es pago frecuente?, 💡 Registrar como… y el motivo cuando no se registra solo."
+  ]
+ },
  {
   "v": "v1.76.0",
   "fecha": "26/10/26",
