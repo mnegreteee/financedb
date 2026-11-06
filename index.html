@@ -3513,8 +3513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <!-- Resumen global -->
     <div class="card" style="padding:18px;margin-bottom:32px" id="tc-global-wrap">
       <div class="section-header">
-        <div class="section-title">Resumen Global — Todas las Tarjetas</div>
+        <div class="section-title" id="tc-global-title">Resumen Global — Todas las Tarjetas</div>
       </div>
+      <div id="tc-global-filtro" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 12px"></div>
       <div class="table-scroll">
       <table class="tc-global-table">
         <thead>
@@ -4095,9 +4096,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.78.0';
-const APP_VERSION_DATE = '30/10/26 - 11:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Deudas Mayores: ahora puedes vincular una deuda con un pago frecuente (ej. Cochera): al registrar uno se marca el otro.';
+const APP_VERSION = 'v1.80.0';
+const APP_VERSION_DATE = '05/11/26 - 19:55'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Tarjetas de crédito: el resumen global se puede filtrar por una o varias tarjetas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16635,10 +16636,29 @@ function renderTCChartsExtra(){
   intentar('Top 10 Comercios', ()=>tcxRenderBarTop10(movsFiltrados));
 }
 
+// Filtro del resumen global: ids de tarjetas elegidas (vacío = todas)
+let tcGlobalSel=new Set();
+function tcGlobalToggle(id){
+  if(id==='__all__') tcGlobalSel.clear();
+  else if(tcGlobalSel.has(id)) tcGlobalSel.delete(id); else tcGlobalSel.add(id);
+  renderTCGlobal();
+}
+function tcGlobalRenderFiltro(todas){
+  const box=document.getElementById('tc-global-filtro');
+  if(!box) return;
+  tcGlobalSel=new Set([...tcGlobalSel].filter(id=>todas.some(t=>t.id===id)));
+  if(todas.length<2){ box.innerHTML=''; return; }
+  const chip=(act,color,label,id)=>`<button type="button" onclick="tcGlobalToggle('${id}')" style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:11px;cursor:pointer;font-family:inherit;border:1px solid ${act?(color||'var(--accent)'):'var(--border)'};background:${act?'rgba(128,128,160,.18)':'transparent'};color:${act?'var(--text)':'var(--text3)'}">${color?`<span style="width:8px;height:8px;border-radius:2px;background:${color};display:inline-block"></span>`:''}${label}</button>`;
+  box.innerHTML='<span style="font-size:11px;color:var(--text3)">Filtrar:</span>'+chip(tcGlobalSel.size===0,'','Todas','__all__')+todas.map(t=>chip(tcGlobalSel.has(t.id),t.color||'#5b8def',escapeHtml(tcxTarjetaLabel(t)),t.id)).join('');
+}
 function renderTCGlobal(){
   const tbody=document.getElementById('tc-global-tbody');
   if(!tbody) return;
-  const tarjetas=state.tarjetas||[];
+  const todasTarjetas=state.tarjetas||[];
+  tcGlobalRenderFiltro(todasTarjetas);
+  const tarjetas=tcGlobalSel.size?todasTarjetas.filter(t=>tcGlobalSel.has(t.id)):todasTarjetas;
+  const _tt=document.getElementById('tc-global-title');
+  if(_tt) _tt.textContent=tcGlobalSel.size?('Resumen — '+tarjetas.map(tcxTarjetaLabel).join(' + ')):'Resumen Global — Todas las Tarjetas';
   if(!tarjetas.length){
     tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:16px;font-size:12px">Sin tarjetas registradas.</td></tr>';
     renderTCEvolutionChart([],[]);
@@ -24945,6 +24965,8 @@ function pfEvaluarPendienteApp(p, destinoElegido){
     let label='';
     if(porTarjeta){ const t=getTarjeta(pf.destino); label=t?_normTexto(t.banco+' '+(t.cat||'')):''; } else label=_normTexto(getBanco(pf.destino)||pf.destino);
     if(!label) return fail('su cuenta o tarjeta ya no existe (edítalo en Pagos frecuentes)',true);
+    const bancoDesconocido=!bancoNorm||bancoNorm==='desconocido';
+    if(bancoDesconocido&&hints.length===0&&porTexto&&montoIgual) return out;
     if(!((bancoNorm&&label.includes(bancoNorm))||hints.some(h=>label.includes(h)))) return fail('el aviso es de '+(p.banco||'otro banco')+' y este pago usa '+labelDest(pf));
     return out;
   });
@@ -26748,6 +26770,20 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.80.0",
+  "fecha": "05/11/26",
+  "cambios": [
+   "Tarjetas de crédito: el Resumen Global ahora se puede filtrar eligiendo una o varias tarjetas; la tabla y el gráfico de evolución muestran solo los montos de las elegidas."
+  ]
+ },
+ {
+  "v": "v1.79.0",
+  "fecha": "05/11/26",
+  "cambios": [
+   "Pagos frecuentes: si un aviso llega sin banco identificado (\"Desconocido\"), ahora se reconoce igual cuando coinciden el «Texto del correo» y el monto fijo del pago frecuente."
+  ]
+ },
  {
   "v": "v1.78.0",
   "fecha": "30/10/26",
