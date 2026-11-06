@@ -106,6 +106,19 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 #face-lock .fl-ico{font-size:54px;line-height:1;}
 #face-lock .fl-sub{font-size:12px;color:var(--text3);}
 #face-lock .fl-out{background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;text-decoration:underline;cursor:pointer;margin-top:6px;}
+#face-lock .fl-av{width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#34a896);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.06);font-family:var(--mono);}
+#face-lock .fl-h{font-size:24px;font-weight:800;margin:16px 0 6px;color:var(--text);letter-spacing:-.02em;}
+#face-lock .fl-dots{display:flex;gap:16px;margin:26px 0 22px;}
+#face-lock .fl-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);box-sizing:border-box;transition:background .12s,border-color .12s;}
+#face-lock .fl-dot.on{background:#34a896;border-color:#34a896;}
+#face-lock .fl-dots.err .fl-dot{border-color:var(--red);background:var(--red);}
+#face-lock .fl-dots.err{animation:flShake .4s;}
+@keyframes flShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+#face-lock .fl-pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px;width:262px;margin-top:6px;}
+#face-lock .fl-k{height:68px;border-radius:50%;border:0;background:var(--bg3);color:var(--text);font-family:var(--font);font-size:26px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+#face-lock .fl-k:active{background:var(--bg4);}
+#face-lock .fl-k.ghost{background:transparent;color:var(--text2);}
+#face-lock .login-err{margin:0 0 6px;max-width:300px;}
 .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:40px 36px;width:380px;max-width:95vw;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.5);}
 .login-icon{width:56px;height:56px;background:var(--accent);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#fff;margin:0 auto 14px;font-family:var(--mono);}
 .login-title{font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.5px;}
@@ -1340,12 +1353,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
 <!-- BLOQUEO FACE ID -->
 <div id="face-lock">
-  <div class="login-icon" id="fl-letter">M</div>
-  <div class="login-title">Bloqueado</div>
-  <div class="fl-sub">Tu sesión sigue activa. Desbloquea con Face ID.</div>
-  <button class="login-btn" id="fl-btn" style="max-width:280px" onclick="unlockFaceId()">🔓 Desbloquear con Face ID</button>
+  <div class="fl-av" id="fl-letter">M</div>
+  <div class="fl-h" id="fl-title">Hola, Miguel</div>
+  <div class="fl-sub" id="fl-sub">Ingresa tu PIN para continuar</div>
+  <div class="fl-dots" id="fl-dots" role="img" aria-label="Dígitos del PIN ingresados"><span class="fl-dot"></span><span class="fl-dot"></span><span class="fl-dot"></span><span class="fl-dot"></span><span class="fl-dot"></span><span class="fl-dot"></span></div>
   <div class="login-err" id="fl-err" style="display:none"></div>
-  <button class="fl-out" onclick="faceLockCerrarSesion()">Cerrar sesión</button>
+  <div class="fl-pad" id="fl-pad"><button type="button" class="fl-k" onclick="pinTecla('1')">1</button><button type="button" class="fl-k" onclick="pinTecla('2')">2</button><button type="button" class="fl-k" onclick="pinTecla('3')">3</button><button type="button" class="fl-k" onclick="pinTecla('4')">4</button><button type="button" class="fl-k" onclick="pinTecla('5')">5</button><button type="button" class="fl-k" onclick="pinTecla('6')">6</button><button type="button" class="fl-k" onclick="pinTecla('7')">7</button><button type="button" class="fl-k" onclick="pinTecla('8')">8</button><button type="button" class="fl-k" onclick="pinTecla('9')">9</button><button type="button" class="fl-k ghost" id="fl-face" aria-label="Entrar con Face ID" onclick="unlockFaceId()"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34a896" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"></path><path d="M9 10v1M15 10v1M12 10v3M9.5 15.5a3.5 3.5 0 005 0"></path></svg></button><button type="button" class="fl-k" onclick="pinTecla('0')">0</button><button type="button" class="fl-k ghost" aria-label="Borrar" onclick="pinBorrar()"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H9l-6 6 6 6h12a1 1 0 001-1V7a1 1 0 00-1-1z"></path><path d="M13 10l4 4M17 10l-4 4"></path></svg></button></div>
+  <button class="login-btn" id="fl-btn" style="max-width:280px;display:none" onclick="unlockFaceId()">🔓 Desbloquear con Face ID</button>
+  <button class="fl-out" id="fl-alt" style="margin-top:18px" onclick="faceLockCerrarSesion()">Usar correo y contraseña</button>
+  <button class="fl-out" id="fl-cancel" style="display:none;margin-top:18px" onclick="pinCancelar()">Cancelar</button>
 </div>
 
 <!-- LOGIN SCREEN -->
@@ -1601,6 +1617,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           <div class="config-row">
             <div class="config-row-label">Face ID / huella<small id="cfg-faceid-label">Desactivado — te pide contraseña al bloquearse</small></div>
             <button class="config-action-btn neutral" id="cfg-faceid-btn" onclick="toggleFaceId()">🔐 Activar</button>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">PIN de acceso<small id="cfg-pin-label">Sin PIN — crea uno de 6 dígitos para entrar más rápido</small></div>
+            <div style="display:flex;gap:6px"><button class="config-action-btn neutral" id="cfg-pin-btn" onclick="iniciarPin()">🔢 Crear</button><button class="config-action-btn neutral" id="cfg-pin-del" style="display:none" onclick="quitarPin()">🗑 Quitar</button></div>
           </div>
         </div>
 
@@ -4118,9 +4138,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.85.0';
-const APP_VERSION_DATE = '06/11/26 - 18:06'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Aviso cuando se modifican movimientos antiguos en otro dispositivo, con botón para sincronizar.';
+const APP_VERSION = 'v1.86.0';
+const APP_VERSION_DATE = '06/11/26 - 18:21'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo PIN de acceso de 6 dígitos con teclado y Face ID en la pantalla de bloqueo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -13540,7 +13560,7 @@ function lockApp(){
   clearInactivityTimer();
   // Con Face ID activado el bloqueo NO cierra la sesión: solo tapa la app y
   // pide Face ID. La sesión de Firebase (y los datos locales) siguen.
-  if(faceIdActivo() && currentUser){ mostrarFaceLock(); return; }
+  if(bloqueoActivo() && currentUser){ mostrarFaceLock(); return; }
   firebase.auth().signOut().catch(e=>console.warn('signOut error:',e));
   // onAuthStateChanged detecta el signOut y muestra la pantalla de login.
   // Se borra también el caché local — si no, los datos financieros completos
@@ -13564,6 +13584,8 @@ function resetInactivityTimer(){
 // Face ID/Touch ID. No reemplaza a Firebase Auth: la sesión sigue persistida.
 const FACEID_KEY='miguel_mf_faceid_cred';
 let _faceLocked=false, _lastHiddenAt=0;
+const PIN_KEY='miguel_mf_pin', PIN_FAILS_KEY='miguel_mf_pin_fails', PIN_OFRECIDO_KEY='miguel_mf_pin_ofrecido', PIN_NOMBRE='Miguel';
+let _pinBuf='', _pinModo='desbloquear', _pinTmp='';
 function faceIdActivo(){ try{ return !!localStorage.getItem(FACEID_KEY); }catch(e){ return false; } }
 function _b64u(buf){ let s=''; new Uint8Array(buf).forEach(b=>s+=String.fromCharCode(b)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
 function _unb64u(str){ str=str.replace(/-/g,'+').replace(/_/g,'/'); while(str.length%4) str+='='; const bin=atob(str); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
@@ -13600,9 +13622,9 @@ async function toggleFaceId(){
 function mostrarFaceLock(){
   _faceLocked=true;
   clearInactivityTimer();
+  _flModo('desbloquear');
   const el=document.getElementById('face-lock'); if(el) el.style.display='flex';
-  const e=document.getElementById('fl-err'); if(e) e.style.display='none';
-  setTimeout(()=>{ if(_faceLocked) unlockFaceId(true); },150);
+  if(faceIdActivo()) setTimeout(()=>{ if(_faceLocked) unlockFaceId(true); },150);
 }
 async function unlockFaceId(auto){
   const errEl=document.getElementById('fl-err');
@@ -13622,7 +13644,7 @@ async function unlockFaceId(auto){
   }
 }
 function ocultarFaceLock(){
-  _faceLocked=false;
+  _faceLocked=false; _pinBuf=''; try{ _flRender(); }catch(e){}
   const el=document.getElementById('face-lock'); if(el) el.style.display='none';
   if(currentUser) resetInactivityTimer();
 }
@@ -13631,17 +13653,81 @@ function faceLockCerrarSesion(){
   const el=document.getElementById('face-lock'); if(el) el.style.display='none';
   const k=localStorage.getItem(FACEID_KEY);
   localStorage.removeItem(FACEID_KEY); // para que lockApp haga cierre completo
+  try{ localStorage.removeItem(PIN_KEY); localStorage.removeItem(PIN_FAILS_KEY); localStorage.removeItem(PIN_OFRECIDO_KEY); }catch(e){} // el PIN es de este equipo con esta sesión
   lockApp();
   if(k) localStorage.setItem(FACEID_KEY,k);
+  actualizarUiPin();
 }
 // Al abrir la app con Face ID activo: tapar de inmediato hasta verificar.
-if(faceIdActivo()){ document.addEventListener('DOMContentLoaded',()=>{ const el=document.getElementById('face-lock'); if(el){ el.style.display='flex'; _faceLocked=true; setTimeout(()=>{ if(_faceLocked) unlockFaceId(true); },400); } }); }
+if(bloqueoActivo()){ document.addEventListener('DOMContentLoaded',()=>{ const el=document.getElementById('face-lock'); if(el){ _flModo('desbloquear'); el.style.display='flex'; _faceLocked=true; if(faceIdActivo()) setTimeout(()=>{ if(_faceLocked) unlockFaceId(true); },400); } }); }
 // Al volver de segundo plano: si pasó más que el tiempo de inactividad, bloquear.
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){ _lastHiddenAt=Date.now(); return; }
-  if(!currentUser||_faceLocked||!faceIdActivo()) return;
+  if(!currentUser||_faceLocked||!bloqueoActivo()) return;
   if(inactivityMinutes!==0 && _lastHiddenAt && Date.now()-_lastHiddenAt >= inactivityMinutes*60*1000) mostrarFaceLock();
 });
+
+// ── PIN DE ACCESO (6 dígitos) ─────────────────────────
+// Bloqueo local de este equipo, igual que Face ID: NO reemplaza a Firebase Auth (la sesión sigue persistida).
+// Se guarda solo un hash (PBKDF2 + sal) en este dispositivo. 5 intentos fallidos → se cierra la sesión por completo.
+function pinActivo(){ try{ return !!localStorage.getItem(PIN_KEY); }catch(e){ return false; } }
+function bloqueoActivo(){ return faceIdActivo()||pinActivo(); }
+async function _pinHash(pin,salt){
+  try{ if(window.crypto&&crypto.subtle){ const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']); const b=await crypto.subtle.deriveBits({name:'PBKDF2',salt:_unb64u(salt),iterations:120000,hash:'SHA-256'},k,256); return _b64u(b); } }catch(e){ console.warn('PBKDF2 no disponible, uso hash simple'); }
+  let h=0x811c9dc5; const t=salt+':'+pin; for(let i=0;i<t.length;i++){ h^=t.charCodeAt(i); h=Math.imul(h,16777619); } return 'f'+(h>>>0).toString(16);
+}
+async function pinGuardar(pin){ const salt=_b64u(crypto.getRandomValues(new Uint8Array(16))); const h=await _pinHash(pin,salt); localStorage.setItem(PIN_KEY,JSON.stringify({s:salt,h})); localStorage.removeItem(PIN_FAILS_KEY); }
+async function pinVerificar(pin){ try{ const o=JSON.parse(localStorage.getItem(PIN_KEY)||'null'); if(!o) return false; return (await _pinHash(pin,o.s))===o.h; }catch(e){ return false; } }
+function _flRender(){ const d=document.getElementById('fl-dots'); if(!d) return; [...d.children].forEach((c,i)=>c.classList.toggle('on',i<_pinBuf.length)); d.setAttribute('aria-label',_pinBuf.length+' de 6 dígitos ingresados'); }
+function _flError(msg){ const e=document.getElementById('fl-err'); if(e){ e.textContent=msg||''; e.style.display=msg?'block':'none'; } }
+function _flModo(m){
+  _pinModo=m; _pinBuf=''; const $=(id)=>document.getElementById(id); if(!$('fl-title')) return;
+  const T={desbloquear:['Hola, '+PIN_NOMBRE,'Ingresa tu PIN para continuar'],'actual-cambiar':['Verifica tu PIN','Ingresa tu PIN actual'],'actual-quitar':['Verifica tu PIN','Ingresa tu PIN actual para quitarlo'],nuevo:['Crea tu PIN','Elige 6 dígitos'],confirmar:['Confirma tu PIN','Vuelve a escribirlo']}[m];
+  const soloFace=(m==='desbloquear'&&!pinActivo());
+  $('fl-title').textContent=T[0]; $('fl-sub').textContent=soloFace?'Tu sesión sigue activa. Desbloquea con Face ID.':T[1];
+  $('fl-dots').style.display=soloFace?'none':''; $('fl-pad').style.display=soloFace?'none':'';
+  $('fl-btn').style.display=soloFace?'':'none';
+  $('fl-face').style.visibility=(m==='desbloquear'&&faceIdActivo())?'visible':'hidden';
+  $('fl-alt').style.display=m==='desbloquear'?'':'none'; $('fl-cancel').style.display=m==='desbloquear'?'none':'';
+  _flError(''); _flRender();
+}
+function pinTecla(d){ if(_pinBuf.length>=6) return; _pinBuf+=d; _flRender(); if(_pinBuf.length===6) setTimeout(_pinCompleto,120); }
+function pinBorrar(){ _pinBuf=_pinBuf.slice(0,-1); _flRender(); }
+function _flSacudir(){ const d=document.getElementById('fl-dots'); if(!d) return; d.classList.add('err'); setTimeout(()=>d.classList.remove('err'),450); }
+async function _pinCompleto(){
+  const pin=_pinBuf, m=_pinModo;
+  if(m==='desbloquear'||m==='actual-cambiar'||m==='actual-quitar'){
+    if(await pinVerificar(pin)){
+      localStorage.removeItem(PIN_FAILS_KEY);
+      if(m==='desbloquear'){ ocultarFaceLock(); }
+      else if(m==='actual-cambiar'){ _flModo('nuevo'); }
+      else { localStorage.removeItem(PIN_KEY); _cerrarPanelPin(); actualizarUiPin(); toast('PIN eliminado','info'); }
+    } else {
+      const f=(parseInt(localStorage.getItem(PIN_FAILS_KEY)||'0',10)||0)+1; localStorage.setItem(PIN_FAILS_KEY,String(f));
+      _flSacudir(); _pinBuf=''; setTimeout(_flRender,450);
+      if(f>=5){ toast('Demasiados intentos: se cerró la sesión','err'); faceLockCerrarSesion(); return; }
+      _flError('PIN incorrecto. Te quedan '+(5-f)+' intento'+((5-f)===1?'':'s')+'.');
+    }
+  } else if(m==='nuevo'){ _pinTmp=pin; _flModo('confirmar'); }
+  else if(m==='confirmar'){
+    if(pin===_pinTmp){ await pinGuardar(pin); _pinTmp=''; _cerrarPanelPin(); actualizarUiPin(); toast('✅ PIN creado','ok'); }
+    else { _flSacudir(); _pinTmp=''; _flModo('nuevo'); _flError('Los PIN no coinciden. Intenta de nuevo.'); }
+  }
+}
+function _abrirPanelPin(m){ try{ if(typeof closeConfig==='function') closeConfig(); }catch(e){} _flModo(m); const el=document.getElementById('face-lock'); if(el) el.style.display='flex'; }
+function _cerrarPanelPin(){ const el=document.getElementById('face-lock'); if(el) el.style.display='none'; _pinBuf=''; _pinTmp=''; _pinModo='desbloquear'; _flRender(); }
+function pinCancelar(){ _cerrarPanelPin(); }
+function iniciarPin(){ _abrirPanelPin(pinActivo()?'actual-cambiar':'nuevo'); }
+function quitarPin(){ if(pinActivo()) _abrirPanelPin('actual-quitar'); }
+function actualizarUiPin(){
+  const on=pinActivo(); const l=document.getElementById('cfg-pin-label'), b=document.getElementById('cfg-pin-btn'), d=document.getElementById('cfg-pin-del');
+  if(l) l.textContent=on?'Activo — al bloquearse o abrir la app te pide tu PIN de 6 dígitos':'Sin PIN — crea uno de 6 dígitos para entrar más rápido';
+  if(b) b.textContent=on?'✏️ Cambiar':'🔢 Crear'; if(d) d.style.display=on?'':'none';
+}
+function ofrecerPin(){ try{ if(pinActivo()||_faceLocked||localStorage.getItem(PIN_OFRECIDO_KEY)) return; localStorage.setItem(PIN_OFRECIDO_KEY,'1'); if(confirm('🔢 ¿Quieres crear un PIN de 6 dígitos para entrar más rápido?\n\nPuedes cambiarlo o quitarlo luego en Configuración → Seguridad.')) iniciarPin(); }catch(e){} }
+document.addEventListener('keydown',(e)=>{ const el=document.getElementById('face-lock'); if(!el||el.style.display!=='flex') return; if(_pinModo==='desbloquear'&&!pinActivo()) return; if(/^[0-9]$/.test(e.key)){ pinTecla(e.key); } else if(e.key==='Backspace'){ pinBorrar(); } else if(e.key==='Escape'&&_pinModo!=='desbloquear'){ pinCancelar(); } });
+document.addEventListener('DOMContentLoaded',actualizarUiPin);
+
 function clearInactivityTimer(){ if(inactivityTimer){clearTimeout(inactivityTimer);inactivityTimer=null;} }
 // Reset on any user interaction
 ['click','keydown','touchstart','scroll','mousemove'].forEach(ev=>{
@@ -27250,6 +27336,15 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.86.0",
+  "fecha": "06/11/26",
+  "cambios": [
+   "Nuevo PIN de acceso de 6 dígitos: pantalla de bloqueo renovada con teclado numérico (también funciona con el teclado del equipo), puntos de avance y Face ID en la esquina.",
+   "Configuración → Seguridad: crear, cambiar o quitar el PIN. Tras 5 intentos fallidos se cierra la sesión y pide correo y contraseña.",
+   "El PIN solo se guarda como código cifrado en este equipo; no reemplaza tu contraseña."
+  ]
+ },
+ {
   "v": "v1.85.0",
   "fecha": "06/11/26",
   "cambios": [
@@ -27713,7 +27808,7 @@ function cfgResumenes(){
     const tc=(typeof state!=='undefined'&&state.tc)?state.tc:null;
     set('finanzas',(tc?('TC '+Number(tc.compra).toFixed(3)+' / '+Number(tc.venta).toFixed(3)+' · '):'')+'tarjetas · cuentas · categorías');
     set('datos','Exportar e importar · histórico Excel');
-    set('seguridad','Bloqueo '+(typeof inactivityMinutes!=='undefined'?inactivityMinutes+' min':'')+' · Face ID '+((typeof faceIdActivo==='function'&&faceIdActivo())?'activo':'apagado')+' · usuarios · accesos');
+    set('seguridad','Bloqueo '+(typeof inactivityMinutes!=='undefined'?inactivityMinutes+' min':'')+' · Face ID '+((typeof faceIdActivo==='function'&&faceIdActivo())?'activo':'apagado')+' · PIN '+((typeof pinActivo==='function'&&pinActivo())?'activo':'apagado')+' · usuarios · accesos');
     set('actividad',(typeof APP_VERSION!=='undefined'?APP_VERSION+' · ':'')+'actividad reciente · cambios');
     set('peligro','Borrar meses o todos los datos');
   }catch(e){ console.warn('Cálculo omitido por error:', e&&e.message); }
@@ -27843,7 +27938,8 @@ function initFirebase(){
         _notifIntervalId=setInterval(checkBrowserNotifications, 60*60*1000);
         iniciarListenerTiempoReal(); // ver más abajo — sincroniza cambios de otros dispositivos sin recargar
         mostrarAvisoSyncAntiguos();
-        setTimeout(()=>{ try{ cargarLibsPesadas(); }catch(e){} }, 2500); // Excel/ZIP/PDF: después de que la app ya es usable
+        setTimeout(()=>{ try{ cargarLibsPesadas(); }catch(e){} }, 2500);
+        setTimeout(ofrecerPin, 6000); // Excel/ZIP/PDF: después de que la app ya es usable
       });
     } else {
       currentUser = null;
