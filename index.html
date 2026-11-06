@@ -4117,9 +4117,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.82.0';
-const APP_VERSION_DATE = '05/11/26 - 20:28'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Deudas Mayores: el simulador permite extra único, mensual, bimestral, trimestral, semestral, anual o cada N meses, con comparación.';
+const APP_VERSION = 'v1.83.0';
+const APP_VERSION_DATE = '05/11/26 - 20:43'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Deudas Mayores: cronograma nuevo con los extras simulados o ya aplicados, con descarga en CSV e impresión.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22592,7 +22592,9 @@ function dmRenderExtras(d){
   } else { html+='</div>'; }
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   if(d.tipo==='amortizado') html+='<button type="button" class="btn btn-primary" style="font-size:12px" onclick="openDMAmortModal()">💸 Amortizar capital</button>';
-  html+='<button type="button" class="btn" style="font-size:12px" onclick="openDMAdelantoModal()">⏩ Adelantar cuotas</button></div>';
+  html+='<button type="button" class="btn" style="font-size:12px" onclick="openDMAdelantoModal()">⏩ Adelantar cuotas</button>';
+  if(d.tipo==='amortizado') html+='<button type="button" class="btn" style="font-size:12px" onclick="dmCronoActual()">📄 Cronograma actualizado</button>';
+  html+='</div>';
   if(insight) html+=`<div style="font-size:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;line-height:1.5">${insight}</div>`;
   box.innerHTML=html;
   // simulador
@@ -22622,11 +22624,11 @@ function dmSimRender(){
     const u=dmSimUnico(d,v), a=u.plazo, b=u.cuota;
     if(!a.ok){ out.innerHTML='<span style="color:var(--red)">'+escapeHtml(a.error||'No se pudo simular.')+'</span>'; return; }
     if(a.liquida){ out.innerHTML='Con '+dmFmt(v,cur)+' <b>liquidas toda la deuda</b> y ahorras ≈ '+dmFmt(a.ahorro,cur)+' en intereses.'; return; }
-    out.innerHTML=`Pagando <b>${dmFmt(v,cur)}</b> una sola vez:<br>• <b>Reduciendo plazo:</b> terminas en ${a.restDespues} cuotas (${a.restAntes-a.restDespues} menos), hacia ${dmFechaCorta(a.nuevas[a.nuevas.length-1].fecha)}. <span style="color:var(--green)">Ahorras ≈ ${dmFmt(a.ahorro,cur)}.</span><br>• <b>Reduciendo cuota:</b> pasa a ${dmFmt(b.cuotaDespues,cur)} (baja ${dmFmt(b.cuotaAntes-b.cuotaDespues,cur)}). <span style="color:var(--green)">Ahorras ≈ ${dmFmt(b.ahorro,cur)}.</span><br><button type="button" class="btn btn-primary" style="font-size:11px;margin-top:6px" onclick="dmSimAplicarUnico()">Aplicar como amortización…</button>`;
+    out.innerHTML=`Pagando <b>${dmFmt(v,cur)}</b> una sola vez:<br>• <b>Reduciendo plazo:</b> terminas en ${a.restDespues} cuotas (${a.restAntes-a.restDespues} menos), hacia ${dmFechaCorta(a.nuevas[a.nuevas.length-1].fecha)}. <span style="color:var(--green)">Ahorras ≈ ${dmFmt(a.ahorro,cur)}.</span><br>• <b>Reduciendo cuota:</b> pasa a ${dmFmt(b.cuotaDespues,cur)} (baja ${dmFmt(b.cuotaAntes-b.cuotaDespues,cur)}). <span style="color:var(--green)">Ahorras ≈ ${dmFmt(b.ahorro,cur)}.</span><br><button type="button" class="btn btn-primary" style="font-size:11px;margin-top:6px" onclick="dmSimAplicarUnico()">Aplicar como amortización…</button> <button type="button" class="btn" style="font-size:11px;margin-top:6px" onclick="dmSimCrono('plazo')">📄 Cronograma (reduce plazo)</button> <button type="button" class="btn" style="font-size:11px;margin-top:6px" onclick="dmSimCrono('cuota')">📄 Cronograma (reduce cuota)</button>`;
   } else {
     const s=dmSimExtraMensual(d,v,cada);
     if(!s){ out.innerHTML='<span style="color:var(--text3)">No se pudo simular.</span>'; return; }
-    out.innerHTML=`<b>${dmFmt(v,cur)}</b> ${dmSimFreqTxt(cada).toLowerCase()}: terminarías en <b>${s.meses}</b> cuotas (<b>${Math.max(0,s.menos)}</b> menos), hacia <b>${dmFechaCorta(s.fin)}</b>.<br>Pondrías ${dmFmt(s.extraUsado,cur)} de más en total.<br><span style="color:var(--green)">Ahorrarías ≈ ${dmFmt(s.ahorro,cur)} en intereses.</span>`;
+    out.innerHTML=`<b>${dmFmt(v,cur)}</b> ${dmSimFreqTxt(cada).toLowerCase()}: terminarías en <b>${s.meses}</b> cuotas (<b>${Math.max(0,s.menos)}</b> menos), hacia <b>${dmFechaCorta(s.fin)}</b>.<br>Pondrías ${dmFmt(s.extraUsado,cur)} de más en total.<br><span style="color:var(--green)">Ahorrarías ≈ ${dmFmt(s.ahorro,cur)} en intereses.</span><br><button type="button" class="btn" style="font-size:11px;margin-top:6px" onclick="dmSimCrono()">📄 Ver cronograma nuevo con este extra</button>`;
   }
   // comparación del mismo monto con distintas frecuencias
   if(comp){
@@ -22674,6 +22676,109 @@ function dmRenderTotal(){
     <div class="dm-sum-card" style="border-top:2px solid var(--red)"><div class="dm-sum-label">Interés por pagar</div><div class="dm-sum-val" style="font-size:14px;color:var(--red)">${M(fm(k=>tot[k].i))}</div><div style="font-size:10px;color:var(--text3)">solo préstamos amortizados</div></div>
     <div class="dm-sum-card" style="border-top:2px solid var(--green)"><div class="dm-sum-label">Libre de deudas</div><div class="dm-sum-val" style="font-size:14px;color:var(--green)">${dmFechaCorta(libre)}</div><div style="font-size:10px;color:var(--text3)">con el cronograma actual</div></div>
   </div>`;
+}
+
+
+// ══════════════════════════════════════════════════════
+//  📄 CRONOGRAMA NUEVO (con extras simulados o ya aplicados): ver, descargar CSV, imprimir
+// ══════════════════════════════════════════════════════
+let _dmCr=null; // {titulo, resumen, filasPagadas, filas}
+// Filas simuladas con un extra periódico (cada = cada cuántos meses; 1 = mensual). Misma lógica que dmSimExtraMensual.
+function dmFilasSim(d,extra,cada){
+  const pend=dmNoPagadas(d); if(!pend.length||!(extra>0)) return null;
+  cada=Math.max(1,parseInt(cada)||1);
+  const i=(Number(d.tasa)||0)/100; let s=pend[0].saldoInicial; const cuota=pend[0].monto;
+  const rows=[]; let k=0;
+  while(s>0.005&&k<1200){
+    k++; const it=s*i; let am=cuota-it; if(am<=0) return null;
+    let e=0; if(k%cada===0){ e=Math.min(extra,Math.max(0,s-am)); }
+    const reg=Math.min(s,am), tot=Math.min(s,am+e), eReal=Math.max(0,tot-reg);
+    const fecha=k<=pend.length?pend[k-1].fecha:dmAddMonths(pend[pend.length-1].fecha,k-pend.length);
+    rows.push({tipo:'cuota',numero:pend[0].numero+k-1,fecha,saldoInicial:s,interes:it,amort:reg,extra:eReal,pago:it+tot,saldoFinal:Math.max(0,s-tot)});
+    s-=tot;
+  }
+  return rows;
+}
+function dmFilasDeCuotas(cs){
+  return cs.map(c=>({tipo:'cuota',numero:c.numero,fecha:c.fecha,saldoInicial:c.saldoInicial,interes:c.interes||0,amort:c.amort||0,extra:0,pago:c.monto,saldoFinal:c.saldoFinal,pagado:!!c.pagado,nota:c.adelantada?'adelantada':''}));
+}
+// Cronograma de un pago extra simulado (cada=0: único hoy, con modo 'plazo'|'cuota')
+function dmSimCrono(modo){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const v=parseFloat(document.getElementById('dm-sim-extra')?.value); if(!(v>0)) return;
+  const fsel=document.getElementById('dm-sim-freq'), nInp=document.getElementById('dm-sim-n');
+  const cada=fsel?(fsel.value==='x'?Math.max(1,parseInt(nInp.value)||1):parseInt(fsel.value)):1;
+  const pag=dmFilasDeCuotas((d.cuotas||[]).filter(c=>c.pagado));
+  let filas, titulo, resumen;
+  const pend=dmNoPagadas(d), intAntes=pend.reduce((a,c)=>a+(c.interes||0),0);
+  if(cada===0){
+    const t=dmCalcAmort(d,v,modo); if(!t.ok){ toast(t.error||'No se pudo generar','err'); return; }
+    filas=[{tipo:'extra',fecha:todayISO(),extra:t.montoAplicado,saldoFinal:t.S2,nota:'Pago extra único ('+(modo==='plazo'?'reduce plazo':'reduce cuota')+')'}].concat(dmFilasDeCuotas(t.nuevas));
+    titulo='Cronograma simulado — '+dmFmt(v,d.currency)+' una sola vez ('+(modo==='plazo'?'reduce plazo':'reduce cuota')+')';
+    resumen=t.liquida?'Liquidas toda la deuda.':`${t.restDespues} cuotas restantes (antes ${t.restAntes}) · cuota ${dmFmt(t.cuotaDespues,d.currency)} · fin ${dmFechaCorta(t.nuevas[t.nuevas.length-1].fecha)} · ahorro ≈ ${dmFmt(t.ahorro,d.currency)}`;
+  } else {
+    filas=dmFilasSim(d,v,cada); if(!filas){ toast('No se pudo generar el cronograma','err'); return; }
+    const intD=filas.reduce((a,r)=>a+r.interes,0), extraT=filas.reduce((a,r)=>a+(r.extra||0),0);
+    titulo='Cronograma simulado — '+dmFmt(v,d.currency)+' '+dmSimFreqTxt(cada).toLowerCase();
+    resumen=`${filas.length} cuotas restantes (antes ${pend.length}) · fin ${dmFechaCorta(filas[filas.length-1].fecha)} · extra total ${dmFmt(extraT,d.currency)} · ahorro ≈ ${dmFmt(intAntes-intD,d.currency)}`;
+  }
+  _dmCr={titulo,resumen,pag,filas,d:d.nombre,cur:d.currency}; dmCronoRender(); document.getElementById('dm-crono-overlay').classList.add('open');
+}
+// Cronograma vigente (cuotas pagadas + restantes, con las amortizaciones ya aplicadas)
+function dmCronoActual(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const cs=d.cuotas||[]; const ams=d.amortizaciones||[];
+  const filas=[]; 
+  cs.forEach((c,ix)=>{
+    filas.push(...dmFilasDeCuotas([c]));
+    ams.filter(a=>a.pagadasAlHacer===ix+1).forEach(a=>filas.push({tipo:'extra',fecha:a.fecha,extra:a.monto,saldoFinal:null,nota:a.liquida?'Liquidación':('Amortización ('+(a.modo==='plazo'?'redujo plazo':'redujo cuota')+')')}));
+  });
+  ams.filter(a=>a.pagadasAlHacer===0).forEach(a=>filas.unshift({tipo:'extra',fecha:a.fecha,extra:a.monto,saldoFinal:null,nota:'Amortización'}));
+  const r=getDMResumen(d), pend=dmNoPagadas(d);
+  _dmCr={titulo:'Cronograma actualizado — '+d.nombre,resumen:`Capital pendiente ${dmFmt(r.saldoPendiente,d.currency)} · ${r.restantes} cuotas restantes`+(pend.length?` · fin ${dmFechaCorta(pend[pend.length-1].fecha)}`:'')+(ams.length?` · ${ams.length} amortización${ams.length===1?'':'es'} aplicada${ams.length===1?'':'s'}`:''),pag:[],filas,d:d.nombre,cur:d.currency,completo:true};
+  dmCronoRender(); document.getElementById('dm-crono-overlay').classList.add('open');
+}
+function dmCronoFilasVisibles(){
+  if(!_dmCr) return [];
+  const inc=document.getElementById('dmcr-pagadas');
+  return (inc&&inc.checked&&!_dmCr.completo?_dmCr.pag:[]).concat(_dmCr.filas);
+}
+function dmCronoRender(){
+  if(!_dmCr) return;
+  document.getElementById('dmcr-titulo').textContent=_dmCr.titulo;
+  document.getElementById('dmcr-resumen').textContent=_dmCr.resumen;
+  document.getElementById('dmcr-pagadas-wrap').style.display=_dmCr.completo?'none':'inline-flex';
+  const cur=_dmCr.cur, F=v=>(v===null||v===undefined||isNaN(v))?'—':dmFmt(v,cur);
+  const hoy=todayISO();
+  document.getElementById('dmcr-body').innerHTML=dmCronoFilasVisibles().map(r=>{
+    if(r.tipo==='extra') return `<tr style="background:rgba(91,141,239,.12)"><td>💸</td><td>${dmFechaCorta(r.fecha)}</td><td colspan="3" style="color:var(--text2)">${escapeHtml(r.nota||'Pago extra')}</td><td style="color:var(--accent);font-weight:600">${F(r.extra)}</td><td>${F(r.extra)}</td><td>${F(r.saldoFinal)}</td></tr>`;
+    return `<tr style="${r.pagado?'opacity:.55':''}"><td>${r.numero}${r.pagado?' ✓':''}</td><td>${dmFechaCorta(r.fecha)}</td><td>${F(r.saldoInicial)}</td><td style="color:var(--red)">${F(r.interes)}</td><td style="color:var(--green)">${F(r.amort)}</td><td style="color:var(--accent)">${r.extra?F(r.extra):''}</td><td style="font-weight:600">${F(r.pago)}</td><td>${F(r.saldoFinal)}</td></tr>`;
+  }).join('');
+}
+function closeDMCronoModal(){ document.getElementById('dm-crono-overlay').classList.remove('open'); }
+function dmCronoCSV(){
+  const filas=dmCronoFilasVisibles(); if(!filas.length) return;
+  const n=v=>(v===null||v===undefined||isNaN(v))?'':(Math.round(v*100)/100).toFixed(2);
+  const q=t=>'"'+String(t).replace(/"/g,'""')+'"';
+  const lines=[['#','Fecha','Saldo inicial','Interés','Capital','Extra','Pago total','Saldo final','Estado/Nota'].join(',')];
+  filas.forEach(r=>{
+    if(r.tipo==='extra') lines.push(['',r.fecha||'','','','',n(r.extra),n(r.extra),n(r.saldoFinal),q(r.nota||'Pago extra')].join(','));
+    else lines.push([r.numero,r.fecha||'',n(r.saldoInicial),n(r.interes),n(r.amort),n(r.extra),n(r.pago),n(r.saldoFinal),q(r.pagado?'Pagada'+(r.nota?' ('+r.nota+')':''):'Pendiente')].join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='cronograma-'+String(_dmCr.d||'deuda').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+todayISO()+'.csv';
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+function dmCronoImprimir(){
+  const filas=dmCronoFilasVisibles(); if(!filas.length) return;
+  const cur=_dmCr.cur, F=v=>(v===null||v===undefined||isNaN(v))?'':dmFmt(v,cur);
+  const trs=filas.map(r=>r.tipo==='extra'
+    ?`<tr class="x"><td>💸</td><td>${dmFechaCorta(r.fecha)}</td><td colspan="3">${escapeHtml(r.nota||'Pago extra')}</td><td>${F(r.extra)}</td><td>${F(r.extra)}</td><td>${F(r.saldoFinal)}</td></tr>`
+    :`<tr class="${r.pagado?'p':''}"><td>${r.numero}${r.pagado?' ✓':''}</td><td>${dmFechaCorta(r.fecha)}</td><td>${F(r.saldoInicial)}</td><td>${F(r.interes)}</td><td>${F(r.amort)}</td><td>${r.extra?F(r.extra):''}</td><td>${F(r.pago)}</td><td>${F(r.saldoFinal)}</td></tr>`).join('');
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(_dmCr.titulo)}</title><style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}h2{margin:0 0 4px}table{border-collapse:collapse;width:100%;margin-top:10px}th,td{border:1px solid #ccc;padding:4px 6px;text-align:right}th{background:#eee}td:first-child,td:nth-child(2){text-align:center}tr.p td{color:#888}tr.x td{background:#e8f0ff}</style></head><body><h2>${escapeHtml(_dmCr.titulo)}</h2><div>${escapeHtml(_dmCr.resumen)}</div><table><thead><tr><th>#</th><th>Fecha</th><th>Saldo inicial</th><th>Interés</th><th>Capital</th><th>Extra</th><th>Pago total</th><th>Saldo final</th></tr></thead><tbody>${trs}</tbody></table><script>window.onload=function(){window.print();}<\/script></body></html>`;
+  const w=window.open('','_blank'); if(!w){ toast('El navegador bloqueó la ventana. Usa «Descargar CSV».','err'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 
@@ -27107,6 +27212,14 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.83.0",
+  "fecha": "05/11/26",
+  "cambios": [
+   "Deudas Mayores: desde el simulador puedes generar el cronograma nuevo con el extra simulado (único, mensual, bimestral, etc.) y verlo cuota por cuota, descargarlo en CSV (Excel) o imprimirlo.",
+   "Deudas Mayores: nuevo botón «Cronograma actualizado» con las cuotas pagadas, las restantes y las amortizaciones que ya aplicaste."
+  ]
+ },
+ {
   "v": "v1.82.0",
   "fecha": "05/11/26",
   "cambios": [
@@ -29170,6 +29283,25 @@ if(state.projGoals){
 </div>
 
 <!-- MODAL FORMULARIO: AMORTIZADO -->
+<!-- MODAL CRONOGRAMA (simulado o actualizado) -->
+<div class="modal-overlay" id="dm-crono-overlay" onclick="if(event.target===this)closeDMCronoModal()">
+  <div class="modal" style="width:min(920px,96vw);max-height:92vh;display:flex;flex-direction:column">
+    <div class="modal-title"><span id="dmcr-titulo">Cronograma</span><button class="modal-close" onclick="closeDMCronoModal()">✕</button></div>
+    <div id="dmcr-resumen" style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <button class="btn btn-primary" style="font-size:11px" onclick="dmCronoCSV()">⬇ Descargar CSV (Excel)</button>
+      <button class="btn" style="font-size:11px" onclick="dmCronoImprimir()">🖨 Imprimir / PDF</button>
+      <label id="dmcr-pagadas-wrap" style="font-size:11px;color:var(--text2);display:inline-flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="dmcr-pagadas" checked onchange="dmCronoRender()"> Incluir cuotas ya pagadas</label>
+    </div>
+    <div style="overflow:auto;flex:1;border:1px solid var(--border);border-radius:8px">
+      <table class="dm-table" style="width:100%;font-size:11px">
+        <thead><tr><th>#</th><th>Fecha</th><th>Saldo inicial</th><th>Interés</th><th>Capital</th><th>Extra</th><th>Pago total</th><th>Saldo final</th></tr></thead>
+        <tbody id="dmcr-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL AMORTIZAR CAPITAL -->
 <div class="modal-overlay" id="dm-amort-overlay" onclick="if(event.target===this)closeDMAmortModal()">
   <div class="modal" style="width:520px">
