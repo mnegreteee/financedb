@@ -3474,10 +3474,17 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         </table>
       </div>
       <div class="card" id="dm-sim" style="display:none;padding:14px;margin-top:14px">
-        <div style="font-size:13px;font-weight:700;margin-bottom:8px">🧮 Simulador: ¿y si pago un extra cada mes?</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:12px;color:var(--text2)">Extra mensual</span><input id="dm-sim-extra" type="number" step="0.01" min="0" placeholder="300" oninput="dmSimRender()" style="width:130px;padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text)"></div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">🧮 Simulador de pagos extra</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <input id="dm-sim-extra" type="number" step="0.01" min="0" placeholder="Monto extra (ej. 300)" oninput="dmSimRender()" style="width:160px;padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text)">
+          <select id="dm-sim-freq" onchange="dmSimRender()" style="padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text)">
+            <option value="1">Cada mes</option><option value="0">Una sola vez (hoy)</option><option value="2">Cada 2 meses (bimestre)</option><option value="3">Cada 3 meses (trimestre)</option><option value="6">Cada 6 meses (semestre)</option><option value="12">Una vez al año</option><option value="x">Cada N meses…</option>
+          </select>
+          <input id="dm-sim-n" type="number" min="1" step="1" value="4" oninput="dmSimRender()" style="display:none;width:70px;padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text)">
+        </div>
         <div id="dm-sim-out" style="font-size:12px;line-height:1.6"></div>
-        <div style="font-size:10px;color:var(--text3);margin-top:6px">Solo calcula, no cambia nada. Para un pago único usa «Amortizar capital».</div>
+        <div id="dm-sim-comp" style="margin-top:10px"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Solo calcula, no cambia nada. El extra se suma a la cuota del mes y va a capital. Para registrar un pago único de verdad usa «Amortizar capital».</div>
       </div>
       <div class="card" id="dm-chart-wrap" style="display:none;padding:14px;margin-top:14px">
         <div style="font-size:13px;font-weight:700;margin-bottom:8px">📊 Capital vs. interés por cuota</div>
@@ -4110,9 +4117,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.81.0';
-const APP_VERSION_DATE = '05/11/26 - 20:18'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Deudas Mayores: amortizar capital (reducir plazo o cuota), adelantar cuotas, simulador, historial, gráfico capital vs. interés y resumen total.';
+const APP_VERSION = 'v1.82.0';
+const APP_VERSION_DATE = '05/11/26 - 20:28'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Deudas Mayores: el simulador permite extra único, mensual, bimestral, trimestral, semestral, anual o cada N meses, con comparación.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22414,14 +22421,27 @@ function dmCalcAmort(d,monto,modo){
   const intDespues=nuevas.reduce((s,c)=>s+c.interes,0);
   return Object.assign({ok:true,liquida:false,montoAplicado:dmR2(monto),S2,nuevas,cuotaDespues:nuevas[0].monto,restDespues:nuevas.length,intDespues,ahorro:intAntes-intDespues},base);
 }
-// Simula pagar `extra` adicional cada mes (sin guardar nada)
-function dmSimExtraMensual(d,extra){
+// Simula pagar `extra` adicional cada `cada` meses (cada=1: mensual) sin guardar nada. Reduce plazo (cuota igual).
+function dmSimExtraMensual(d,extra,cada){
   const pend=dmNoPagadas(d); if(!pend.length||!(extra>0)) return null;
-  const i=(Number(d.tasa)||0)/100; let s=pend[0].saldoInicial; const cuota=pend[0].monto+extra;
-  let meses=0, interes=0;
-  while(s>0.005&&meses<1200){ const it=s*i; interes+=it; const am=Math.min(s,cuota-it); if(am<=0) return null; s-=am; meses++; }
+  cada=Math.max(1,parseInt(cada)||1);
+  const i=(Number(d.tasa)||0)/100; let s=pend[0].saldoInicial; const cuota=pend[0].monto;
+  let meses=0, interes=0, extraUsado=0;
+  while(s>0.005&&meses<1200){
+    meses++; const it=s*i; interes+=it;
+    let am=cuota-it; if(am<=0) return null;
+    if(meses%cada===0){ const resto=Math.max(0,s-am); const e=Math.min(extra,resto); am+=e; extraUsado+=e; }
+    am=Math.min(s,am); s-=am;
+  }
   const intAntes=pend.reduce((a,c)=>a+(c.interes||0),0);
-  return {meses,interes,ahorro:intAntes-interes,menos:pend.length-meses,fin:dmAddMonths(pend[0].fecha,meses-1)};
+  return {meses,interes,ahorro:intAntes-interes,menos:pend.length-meses,fin:dmAddMonths(pend[0].fecha,meses-1),extraUsado};
+}
+// Pago único hoy: usa el mismo cálculo de la amortización (devuelve ambos modos)
+function dmSimUnico(d,monto){ return {plazo:dmCalcAmort(d,monto,'plazo'),cuota:dmCalcAmort(d,monto,'cuota')}; }
+function dmSimFreqTxt(c){ return c===0?'Una sola vez':c===1?'Cada mes':c===2?'Cada 2 meses':c===3?'Cada 3 meses':c===6?'Cada 6 meses':c===12?'Una vez al año':'Cada '+c+' meses'; }
+function dmSimAplicarUnico(){
+  const v=parseFloat(document.getElementById('dm-sim-extra')?.value); if(!(v>0)) return;
+  openDMAmortModal(); document.getElementById('dmam-monto').value=v; dmAmortPreview();
 }
 function dmFechaCorta(f){ return f?new Date(f+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—'; }
 
@@ -22591,11 +22611,31 @@ function dmRenderExtras(d){
 function dmSimRender(){
   const out=document.getElementById('dm-sim-out'); if(!out) return;
   const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const cur=d.currency, comp=document.getElementById('dm-sim-comp');
+  const fsel=document.getElementById('dm-sim-freq'), nInp=document.getElementById('dm-sim-n');
+  if(nInp) nInp.style.display=(fsel&&fsel.value==='x')?'inline-block':'none';
   const v=parseFloat(document.getElementById('dm-sim-extra')?.value);
-  if(!(v>0)){ out.innerHTML='<span style="color:var(--text3)">Escribe un monto extra mensual.</span>'; return; }
-  const s=dmSimExtraMensual(d,v);
-  if(!s){ out.innerHTML='<span style="color:var(--text3)">No se pudo simular.</span>'; return; }
-  out.innerHTML=`Terminarías en <b>${s.meses}</b> cuotas (<b>${Math.max(0,s.menos)}</b> menos), hacia <b>${dmFechaCorta(s.fin)}</b>.<br><span style="color:var(--green)">Ahorrarías ≈ ${dmFmt(s.ahorro,d.currency)} en intereses.</span>`;
+  if(comp) comp.innerHTML='';
+  if(!(v>0)){ out.innerHTML='<span style="color:var(--text3)">Escribe un monto extra y elige cada cuánto lo pagarías.</span>'; return; }
+  let cada=fsel?(fsel.value==='x'?Math.max(1,parseInt(nInp.value)||1):parseInt(fsel.value)):1;
+  if(cada===0){
+    const u=dmSimUnico(d,v), a=u.plazo, b=u.cuota;
+    if(!a.ok){ out.innerHTML='<span style="color:var(--red)">'+escapeHtml(a.error||'No se pudo simular.')+'</span>'; return; }
+    if(a.liquida){ out.innerHTML='Con '+dmFmt(v,cur)+' <b>liquidas toda la deuda</b> y ahorras ≈ '+dmFmt(a.ahorro,cur)+' en intereses.'; return; }
+    out.innerHTML=`Pagando <b>${dmFmt(v,cur)}</b> una sola vez:<br>• <b>Reduciendo plazo:</b> terminas en ${a.restDespues} cuotas (${a.restAntes-a.restDespues} menos), hacia ${dmFechaCorta(a.nuevas[a.nuevas.length-1].fecha)}. <span style="color:var(--green)">Ahorras ≈ ${dmFmt(a.ahorro,cur)}.</span><br>• <b>Reduciendo cuota:</b> pasa a ${dmFmt(b.cuotaDespues,cur)} (baja ${dmFmt(b.cuotaAntes-b.cuotaDespues,cur)}). <span style="color:var(--green)">Ahorras ≈ ${dmFmt(b.ahorro,cur)}.</span><br><button type="button" class="btn btn-primary" style="font-size:11px;margin-top:6px" onclick="dmSimAplicarUnico()">Aplicar como amortización…</button>`;
+  } else {
+    const s=dmSimExtraMensual(d,v,cada);
+    if(!s){ out.innerHTML='<span style="color:var(--text3)">No se pudo simular.</span>'; return; }
+    out.innerHTML=`<b>${dmFmt(v,cur)}</b> ${dmSimFreqTxt(cada).toLowerCase()}: terminarías en <b>${s.meses}</b> cuotas (<b>${Math.max(0,s.menos)}</b> menos), hacia <b>${dmFechaCorta(s.fin)}</b>.<br>Pondrías ${dmFmt(s.extraUsado,cur)} de más en total.<br><span style="color:var(--green)">Ahorrarías ≈ ${dmFmt(s.ahorro,cur)} en intereses.</span>`;
+  }
+  // comparación del mismo monto con distintas frecuencias
+  if(comp){
+    const filas=[0,1,2,3,6,12].map(c=>{
+      if(c===0){ const a=dmCalcAmort(d,v,'plazo'); if(!a.ok||a.liquida) return null; return {c,menos:a.restAntes-a.restDespues,ahorro:a.ahorro,extra:v,fin:a.nuevas[a.nuevas.length-1].fecha}; }
+      const s=dmSimExtraMensual(d,v,c); if(!s) return null; return {c,menos:s.menos,ahorro:s.ahorro,extra:s.extraUsado,fin:s.fin};
+    }).filter(Boolean);
+    if(filas.length) comp.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Mismo monto (${dmFmt(v,cur)}) con otras frecuencias:</div><div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="color:var(--text3);text-align:left"><th style="padding:3px 6px">Frecuencia</th><th style="padding:3px 6px">Cuotas menos</th><th style="padding:3px 6px">Extra total</th><th style="padding:3px 6px">Ahorro</th><th style="padding:3px 6px">Fin</th></tr></thead><tbody>${filas.map(x=>`<tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px">${dmSimFreqTxt(x.c)}</td><td style="padding:3px 6px">${Math.max(0,x.menos)}</td><td style="padding:3px 6px">${dmFmt(x.extra,cur)}</td><td style="padding:3px 6px;color:var(--green)">${dmFmt(x.ahorro,cur)}</td><td style="padding:3px 6px">${dmFechaCorta(x.fin)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
 }
 function dmRenderChart(d){
   const wrap=document.getElementById('dm-chart-wrap'), cv=document.getElementById('dm-chart-capint');
@@ -27066,6 +27106,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.82.0",
+  "fecha": "05/11/26",
+  "cambios": [
+   "Deudas Mayores: el simulador de pagos extra ahora permite un extra único, mensual, bimestral, trimestral, semestral, anual o cada N meses, y compara el mismo monto con las distintas frecuencias (cuotas que te ahorras, extra total e intereses ahorrados)."
+  ]
+ },
  {
   "v": "v1.81.0",
   "fecha": "05/11/26",
