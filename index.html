@@ -3435,6 +3435,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
     <!-- LIST VIEW -->
     <div id="dm-list-view">
+      <div id="dm-total-resumen"></div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:10px">
         <span style="color:var(--text3)">Ordenar:</span>
         <span onclick="setDMSort('fecha')" style="cursor:pointer;padding:3px 9px;border-radius:12px;background:var(--bg3);user-select:none">Próximo pago <span id="dmsort-fecha"></span></span>
@@ -3464,6 +3465,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div class="dm-sum-card" style="border-top:2px solid var(--purple)"><div class="dm-sum-label">Próximo Pago</div><div class="dm-sum-val" id="dm-sum-proximo" style="color:var(--purple);font-size:13px">—</div></div>
       </div>
 
+      <div id="dm-extra"></div>
       <div id="dm-pf-link"></div>
       <div class="dm-table-wrap">
         <table class="dm-table">
@@ -3471,6 +3473,18 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           <tbody id="dm-detail-tbody"></tbody>
         </table>
       </div>
+      <div class="card" id="dm-sim" style="display:none;padding:14px;margin-top:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">🧮 Simulador: ¿y si pago un extra cada mes?</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:12px;color:var(--text2)">Extra mensual</span><input id="dm-sim-extra" type="number" step="0.01" min="0" placeholder="300" oninput="dmSimRender()" style="width:130px;padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text)"></div>
+        <div id="dm-sim-out" style="font-size:12px;line-height:1.6"></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Solo calcula, no cambia nada. Para un pago único usa «Amortizar capital».</div>
+      </div>
+      <div class="card" id="dm-chart-wrap" style="display:none;padding:14px;margin-top:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">📊 Capital vs. interés por cuota</div>
+        <div style="position:relative;height:220px"><canvas id="dm-chart-capint"></canvas></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Las cuotas ya pagadas se ven más tenues.</div>
+      </div>
+      <div class="card" id="dm-hist" style="display:none;padding:14px;margin-top:14px"></div>
     </div>
   </div>
 
@@ -4096,9 +4110,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.80.0';
-const APP_VERSION_DATE = '05/11/26 - 19:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas de crédito: el resumen global se puede filtrar por una o varias tarjetas.';
+const APP_VERSION = 'v1.81.0';
+const APP_VERSION_DATE = '05/11/26 - 20:18'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Deudas Mayores: amortizar capital (reducir plazo o cuota), adelantar cuotas, simulador, historial, gráfico capital vs. interés y resumen total.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4571,7 +4585,7 @@ const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄'
   movimiento_eliminado:'💵',tc_consumo_eliminado:'💳',tc_consumo_editado:'💳',cuenta_nueva:'🏦',
   deuda_eliminada:'🤝',deuda_item_editado:'🧾',deuda_item_eliminado:'🧾',
   compra_nueva:'🛒',compra_editada:'🛒',compra_eliminada:'🛒',
-  tc_consumo_pagado:'✅',deuda_mayor_cuota:'✅',
+  tc_consumo_pagado:'✅',deuda_mayor_cuota:'✅',deuda_mayor_amortizacion:'💸',deuda_mayor_adelanto:'⏩',
   tc_manual:'💱',presupuesto:'📊',presupuesto_eliminado:'📊',
   categoria_editada:'🏷️',categoria_eliminada:'🏷️',
   acceso_rapido_editado:'⚡',acceso_rapido_eliminado:'⚡',
@@ -22082,7 +22096,7 @@ function getDMResumen(d){
   const restantes = total-pagadas;
   let saldoPendiente = d.tipo==='fijo'
     ? d.cuotas.filter(c=>!c.pagado).reduce((s,c)=>s+c.monto,0)
-    : (d.importe - d.cuotas.filter(c=>c.pagado).reduce((s,c)=>s+c.amort,0));
+    : (d.importe - d.cuotas.filter(c=>c.pagado).reduce((s,c)=>s+c.amort,0) - (d.capitalExtra||0));
   if(Math.abs(saldoPendiente)<0.005) saldoPendiente=0; // evita mostrar -0.00 por redondeo
   const proxima = d.cuotas.filter(c=>!c.pagado).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha))[0];
   return { total, pagadas, restantes, saldoPendiente, proximaFecha: proxima?proxima.fecha:null };
@@ -22107,6 +22121,7 @@ function updateDMSortIndicators(){
 function renderDeudasMayores(){
   const grid = document.getElementById('dm-grid');
   if(!grid) return;
+  try{ dmRenderTotal(); }catch(e){ console.error('dmRenderTotal',e); }
   let deudas = state.deudasMayores || [];
   if(!deudas.length){
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🏛️</div>Sin deudas mayores registradas.</div>';
@@ -22194,8 +22209,8 @@ function renderDMDetail(){
     tbody.innerHTML = d.cuotas.map(c=>`
       <tr class="${c.pagado?'dm-row-paid':''}">
         <td>${c.numero}</td>
-        <td><input class="dm-fecha-inp" type="date" value="${c.fecha}" onchange="updateDMCuotaFecha('${c.numero}',this.value)"></td>
-        <td>${dmFmt(c.monto,d.currency)}</td>
+        <td><input class="dm-fecha-inp" type="date" value="${c.fecha}" ${c.pagado?'disabled':''} onchange="updateDMCuotaFecha('${c.numero}',this.value)"></td>
+        <td>${dmCeldaMonto(c,d)}</td>
         <td><input class="dm-check" type="checkbox" ${c.pagado?'checked':''} onchange="toggleDMCuotaPagado('${c.numero}',this.checked)"></td>
       </tr>`).join('');
   } else {
@@ -22203,14 +22218,22 @@ function renderDMDetail(){
     tbody.innerHTML = d.cuotas.map(c=>`
       <tr class="${c.pagado?'dm-row-paid':''}">
         <td>${c.numero}</td>
-        <td><input class="dm-fecha-inp" type="date" value="${c.fecha}" onchange="updateDMCuotaFecha('${c.numero}',this.value)"></td>
+        <td><input class="dm-fecha-inp" type="date" value="${c.fecha}" ${c.pagado?'disabled':''} onchange="updateDMCuotaFecha('${c.numero}',this.value)"></td>
         <td>${dmFmt(c.saldoInicial,d.currency)}</td>
         <td style="color:var(--red)">${dmFmt(c.interes,d.currency)}</td>
         <td style="color:var(--green)">${dmFmt(c.amort,d.currency)}</td>
-        <td style="font-weight:600">${dmFmt(c.monto,d.currency)}</td>
+        <td style="font-weight:600">${dmCeldaMonto(c,d)}</td>
         <td><input class="dm-check" type="checkbox" ${c.pagado?'checked':''} onchange="toggleDMCuotaPagado('${c.numero}',this.checked)"></td>
       </tr>`).join('');
   }
+  try{ dmRenderExtras(d); }catch(e){ console.error('dmRenderExtras',e); }
+}
+function dmCeldaMonto(c,d){
+  let h=dmFmt(c.monto,d.currency);
+  if(c.montoReal!==undefined) h+=`<div style="font-size:10px;font-weight:400;color:var(--amber)">cobró ${dmFmt(c.montoReal,d.currency)} (${c.montoReal-c.monto>=0?'+':''}${dmFmt(c.montoReal-c.monto,d.currency)})</div>`;
+  if(c.adelantada) h+=' <span title="Cuota adelantada" style="font-size:10px">⏩</span>';
+  if(c.pagado) h+=` <button type="button" title="Monto real cobrado por el banco" onclick="dmMontoReal('${c.numero}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:0 2px">✎</button>`;
+  return h;
 }
 
 
@@ -22324,7 +22347,9 @@ function toggleDMCuotaPagado(numero, checked){
   const c = d.cuotas.find(x=>x.numero==numero);
   if(c){
     const antes=c.pagado;
+    if(!checked&&antes&&!confirm('¿Desmarcar la cuota #'+numero+' como pagada?')){ renderDMDetail(); return; }
     c.pagado=checked; delete c.viaPF;
+    if(!checked){ delete c.adelantada; delete c.fechaAdelanto; delete c.montoReal; }
     const pfInfo=dmSyncPFDesdeCuota(d,c,checked);
     logActividad('deuda_mayor_cuota', `${checked?'Cuota marcada pagada':'Cuota desmarcada'}: ${d.nombre} #${numero}`, {deudaMayorId:currentDMId, cuotaNumero:numero, pagadoAntes:antes, ...(pfInfo||{})});
     saveState(); renderDMDetail();
@@ -22338,6 +22363,277 @@ function updateDMCuotaFecha(numero, value){
   if(!d) return;
   const c = d.cuotas.find(x=>x.numero==numero);
   if(c){ c.fecha=value; saveState(); renderDMDetail(); }
+}
+
+
+// ══════════════════════════════════════════════════════
+//  💸 AMORTIZACIÓN DE CAPITAL, ADELANTO DE CUOTAS, SIMULADOR E HISTORIAL (Deudas Mayores)
+//  Modelo simple: el pago extra entra directo al capital pendiente (el de la última cuota pagada) y se regenera el cronograma
+//  de las cuotas NO pagadas. El banco puede cobrar además el interés corrido de los días; aquí no se calcula por días.
+//  d.capitalExtra = capital amortizado fuera de cuota; d.amortizaciones = historial (con copia de las cuotas previas para deshacer).
+// ══════════════════════════════════════════════════════
+let dmChartCapInt=null;
+function dmR2(n){ return Math.round(n*100)/100; }
+function dmNoPagadas(d){ return (d.cuotas||[]).filter(c=>!c.pagado); }
+function dmPagadasPrefijo(d){
+  let visto=false;
+  for(const c of (d.cuotas||[])){ if(!c.pagado) visto=true; else if(visto) return false; }
+  return true;
+}
+// Cuotas nuevas con cuota fija dada (reduce plazo)
+function dmGenPorCuota(saldo, tasaPct, cuota, fecha0, numIni){
+  const i=tasaPct/100, out=[]; let s=saldo, k=0;
+  if(!(cuota>s*i+0.005)) return null;
+  while(s>0.005 && k<1200){
+    const interes=s*i; let amort=cuota-interes, monto=cuota;
+    if(s+interes<=cuota+0.005 || amort>=s){ amort=s; monto=s+interes; }
+    out.push({numero:numIni+k,fecha:dmAddMonths(fecha0,k),saldoInicial:s,interes,amort,monto,saldoFinal:Math.max(0,s-amort),pagado:false});
+    s-=amort; k++;
+  }
+  if(out.length) out[out.length-1].saldoFinal=0;
+  return out;
+}
+// Calcula el efecto de amortizar `monto` con el modo 'plazo' (cuota igual, menos cuotas) o 'cuota' (mismas cuotas, cuota menor)
+function dmCalcAmort(d,monto,modo){
+  if(!d||d.tipo!=='amortizado') return {ok:false,error:'La amortización solo aplica a préstamos amortizados.'};
+  const pend=dmNoPagadas(d);
+  if(!pend.length) return {ok:false,error:'Esta deuda ya está pagada.'};
+  if(!dmPagadasPrefijo(d)) return {ok:false,error:'Hay cuotas pagadas después de una sin pagar. Marca como pagadas solo las primeras cuotas, en orden, antes de amortizar.'};
+  const S=pend[0].saldoInicial, cuotaAntes=pend[0].monto;
+  const intAntes=pend.reduce((s,c)=>s+(c.interes||0),0);
+  const base={S,cuotaAntes,intAntes,restAntes:pend.length,pend};
+  if(!(monto>0)) return Object.assign({ok:false,error:''},base);
+  if(monto>=S-0.005) return Object.assign({ok:true,liquida:true,montoAplicado:dmR2(S),S2:0,cuotaDespues:0,restDespues:0,intDespues:0,ahorro:intAntes,nuevas:[]},base);
+  const S2=S-monto, numIni=pend[0].numero;
+  let nuevas;
+  if(modo==='plazo') nuevas=dmGenPorCuota(S2,d.tasa,cuotaAntes,pend[0].fecha,numIni);
+  else { const g=generateAmortizacion(S2,d.tasa,pend.length,pend[0].fecha); nuevas=g.cuotas; nuevas.forEach((c,k)=>{c.numero=numIni+k;}); }
+  if(!nuevas||!nuevas.length) return Object.assign({ok:false,error:'Con esa cuota no alcanza ni para cubrir los intereses.'},base);
+  // conserva las fechas que ya tenías (puedes haberlas ajustado) y extiende mes a mes si hay más cuotas
+  nuevas.forEach((c,k)=>{ c.fecha = k<pend.length ? pend[k].fecha : dmAddMonths(pend[pend.length-1].fecha,k-pend.length+1); });
+  const intDespues=nuevas.reduce((s,c)=>s+c.interes,0);
+  return Object.assign({ok:true,liquida:false,montoAplicado:dmR2(monto),S2,nuevas,cuotaDespues:nuevas[0].monto,restDespues:nuevas.length,intDespues,ahorro:intAntes-intDespues},base);
+}
+// Simula pagar `extra` adicional cada mes (sin guardar nada)
+function dmSimExtraMensual(d,extra){
+  const pend=dmNoPagadas(d); if(!pend.length||!(extra>0)) return null;
+  const i=(Number(d.tasa)||0)/100; let s=pend[0].saldoInicial; const cuota=pend[0].monto+extra;
+  let meses=0, interes=0;
+  while(s>0.005&&meses<1200){ const it=s*i; interes+=it; const am=Math.min(s,cuota-it); if(am<=0) return null; s-=am; meses++; }
+  const intAntes=pend.reduce((a,c)=>a+(c.interes||0),0);
+  return {meses,interes,ahorro:intAntes-interes,menos:pend.length-meses,fin:dmAddMonths(pend[0].fecha,meses-1)};
+}
+function dmFechaCorta(f){ return f?new Date(f+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—'; }
+
+// ── Modal AMORTIZAR ───────────────────────────────────
+function openDMAmortModal(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const t=dmCalcAmort(d,0,'plazo');
+  if(t.error){ toast(t.error,'err'); return; }
+  document.getElementById('dmam-monto').value='';
+  document.getElementById('dmam-fecha').value=todayLocalISO();
+  document.getElementById('dmam-modo').value='plazo';
+  document.getElementById('dmam-info').textContent='Capital pendiente: '+dmFmt(t.S,d.currency)+' · cuota actual: '+dmFmt(t.cuotaAntes,d.currency)+' · '+t.restAntes+' cuotas restantes';
+  dmAmortPreview();
+  document.getElementById('dm-amort-overlay').classList.add('open');
+}
+function closeDMAmortModal(){ document.getElementById('dm-amort-overlay').classList.remove('open'); }
+function dmAmortPreview(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const box=document.getElementById('dmam-preview'), btn=document.getElementById('dmam-apply');
+  const monto=parseFloat(document.getElementById('dmam-monto').value);
+  const modo=document.getElementById('dmam-modo').value;
+  if(!(monto>0)){ box.innerHTML='<span style="color:var(--text3)">Escribe cuánto vas a amortizar para ver el efecto.</span>'; btn.disabled=true; return; }
+  const cur=d.currency;
+  const a=dmCalcAmort(d,monto,'plazo'), b=dmCalcAmort(d,monto,'cuota');
+  const fila=(tit,x,sel)=>{
+    if(!x.ok) return `<div style="flex:1;min-width:150px;padding:8px 10px;border-radius:8px;border:1px solid var(--border2);opacity:.6"><b>${tit}</b><br><span style="color:var(--red)">${escapeHtml(x.error||'')}</span></div>`;
+    if(x.liquida) return `<div style="flex:1;min-width:150px;padding:8px 10px;border-radius:8px;border:1px solid var(--green)"><b>${tit}</b><br>Liquidas toda la deuda.<br>Ahorras ${dmFmt(x.ahorro,cur)} en intereses.</div>`;
+    const cuotasTxt = tit.indexOf('plazo')>=0
+      ? `Cuota igual: ${dmFmt(x.cuotaDespues,cur)}<br>Terminas en <b>${x.restDespues}</b> cuotas (<b>${x.restAntes-x.restDespues}</b> menos)<br>Fin: ${dmFechaCorta(x.nuevas[x.nuevas.length-1].fecha)}`
+      : `Cuota nueva: <b>${dmFmt(x.cuotaDespues,cur)}</b> (baja ${dmFmt(x.cuotaAntes-x.cuotaDespues,cur)})<br>Mismas ${x.restDespues} cuotas<br>Fin: ${dmFechaCorta(x.nuevas[x.nuevas.length-1].fecha)}`;
+    return `<div style="flex:1;min-width:150px;padding:8px 10px;border-radius:8px;border:1px solid ${sel?'var(--accent)':'var(--border2)'};background:${sel?'rgba(91,141,239,.10)':'transparent'}"><b>${tit}</b><br>${cuotasTxt}<br><span style="color:var(--green)">Ahorras ${dmFmt(x.ahorro,cur)} en intereses</span></div>`;
+  };
+  box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap">${fila('Reducir plazo',a,modo==='plazo')}${fila('Reducir cuota',b,modo==='cuota')}</div>`;
+  const sel=modo==='plazo'?a:b;
+  btn.disabled=!sel.ok;
+}
+function dmAplicarAmort(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const monto=parseFloat(document.getElementById('dmam-monto').value);
+  const fecha=document.getElementById('dmam-fecha').value||todayLocalISO();
+  const modo=document.getElementById('dmam-modo').value;
+  const t=dmCalcAmort(d,monto,modo);
+  if(!t.ok){ toast(t.error||'Revisa el monto','err'); return; }
+  const msg=t.liquida
+    ? `¿Liquidar toda la deuda «${d.nombre}» con ${dmFmt(t.montoAplicado,d.currency)}?`
+    : `¿Amortizar ${dmFmt(t.montoAplicado,d.currency)} a «${d.nombre}» (${modo==='plazo'?'reducir plazo':'reducir cuota'})?\nAhorras ${dmFmt(t.ahorro,d.currency)} en intereses.`;
+  if(!confirm(msg)) return;
+  const pagadas=d.cuotas.filter(c=>c.pagado);
+  const reg={id:'am-'+Date.now(),ts:Date.now(),fecha,monto:t.montoAplicado,modo,liquida:!!t.liquida,
+    previas:JSON.parse(JSON.stringify(t.pend)),plazoPrev:d.plazo,cuotaCalcPrev:d.cuotaCalc,capExtraPrev:d.capitalExtra||0,pagadasAlHacer:pagadas.length,
+    cuotaAntes:t.cuotaAntes,cuotaDespues:t.cuotaDespues,restAntes:t.restAntes,restDespues:t.restDespues,ahorro:t.ahorro,pfMontoPrev:null};
+  d.capitalExtra=dmR2((d.capitalExtra||0)+t.montoAplicado);
+  d.cuotas=pagadas.concat(t.nuevas);
+  d.plazo=d.cuotas.length;
+  if(!t.liquida) d.cuotaCalc=t.cuotaDespues;
+  const pf=dmPFDe(d);
+  if(pf&&!t.liquida&&modo==='cuota'&&pf.tipoMonto==='fijo'&&Math.abs((Number(pf.montoFijo)||0)-t.cuotaAntes)<0.5){ reg.pfMontoPrev=pf.montoFijo; pf.montoFijo=dmR2(t.cuotaDespues); }
+  if(!Array.isArray(d.amortizaciones)) d.amortizaciones=[];
+  d.amortizaciones.push(reg);
+  logActividad('deuda_mayor_amortizacion',`${t.liquida?'Deuda liquidada':'Amortización de capital'}: ${d.nombre} ${dmFmt(t.montoAplicado,d.currency)}`,{deudaMayorId:d.id});
+  saveState(); closeDMAmortModal(); openDMDetail(d.id);
+  toast(t.liquida?'🎉 Deuda liquidada':'💸 Amortización aplicada. Ahorro estimado: '+dmFmt(t.ahorro,d.currency)+(reg.pfMontoPrev!==null?' · cuota del pago frecuente actualizada':''));
+  try{ renderPagosFrecuentes(); }catch(e){}
+}
+function dmDeshacerAmort(id){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const h=d.amortizaciones||[]; const reg=h[h.length-1];
+  if(!reg||reg.id!==id){ toast('Solo se puede deshacer la última amortización.','err'); return; }
+  const pagadas=d.cuotas.filter(c=>c.pagado);
+  if(pagadas.length!==reg.pagadasAlHacer||!dmPagadasPrefijo(d)){ toast('Desmarca primero las cuotas que pagaste después de esa amortización.','err'); return; }
+  if(!confirm('¿Deshacer la amortización de '+dmFmt(reg.monto,d.currency)+' del '+dmFechaCorta(reg.fecha)+'? Se restaura el cronograma anterior.')) return;
+  d.cuotas=pagadas.concat(reg.previas);
+  d.plazo=reg.plazoPrev; if(reg.cuotaCalcPrev!==undefined) d.cuotaCalc=reg.cuotaCalcPrev;
+  d.capitalExtra=reg.capExtraPrev; if(!d.capitalExtra) delete d.capitalExtra;
+  const pf=dmPFDe(d); if(pf&&reg.pfMontoPrev!==null&&reg.pfMontoPrev!==undefined) pf.montoFijo=reg.pfMontoPrev;
+  d.amortizaciones=h.slice(0,-1);
+  logActividad('deuda_mayor_amortizacion',`Amortización deshecha: ${d.nombre} ${dmFmt(reg.monto,d.currency)}`,{deudaMayorId:d.id});
+  saveState(); openDMDetail(d.id); toast('Amortización deshecha');
+  try{ renderPagosFrecuentes(); }catch(e){}
+}
+
+// ── ADELANTAR CUOTAS ──────────────────────────────────
+function openDMAdelantoModal(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  if(!dmNoPagadas(d).length){ toast('Esta deuda ya está pagada.','err'); return; }
+  document.getElementById('dmad-n').value='1';
+  dmAdelantoPreview();
+  document.getElementById('dm-adelanto-overlay').classList.add('open');
+}
+function closeDMAdelantoModal(){ document.getElementById('dm-adelanto-overlay').classList.remove('open'); }
+function dmAdelantoPreview(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const pend=dmNoPagadas(d).sort((a,b)=>a.numero-b.numero);
+  const n=Math.min(parseInt(document.getElementById('dmad-n').value)||0,pend.length);
+  const box=document.getElementById('dmad-preview'), btn=document.getElementById('dmad-apply');
+  if(n<1){ box.textContent='Indica cuántas cuotas quieres adelantar.'; btn.disabled=true; return; }
+  const sel=pend.slice(0,n); const tot=sel.reduce((s,c)=>s+c.monto,0);
+  box.innerHTML=`Se marcarán como pagadas las cuotas <b>#${sel[0].numero}${n>1?' a #'+sel[n-1].numero:''}</b> (${dmFechaCorta(sel[0].fecha)}${n>1?' – '+dmFechaCorta(sel[n-1].fecha):''}).<br>Total: <b>${dmFmt(tot,d.currency)}</b>`+(d.tipo==='amortizado'?`<br><span style="color:var(--text3)">Cada cuota se paga completa, con su interés. Para pagar menos interés usa «Amortizar capital».</span>`:'');
+  btn.disabled=false;
+}
+function dmAplicarAdelanto(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const pend=dmNoPagadas(d).sort((a,b)=>a.numero-b.numero);
+  const n=Math.min(parseInt(document.getElementById('dmad-n').value)||0,pend.length); if(n<1) return;
+  const sel=pend.slice(0,n); const tot=sel.reduce((s,c)=>s+c.monto,0);
+  if(!confirm('¿Adelantar '+n+' cuota'+(n>1?'s':'')+' de «'+d.nombre+'» por '+dmFmt(tot,d.currency)+'?')) return;
+  const hoy=todayISO();
+  sel.forEach(c=>{ c.pagado=true; c.adelantada=true; c.fechaAdelanto=hoy; delete c.viaPF; });
+  logActividad('deuda_mayor_adelanto',`Cuotas adelantadas: ${d.nombre} (#${sel[0].numero}${n>1?'–#'+sel[n-1].numero:''}) ${dmFmt(tot,d.currency)}`,{deudaMayorId:d.id});
+  saveState(); closeDMAdelantoModal(); renderDMDetail();
+  toast('⏩ '+n+' cuota'+(n>1?'s':'')+' adelantada'+(n>1?'s':''));
+  try{ renderPagosFrecuentes(); }catch(e){}
+}
+
+// ── MONTO REAL COBRADO (seguros, comisiones) ──────────
+function dmMontoReal(numero){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const c=d.cuotas.find(x=>x.numero==numero); if(!c) return;
+  const v=prompt('Monto REAL que cobró el banco por la cuota #'+numero+' (cuota del cronograma: '+dmFmt(c.monto,d.currency)+').\nDéjalo vacío para quitarlo.', c.montoReal!==undefined?c.montoReal:'');
+  if(v===null) return;
+  const n=parseFloat(String(v).replace(',','.'));
+  if(String(v).trim()===''||isNaN(n)||n<=0) delete c.montoReal; else c.montoReal=dmR2(n);
+  saveState(); renderDMDetail();
+}
+
+// ── PANEL DE DATOS, SIMULADOR, GRÁFICO E HISTORIAL ────
+function dmRenderExtras(d){
+  const box=document.getElementById('dm-extra'); if(!box) return;
+  const cur=d.currency, r=getDMResumen(d);
+  const pend=dmNoPagadas(d), pag=(d.cuotas||[]).filter(c=>c.pagado);
+  const porPagar=pend.reduce((s,c)=>s+c.monto,0);
+  const card=(lab,val,sub,col)=>`<div class="dm-sum-card"><div class="dm-sum-label">${lab}</div><div class="dm-sum-val" style="font-size:14px;${col?'color:'+col:''}">${val}</div>${sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div>`:''}</div>`;
+  let html='<div class="dm-summary" style="margin-top:-6px">';
+  html+=card('Por pagar en cuotas',dmFmt(porPagar,cur),pend.length+' cuotas restantes');
+  const extraReal=pag.filter(c=>c.montoReal!==undefined).reduce((s,c)=>s+(c.montoReal-c.monto),0);
+  let insight='';
+  if(d.tipo==='amortizado'){
+    const intRest=pend.reduce((s,c)=>s+(c.interes||0),0), intPag=pag.reduce((s,c)=>s+(c.interes||0),0);
+    const capPag=(d.importe||0)-r.saldoPendiente;
+    const tea=(Math.pow(1+(Number(d.tasa)||0)/100,12)-1)*100;
+    html+=card('Interés que aún pagarías',dmFmt(intRest,cur),'de lo que falta por pagar','var(--red)');
+    html+=card('Capital ya pagado',dmFmt(capPag,cur),((d.importe>0?capPag/d.importe*100:0).toFixed(0))+'% del préstamo','var(--green)');
+    html+=card('Costo total en intereses',dmFmt(intPag+intRest,cur),'pagado '+dmFmt(intPag,cur)+' · TEA ≈ '+tea.toFixed(1)+'%');
+    html+='</div>';
+    if(extraReal!==0) html+=`<div style="font-size:11px;color:var(--text3);margin:-6px 0 10px">Seguros/comisiones cobrados de más en cuotas ya pagadas: <b>${dmFmt(extraReal,cur)}</b></div>`;
+    const mil=Math.min(1000,r.saldoPendiente/2);
+    if(pend.length>1&&mil>=100){ const t=dmCalcAmort(d,mil,'plazo'); if(t.ok&&!t.liquida) insight=`💡 Por cada ${dmFmt(mil,cur)} que amortices ahora (reduciendo plazo) te ahorras ≈ <b>${dmFmt(t.ahorro,cur)}</b> en intereses y terminas <b>${t.restAntes-t.restDespues}</b> cuota${t.restAntes-t.restDespues===1?'':'s'} antes. Mientras antes amortices, más ahorras.`; }
+  } else { html+='</div>'; }
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
+  if(d.tipo==='amortizado') html+='<button type="button" class="btn btn-primary" style="font-size:12px" onclick="openDMAmortModal()">💸 Amortizar capital</button>';
+  html+='<button type="button" class="btn" style="font-size:12px" onclick="openDMAdelantoModal()">⏩ Adelantar cuotas</button></div>';
+  if(insight) html+=`<div style="font-size:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;line-height:1.5">${insight}</div>`;
+  box.innerHTML=html;
+  // simulador
+  const sim=document.getElementById('dm-sim'); if(sim) sim.style.display=(d.tipo==='amortizado'&&pend.length>1)?'block':'none';
+  dmSimRender();
+  // historial
+  const hb=document.getElementById('dm-hist'); if(hb){
+    const h=(d.amortizaciones||[]);
+    if(!h.length){ hb.style.display='none'; hb.innerHTML=''; }
+    else { hb.style.display='block';
+      hb.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px">📜 Historial de amortizaciones</div>'+[...h].reverse().map((x,ix)=>`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);font-size:12px"><div><b>${dmFechaCorta(x.fecha)}</b> · ${dmFmt(x.monto,cur)} · ${x.liquida?'liquidación':(x.modo==='plazo'?'redujo plazo ('+x.restAntes+'→'+x.restDespues+' cuotas)':'redujo cuota ('+dmFmt(x.cuotaAntes,cur)+' → '+dmFmt(x.cuotaDespues,cur)+')')}<br><span style="color:var(--green);font-size:11px">Ahorro estimado ${dmFmt(x.ahorro,cur)} en intereses</span></div>${ix===0?`<button type="button" class="btn" style="font-size:11px" onclick="dmDeshacerAmort('${x.id}')">↩ Deshacer</button>`:''}</div>`).join('');
+    }
+  }
+  dmRenderChart(d);
+}
+function dmSimRender(){
+  const out=document.getElementById('dm-sim-out'); if(!out) return;
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const v=parseFloat(document.getElementById('dm-sim-extra')?.value);
+  if(!(v>0)){ out.innerHTML='<span style="color:var(--text3)">Escribe un monto extra mensual.</span>'; return; }
+  const s=dmSimExtraMensual(d,v);
+  if(!s){ out.innerHTML='<span style="color:var(--text3)">No se pudo simular.</span>'; return; }
+  out.innerHTML=`Terminarías en <b>${s.meses}</b> cuotas (<b>${Math.max(0,s.menos)}</b> menos), hacia <b>${dmFechaCorta(s.fin)}</b>.<br><span style="color:var(--green)">Ahorrarías ≈ ${dmFmt(s.ahorro,d.currency)} en intereses.</span>`;
+}
+function dmRenderChart(d){
+  const wrap=document.getElementById('dm-chart-wrap'), cv=document.getElementById('dm-chart-capint');
+  if(dmChartCapInt){ try{dmChartCapInt.destroy();}catch(e){} dmChartCapInt=null; }
+  if(!wrap||!cv) return;
+  if(d.tipo!=='amortizado'||!(d.cuotas||[]).length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  if(typeof Chart==='undefined') return;
+  const cs=d.cuotas;
+  const alfa=c=>c.pagado?'55':'ff';
+  dmChartCapInt=new Chart(cv.getContext('2d'),{
+    type:'bar',
+    data:{labels:cs.map(c=>c.numero),datasets:[
+      {label:'Capital',data:cs.map(c=>+(c.amort||0).toFixed(2)),backgroundColor:cs.map(c=>'#22c55e'+alfa(c)),stack:'a'},
+      {label:'Interés',data:cs.map(c=>+(c.interes||0).toFixed(2)),backgroundColor:cs.map(c=>'#ef4444'+alfa(c)),stack:'a'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#9899a6'}},tooltip:{callbacks:{title:(it)=>'Cuota #'+it[0].label,label:(it)=>it.dataset.label+': '+dmFmt(it.parsed.y,d.currency)}}},scales:{x:{stacked:true,ticks:{color:'#9899a6',maxTicksLimit:16}},y:{stacked:true,ticks:{color:'#9899a6'}}}}
+  });
+}
+
+// ── RESUMEN TOTAL DE TODAS LAS DEUDAS MAYORES ─────────
+function dmRenderTotal(){
+  const box=document.getElementById('dm-total-resumen'); if(!box) return;
+  const act=(state.deudasMayores||[]).map(d=>({d,r:getDMResumen(d),pend:dmNoPagadas(d)})).filter(x=>x.pend.length&&x.r.saldoPendiente>0.005);
+  if(act.length<2&&!(act.length===1)){ box.innerHTML=''; return; }
+  const tot={PEN:{s:0,c:0,i:0},USD:{s:0,c:0,i:0}}; let libre='';
+  act.forEach(({d,r,pend})=>{
+    const k=d.currency==='USD'?'USD':'PEN';
+    tot[k].s+=r.saldoPendiente; tot[k].c+=pend[0].monto; tot[k].i+=pend.reduce((s,c)=>s+(c.interes||0),0);
+    const ult=pend.map(c=>c.fecha).filter(Boolean).sort().pop(); if(ult&&ult>libre) libre=ult;
+  });
+  const fm=(f)=>{ const pen=f('PEN'), usd=f('USD'); return fmtTCMixed(pen,usd); };
+  box.innerHTML=`<div class="dm-summary" style="grid-template-columns:repeat(4,1fr)">
+    <div class="dm-sum-card" style="border-top:2px solid var(--accent)"><div class="dm-sum-label">Debes en total</div><div class="dm-sum-val" style="font-size:14px;color:var(--accent)">${M(fm(k=>tot[k].s))}</div><div style="font-size:10px;color:var(--text3)">${act.length} deuda${act.length===1?'':'s'} activa${act.length===1?'':'s'}</div></div>
+    <div class="dm-sum-card" style="border-top:2px solid var(--amber)"><div class="dm-sum-label">Cuotas de un mes</div><div class="dm-sum-val" style="font-size:14px;color:var(--amber)">${M(fm(k=>tot[k].c))}</div><div style="font-size:10px;color:var(--text3)">próxima cuota de cada deuda</div></div>
+    <div class="dm-sum-card" style="border-top:2px solid var(--red)"><div class="dm-sum-label">Interés por pagar</div><div class="dm-sum-val" style="font-size:14px;color:var(--red)">${M(fm(k=>tot[k].i))}</div><div style="font-size:10px;color:var(--text3)">solo préstamos amortizados</div></div>
+    <div class="dm-sum-card" style="border-top:2px solid var(--green)"><div class="dm-sum-label">Libre de deudas</div><div class="dm-sum-val" style="font-size:14px;color:var(--green)">${dmFechaCorta(libre)}</div><div style="font-size:10px;color:var(--text3)">con el cronograma actual</div></div>
+  </div>`;
 }
 
 
@@ -23151,7 +23447,7 @@ function deudaMayorAlCierre(d,eom,rate){
   const pagadaA=c=>c.pagado&&c.fecha&&c.fecha<=eom;
   let saldo=d.tipo==='fijo'
     ? cs.filter(c=>!pagadaA(c)).reduce((s,c)=>s+(c.monto||0),0)
-    : (d.importe||0)-cs.filter(pagadaA).reduce((s,c)=>s+(c.amort||0),0);
+    : (d.importe||0)-cs.filter(pagadaA).reduce((s,c)=>s+(c.amort||0),0)-(d.amortizaciones||[]).filter(a=>a.fecha&&a.fecha<=eom).reduce((s,a)=>s+(a.monto||0),0);
   if(saldo<0.005) saldo=0;
   return saldo*(d.currency==='USD'?rate:1);
 }
@@ -26771,6 +27067,16 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.81.0",
+  "fecha": "05/11/26",
+  "cambios": [
+   "Deudas Mayores: nuevo botón «Amortizar capital» (reduce el plazo o la cuota, con comparación y ahorro de intereses antes de aplicar, y opción de deshacer).",
+   "Deudas Mayores: «Adelantar cuotas», simulador de pago extra mensual, historial de amortizaciones y gráfico de capital vs. interés por cuota.",
+   "Deudas Mayores: el detalle muestra el capital pendiente, lo que falta por pagar en cuotas, el interés restante y el costo total; arriba de la lista, el resumen de todas tus deudas.",
+   "Deudas Mayores: las cuotas pagadas piden confirmación para desmarcarse y puedes anotar el monto real que cobró el banco (seguros o comisiones)."
+  ]
+ },
+ {
   "v": "v1.80.0",
   "fecha": "05/11/26",
   "cambios": [
@@ -28817,6 +29123,39 @@ if(state.projGoals){
 </div>
 
 <!-- MODAL FORMULARIO: AMORTIZADO -->
+<!-- MODAL AMORTIZAR CAPITAL -->
+<div class="modal-overlay" id="dm-amort-overlay" onclick="if(event.target===this)closeDMAmortModal()">
+  <div class="modal" style="width:520px">
+    <div class="modal-title"><span>💸 Amortizar capital</span><button class="modal-close" onclick="closeDMAmortModal()">✕</button></div>
+    <div id="dmam-info" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
+    <div class="field-row">
+      <div class="field"><label>Monto a amortizar</label><input id="dmam-monto" type="number" step="0.01" min="0" placeholder="5000.00" oninput="dmAmortPreview()"></div>
+      <div class="field"><label>Fecha del pago</label><input id="dmam-fecha" type="date"></div>
+    </div>
+    <div class="field"><label>¿Qué quieres reducir?</label>
+      <select id="dmam-modo" onchange="dmAmortPreview()"><option value="plazo">Reducir el plazo (misma cuota, terminas antes)</option><option value="cuota">Reducir la cuota (mismo plazo, pagas menos cada mes)</option></select>
+    </div>
+    <div id="dmam-preview" style="font-size:12px;line-height:1.55;margin:8px 0"></div>
+    <div style="font-size:10px;color:var(--text3);line-height:1.5">El monto entra directo al capital pendiente. El banco puede cobrar además el interés corrido de los días; confírmalo con tu banco. Se puede deshacer desde el historial.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="closeDMAmortModal()">Cancelar</button>
+      <button class="btn btn-primary" id="dmam-apply" onclick="dmAplicarAmort()">Aplicar amortización</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL ADELANTAR CUOTAS -->
+<div class="modal-overlay" id="dm-adelanto-overlay" onclick="if(event.target===this)closeDMAdelantoModal()">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><span>⏩ Adelantar cuotas</span><button class="modal-close" onclick="closeDMAdelantoModal()">✕</button></div>
+    <div class="field"><label>¿Cuántas cuotas quieres adelantar?</label><input id="dmad-n" type="number" step="1" min="1" oninput="dmAdelantoPreview()"></div>
+    <div id="dmad-preview" style="font-size:12px;line-height:1.55;margin:8px 0"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="closeDMAdelantoModal()">Cancelar</button>
+      <button class="btn btn-primary" id="dmad-apply" onclick="dmAplicarAdelanto()">Adelantar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="dm-form-amort-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeDMFormModal')">
   <div class="modal" style="width:460px">
     <div class="modal-title"><span>🏦 Deuda Mayor — Amortizado</span><button class="modal-close" onclick="closeDMFormModal()">✕</button></div>
