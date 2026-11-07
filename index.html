@@ -4167,9 +4167,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.92.0';
-const APP_VERSION_DATE = '07/11/26 - 14:34'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: la compra y la venta de dólares ya no cuentan como gasto (son cambio de moneda); se evita contar dos veces el mismo dinero. Aplica a la lista, los totales y la tabla «Por categoría y mes».';
+const APP_VERSION = 'v1.93.0';
+const APP_VERSION_DATE = '07/11/26 - 14:53'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'La compra y venta de dólares ya no cuenta en el monto recomendado, el gasto por categoría, los presupuestos y alertas, los insights ni en las respuestas del asistente con IA.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6511,7 +6511,7 @@ function gsSegmentos(){
 // Recomendado = presupuesto − lo ya gastado − pagos programados que faltan, sin pasar de tu saldo disponible.
 function gsRecomendado(dp){
   const hoy=new Date(), y=hoy.getFullYear(), m=hoy.getMonth(), D=new Date(y,m+1,0).getDate(), d=hoy.getDate(), mk=tcMonthKey(y,m);
-  const incPen=arr=>arr.filter(x=>x.type==='income'&&!esTransferenciaInterna(x)).reduce((s,x)=>s+gsPen(x.amount,x.currency||'PEN'),0);
+  const incPen=arr=>arr.filter(x=>x.type==='income'&&!esTransferenciaInterna(x)&&!esCambioMoneda(x)).reduce((s,x)=>s+gsPen(x.amount,x.currency||'PEN'),0);
   const hist=[];
   for(let i=1;i<=3;i++){ const dt=new Date(y,m-i,1), yy=dt.getFullYear(), mm=dt.getMonth();
     const ing=incPen(getMovs(yy,mm)), gas=gsItems(yy,mm).reduce((s,x)=>s+x.pen,0);
@@ -9622,7 +9622,7 @@ function chartOpts(cb){
 }
 // Helper: totales de gasto por categoría de un mes dado (cuentas + tarjetas de crédito)
 function catTotalsForMonth(y,m){
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv));
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv));
   const tcMovs=getCategorizedTCMovsForMonth(y,m);
   const totals={};
   movs.forEach(mv=>{const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount;totals[mv.cat]=(totals[mv.cat]||0)+amt;});
@@ -9748,7 +9748,7 @@ function renderChart(){
     document.getElementById('chart-legend').innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:${col};display:inline-block"></span>${lbl}</span>`;
   } else if(currentChartTab===5){
     // Categorías — donut del mes actual (movimientos de cuenta + consumos de tarjeta)
-    const movs=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense'&&m.cat&&!esTransferenciaInterna(m));
+    const movs=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense'&&m.cat&&!esTransferenciaInterna(m)&&!esCambioMoneda(m));
     const tcMovsThisMonth=getCategorizedTCMovsForMonth(state.currentYear,state.currentMonth);
     const allColors=getAllCategorias();
     const catTotals={};
@@ -9788,7 +9788,7 @@ function renderChart(){
     }
     // Totales por categoría en cada mes, y un total general para elegir las top categorías
     const porMes=meses.map(({y,m})=>{
-      const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv));
+      const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv));
       const tcMovs=getCategorizedTCMovsForMonth(y,m);
       const tot={};
       movs.forEach(mv=>{ const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount; tot[mv.cat]=(tot[mv.cat]||0)+amt; });
@@ -11600,7 +11600,7 @@ function getMonthProjection(spent,y,m,futuro){
 // revisar si está todo correcto o falta incluir algo.
 function openCategoryDetailModal(cat){
   const y=state.currentYear, m=state.currentMonth;
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat===cat&&!esTransferenciaInterna(mv));
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat===cat&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv));
   const tcMovs=getCategorizedTCMovsForMonth(y,m).filter(mv=>mv.cat===cat);
 
   const items=[
@@ -11660,7 +11660,7 @@ function renderPresupuesto(){
   const empty=document.getElementById('budget-empty');
   const spendListEl=document.getElementById('cat-spend-list');
   const y=state.currentYear, m=state.currentMonth;
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv));
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv));
   const tcMovsThisMonth=getCategorizedTCMovsForMonth(y,m);
   const allColors=getAllCategorias();
 
@@ -12696,7 +12696,7 @@ function generarReportePDF(){
 
 // Categoriza los gastos (movimientos + consumos de tarjeta) de un mes, en soles.
 function gastoPorCategoria(y,m){
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv));
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&mv.cat&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv));
   const tcMovs=getCategorizedTCMovsForMonth(y,m);
   const cat={};
   movs.forEach(mv=>{ const amt=mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount; cat[mv.cat]=(cat[mv.cat]||0)+amt; });
@@ -15780,7 +15780,7 @@ function renderTodoPendiente(){
 // en un widget del Dashboard sin duplicar la lógica de cálculo.
 function obtenerAlertasPresupuesto(umbralPct=70){
   const y=state.currentYear, m=state.currentMonth;
-  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv));
+  const movs=getMovs(y,m).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv));
   const tcMovsThisMonth=getCategorizedTCMovsForMonth(y,m);
   const totals={};
   movs.forEach(mv=>{
@@ -27479,6 +27479,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.93.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "La compra y venta de dólares ya no cuenta en el monto recomendado, el gasto por categoría, los presupuestos y alertas, los insights ni en las respuestas del asistente con IA."
+  ]
+ },
+ {
   "v": "v1.92.0",
   "fecha": "07/11/26",
   "cambios": [
@@ -28604,7 +28611,7 @@ function construirContextoParaIA(){
     try{
       const hoyBud = new Date();
       const yBud=hoyBud.getFullYear(), mBud=hoyBud.getMonth();
-      const movsBud = (typeof getMovs==='function') ? getMovs(yBud,mBud).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv)) : [];
+      const movsBud = (typeof getMovs==='function') ? getMovs(yBud,mBud).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv)) : [];
       const tcMovsBud = (typeof getCategorizedTCMovsForMonth==='function') ? getCategorizedTCMovsForMonth(yBud,mBud) : [];
       resumenRapido.presupuestosEstado = Object.keys(state.budgets||{}).map(cat=>{
         const b = state.budgets[cat];
@@ -28816,7 +28823,7 @@ function calcularTotalesPorDescripcionRepetida(datosFiltrados){
       grupos[key].ocurrencias.push({ fecha, monto, currency: currency||'PEN', fuente });
     };
     (datosFiltrados.movimientos||[]).forEach(mv=>{
-      if(mv.type==='expense' && !esTransferenciaInterna(mv)) agregar(mv.desc, mv.amount, mv.currency, mv.date, 'movimiento de cuenta');
+      if(mv.type==='expense' && !esTransferenciaInterna(mv) && !esCambioMoneda(mv)) agregar(mv.desc, mv.amount, mv.currency, mv.date, 'movimiento de cuenta');
     });
     (datosFiltrados.tarjetas||[]).forEach(t=>{
       Object.values(t.movs||{}).forEach(arr=>{
@@ -28892,7 +28899,7 @@ function calcularCoincidenciasPorPalabrasDelMensaje(datosFiltrados, texto){
     palabras.forEach(palabra=>{
       const items=[];
       (datosFiltrados.movimientos||[]).forEach(mv=>{
-        if(mv.type==='expense' && !esTransferenciaInterna(mv) && normalizarBusqueda(mv.desc||'').includes(palabra)){
+        if(mv.type==='expense' && !esTransferenciaInterna(mv) && !esCambioMoneda(mv) && normalizarBusqueda(mv.desc||'').includes(palabra)){
           items.push({ descripcionOriginal:mv.desc, fecha:mv.date, monto:mv.amount, currency:mv.currency||'PEN', fuente:'movimiento de cuenta' });
         }
       });
@@ -29218,7 +29225,7 @@ function insPresupuestos(y,m){
   return Object.entries(state.budgets||{}).map(([cat,b])=>{ const limit=b.limit||0, spent=tot[cat]||0;
     return {cat,limit,spent,pct:limit>0?spent/limit*100:0,proy:esAct&&d>0?spent/d*D:null,diasRest:esAct?Math.max(1,D-d+1):0,esAct}; }).filter(x=>x.limit>0);
 }
-function insMesCu(y,m,cu){ let ing=0,gas=0,n=0; getMovs(y,m).forEach(mv=>{ if(esTransferenciaInterna(mv)||insCu(mv.currency)!==cu) return; n++; if(mv.type==='income') ing+=mv.amount; else if(mv.type==='expense') gas+=mv.amount; }); return {ing,gas,bal:ing-gas,n}; }
+function insMesCu(y,m,cu){ let ing=0,gas=0,n=0; getMovs(y,m).forEach(mv=>{ if(esTransferenciaInterna(mv)||esCambioMoneda(mv)||insCu(mv.currency)!==cu) return; n++; if(mv.type==='income') ing+=mv.amount; else if(mv.type==='expense') gas+=mv.amount; }); return {ing,gas,bal:ing-gas,n}; }
 const insSg=(v,cu)=>M((v<-0.004?'-':'')+(cu==='USD'?fmtD(Math.abs(v)):fmtS(Math.abs(v))));
 
 function insDash(){
