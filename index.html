@@ -104,9 +104,9 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 #login-screen.hidden{opacity:0;pointer-events:none;}
 #face-lock{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:10000;text-align:center;padding:24px;}
 #face-lock .fl-ico{font-size:54px;line-height:1;}
-#face-lock .fl-ver{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5;}
-#face-lock .fl-ver b{font-weight:600;color:var(--text2);}
-#face-lock .fl-ver .ok{color:#34c06e;}#face-lock .fl-ver .nw{color:var(--amber,#e0a63a);font-weight:600;cursor:pointer;text-decoration:underline;}
+#face-lock .fl-ver,#login-screen .fl-ver{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5;}
+#face-lock .fl-ver b,#login-screen .fl-ver b{font-weight:600;color:var(--text2);}
+#face-lock .fl-ver .ok,#login-screen .fl-ver .ok{color:#34c06e;}#face-lock .fl-ver .nw,#login-screen .fl-ver .nw{color:var(--amber,#e0a63a);font-weight:600;cursor:pointer;text-decoration:underline;}
 #face-lock .fl-sub{font-size:12px;color:var(--text3);}
 #face-lock .fl-out{background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;text-decoration:underline;cursor:pointer;margin-top:6px;}
 #face-lock .fl-av{width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#34a896);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.06);font-family:var(--mono);}
@@ -1405,7 +1405,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="login-field"><label>Contraseña</label><input id="login-pass" type="password" name="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="login-btn" onclick="doLogin()">Ingresar</button>
     <div class="login-err" id="login-err">Correo o contraseña incorrectos.</div>
-    <div id="app-version-label" style="text-align:center;font-size:10px;color:var(--text3);margin-top:18px;letter-spacing:.3px"></div>
+    <div id="app-version-label" class="fl-ver" aria-live="polite" style="text-align:center;font-size:10px;color:var(--text3);margin-top:18px;letter-spacing:.3px"></div>
   </div>
 </div>
 
@@ -4171,9 +4171,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.94.0';
-const APP_VERSION_DATE = '07/11/26 - 15:10'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pantalla de bloqueo (PIN): ahora muestra la versión de la app y si es la última publicada o hay una nueva para actualizar.';
+const APP_VERSION = 'v1.95.0';
+const APP_VERSION_DATE = '07/11/26 - 15:33'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pantalla de inicio con correo y contraseña: también muestra si estás en la última versión o hay una nueva para actualizar.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -13768,8 +13768,8 @@ async function toggleFaceId(){
 }
 
 // Versión en la pantalla de bloqueo: muestra cuál es y si ya es la última publicada
-async function flVerEstado(){
-  const el=document.getElementById('fl-ver'); if(!el) return;
+async function flVerEstado(id){
+  const el=document.getElementById(id||'fl-ver'); if(!el) return;
   const base='<b>'+escapeHtml(APP_VERSION)+'</b> · '+escapeHtml(APP_VERSION_DATE);
   el.innerHTML=base;
   if(!/^https?:$/.test(location.protocol)) return;
@@ -27506,6 +27506,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v1.95.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Pantalla de inicio con correo y contraseña: también muestra si estás en la última versión o hay una nueva para actualizar."
+  ]
+ },
+ {
   "v": "v1.94.0",
   "fecha": "07/11/26",
   "cambios": [
@@ -28098,6 +28105,7 @@ window.addEventListener('beforeunload', ()=>actualizarUltimaActividadSesion(true
 (function(){
   const el = document.getElementById('app-version-label');
   if(el) el.textContent = 'Versión '+APP_VERSION_DATE;
+  try{ flVerEstado('app-version-label'); }catch(e){}
 })();
 
 // Init Firebase then load state
