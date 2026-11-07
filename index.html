@@ -4171,9 +4171,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.95.0';
-const APP_VERSION_DATE = '07/11/26 - 15:33'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pantalla de inicio con correo y contraseña: también muestra si estás en la última versión o hay una nueva para actualizar.';
+const APP_VERSION = 'v1.98.0';
+const APP_VERSION_DATE = '07/11/26 - 16:27'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Resumen: 10 widgets nuevos (Gastos del mes, Gasto por categoría, Gastos por mes, Próximos pagos e ingresos, Compras en camino, Aprobaciones pendientes, Dólares comprados, Ahorros e intereses, Racha de registro y Evolución de la deuda). Se activan en ✏️ Editar → Mi Resumen.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6669,7 +6669,8 @@ function gsRenderMatriz(){
 // Detalle de los movimientos que forman un monto de la tabla «Por categoría y mes»
 function gsMxCerrar(){ const m=document.getElementById('gs-mx-modal'); if(m) m.classList.remove('open'); document.removeEventListener('keydown',gsMxEsc); }
 function gsMxEsc(e){ if(e.key==='Escape') gsMxCerrar(); }
-function gsMxDet(fi,j){
+function gsMxDet(fi,j,cur){
+  cur=cur||'';
   const D=window._gsMxD; if(!D) return;
   const fila=fi>=0?D.filas[fi]:null;
   const mesesSel=j>=0?[j]:D.meses.map((_,k)=>k);
@@ -6677,7 +6678,7 @@ function gsMxDet(fi,j){
   const por=new Map(); // clave de grupo -> {titulo, items}
   let todos=[];
   mesesSel.forEach(k=>{ const [yy,mm]=D.meses[k];
-    gsItems(yy,mm).forEach(i=>{ const c=i.cat||'Sin categoría'; if(fila&&c!==fila.c) return; todos.push(i);
+    gsItems(yy,mm).forEach(i=>{ const c=i.cat||'Sin categoría'; if(fila&&c!==fila.c) return; if(cur&&i.cur!==cur) return; todos.push(i);
       const agrupaMes=(fi>=0&&j<0)||(fi<0&&j<0); const key=agrupaMes?(yy*100+mm):c; const tit=agrupaMes?(MONTHS[mm]+' '+yy):c;
       if(!por.has(key)) por.set(key,{titulo:tit,items:[],orden:agrupaMes?-(yy*100+mm):0}); por.get(key).items.push(i); }); });
   const grupos=[...por.values()].sort((a,b)=>a.orden-b.orden||(gsSum(b.items).pen+gsSum(b.items).usd*gsRate())-(gsSum(a.items).pen+gsSum(a.items).usd*gsRate()));
@@ -6690,9 +6691,10 @@ function gsMxDet(fi,j){
     return (mostrarTitulos?`<div class="gs-mxd-g"><span>${escapeHtml(g.titulo)} · ${g.items.length}</span><b>${M(gsMix(t.pen,t.usd))}</b></div>`:'')+g.items.map(fila_).join(''); }).join('');
   const t=gsSum(todos);
   const titulo=(fila?`<span class="gs-mx-dot" style="background:${gsCatColor(fila.c)}"></span>${escapeHtml(fila.c)}`:'Todas las categorías')+' · '+(j>=0?MONTHS[D.meses[j][1]]+' '+D.meses[j][0]:'periodo seleccionado');
+  const segMon=`<div class="gs-seg" style="margin-top:12px;display:inline-flex" role="group" aria-label="Filtrar por moneda">${[['','Todas'],['PEN','S/ Soles'],['USD','$ Dólares']].map(([v,l])=>`<button type="button" class="${cur===v?'on':''}" onclick="gsMxDet(${fi},${j},'${v}')">${l}</button>`).join('')}</div>`;
   let m=document.getElementById('gs-mx-modal');
   if(!m){ m=document.createElement('div'); m.id='gs-mx-modal'; m.className='modal-overlay'; m.onclick=e=>{ if(e.target===m) gsMxCerrar(); }; document.body.appendChild(m); }
-  m.innerHTML=`<div class="modal gs-mxd" role="dialog" aria-modal="true" aria-label="Detalle de movimientos"><div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:15px;font-weight:700">${titulo}</div><div style="font-size:12px;color:var(--text3);margin-top:3px">${todos.length} movimiento${todos.length===1?'':'s'} · total <b style="color:var(--text)">${M(gsMix(t.pen,t.usd))}</b></div></div><button class="btn" style="padding:4px 10px" onclick="gsMxCerrar()" aria-label="Cerrar">✕</button></div><div class="gs-mxd-l">${cuerpo||'<div class="empty">Sin movimientos.</div>'}</div></div>`;
+  m.innerHTML=`<div class="modal gs-mxd" role="dialog" aria-modal="true" aria-label="Detalle de movimientos"><div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:15px;font-weight:700">${titulo}</div><div style="font-size:12px;color:var(--text3);margin-top:3px">${todos.length} movimiento${todos.length===1?'':'s'} · total <b style="color:var(--text)">${M(gsMix(t.pen,t.usd))}</b></div></div><button class="btn" style="padding:4px 10px" onclick="gsMxCerrar()" aria-label="Cerrar">✕</button></div>${segMon}<div class="gs-mxd-l">${cuerpo||'<div class="empty">Sin movimientos'+(cur==='USD'?' en dólares':cur==='PEN'?' en soles':'')+'.</div>'}</div></div>`;
   m.classList.add('open'); document.addEventListener('keydown',gsMxEsc);
 }
 function gsMxExportar(){
@@ -10909,8 +10911,23 @@ document.addEventListener('keydown',e=>{
   if(e.key!=='Escape') return;
   const abiertos=[...document.querySelectorAll('.modal-overlay.open')]; if(!abiertos.length) return;
   const ov=abiertos[abiertos.length-1];
+  try{ if(_modalIsDirty(ov) && !confirm('¿Seguro que quieres salir? Tienes cambios sin guardar.')) return; }catch(err){}
   const btn=ov.querySelector('.modal-close'); if(btn){ btn.click(); } else { ov.classList.remove('open'); }
 });
+// Los cuadros (modales) no se cierran por accidente: si empiezas a seleccionar texto dentro y sueltas el mouse
+// fuera, el clic ya no cuenta como «clic en el fondo»; y si hay cambios sin guardar, el fondo pide confirmación.
+let _ovDownDentro=false;
+const _ovDown=e=>{ const t=e.target; const ov=(t&&t.closest)?t.closest('.modal-overlay'):null; _ovDownDentro=!!(ov&&t!==ov); };
+document.addEventListener('mousedown',_ovDown,true);
+document.addEventListener('touchstart',_ovDown,{capture:true,passive:true});
+document.addEventListener('click',e=>{
+  const t=e.target;
+  if(!t||!t.classList||!t.classList.contains('modal-overlay')){ _ovDownDentro=false; return; }
+  if(_ovDownDentro){ _ovDownDentro=false; e.stopImmediatePropagation(); e.preventDefault(); return; }
+  if(!/confirmAndClose/.test(t.getAttribute('onclick')||'')){
+    try{ if(_modalIsDirty(t) && !confirm('¿Seguro que quieres salir? Tienes cambios sin guardar.')){ e.stopImmediatePropagation(); e.preventDefault(); } }catch(err){}
+  }
+},true);
 // Retrasa una función hasta que pasen `ms` sin nuevas llamadas (para campos que redibujan listas o gráficos por tecla).
 function _debounce(fn,ms){ let t=null; return function(...a){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a),ms); }; }
 const renderMovimientosDebounced=_debounce(()=>renderMovimientos(),150);
@@ -17852,6 +17869,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
   {id:'alertas-presupuesto', visible:false},
+  {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -18380,9 +18398,162 @@ function renderDashDebts(){
   renderFechasImportantes();
 
   renderNuevosWidgetsDashboard();
+  renderWidgetsExtra();
 }
 // Llena los 10 widgets NUEVOS (solo si su contenedor existe, es decir, si
 // la persona los activó) — cada uno resume su sección y lleva directo ahí.
+
+// ══ WIDGETS NUEVOS DEL RESUMEN (se activan en ✏️ Editar → Mi Resumen) ══
+function wxShell(id,titulo,accion,btn){
+  return `<div class="card" style="padding:18px" id="${id}-card"><div class="dash-section-title">${titulo}</div><div id="${id}-body"><div class="dash-empty">Cargando...</div></div>${accion?`<div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="${accion}">${btn}</button></div>`:''}</div>`;
+}
+function wxFila(izq,der,col){ return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--border)"><span style="min-width:0">${izq}</span><b style="font-family:var(--mono);white-space:nowrap;${col?'color:'+col:''}">${der}</b></div>`; }
+function wxBarra(pct,col){ return `<div style="height:6px;background:var(--bg4);border-radius:3px;overflow:hidden"><div style="height:6px;width:${Math.max(0,Math.min(100,pct))}%;background:${col};border-radius:3px"></div></div>`; }
+function wxVacio(msg,ic){ return `<div class="dash-empty"><div class="dash-empty-icon">${ic||'📭'}</div>${msg}</div>`; }
+function wxIso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+Object.assign(DASHBOARD_WIDGET_DEFS,{
+  'wx-gastos-mes':{label:'💸 Gastos del mes',size:'medium',shell:()=>wxShell('wx-gastos-mes','💸 Gastos del mes',"showPage('gastos')",'Abrir Gastos →')},
+  'wx-gasto-categoria':{label:'🏷️ Gasto por categoría',size:'medium',shell:()=>wxShell('wx-gasto-categoria','🏷️ Gasto por categoría',"showPage('gastos')",'Ver Gastos →')},
+  'wx-gastos-por-mes':{label:'📊 Gastos por mes',size:'medium',shell:()=>wxShell('wx-gastos-por-mes','📊 Gastos por mes',"showPage('gastos');setTimeout(()=>{const e=document.getElementById('gs-matriz');if(e)e.scrollIntoView({behavior:'smooth'})},200)",'Abrir tabla por categoría y mes →')},
+  'wx-proximos-pagos':{label:'🔁 Próximos pagos e ingresos',size:'medium',shell:()=>wxShell('wx-proximos-pagos','🔁 Próximos pagos e ingresos',"showPage('deudas')",'Abrir pagos frecuentes →')},
+  'wx-compras-camino':{label:'🛒 Compras en camino',size:'medium',shell:()=>wxShell('wx-compras-camino','🛒 Compras en camino',"showPage('compras')",'Abrir Lista de Compras →')},
+  'wx-aprobaciones':{label:'🔔 Aprobaciones pendientes',size:'small',shell:()=>wxShell('wx-aprobaciones','🔔 Aprobaciones pendientes',"showPage('aprobaciones')",'Aprobar ahora →')},
+  'wx-dolares':{label:'💱 Dólares comprados',size:'small',shell:()=>wxShell('wx-dolares','💱 Dólares comprados',"showPage('tc-tracker')",'Abrir operaciones →')},
+  'wx-ahorros':{label:'🏦 Ahorros e intereses',size:'small',shell:()=>wxShell('wx-ahorros','🏦 Ahorros e intereses',"showPage('ahorros-intereses')",'Abrir ahorros →')},
+  'wx-racha':{label:'🔥 Racha de registro',size:'small',shell:()=>wxShell('wx-racha','🔥 Racha de registro',"openModal()",'Registrar un movimiento →')},
+  'wx-deuda-evolucion':{label:'📉 Evolución de la deuda',size:'medium',shell:()=>wxShell('wx-deuda-evolucion','📉 Evolución de la deuda',"showPage('deudas')",'Abrir deudas →')},
+});
+function renderWidgetsExtra(){
+  [wxGastosMes,wxGastoCategoria,wxGastosPorMes,wxProximosPagos,wxComprasCamino,wxAprobaciones,wxDolares,wxAhorros,wxRacha,wxDeudaEvolucion].forEach(f=>{ try{ f(); }catch(e){ console.warn('Widget omitido por error ('+f.name+'):',e&&e.message); } });
+}
+function wxGastosMes(){
+  const el=document.getElementById('wx-gastos-mes-body'); if(!el) return;
+  const h=new Date(), y=h.getFullYear(), m=h.getMonth();
+  const items=gsItems(y,m), s=gsSum(items), eq=items.reduce((a,i)=>a+i.pen,0), dias=h.getDate();
+  let R=null; try{ R=gsRecomendado(gsDisponible()); }catch(e){}
+  let html=`<div style="font-size:11px;color:var(--text3)">${MONTHS[m]} ${y} · ${items.length} movimiento${items.length===1?'':'s'}</div><div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--red);margin:4px 0 8px">${M(gsMix(s.pen,s.usd))}</div>`;
+  if(R&&R.presupuesto>0){ const pct=eq/R.presupuesto*100; const col=pct>=100?'var(--red)':pct>=80?'var(--amber)':'var(--accent)';
+    html+=wxBarra(pct,col)+`<div style="font-size:11px;color:var(--text3);margin:4px 0 8px">${Math.round(pct)}% del presupuesto del mes (${M(fmtS(R.presupuesto))})</div>`; }
+  if(R) html+=wxFila('⭐ Recomendado hoy',M(fmtS(R.recomendado)),'var(--green)');
+  html+=wxFila('Promedio diario',M(gsMix(s.pen/dias,s.usd/dias)));
+  if(R){ let est='';
+    if(R.recomendado<=0.004) est='<span style="color:var(--red)">Ya alcanzaste el presupuesto del mes</span>';
+    else if(R.capado) est='<span style="color:var(--amber)">Limitado por tu saldo disponible</span>';
+    else if(R.cierre!==null) est=R.cierre<=R.presupuesto?'<span style="color:var(--green)">Vas dentro del presupuesto</span>':'<span style="color:var(--amber)">A este ritmo cerrarías sobre el presupuesto</span>';
+    if(est) html+=`<div style="font-size:11px;margin-top:8px">${est}</div>`; }
+  el.innerHTML=html;
+}
+function wxGastoCategoria(){
+  const el=document.getElementById('wx-gasto-categoria-body'); if(!el) return;
+  const h=new Date(), items=gsItems(h.getFullYear(),h.getMonth());
+  if(!items.length){ el.innerHTML=wxVacio('Sin gastos este mes.','🏷️'); return; }
+  const mp=new Map(); items.forEach(i=>{ const c=i.cat||'Sin categoría'; const o=mp.get(c)||{p:0,u:0,e:0}; if(i.cur==='USD') o.u+=i.amount; else o.p+=i.amount; o.e+=i.pen; mp.set(c,o); });
+  const top=[...mp.entries()].sort((a,b)=>b[1].e-a[1].e).slice(0,5), mx=top[0][1].e||1;
+  el.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${MONTHS[h.getMonth()]} · top ${top.length}</div>`+top.map(([c,o])=>`<div style="padding:5px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:12px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c)}</span><b style="font-family:var(--mono);white-space:nowrap">${M(gsMix(o.p,o.u))}</b></div><div style="margin-top:4px">${wxBarra(o.e/mx*100,gsCatColor(c))}</div></div>`).join('');
+}
+function wxGastosPorMes(){
+  const el=document.getElementById('wx-gastos-por-mes-body'); if(!el) return;
+  const h=new Date(), filas=[];
+  for(let i=5;i>=0;i--){ const d=new Date(h.getFullYear(),h.getMonth()-i,1), it=gsItems(d.getFullYear(),d.getMonth()), s=gsSum(it); filas.push({m:d.getMonth(),p:s.pen,u:s.usd,e:it.reduce((a,x)=>a+x.pen,0),act:i===0}); }
+  const mx=Math.max(...filas.map(f=>f.e),1), cer=filas.filter(f=>!f.act&&f.e>0);
+  if(!filas.some(f=>f.e>0)){ el.innerHTML=wxVacio('Sin gastos registrados.','📊'); return; }
+  const prom=cer.length?gsMix(cer.reduce((a,f)=>a+f.p,0)/cer.length,cer.reduce((a,f)=>a+f.u,0)/cer.length):'—';
+  let vr='';
+  if(cer.length>=2){ const a=cer[cer.length-1].e, b=cer[cer.length-2].e; if(b>0){ const pc=Math.round((a-b)/b*100); vr=`<div style="font-size:11px;color:var(--text3)">${GS_MES[cer[cer.length-1].m]} vs ${GS_MES[cer[cer.length-2].m]}: <b style="color:${pc>0?'var(--red)':'var(--green)'}">${pc>0?'▲':'▼'} ${Math.abs(pc)}%</b></div>`; } }
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:8px"><div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Promedio meses cerrados</div><div style="font-family:var(--mono);font-size:15px;font-weight:600">${M(prom)}</div></div>${vr}</div>`
+   +`<div style="display:flex;gap:8px;align-items:flex-end;height:120px">${filas.map(f=>`<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%"><span style="font-family:var(--mono);font-size:10px;color:var(--text2);white-space:nowrap">${M(f.e>0?Math.round(f.p).toLocaleString('en-US'):'—')}${f.u>0.004?'<span style="color:var(--teal)"> +$</span>':''}</span><div style="width:100%;max-width:44px;height:${Math.max(3,Math.round(f.e/mx*70))}px;border-radius:5px 5px 2px 2px;background:var(--accent);opacity:${f.act?.45:1}"></div><span style="font-size:10px;color:var(--text3)">${GS_MES[f.m]}</span></div>`).join('')}</div><div style="font-size:10px;color:var(--text3);margin-top:6px">Soles; «+$» indica gasto también en dólares. El mes en curso va más claro.</div>`;
+}
+function wxProximosPagos(){
+  const el=document.getElementById('wx-proximos-pagos-body'); if(!el) return;
+  const hoy=new Date(); hoy.setHours(12,0,0,0); const hoyIso=wxIso(hoy), lim=new Date(hoy); lim.setDate(lim.getDate()+7); const limIso=wxIso(lim);
+  const lista=[];
+  [new Date(hoy.getFullYear(),hoy.getMonth(),1),new Date(hoy.getFullYear(),hoy.getMonth()+1,1)].forEach(d=>{
+    getOcurrenciasFrecuentesMes(d.getFullYear(),d.getMonth()).forEach(o=>{
+      if(o.fecha<hoyIso||o.fecha>limIso||o.event.hecho) return;
+      const mm=/^auto-pf-(.*)-\d{4}-\d{2}$/.exec(o.event.id||''); const pf=mm?(state.pagosFrecuentes||[]).find(x=>String(x.id)===mm[1]):null;
+      let monto=null, cur=(pf&&pf.currency)||'PEN';
+      if(pf){ if(!pf.tipoMonto||pf.tipoMonto==='fijo') monto=Number(pf.montoFijo)||null; else { try{ monto=ultimoMontoRegistradoPF(pf,d.getFullYear(),d.getMonth()); }catch(e){} } }
+      lista.push({fecha:o.fecha,nombre:o.event.titulo,ing:o.event.tipo==='pf_ingreso',monto,cur});
+    });
+  });
+  if(!lista.length){ el.innerHTML=wxVacio('Nada programado en los próximos 7 días.','🔁'); return; }
+  lista.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const dias=['dom','lun','mar','mié','jue','vie','sáb'];
+  el.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Próximos 7 días</div>`+lista.slice(0,5).map(x=>{ const d=new Date(x.fecha+'T12:00:00'); const dif=Math.round((d-hoy)/86400000);
+    const cuando=dif<=0?'Hoy':dif===1?'Mañana':dias[d.getDay()]+' '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+    const txt=x.monto?(x.ing?'+ ':'− ')+gsFmt(x.monto,x.cur):'monto variable';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--border)"><span style="width:64px;color:var(--text3);flex:none">${cuando}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nombre)}</span><b style="font-family:var(--mono);white-space:nowrap;color:${x.monto?(x.ing?'var(--green)':'var(--red)'):'var(--text3)'}">${M(txt)}</b></div>`; }).join('')+(lista.length>5?`<div style="font-size:11px;color:var(--text3);text-align:center;padding-top:6px">+ ${lista.length-5} más</div>`:'');
+}
+function wxComprasCamino(){
+  const el=document.getElementById('wx-compras-camino-body'); if(!el) return;
+  const items=state.listaCompras||[], cam=items.filter(x=>x.estado==='comprado'&&!x.fechaLlegada), des=items.filter(x=>x.estado==='deseado').length;
+  if(!cam.length){ el.innerHTML=wxVacio('No tienes compras en camino.','🛒')+(des?`<div style="font-size:11px;color:var(--text3);text-align:center">${des} deseado${des===1?'':'s'} en tu lista</div>`:''); return; }
+  const hoy=new Date(); hoy.setHours(12,0,0,0);
+  const dias=x=>{ if(!x.fechaComprado) return null; const d=new Date(String(x.fechaComprado).slice(0,10)+'T12:00:00'); return isNaN(d)?null:Math.max(0,Math.round((hoy-d)/86400000)); };
+  cam.sort((a,b)=>String(a.fechaComprado||'').localeCompare(String(b.fechaComprado||'')));
+  el.innerHTML=`<div style="font-size:11px;color:var(--text3);margin-bottom:4px">${cam.length} en camino${des?' · '+des+' deseado'+(des===1?'':'s')+' en tu lista':''}</div>`+cam.slice(0,4).map(x=>{ const n=dias(x); const col=n!==null&&n>=14?'var(--amber)':'var(--text2)';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📦 ${escapeHtml(x.nombre||'Compra')}</span><span style="color:${col};white-space:nowrap;font-size:11px">${n===null?'—':n===0?'comprado hoy':'hace '+n+' día'+(n===1?'':'s')}</span></div>`; }).join('')+(cam.length>4?`<div style="font-size:11px;color:var(--text3);text-align:center;padding-top:6px">+ ${cam.length-4} más</div>`:'');
+}
+function wxAprobaciones(){
+  const el=document.getElementById('wx-aprobaciones-body'); if(!el) return;
+  const lst=(typeof pendientesBanco!=='undefined'&&Array.isArray(pendientesBanco))?pendientesBanco:[];
+  if(!lst.length){ el.innerHTML=wxVacio('Nada por aprobar.','✅'); return; }
+  const rec=lst.slice().sort((a,b)=>((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||''))).slice(0,2);
+  el.innerHTML=`<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--mono);font-size:26px;font-weight:600;color:var(--amber)">${lst.length}</span><span style="font-size:12px;color:var(--text3)">por revisar</span></div>`+rec.map(p=>{
+    const txt=p.noReconocido?'No reconocido':(p.descripcion||p.tipoLabel||'Movimiento'); const monto=p.monto?gsFmt(Number(p.monto)||0,p.moneda==='USD'?'USD':'PEN'):'';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--border)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(txt)}<br><span style="font-size:10px;color:var(--text3)">${escapeHtml(p.banco||'')}</span></span><b style="font-family:var(--mono);white-space:nowrap">${M(monto)}</b></div>`; }).join('');
+}
+function wxDolares(){
+  const el=document.getElementById('wx-dolares-body'); if(!el) return;
+  const ops=(state.tcOperaciones||[]).filter(o=>!o.fechaVenta&&Number(o.montoDolaresCompra)>0);
+  if(!ops.length){ el.innerHTML=wxVacio('No tienes dólares comprados pendientes de vender.','💱'); return; }
+  const usd=ops.reduce((a,o)=>a+Number(o.montoDolaresCompra),0), pen=ops.reduce((a,o)=>a+(Number(o.montoSolesCompra)||0),0);
+  const tcProm=pen/usd, tcHoy=(state.tc&&(state.tc.compra||state.tc.venta))||0, gan=usd*tcHoy-pen;
+  el.innerHTML=`<div style="font-size:11px;color:var(--text3)">Compras abiertas (${ops.length})</div><div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--teal);margin:4px 0 6px">${M(fmtD(usd))}</div>`
+   +wxFila('TC promedio de compra',tcProm.toFixed(3))+(tcHoy?wxFila('TC al que te compran hoy',tcHoy.toFixed(3))+wxFila('Si vendes hoy',M((gan>=0?'+ ':'− ')+fmtS(Math.abs(gan))),gan>=0?'var(--green)':'var(--red)'):'');
+}
+function wxAhorros(){
+  const el=document.getElementById('wx-ahorros-body'); if(!el) return;
+  const h=new Date(), y=h.getFullYear(), m=h.getMonth(), saldos=reconstructSaldoAt(y,m)||{};
+  const cuentas=getTodasCuentasAhorro().filter(c=>cuentaAhorroVisible(c,saldos[c]||0));
+  if(!cuentas.length){ el.innerHTML=wxVacio('Sin cuentas de ahorro.','🏦'); return; }
+  let ip=0, iu=0, hay=false;
+  const filas=cuentas.map(c=>{ const cur=monedaDeCuentaAhorro(c), trea=getTREAEnMes(c,y,m); let it=null;
+    try{ const r=getAhiMetodo(c)==='mensual'?calcularInteresMensualPromedioMes(c,y,m):calcularInteresDiarioMes(c,y,m); it=r.interes; }catch(e){}
+    if(it!==null&&it!==undefined){ hay=true; if(cur==='USD') iu+=it; else ip+=it; }
+    return {c,cur,trea,saldo:saldos[c]||0}; });
+  el.innerHTML=`<div style="font-size:11px;color:var(--text3)">Interés estimado de ${MONTHS[m]}</div><div style="font-family:var(--mono);font-size:22px;font-weight:600;color:var(--green);margin:4px 0 6px">${hay?M('≈ '+gsMix(ip,iu)):'—'}</div>`
+   +filas.slice(0,3).map(f=>wxFila(escapeHtml(f.c)+(f.trea?` <span style="color:var(--text3)">· ${f.trea.toFixed(2)}%</span>`:''),M(gsFmt(f.saldo,f.cur)))).join('')+(filas.length>3?`<div style="font-size:11px;color:var(--text3);text-align:center;padding-top:6px">+ ${filas.length-3} cuenta${filas.length-3===1?'':'s'} más</div>`:'');
+}
+function wxRacha(){
+  const el=document.getElementById('wx-racha-body'); if(!el) return;
+  const f=new Set();
+  (state.movimientos||[]).forEach(x=>{ if(x.date) f.add(String(x.date).slice(0,10)); });
+  (state.tarjetas||[]).forEach(t=>Object.values(t.movs||{}).forEach(a=>(a||[]).forEach(x=>{ if(x.fecha) f.add(String(x.fecha).slice(0,10)); })));
+  if(!f.size){ el.innerHTML=wxVacio('Registra tu primer movimiento para empezar tu racha.','🔥'); return; }
+  const {racha,registroHoy}=calcularRachaRegistro();
+  const orden=[...f].sort(); let mejor=0, run=0, prev=null;
+  orden.forEach(iso=>{ const d=new Date(iso+'T12:00:00'); if(prev&&Math.round((d-prev)/86400000)===1) run++; else run=1; if(run>mejor) mejor=run; prev=d; });
+  const hoy=new Date(); const pts=[];
+  for(let i=13;i>=0;i--){ const d=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()-i); pts.push(f.has(wxIso(d))); }
+  el.innerHTML=`<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--mono);font-size:26px;font-weight:600;color:${racha>0?'var(--accent)':'var(--text3)'}">${racha}</span><span style="font-size:12px;color:var(--text3)">día${racha===1?'':'s'} seguido${racha===1?'':'s'}</span></div>`
+   +`<div style="display:flex;gap:4px;flex-wrap:wrap;margin:8px 0" aria-label="Últimos 14 días">${pts.map(v=>`<span style="width:14px;height:14px;border-radius:4px;background:${v?'var(--green)':'var(--bg4)'}"></span>`).join('')}</div>`
+   +`<div style="font-size:11px;color:var(--text3);line-height:1.5">Tu mejor racha: ${mejor} día${mejor===1?'':'s'}.${registroHoy?' Hoy ya registraste algo ✅':' Hoy aún no registras nada.'}</div>`;
+}
+function wxDeudaEvolucion(){
+  const el=document.getElementById('wx-deuda-evolucion-body'); if(!el) return;
+  const ahora=deudaTotalAhora(), h=state.deudaHistorial||{}, now=new Date(), mkAhora=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const pts=Object.keys(h).filter(k=>k<mkAhora).sort().slice(-5).map(k=>({k,v:Number(h[k].total)||0})); pts.push({k:mkAhora,v:ahora.total});
+  const big=`<div style="font-size:11px;color:var(--text3)">Deuda total (en soles)</div><div style="font-family:var(--mono);font-size:24px;font-weight:600;margin:4px 0 6px">${M(fmtS(ahora.total))}</div>`;
+  if(ahora.total<=0.004&&pts.every(p=>p.v<=0.004)){ el.innerHTML=wxVacio('Sin deudas registradas. 🎉','📉'); return; }
+  if(pts.length<2){ el.innerHTML=big+`<div style="font-size:11px;color:var(--text3);line-height:1.5">Aún no hay historial: se va guardando mes a mes cuando abres Deudas.</div>`; return; }
+  const mx=Math.max(...pts.map(p=>p.v),1), mn=Math.min(...pts.map(p=>p.v)), W=240, H=60, rng=(mx-mn)||1;
+  const xy=pts.map((p,i)=>[Math.round(i/(pts.length-1)*W),Math.round(H-6-((p.v-mn)/rng)*(H-12))]);
+  const dif=ahora.total-pts[0].v, bajo=dif<=0;
+  const nomMes=k=>tcMesesLong()[parseInt(k.slice(5),10)-1].slice(0,3);
+  el.innerHTML=big+`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${xy.map(a=>a.join(',')).join(' ')}" fill="none" stroke="${bajo?'var(--green)':'var(--red)'}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`
+   +wxFila('Desde '+nomMes(pts[0].k),M(fmtS(pts[0].v)))+wxFila(bajo?'Bajó':'Subió',M((bajo?'▼ ':'▲ ')+fmtS(Math.abs(dif))),bajo?'var(--green)':'var(--red)');
+}
 function renderNuevosWidgetsDashboard(){
   // ── Mis Metas de Ahorro ──
   const metasEl=document.getElementById('dash-metas-list');
@@ -27505,6 +27676,27 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.98.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Resumen: 10 widgets nuevos (Gastos del mes, Gasto por categoría, Gastos por mes, Próximos pagos e ingresos, Compras en camino, Aprobaciones pendientes, Dólares comprados, Ahorros e intereses, Racha de registro y Evolución de la deuda). Se activan en ✏️ Editar → Mi Resumen."
+  ]
+ },
+ {
+  "v": "v1.97.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Cuadros (modales): ya no se cierran si empiezas a escribir o seleccionar texto dentro y sueltas el mouse fuera; y si hay cambios sin guardar, Esc o tocar el fondo piden confirmación."
+  ]
+ },
+ {
+  "v": "v1.96.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Detalle de «Por categoría y mes»: nuevo filtro de moneda arriba (Todas, Soles o Dólares) para ver solo los movimientos de esa moneda."
+  ]
+ },
  {
   "v": "v1.95.0",
   "fecha": "07/11/26",
