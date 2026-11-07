@@ -4154,9 +4154,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.88.0';
-const APP_VERSION_DATE = '07/11/26 - 13:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: nueva tabla «Por categoría y mes» debajo de la sección, con filtro de periodo (este año, últimos 12/6/3 meses, año pasado, todo el historial) y exportación a Excel.';
+const APP_VERSION = 'v1.89.0';
+const APP_VERSION_DATE = '07/11/26 - 14:06'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: la lista de movimientos ya no se alarga más que la columna derecha (hasta Análisis con IA); el resto se ve desplazando dentro de la lista.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6644,6 +6644,16 @@ function gsMxExportar(){
   XLSX.writeFile(wb,'gastos_categoria_mes_'+GS.mx+'.xlsx');
 }
 
+
+// La lista de movimientos no pasa del alto de la columna derecha (en pantalla ancha); el resto se ve desplazando dentro de la lista
+function gsAjustarLista(){
+  const l=document.getElementById('gs-list'), o=document.getElementById('gs-origen'); if(!l||!o) return;
+  const col=o.parentElement;
+  if(window.innerWidth<=1000){ l.style.maxHeight=''; l.style.overflowY=''; return; }
+  const h=Math.max(420,Math.round(col.getBoundingClientRect().height));
+  l.style.maxHeight=h+'px'; l.style.overflowY='auto';
+  if(!window._gsRO&&window.ResizeObserver){ window._gsRO=new ResizeObserver(()=>gsAjustarLista()); window._gsRO.observe(col); window.addEventListener('resize',gsAjustarLista); }
+}
 function gsRefrescarLista(){
   const base=gsItems(GS.y,GS.m);
   // opciones de origen y categoría del mes
@@ -6659,6 +6669,7 @@ function gsRefrescarLista(){
   gsRenderLista(items);
   gsRenderLaterales(items);
   gsRenderIA(base);
+  gsAjustarLista();
 }
 function gsRenderKpis(items){
   const el=document.getElementById('gs-kpis'); if(!el) return;
@@ -27409,6 +27420,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.89.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Gastos: la lista de movimientos ya no se alarga más que la columna derecha (hasta Análisis con IA); el resto se ve desplazando dentro de la lista."
+  ]
+ },
  {
   "v": "v1.88.0",
   "fecha": "07/11/26",
