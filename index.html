@@ -1359,6 +1359,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-mx-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
 .gs-mx td.gs-mx-t,.gs-mx th.gs-mx-t{border-left:1px solid var(--border);color:var(--text);font-weight:600}
 .gs-mx-h1{background:rgba(79,134,255,.10)}.gs-mx-h2{background:rgba(79,134,255,.20)}.gs-mx-h3{background:rgba(79,134,255,.33)}.gs-mx-h4{background:rgba(79,134,255,.48);color:var(--text)!important}
+.gs-mx-u{display:block;font-size:10px;line-height:1.2;color:var(--teal)}
+.gs-mx td,.gs-mx th.gs-mx-c{line-height:1.25}
 .gs-mx-h0{color:var(--text3)!important}
 .gs-mx-foot th,.gs-mx-foot td{border-top:1px solid var(--text3);border-bottom:0;font-weight:700;color:var(--text)}
 </style>
@@ -4154,9 +4156,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.89.0';
-const APP_VERSION_DATE = '07/11/26 - 14:06'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: la lista de movimientos ya no se alarga más que la columna derecha (hasta Análisis con IA); el resto se ve desplazando dentro de la lista.';
+const APP_VERSION = 'v1.90.0';
+const APP_VERSION_DATE = '07/11/26 - 14:11'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: la tabla «Por categoría y mes» ahora muestra soles y dólares en la misma celda (sin convertir) y el Excel trae hojas separadas por moneda.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6613,37 +6615,47 @@ function gsMxMeses(){
   return out;
 }
 function gsMxDatos(){
-  const meses=gsMxMeses(), cats=new Map(), tot=meses.map(()=>0);
-  meses.forEach(([yy,mm],j)=>{ gsItems(yy,mm).forEach(i=>{ const c=i.cat||'Sin categoría'; if(!cats.has(c)) cats.set(c,meses.map(()=>0)); cats.get(c)[j]+=i.pen; tot[j]+=i.pen; }); });
-  const filas=[...cats.entries()].map(([c,v])=>({c,v,t:v.reduce((a,b)=>a+b,0)})).filter(f=>f.t>0.004).sort((a,b)=>b.t-a.t);
-  return {meses,filas,tot,total:tot.reduce((a,b)=>a+b,0)};
+  // cada celda guarda soles y dólares por separado (sin convertir) y el equivalente en S/ solo para el color
+  const meses=gsMxMeses(), cats=new Map(), n=meses.length, z=()=>meses.map(()=>({p:0,u:0,e:0}));
+  const tot=z();
+  meses.forEach(([yy,mm],k)=>{ gsItems(yy,mm).forEach(i=>{ const c=i.cat||'Sin categoría'; if(!cats.has(c)) cats.set(c,z()); const o=cats.get(c)[k], t=tot[k];
+    if(i.cur==='USD'){ o.u+=i.amount; t.u+=i.amount; } else { o.p+=i.amount; t.p+=i.amount; } o.e+=i.pen; t.e+=i.pen; }); });
+  const sum=a=>a.reduce((r,x)=>({p:r.p+x.p,u:r.u+x.u,e:r.e+x.e}),{p:0,u:0,e:0});
+  const filas=[...cats.entries()].map(([c,v])=>({c,v,t:sum(v)})).filter(f=>f.t.e>0.004).sort((a,b)=>b.t.e-a.t.e);
+  return {meses,filas,tot,total:sum(tot)};
 }
 function gsMxEtq(yy,mm,multi){ return GS_MES[mm].charAt(0).toUpperCase()+GS_MES[mm].slice(1)+(multi?' '+String(yy).slice(2):''); }
+function gsMxCelda(o){
+  const fp=Math.round(o.p).toLocaleString('en-US'), fu=Math.round(o.u).toLocaleString('en-US');
+  const hp=o.p>0.004, hu=o.u>0.004;
+  if(!hp&&!hu) return '—';
+  return (hp?'S/ '+fp:'')+(hu?`<span class="gs-mx-u">$ ${fu}</span>`:'');
+}
 function gsRenderMatriz(){
   const el=document.getElementById('gs-matriz'); if(!el) return;
-  const hoy=new Date(), aniosOpc=[]; for(let yy=hoy.getFullYear()-1;yy>=hoy.getFullYear()-4;yy--) if(yy!==hoy.getFullYear()-1) aniosOpc.push(yy);
+  const hoy=new Date(), aniosOpc=[]; for(let yy=hoy.getFullYear()-2;yy>=hoy.getFullYear()-4;yy--) aniosOpc.push(yy);
   const opts=GS_MX_OPC.map(([v,l])=>`<option value="${v}"${GS.mx===v?' selected':''}>${l}</option>`).join('')+aniosOpc.map(yy=>`<option value="${yy}"${GS.mx===String(yy)?' selected':''}>Año ${yy}</option>`).join('');
   const D=gsMxDatos(), multi=D.meses.length&&D.meses[0][0]!==D.meses[D.meses.length-1][0];
-  const cab=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div class="section-title" style="margin:0">📊 Por categoría y mes</div><div style="flex:1"></div><select id="gs-mx-sel" onchange="gsMxSet(this.value)" aria-label="Periodo">${opts}</select><button class="btn" style="font-size:11px;padding:5px 12px" onclick="gsMxExportar()">⬇ Exportar Excel</button></div>`;
+  const cab=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div class="section-title" style="margin:0">📊 Por categoría y mes</div><span style="font-size:11px;color:var(--text3)">S/ y <span style="color:var(--teal)">$</span> en la misma celda</span><div style="flex:1"></div><select id="gs-mx-sel" onchange="gsMxSet(this.value)" aria-label="Periodo">${opts}</select><button class="btn" style="font-size:11px;padding:5px 12px" onclick="gsMxExportar()">⬇ Exportar Excel</button></div>`;
   if(!D.filas.length){ el.innerHTML=cab+'<div class="empty">Sin gastos en este periodo.</div>'; return; }
-  const f=v=>v>0.004?Math.round(v).toLocaleString('en-US'):'—';
   const hdr=D.meses.map(([yy,mm])=>`<th class="gs-mx-m" title="Ver ${MONTHS[mm]} ${yy}" onclick="GS.y=${yy};GS.m=${mm};renderGastos();window.scrollTo({top:0,behavior:'smooth'})">${gsMxEtq(yy,mm,multi)}</th>`).join('');
-  const body=D.filas.map(r=>{ const mx=Math.max(...r.v);
-    return `<tr><th class="gs-mx-c"><span class="gs-mx-dot" style="background:${gsCatColor(r.c)}"></span>${escapeHtml(r.c)}</th>${r.v.map(v=>{ const q=mx>0?v/mx:0; const k=v<=0.004?0:q<.35?1:q<.6?2:q<.85?3:4; return `<td class="gs-mx-h${k}">${M(f(v))}</td>`; }).join('')}<td class="gs-mx-t">${M(f(r.t))}</td></tr>`; }).join('');
-  const foot=`<tr class="gs-mx-foot"><th class="gs-mx-c">Total</th>${D.tot.map(v=>`<td>${M(f(v))}</td>`).join('')}<td class="gs-mx-t">${M(f(D.total))}</td></tr>`;
-  const prom=D.meses.length?D.total/D.meses.length:0;
-  el.innerHTML=cab+`<div class="gs-mx-wrap"><table class="gs-mx"><thead><tr><th class="gs-mx-c">Categoría</th>${hdr}<th class="gs-mx-t">Total</th></tr></thead><tbody>${body}${foot}</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">Cuentas y tarjetas juntas, en soles (los dólares se convierten al tipo de cambio actual). No incluye pagos de tarjeta ni transferencias entre tus cuentas. Más azul = más gasto de esa categoría. Promedio mensual del periodo: <b style="color:var(--text2)">${M(fmtS(prom))}</b>. Toca un mes para abrirlo.</div>`;
+  const body=D.filas.map(r=>{ const mx=Math.max(...r.v.map(o=>o.e));
+    return `<tr><th class="gs-mx-c"><span class="gs-mx-dot" style="background:${gsCatColor(r.c)}"></span>${escapeHtml(r.c)}</th>${r.v.map(o=>{ const q=mx>0?o.e/mx:0; const k=o.e<=0.004?0:q<.35?1:q<.6?2:q<.85?3:4; return `<td class="gs-mx-h${k}">${M(gsMxCelda(o))}</td>`; }).join('')}<td class="gs-mx-t">${M(gsMxCelda(r.t))}</td></tr>`; }).join('');
+  const foot=`<tr class="gs-mx-foot"><th class="gs-mx-c">Total</th>${D.tot.map(o=>`<td>${M(gsMxCelda(o))}</td>`).join('')}<td class="gs-mx-t">${M(gsMxCelda(D.total))}</td></tr>`;
+  const n=D.meses.length||1, prom=gsMix(D.total.p/n,D.total.u/n);
+  el.innerHTML=cab+`<div class="gs-mx-wrap"><table class="gs-mx"><thead><tr><th class="gs-mx-c">Categoría</th>${hdr}<th class="gs-mx-t">Total</th></tr></thead><tbody>${body}${foot}</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">Cuentas y tarjetas juntas. Soles arriba y dólares debajo, sin convertir; el color de la celda usa el equivalente en soles al tipo de cambio actual. No incluye pagos de tarjeta ni transferencias entre tus cuentas. Promedio mensual del periodo: <b style="color:var(--text2)">${M(prom)}</b>. Toca un mes para abrirlo.</div>`;
 }
 function gsMxExportar(){
   const D=gsMxDatos(); if(!D.filas.length){ alert('No hay gastos en este periodo.'); return; }
-  const multi=D.meses[0][0]!==D.meses[D.meses.length-1][0];
   const r2=v=>Math.round(v*100)/100;
-  const rows=D.filas.map(r=>{ const o={Categoría:r.c}; D.meses.forEach(([yy,mm],j)=>{ o[gsMxEtq(yy,mm,true)]=r2(r.v[j]); }); o.Total=r2(r.t); return o; });
-  const o={Categoría:'Total'}; D.meses.forEach(([yy,mm],j)=>{ o[gsMxEtq(yy,mm,true)]=r2(D.tot[j]); }); o.Total=r2(D.total); rows.push(o);
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Por categoría y mes');
+  const hoja=(k)=>{ const rows=D.filas.filter(r=>r.t[k]>0.004||k==='e').map(r=>{ const o={Categoría:r.c}; D.meses.forEach(([yy,mm],j)=>{ o[gsMxEtq(yy,mm,true)]=r2(r.v[j][k]); }); o.Total=r2(r.t[k]); return o; });
+    const o={Categoría:'Total'}; D.meses.forEach(([yy,mm],j)=>{ o[gsMxEtq(yy,mm,true)]=r2(D.tot[j][k]); }); o.Total=r2(D.total[k]); rows.push(o); return XLSX.utils.json_to_sheet(rows); };
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,hoja('p'),'Soles');
+  if(D.total.u>0.004) XLSX.utils.book_append_sheet(wb,hoja('u'),'Dólares');
+  XLSX.utils.book_append_sheet(wb,hoja('e'),'Todo en S-');
   XLSX.writeFile(wb,'gastos_categoria_mes_'+GS.mx+'.xlsx');
 }
-
 
 // La lista de movimientos no pasa del alto de la columna derecha (en pantalla ancha); el resto se ve desplazando dentro de la lista
 function gsAjustarLista(){
@@ -27420,6 +27432,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.90.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Gastos: la tabla «Por categoría y mes» ahora muestra soles y dólares en la misma celda (sin convertir) y el Excel trae hojas separadas por moneda."
+  ]
+ },
  {
   "v": "v1.89.0",
   "fecha": "07/11/26",
