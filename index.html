@@ -4167,9 +4167,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.91.0';
-const APP_VERSION_DATE = '07/11/26 - 14:18'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: en la tabla «Por categoría y mes», al tocar un monto (celda, total de categoría o total del mes) se abre el detalle de los movimientos que lo forman.';
+const APP_VERSION = 'v1.92.0';
+const APP_VERSION_DATE = '07/11/26 - 14:34'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: la compra y la venta de dólares ya no cuentan como gasto (son cambio de moneda); se evita contar dos veces el mismo dinero. Aplica a la lista, los totales y la tabla «Por categoría y mes».';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6351,12 +6351,15 @@ function gsCatColor(c){ return getAllCategorias()[c]||'#9ca3af'; }
 function gsCatEmoji(c){ const p=(c||'').split(' ')[0]; return (p&&/[^\x00-\x7F]/.test(p))?p:'💸'; }
 
 // Todos los gastos del mes (y,m): cuentas (type expense, sin "Pago de tarjeta") + consumos de tarjeta por fecha
+// Compra o venta de dólares (operaciones de tipo de cambio): no son un gasto
+function esCambioMoneda(mv){ return !!mv&&(String(mv.id||'').startsWith('tcop-mov-')||/^(Compra|Venta) USD @ TC/i.test(mv.desc||'')); }
 function gsItems(y,m){
   const out=[];
   getMovs(y,m).forEach(mv=>{
     if(mv.type!=='expense') return;
     if(String(mv.id||'').startsWith('pagoTC') || /^Pago de tarjeta/i.test(mv.desc||'')) return; // el pago del estado ya está en los consumos de la tarjeta
     if(esTransferenciaInterna(mv)) return; // transferencia entre tus cuentas (no es un gasto)
+    if(esCambioMoneda(mv)) return; // compra/venta de dólares: es cambio de moneda, el gasto real es el consumo posterior
     const cur=mv.currency||'PEN';
     out.push({ub:mv.ubicacion,id:mv.id,desc:mv.desc||'(sin concepto)',amount:mv.amount,cur,pen:gsPen(mv.amount,cur),fecha:mv.date,hora:mv.hora||'',cat:mv.cat||'',tipo:'cuenta',origen:mv.account||'—',estado:'Pagado',cuota:null,color:'var(--teal)'});
   });
@@ -27475,6 +27478,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.92.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Gastos: la compra y la venta de dólares ya no cuentan como gasto (son cambio de moneda); se evita contar dos veces el mismo dinero. Aplica a la lista, los totales y la tabla «Por categoría y mes»."
+  ]
+ },
  {
   "v": "v1.91.0",
   "fecha": "07/11/26",
