@@ -4138,9 +4138,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.86.0';
-const APP_VERSION_DATE = '06/11/26 - 18:21'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo PIN de acceso de 6 dígitos con teclado y Face ID en la pantalla de bloqueo.';
+const APP_VERSION = 'v1.87.0';
+const APP_VERSION_DATE = '07/11/26 - 09:52'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Servicios compartidos: los pagos adelantados quedan con la fecha real de pago y se muestran como adelanto del mes que cubren.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9390,7 +9390,7 @@ function renderMovimientos(){
       <div class="swipe-delete-bg" onclick="deleteMovimiento('${m.id}',event)">🗑 Eliminar</div>
       <div class="mov-item ${cls} swipe-target" ${clickHandler} ontouchstart="swipeStart(event,this)" ontouchmove="swipeMove(event,this)" ontouchend="swipeEnd(event,this,'${m.id}')">
       <div class="mov-left">${checkbox}<div class="mov-dot ${cls}">${ic}</div>
-        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}${ubicPinCatHtml('mov',m.id,m.ubicacion)}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}</div>${noteHtml}</div>
+        <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}${ubicPinCatHtml('mov',m.id,m.ubicacion)}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}${m.mesServicio?` · <span style="color:var(--yellow,#d9a441);font-weight:600">⏩ Adelanto de ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(m.mesServicio.slice(5,7),10)-1]} ${m.mesServicio.slice(0,4)}</span>`:''}</div>${noteHtml}</div>
       </div>
       <div style="text-align:right;flex-shrink:0;margin-left:8px">
         <div class="mov-amount ${cls}">${M(amtStr)}</div>
@@ -13123,10 +13123,14 @@ function togglePayment(sid,pid){
 function addSrvPayment(sid,pid,svc,person){
   const acct=svc.account||'BBVA';
   const _dim=new Date(state.currentYear,state.currentMonth+1,0).getDate();
-  const date=state.currentYear+'-'+String(state.currentMonth+1).padStart(2,'0')+'-'+String(Math.min(svc.payDay||9,_dim)).padStart(2,'0');
+  let date=state.currentYear+'-'+String(state.currentMonth+1).padStart(2,'0')+'-'+String(Math.min(svc.payDay||9,_dim)).padStart(2,'0');
+  // Pago ADELANTADO: si la fecha de cobro del servicio aún no llega, el movimiento queda con la fecha REAL de hoy
+  // (cuándo entró la plata) y se anota qué mes cubre (mesServicio) para mostrarlo como «Adelanto de <mes>».
+  const _hoy=todayLocalISO(); const _extra={};
+  if(date>_hoy){ const _mesSrv=date.slice(0,7); date=_hoy; if(_mesSrv!==_hoy.slice(0,7)) _extra.mesServicio=_mesSrv; }
   const movId='srv-'+paymentKey(sid,pid);
   state.movimientos=state.movimientos.filter(m=>m.id!==movId);
-  const mov={id:movId,type:'income',desc:svc.name+' - '+person.name,amount:svc.pricePerPerson,account:acct,date,currency:'PEN'};
+  const mov={id:movId,type:'income',desc:svc.name+' - '+person.name,amount:svc.pricePerPerson,account:acct,date,currency:'PEN',..._extra};
   if(svc.cat) mov.cat=svc.cat;
   pushMovimiento(mov);
   state.cuentas[acct]=(state.cuentas[acct]||0)+svc.pricePerPerson;
@@ -13143,7 +13147,7 @@ function renderServicios(){
     const ph=svc.people.map(p=>{
       const key=paymentKey(sid,p.id);const paid=!!(state.payments&&state.payments[key]);
       if(paid){paidTotal+=svc.pricePerPerson;paidCount++;}
-      return`<div class="person-row"><div class="person-info"><div class="person-avatar" style="background:${paid?'var(--green-bg)':'var(--red-bg)'}">${p.avatar||'👤'}</div><div><div class="person-name">${escapeHtml(p.name)}</div><div class="person-amount">${M(fmtS(svc.pricePerPerson))}/mes</div></div></div><button class="pay-btn ${paid?'paid':'unpaid'}" onclick="togglePayment('${sid}','${p.id}')">${paid?'✓ Pagó':'✕ Debe'}</button></div>`;
+      return`<div class="person-row"><div class="person-info"><div class="person-avatar" style="background:${paid?'var(--green-bg)':'var(--red-bg)'}">${p.avatar||'👤'}</div><div><div class="person-name">${escapeHtml(p.name)}</div><div class="person-amount">${M(fmtS(svc.pricePerPerson))}/mes${(()=>{ if(!paid) return ''; const mv=(state.movimientos||[]).find(x=>x.id==='srv-'+key); return mv&&mv.mesServicio&&mv.date?' · pagó el '+mv.date.slice(8,10)+'/'+mv.date.slice(5,7):''; })()}</div></div></div><button class="pay-btn ${paid?'paid':'unpaid'}" onclick="togglePayment('${sid}','${p.id}')">${paid?'✓ Pagó':'✕ Debe'}</button></div>`;
     }).join('');
     const pend=(svc.people.length-paidCount)*svc.pricePerPerson;
     grid.innerHTML+=`<div class="srv-card" id="srv-card-${sid}"><div class="srv-header-actions"><div style="display:flex;align-items:center;gap:9px"><span style="font-size:22px">${svc.icon||'📡'}</span><div><div class="srv-title">${escapeHtml(svc.name)}</div><div class="srv-sub">${M(fmtS(svc.pricePerPerson))}/persona · Día ${svc.payDay||9} · ${svc.account||'BBVA'}</div></div></div><div style="display:flex;gap:5px"><button class="srv-edit-btn" onclick="openEditService('${sid}')">✏️</button><button class="srv-edit-btn" style="color:var(--red)" onclick="deleteService('${sid}')">🗑</button></div></div>${ph}<div class="srv-summary"><div><div class="srv-total-label">Cobrado</div><div class="srv-total-val">${M(fmtS(paidTotal))}</div></div><div style="text-align:right"><div class="srv-total-label">Pendiente</div><div style="font-family:var(--mono);font-size:14px;font-weight:500;color:${pend>0?'var(--red)':'var(--text3)'}">${M(fmtS(pend))}</div></div></div></div>`;
@@ -27335,6 +27339,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.87.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Servicios compartidos: si marcas un pago adelantado (ej. diciembre estando en noviembre), el movimiento queda con la fecha real de hoy y se muestra «Adelanto de Dic 2026»; en la tarjeta del servicio aparece «pagó el 07/11»."
+  ]
+ },
  {
   "v": "v1.86.0",
   "fecha": "06/11/26",
