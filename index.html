@@ -1242,7 +1242,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-seg button{background:none;border:none;color:var(--text2);font-family:var(--font);font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer}
 .gs-seg button.on{background:var(--accent);color:#fff}
 .gs-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.gs-filters input,.gs-filters select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);padding:6px 10px;font-family:var(--font);font-size:12px;min-width:0}
+.gs-filters input,.gs-filters select,#gs-mx-sel{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);padding:6px 10px;font-family:var(--font);font-size:12px;min-width:0}
 .gs-filters input[type=search]{flex:1 1 180px}
 @media(max-width:600px){
   /* móvil: todos los filtros en UNA fila que se desliza hacia los lados (igual que la barra de pestañas) */
@@ -1347,6 +1347,20 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .cfg-group-b .cfg-sub:first-child{border-top:none;}
 .cfg-group.cfg-danger .cfg-group-t b{color:var(--red);}
 .cfg-group.cfg-danger{border-color:rgba(248,113,113,.35);}
+
+.gs-mx-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.gs-mx{width:100%;border-collapse:collapse;font-size:12px}
+.gs-mx th,.gs-mx td{padding:8px 9px;border-bottom:1px solid var(--border);white-space:nowrap}
+.gs-mx td{text-align:right;font-family:var(--mono);color:var(--text2)}
+.gs-mx thead th{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text3);text-align:right}
+.gs-mx thead th.gs-mx-m{cursor:pointer}
+.gs-mx thead th.gs-mx-m:hover{color:var(--accent)}
+.gs-mx th.gs-mx-c{text-align:left;position:sticky;left:0;background:var(--bg2);font-weight:600;color:var(--text);z-index:1}
+.gs-mx-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.gs-mx td.gs-mx-t,.gs-mx th.gs-mx-t{border-left:1px solid var(--border);color:var(--text);font-weight:600}
+.gs-mx-h1{background:rgba(79,134,255,.10)}.gs-mx-h2{background:rgba(79,134,255,.20)}.gs-mx-h3{background:rgba(79,134,255,.33)}.gs-mx-h4{background:rgba(79,134,255,.48);color:var(--text)!important}
+.gs-mx-h0{color:var(--text3)!important}
+.gs-mx-foot th,.gs-mx-foot td{border-top:1px solid var(--text3);border-bottom:0;font-weight:700;color:var(--text)}
 </style>
 </head>
 <body>
@@ -2097,6 +2111,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="card" style="padding:16px;margin-top:16px" id="gs-ia"></div>
     </div>
   </div>
+
+  <div class="card" style="padding:16px;margin-top:16px" id="gs-matriz"></div>
 </div>
 </div>
 
@@ -4138,9 +4154,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.87.0';
-const APP_VERSION_DATE = '07/11/26 - 09:52'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Servicios compartidos: los pagos adelantados quedan con la fecha real de pago y se muestran como adelanto del mes que cubren.';
+const APP_VERSION = 'v1.88.0';
+const APP_VERSION_DATE = '07/11/26 - 13:58'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: nueva tabla «Por categoría y mes» debajo de la sección, con filtro de periodo (este año, últimos 12/6/3 meses, año pasado, todo el historial) y exportación a Excel.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6465,6 +6481,7 @@ function renderGastos(){
   gsSegmentos();
   gsRenderDisp();
   gsRefrescarLista();
+  gsRenderMatriz();
 }
 function gsSegmentos(){
   const seg=(id,key,opts)=>{ const el=document.getElementById(id); if(el) el.innerHTML=opts.map(([v,l])=>`<button class="${GS[key]===v?'on':''}" onclick="GS['${key}']='${v}';gsSegmentos();gsRefrescarLista()">${l}</button>`).join(''); };
@@ -6572,6 +6589,59 @@ function gsRenderDisp(){
   });
   h+=`</div><div style="font-size:10px;color:var(--text3);margin-top:10px">Cuentas de ahorro no incluidas. Soles y dólares se muestran por separado, sin convertir.</div>`;
   el.innerHTML=h;
+}
+
+
+// ── TABLA «POR CATEGORÍA Y MES» (debajo de Gastos) ──
+const GS_MX_OPC=[['anio','Este año'],['12','Últimos 12 meses'],['6','Últimos 6 meses'],['3','Últimos 3 meses'],['pasado','Año pasado'],['todo','Todo el historial']];
+GS.mx='anio';
+try{ const v=localStorage.getItem('gs_mx_v1'); if(v) GS.mx=v; }catch(e){ console.warn('Cálculo omitido por error:', e&&e.message); }
+function gsMxSet(v){ GS.mx=v; try{ localStorage.setItem('gs_mx_v1',v); }catch(e){} gsRenderMatriz(); }
+function gsMxMeses(){
+  const h=new Date(), y=h.getFullYear(), m=h.getMonth(), out=[];
+  const add=(yy,mm)=>out.push([yy,mm]);
+  const mod=GS.mx;
+  if(mod==='anio'){ for(let i=0;i<=m;i++) add(y,i); }
+  else if(mod==='pasado'){ for(let i=0;i<12;i++) add(y-1,i); }
+  else if(mod==='12'||mod==='6'||mod==='3'){ const n=+mod; for(let i=n-1;i>=0;i--){ const d=new Date(y,m-i,1); add(d.getFullYear(),d.getMonth()); } }
+  else if(/^\d{4}$/.test(mod)){ const yy=+mod; const hasta=yy===y?m:11; for(let i=0;i<=hasta;i++) add(yy,i); }
+  else { // todo: desde el primer mes con gastos
+    let ini=y; for(let yy=y-1;yy>=y-15;yy--){ let hay=false; for(let mm=0;mm<12&&!hay;mm++) if(gsItems(yy,mm).length) hay=true; if(hay) ini=yy; else if(yy<ini-1) break; }
+    for(let yy=ini;yy<=y;yy++) for(let mm=0;mm<(yy===y?m+1:12);mm++) add(yy,mm);
+    while(out.length>1&&!gsItems(out[0][0],out[0][1]).length) out.shift();
+  }
+  return out;
+}
+function gsMxDatos(){
+  const meses=gsMxMeses(), cats=new Map(), tot=meses.map(()=>0);
+  meses.forEach(([yy,mm],j)=>{ gsItems(yy,mm).forEach(i=>{ const c=i.cat||'Sin categoría'; if(!cats.has(c)) cats.set(c,meses.map(()=>0)); cats.get(c)[j]+=i.pen; tot[j]+=i.pen; }); });
+  const filas=[...cats.entries()].map(([c,v])=>({c,v,t:v.reduce((a,b)=>a+b,0)})).filter(f=>f.t>0.004).sort((a,b)=>b.t-a.t);
+  return {meses,filas,tot,total:tot.reduce((a,b)=>a+b,0)};
+}
+function gsMxEtq(yy,mm,multi){ return GS_MES[mm].charAt(0).toUpperCase()+GS_MES[mm].slice(1)+(multi?' '+String(yy).slice(2):''); }
+function gsRenderMatriz(){
+  const el=document.getElementById('gs-matriz'); if(!el) return;
+  const hoy=new Date(), aniosOpc=[]; for(let yy=hoy.getFullYear()-1;yy>=hoy.getFullYear()-4;yy--) if(yy!==hoy.getFullYear()-1) aniosOpc.push(yy);
+  const opts=GS_MX_OPC.map(([v,l])=>`<option value="${v}"${GS.mx===v?' selected':''}>${l}</option>`).join('')+aniosOpc.map(yy=>`<option value="${yy}"${GS.mx===String(yy)?' selected':''}>Año ${yy}</option>`).join('');
+  const D=gsMxDatos(), multi=D.meses.length&&D.meses[0][0]!==D.meses[D.meses.length-1][0];
+  const cab=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div class="section-title" style="margin:0">📊 Por categoría y mes</div><div style="flex:1"></div><select id="gs-mx-sel" onchange="gsMxSet(this.value)" aria-label="Periodo">${opts}</select><button class="btn" style="font-size:11px;padding:5px 12px" onclick="gsMxExportar()">⬇ Exportar Excel</button></div>`;
+  if(!D.filas.length){ el.innerHTML=cab+'<div class="empty">Sin gastos en este periodo.</div>'; return; }
+  const f=v=>v>0.004?Math.round(v).toLocaleString('en-US'):'—';
+  const hdr=D.meses.map(([yy,mm])=>`<th class="gs-mx-m" title="Ver ${MONTHS[mm]} ${yy}" onclick="GS.y=${yy};GS.m=${mm};renderGastos();window.scrollTo({top:0,behavior:'smooth'})">${gsMxEtq(yy,mm,multi)}</th>`).join('');
+  const body=D.filas.map(r=>{ const mx=Math.max(...r.v);
+    return `<tr><th class="gs-mx-c"><span class="gs-mx-dot" style="background:${gsCatColor(r.c)}"></span>${escapeHtml(r.c)}</th>${r.v.map(v=>{ const q=mx>0?v/mx:0; const k=v<=0.004?0:q<.35?1:q<.6?2:q<.85?3:4; return `<td class="gs-mx-h${k}">${M(f(v))}</td>`; }).join('')}<td class="gs-mx-t">${M(f(r.t))}</td></tr>`; }).join('');
+  const foot=`<tr class="gs-mx-foot"><th class="gs-mx-c">Total</th>${D.tot.map(v=>`<td>${M(f(v))}</td>`).join('')}<td class="gs-mx-t">${M(f(D.total))}</td></tr>`;
+  const prom=D.meses.length?D.total/D.meses.length:0;
+  el.innerHTML=cab+`<div class="gs-mx-wrap"><table class="gs-mx"><thead><tr><th class="gs-mx-c">Categoría</th>${hdr}<th class="gs-mx-t">Total</th></tr></thead><tbody>${body}${foot}</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">Cuentas y tarjetas juntas, en soles (los dólares se convierten al tipo de cambio actual). No incluye pagos de tarjeta ni transferencias entre tus cuentas. Más azul = más gasto de esa categoría. Promedio mensual del periodo: <b style="color:var(--text2)">${M(fmtS(prom))}</b>. Toca un mes para abrirlo.</div>`;
+}
+function gsMxExportar(){
+  const D=gsMxDatos(); if(!D.filas.length){ alert('No hay gastos en este periodo.'); return; }
+  const multi=D.meses[0][0]!==D.meses[D.meses.length-1][0];
+  const r2=v=>Math.round(v*100)/100;
+  const rows=D.filas.map(r=>{ const o={Categoría:r.c}; D.meses.forEach(([yy,mm],j)=>{ o[gsMxEtq(yy,mm,true)]=r2(r.v[j]); }); o.Total=r2(r.t); return o; });
+  const o={Categoría:'Total'}; D.meses.forEach(([yy,mm],j)=>{ o[gsMxEtq(yy,mm,true)]=r2(D.tot[j]); }); o.Total=r2(D.total); rows.push(o);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Por categoría y mes');
+  XLSX.writeFile(wb,'gastos_categoria_mes_'+GS.mx+'.xlsx');
 }
 
 function gsRefrescarLista(){
@@ -27339,6 +27409,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.88.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Gastos: nueva tabla «Por categoría y mes» debajo de la sección, con filtro de periodo (este año, últimos 12/6/3 meses, año pasado, todo el historial) y exportación a Excel."
+  ]
+ },
  {
   "v": "v1.87.0",
   "fecha": "07/11/26",
