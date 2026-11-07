@@ -104,6 +104,9 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 #login-screen.hidden{opacity:0;pointer-events:none;}
 #face-lock{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:10000;text-align:center;padding:24px;}
 #face-lock .fl-ico{font-size:54px;line-height:1;}
+#face-lock .fl-ver{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5;}
+#face-lock .fl-ver b{font-weight:600;color:var(--text2);}
+#face-lock .fl-ver .ok{color:#34c06e;}#face-lock .fl-ver .nw{color:var(--amber,#e0a63a);font-weight:600;cursor:pointer;text-decoration:underline;}
 #face-lock .fl-sub{font-size:12px;color:var(--text3);}
 #face-lock .fl-out{background:none;border:none;color:var(--text3);font-family:var(--font);font-size:12px;text-decoration:underline;cursor:pointer;margin-top:6px;}
 #face-lock .fl-av{width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#34a896);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;color:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.06);font-family:var(--mono);}
@@ -1389,6 +1392,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <button class="login-btn" id="fl-btn" style="max-width:280px;display:none" onclick="unlockFaceId()">🔓 Desbloquear con Face ID</button>
   <button class="fl-out" id="fl-alt" style="margin-top:18px" onclick="faceLockCerrarSesion()">Usar correo y contraseña</button>
   <button class="fl-out" id="fl-cancel" style="display:none;margin-top:18px" onclick="pinCancelar()">Cancelar</button>
+  <div id="fl-ver" class="fl-ver" aria-live="polite"></div>
 </div>
 
 <!-- LOGIN SCREEN -->
@@ -4167,9 +4171,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.93.0';
-const APP_VERSION_DATE = '07/11/26 - 14:53'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'La compra y venta de dólares ya no cuenta en el monto recomendado, el gasto por categoría, los presupuestos y alertas, los insights ni en las respuestas del asistente con IA.';
+const APP_VERSION = 'v1.94.0';
+const APP_VERSION_DATE = '07/11/26 - 15:10'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pantalla de bloqueo (PIN): ahora muestra la versión de la app y si es la última publicada o hay una nueva para actualizar.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -13762,11 +13766,34 @@ async function toggleFaceId(){
     alert('No se pudo activar Face ID ('+(e&&e.name||'error')+'). Verifica que Face ID esté activo en Ajustes de iPhone y que abras la app desde Safari o el acceso directo.');
   }
 }
+
+// Versión en la pantalla de bloqueo: muestra cuál es y si ya es la última publicada
+async function flVerEstado(){
+  const el=document.getElementById('fl-ver'); if(!el) return;
+  const base='<b>'+escapeHtml(APP_VERSION)+'</b> · '+escapeHtml(APP_VERSION_DATE);
+  el.innerHTML=base;
+  if(!/^https?:$/.test(location.protocol)) return;
+  el.innerHTML=base+'<br>Comprobando actualización…';
+  try{
+    const url=location.origin+location.pathname;
+    let alDia=false;
+    try{ const h=await fetch(url+'?_v='+Date.now(),{method:'HEAD',cache:'no-store'});
+      if(h.ok){ const lm=h.headers.get('last-modified'); if(lm&&document.lastModified&&Math.abs(new Date(lm).getTime()-new Date(document.lastModified).getTime())<2000) alDia=true; } }catch(e){}
+    if(alDia){ el.innerHTML=base+'<br><span class="ok">✓ Estás en la última versión</span>'; return; }
+    const r=await fetch(url+'?_v='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
+    const t=await r.text(); const m=t.match(/const APP_VERSION_DATE = '([^']+)'/); if(!m) throw new Error('sin versión');
+    if(_verAFecha(m[1])>_verAFecha(APP_VERSION_DATE)){
+      const n=t.match(/const APP_VERSION = '([^']+)'/);
+      el.innerHTML=base+'<br><span class="nw" role="button" tabindex="0" onclick="location.reload()">⬆ Hay una versión nueva'+(n?' ('+escapeHtml(n[1])+')':'')+' · toca para actualizar</span>';
+    } else el.innerHTML=base+'<br><span class="ok">✓ Estás en la última versión</span>';
+  }catch(e){ el.innerHTML=base+'<br>No se pudo comprobar si hay una versión nueva'; }
+}
 function mostrarFaceLock(){
   _faceLocked=true;
   clearInactivityTimer();
   _flModo('desbloquear');
   const el=document.getElementById('face-lock'); if(el) el.style.display='flex';
+  flVerEstado();
   if(faceIdActivo()) setTimeout(()=>{ if(_faceLocked) unlockFaceId(true); },150);
 }
 async function unlockFaceId(auto){
@@ -27478,6 +27505,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.94.0",
+  "fecha": "07/11/26",
+  "cambios": [
+   "Pantalla de bloqueo (PIN): ahora muestra la versión de la app y si es la última publicada o hay una nueva para actualizar."
+  ]
+ },
  {
   "v": "v1.93.0",
   "fecha": "07/11/26",
