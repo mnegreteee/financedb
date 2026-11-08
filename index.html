@@ -141,6 +141,12 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 /* ── LAYOUT ── */
 .page{display:none;}.page.active{display:block;}
+.hr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:14px;align-items:start}
+.hr-card{padding:18px}.hr-t{font-size:13px;font-weight:700;margin-bottom:2px}.hr-s{font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5}
+.hr-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+.hr-row label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.hr-row input,.hr-row select{background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:13px;font-family:inherit;min-width:0}
+
 .gd-wrap{max-width:980px;margin:0 auto}
 .gd-intro{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px}
 .gd-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
@@ -1474,6 +1480,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-compras" onclick="showPage('compras')">🛒 Lista de Compras</button>
         <button class="nav-dropdown-item" id="nav-ahorros-intereses" onclick="showPage('ahorros-intereses')">💰 Ahorros e Intereses</button>
         <button class="nav-dropdown-item" id="nav-minijuegos" onclick="showPage('minijuegos')">🎮 Minijuegos</button>
+        <button class="nav-dropdown-item" id="nav-herr" onclick="showPage('herr')">🧰 Herramientas</button>
         <button class="nav-dropdown-item" id="nav-guia" onclick="showPage('guia')">📖 Cómo se calcula</button>
       </div>
     </div>
@@ -3374,6 +3381,17 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <li>Su resumen del mes de <b>gastos</b> excluye transferencias y cambio de moneda; el resumen de <b>Finanzas</b> y el año completo siguen el flujo de caja.</li>
     </ul></div></details>
 
+  <details class="gd-card"><summary>🧰 Herramientas</summary><div class="gd-body">
+    <ul>
+      <li><b>¿Me alcanza?</b>: compara el monto con tu dinero libre en cuentas (ya descontando lo que debes de tarjetas), con lo que te queda del presupuesto del mes y con tu proyección de cierre. Si es con tarjeta, usa la línea libre y la cuota mensual (sin intereses).</li>
+      <li><b>Fondo de emergencia</b> = ahorro total (dólares al TC de compra) ÷ gasto mensual promedio de los últimos 3 meses. Meta editable de 3 a 12 meses.</li>
+      <li><b>Mejor día para comprar</b>: usa inicio, cierre y pago de cada tarjeta. Una compra hecha justo después del cierre te da el máximo de días para pagar.</li>
+      <li><b>Suscripciones</b>: gastos con el mismo concepto y monto parecido (±15%) en al menos 3 meses distintos que aún siguen cobrando; se excluyen los que ya están en pagos frecuentes o servicios y las cuotas.</li>
+      <li><b>Duplicados</b>: mismo monto, moneda y concepto el mismo día (si hay hora, con ≤15 min de diferencia). Eliminar usa el mismo borrado de siempre.</li>
+      <li><b>Etiquetas</b>: cualquier <code>#palabra</code> en la descripción de un gasto de cuenta o tarjeta. Usa las mismas reglas de Gastos (sin transferencias, pagos de tarjeta ni cambio de moneda).</li>
+      <li><b>Metas de compras</b>: precio del artículo deseado ÷ tu ahorro neto mensual (promedio de 3 meses; si no hay, tu ahorro objetivo del mes).</li>
+      <li><b>Vencimientos del auto</b>: fechas que tú registras; no afectan saldos.</li>
+    </ul></div></details>
   <details class="gd-card"><summary>🧭 Reglas que aplican en toda la app</summary><div class="gd-body">
     <ul>
       <li><b>Soles y dólares</b>: nunca se mezclan en una misma cuenta. Para totales en soles se convierte con el TC de venta (salvo ahorro en dólares, que se valora con el TC de compra).</li>
@@ -3381,6 +3399,38 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <li><b>Fechas</b>: un gasto cuenta en el mes de su fecha. Los consumos de tarjeta cuentan en la fecha del consumo; la caja, en la fecha del pago.</li>
       <li><b>Meses pasados</b>: los saldos se reconstruyen desde los movimientos, no desde el saldo de hoy.</li>
     </ul></div></details>
+</div>
+</div>
+
+<div class="page" id="page-herr">
+<div class="container">
+  <div class="section-header" style="margin-bottom:12px"><div class="section-title">🧰 Herramientas</div></div>
+  <div class="hr-grid">
+    <div class="card hr-card"><div class="hr-t">🤔 ¿Me alcanza?</div><div class="hr-s">Escribe lo que quieres comprar y te digo si puedes, sin registrar nada.</div>
+      <div class="hr-row">
+        <label>Monto<input type="number" id="hr-ma-monto" inputmode="decimal" step="0.01" min="0" placeholder="0.00" style="width:110px" oninput="hrMeAlcanza()"></label>
+        <label>Moneda<select id="hr-ma-cur" onchange="hrMeAlcanza()"><option value="PEN">S/</option><option value="USD">$</option></select></label>
+        <label>Pago<select id="hr-ma-forma" onchange="hrMeAlcanza()"><option value="cuenta">Con mi dinero (cuenta)</option></select></label>
+        <label id="hr-ma-cuotas-wrap" style="display:none">Cuotas<input type="number" id="hr-ma-cuotas" min="1" max="48" value="1" style="width:70px" oninput="hrMeAlcanza()"></label>
+      </div><div id="hr-ma-res"></div></div>
+    <div class="card hr-card"><div class="hr-t">🛟 Fondo de emergencia</div><div class="hr-s">Cuántos meses de gastos podrías cubrir con tu ahorro.</div>
+      <div class="hr-row"><label>Meta<select id="hr-fondo-meta" onchange="hrFondoMeta(this.value)"><option value="3">3 meses</option><option value="6" selected>6 meses</option><option value="9">9 meses</option><option value="12">12 meses</option></select></label></div>
+      <div id="hr-fondo"></div></div>
+    <div class="card hr-card"><div class="hr-t">📅 Mejor día para comprar con tarjeta</div><div class="hr-s">Cuántos días tienes para pagar según el cierre de cada tarjeta.</div><div id="hr-dia"></div></div>
+    <div class="card hr-card"><div class="hr-t">🔁 Suscripciones olvidadas</div><div class="hr-s">Cobros que se repiten cada mes (últimos 8 meses) y que no están en tus pagos frecuentes ni servicios.</div><div id="hr-subs"></div></div>
+    <div class="card hr-card"><div class="hr-t">👯 Posibles duplicados</div><div class="hr-s">Mismo monto y concepto el mismo día (±15 min si hay hora), últimos 45 días. Las cuotas no se comparan.</div><div id="hr-dups"></div></div>
+    <div class="card hr-card"><div class="hr-t">🏷️ Etiquetas de viajes y eventos</div><div class="hr-s">Escribe #palabra en la descripción de cualquier gasto (ej. “Taxi #cusco”) y aquí ves el total, en soles y dólares.</div><div id="hr-tags"></div></div>
+    <div class="card hr-card"><div class="hr-t">🎯 Metas de la lista de compras</div><div class="hr-s">En cuánto tiempo juntas cada artículo deseado con tu ahorro mensual.</div><div id="hr-metas"></div></div>
+    <div class="card hr-card"><div class="hr-t">🚗 Vencimientos del auto</div><div class="hr-s">SOAT, revisión técnica, brevete y más. Se puede mostrar en el Resumen (✏️ Editar → Mi Resumen).</div>
+      <div class="hr-row">
+        <label>Qué vence<select id="hr-v-tipo" onchange="hrVencOtro()"><option>SOAT</option><option>Revisión técnica</option><option>Brevete</option><option>Seguro vehicular</option><option>Impuesto vehicular</option><option>Otro</option></select></label>
+        <label style="display:none" id="hr-v-otro-wrap"></label>
+        <input type="text" id="hr-v-otro" placeholder="Nombre" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:13px;width:130px">
+        <label>Vence el<input type="date" id="hr-v-fecha"></label>
+        <label>Nota<input type="text" id="hr-v-nota" placeholder="Opcional" style="width:120px"></label>
+        <button class="btn" id="hr-v-btn" onclick="hrVencGuardar()">Agregar</button><button class="btn" id="hr-v-cancel" style="display:none" onclick="hrVencLimpiar()">Cancelar</button>
+      </div><div id="hr-venc"></div></div>
+  </div>
 </div>
 </div>
 
@@ -4361,9 +4411,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.99.0';
-const APP_VERSION_DATE = '08/11/26 - 09:26'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva sección 📖 Cómo se calcula (en Otros): explica cómo calcula cada parte de la app y qué considera o deja fuera cada sección.';
+const APP_VERSION = 'v2.0.0';
+const APP_VERSION_DATE = '08/11/26 - 14:33'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva página 🧰 Herramientas (en Otros): ¿Me alcanza?, fondo de emergencia, mejor día para comprar con tarjeta, suscripciones olvidadas, posibles duplicados, etiquetas #viaje, metas de la lista de compras y vencimientos del auto (con widget opcional en el Resumen).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7301,6 +7351,7 @@ function showPage(name){
   if(name==='aprobaciones') renderAprobacionesBanco();
   if(name==='ahorros-intereses') renderAhorrosIntereses();
   if(name==='minijuegos')  initMinijuegos();
+  if(name==='herr')        renderHerramientas();
 }
 
 // ── HELPERS ───────────────────────────────────────────
@@ -18059,7 +18110,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
   {id:'alertas-presupuesto', visible:false},
-  {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false},
+  {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -18589,6 +18640,7 @@ function renderDashDebts(){
 
   renderNuevosWidgetsDashboard();
   renderWidgetsExtra();
+  try{ wxVencimientos(); }catch(e){ console.warn('Widget vencimientos:',e); }
 }
 // Llena los 10 widgets NUEVOS (solo si su contenedor existe, es decir, si
 // la persona los activó) — cada uno resume su sección y lleva directo ahí.
@@ -18744,6 +18796,278 @@ function wxDeudaEvolucion(){
   el.innerHTML=big+`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${xy.map(a=>a.join(',')).join(' ')}" fill="none" stroke="${bajo?'var(--green)':'var(--red)'}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`
    +wxFila('Desde '+nomMes(pts[0].k),M(fmtS(pts[0].v)))+wxFila(bajo?'Bajó':'Subió',M((bajo?'▼ ':'▲ ')+fmtS(Math.abs(dif))),bajo?'var(--green)':'var(--red)');
 }
+// ═══════════════════════════════════════════════════════
+//  🧰 HERRAMIENTAS — suscripciones, duplicados, mejor día de compra, ¿me alcanza?,
+//  fondo de emergencia, etiquetas (#viaje), metas de compras y vencimientos del auto.
+//  Solo LEE los datos existentes (misma regla de Gastos); lo único nuevo que guarda es
+//  state.vencimientosAuto, state.fondoEmergenciaMeses, state.suscripcionesIgnoradas y
+//  state.duplicadosIgnorados.
+// ═══════════════════════════════════════════════════════
+function hrNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/#[\p{L}\d_]+/gu,' ').replace(/[0-9]+/g,' ').replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim(); }
+function hrF(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
+function hrFIso(s){ const p=String(s||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:s; }
+function hrMin(h){ const m=/^(\d{1,2}):(\d{2})/.exec(h||''); return m?(+m[1])*60+(+m[2]):null; }
+function hrGastosTodos(){
+  const out=[];
+  (state.movimientos||[]).forEach(mv=>{
+    if(!mv||mv.type!=='expense') return;
+    if(String(mv.id||'').startsWith('pagoTC')||/^Pago de tarjeta/i.test(mv.desc||'')) return;
+    if(esTransferenciaInterna(mv)||esCambioMoneda(mv)) return;
+    const cur=mv.currency||'PEN';
+    out.push({id:mv.id,desc:mv.desc||'',amount:mv.amount,cur,pen:gsPen(mv.amount,cur),fecha:mv.date||'',hora:mv.hora||'',cat:mv.cat||'',tipo:'cuenta',origen:mv.account||'—',cuota:false});
+  });
+  (state.tarjetas||[]).forEach(t=>{
+    Object.entries(t.movs||{}).forEach(([mk,arr])=>(arr||[]).forEach(mv=>{
+      if(!mv||typeof mv.fecha!=='string') return;
+      const cur=mv.currency||t.currency||'PEN';
+      out.push({id:mv.id,desc:mv.desc||'',amount:mv.monto,cur,pen:gsPen(mv.monto,cur),fecha:mv.fecha,hora:mv.hora||'',cat:mv.cat||'',tipo:'tarjeta',origen:((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta',tid:t.id,mk,cuota:!!mv.grupoCuotaId||/cuota \d+\/\d+/i.test(mv.desc||'')});
+    }));
+  });
+  return out;
+}
+function hrBadge(dias){
+  if(dias<0) return `<span style="color:var(--red);font-weight:700">Vencido hace ${-dias} d</span>`;
+  if(dias===0) return `<span style="color:var(--red);font-weight:700">Vence hoy</span>`;
+  if(dias<=30) return `<span style="color:var(--amber,#f0a53a);font-weight:700">Vence en ${dias} d</span>`;
+  return `<span style="color:var(--green);font-weight:700">Vence en ${dias} d</span>`;
+}
+function hrDiasHasta(iso){ const a=new Date(); a.setHours(12,0,0,0); const b=new Date(iso+'T12:00:00'); return Math.round((b-a)/86400000); }
+
+// ── 3. Suscripciones olvidadas ──
+function hrSuscripciones(){
+  const hoy=new Date(), dIso=wxIso(new Date(hoy.getFullYear(),hoy.getMonth()-8,1));
+  const ign=new Set(state.suscripcionesIgnoradas||[]);
+  const conocidos=[...(state.pagosFrecuentes||[]).map(p=>hrNorm(p.nombre)),...Object.values(state.servicios||{}).map(s=>hrNorm((s&&(s.nombre||s.name))||''))].filter(x=>x.length>=3);
+  const g={};
+  hrGastosTodos().forEach(i=>{ if(i.cuota||!i.fecha||i.fecha<dIso) return; const n=hrNorm(i.desc); if(n.length<3) return; const k=n+'|'+i.cur; (g[k]=g[k]||{n,cur:i.cur,items:[]}).items.push(i); });
+  const res=[];
+  Object.entries(g).forEach(([k,o])=>{
+    if(ign.has(k)) return;
+    if(conocidos.some(c=>o.n.includes(c)||c.includes(o.n))) return;
+    const porMes={}; o.items.forEach(i=>{ const m=i.fecha.slice(0,7); (porMes[m]=porMes[m]||[]).push(i); });
+    const unicos=Object.values(porMes).filter(a=>a.length===1).map(a=>a[0]);
+    if(unicos.length<3) return;
+    const mont=unicos.map(i=>i.amount).sort((a,b)=>a-b), med=mont[Math.floor(mont.length/2)];
+    const ok=unicos.filter(i=>Math.abs(i.amount-med)<=med*0.15);
+    if(ok.length<3) return;
+    ok.sort((a,b)=>a.fecha<b.fecha?-1:1);
+    const ult=ok[ok.length-1];
+    if((hoy-new Date(ult.fecha+'T12:00:00'))/86400000>50) return;
+    res.push({key:k,nombre:ult.desc||o.n,cur:o.cur,monto:med,meses:ok.length,ultima:ult.fecha,origen:ult.origen,anualPen:gsPen(med,o.cur)*12});
+  });
+  return res.sort((a,b)=>b.anualPen-a.anualPen);
+}
+function hrRenderSuscripciones(){
+  const el=document.getElementById('hr-subs'); if(!el) return;
+  const L=hrSuscripciones();
+  if(!L.length){ el.innerHTML=wxVacio('No encontré cobros que se repitan cada mes sin estar en tus pagos frecuentes o servicios.','✅'); return; }
+  const tot=L.reduce((s,x)=>s+x.anualPen,0);
+  el.innerHTML=`<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${L.length} posible${L.length===1?'':'s'} · aprox. <b>${M(fmtS(tot))}</b> al año (${M(fmtS(tot/12))} al mes)</div>`+L.map(x=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px"><div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nombre)}</div><div style="color:var(--text3);font-size:11px">${x.meses} meses seguidos o casi · último ${hrFIso(x.ultima)} · ${escapeHtml(x.origen)}</div></div><b style="font-family:var(--mono);white-space:nowrap">${M(gsFmt(x.monto,x.cur))}</b><button class="btn" style="font-size:10px;padding:3px 7px" data-k="${escapeHtml(x.key)}" onclick="hrIgnorarSub(this.dataset.k)" title="No es una suscripción">Ignorar</button></div>`).join('');
+}
+function hrIgnorarSub(k){ if(!Array.isArray(state.suscripcionesIgnoradas)) state.suscripcionesIgnoradas=[]; if(!state.suscripcionesIgnoradas.includes(k)) state.suscripcionesIgnoradas.push(k); saveState(); hrRenderSuscripciones(); }
+
+// ── 4. Posibles duplicados ──
+function hrDuplicados(){
+  const hoy=new Date(), lim=wxIso(new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()-45));
+  const ign=new Set(state.duplicadosIgnorados||[]);
+  const its=hrGastosTodos().filter(i=>i.fecha>=lim&&!i.cuota).sort((a,b)=>(a.fecha+a.hora)<(b.fecha+b.hora)?-1:(a.fecha+a.hora)>(b.fecha+b.hora)?1:0);
+  const out=[];
+  for(let a=0;a<its.length;a++){
+    for(let b=a+1;b<its.length;b++){
+      const x=its[a], y=its[b];
+      if(y.fecha!==x.fecha) break;
+      if(x.id===y.id||x.cur!==y.cur||Math.abs(x.amount-y.amount)>=0.005) continue;
+      const nx=hrNorm(x.desc), ny=hrNorm(y.desc);
+      if(!nx||nx!==ny) continue;
+      const hx=hrMin(x.hora), hy=hrMin(y.hora);
+      if(hx!==null&&hy!==null&&Math.abs(hx-hy)>15) continue;
+      const key=[x.id,y.id].sort().join('|');
+      if(ign.has(key)) continue;
+      out.push({key,x,y});
+    }
+  }
+  return out.reverse();
+}
+function hrRenderDuplicados(){
+  const el=document.getElementById('hr-dups'); if(!el) return;
+  const L=hrDuplicados();
+  if(!L.length){ el.innerHTML=wxVacio('No hay gastos repetidos (mismo monto y concepto el mismo día) en los últimos 45 días.','✅'); return; }
+  const fila=i=>`<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(i.desc||'(sin concepto)')} <span style="color:var(--text3)">· ${escapeHtml(i.origen)}${i.hora?' · '+escapeHtml(i.hora):''}</span></span><b style="font-family:var(--mono)">${M(gsFmt(i.amount,i.cur))}</b><button class="btn" style="font-size:10px;padding:3px 7px;color:var(--red)" data-t="${i.tipo}" data-id="${escapeHtml(String(i.id))}" data-tid="${escapeHtml(String(i.tid||''))}" data-mk="${escapeHtml(String(i.mk||''))}" onclick="hrDupEliminar(this.dataset.t,this.dataset.id,this.dataset.tid,this.dataset.mk)">Eliminar</button></div>`;
+  el.innerHTML=`<div style="font-size:12px;color:var(--text2);margin-bottom:8px">${L.length} posible${L.length===1?'':'s'} duplicado${L.length===1?'':'s'}. Revisa y elimina el que sobre.</div>`+L.map(p=>`<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">${hrFIso(p.x.fecha)}</div>${fila(p.x)}${fila(p.y)}<div style="text-align:right;margin-top:4px"><button class="btn" style="font-size:10px;padding:3px 7px" data-k="${escapeHtml(p.key)}" onclick="hrIgnorarDup(this.dataset.k)">No es duplicado</button></div></div>`).join('');
+}
+function hrIgnorarDup(k){ if(!Array.isArray(state.duplicadosIgnorados)) state.duplicadosIgnorados=[]; if(!state.duplicadosIgnorados.includes(k)) state.duplicadosIgnorados.push(k); saveState(); hrRenderDuplicados(); }
+function hrDupEliminar(tipo,id,tid,mk){
+  try{ if(tipo==='cuenta'){ deleteMovimiento(id); } else { currentTCId=tid; currentTCMonth=mk; deleteTCMov(id); } }catch(e){ console.warn('Eliminar duplicado:',e); }
+  setTimeout(()=>{ try{ renderHerramientas(); }catch(e){} },80);
+}
+
+// ── 5. Mejor día para comprar con tarjeta ──
+function hrDiasTarjeta(t,fecha){
+  const key=getBillingMonthKey(wxIso(fecha),t); const [py,pm]=key.split('-').map(Number);
+  const dim=(y,m0)=>new Date(y,m0+1,0).getDate();
+  const pago=new Date(py,pm-1,Math.min(parseInt(t.pago)||1,dim(py,pm-1)),12);
+  const cm=new Date(py,pm-2,1);
+  const cierre=new Date(cm.getFullYear(),cm.getMonth(),Math.min(parseInt(t.cierre)||25,dim(cm.getFullYear(),cm.getMonth())),12);
+  const dias=Math.round((pago-new Date(fecha.getFullYear(),fecha.getMonth(),fecha.getDate(),12))/86400000);
+  return {pago,cierre,dias};
+}
+function hrRenderDiaCompra(){
+  const el=document.getElementById('hr-dia'); if(!el) return;
+  const ts=state.tarjetas||[];
+  if(!ts.length){ el.innerHTML=wxVacio('Aún no tienes tarjetas registradas.','💳'); return; }
+  const hoy=new Date();
+  el.innerHTML=ts.map(t=>{
+    try{
+      const h=hrDiasTarjeta(t,hoy); let best=null;
+      for(let k=0;k<=35;k++){ const d=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+k); const r=hrDiasTarjeta(t,d); if(!best||r.dias>best.r.dias) best={d,r,k}; }
+      const bueno=best.r.dias-h.dias<=2;
+      const nombre=((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta';
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--border);font-size:12px"><div style="font-weight:700;margin-bottom:3px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${escapeHtml(t.color||'#5b8def')};margin-right:6px"></span>${escapeHtml(nombre)}</div>
+      <div style="color:var(--text2)">Si compras <b>hoy</b>: cierra el ${hrF(h.cierre)}, pagas el <b>${hrF(h.pago)}</b> → <b>${h.dias} días</b> para pagar.</div>
+      <div style="color:var(--text2)">${bueno?'👍 Hoy ya es de los mejores días.':`⭐ Mejor día: <b>${hrF(best.d)}</b>${best.k===0?' (hoy)':best.k===1?' (mañana)':` (en ${best.k} días)`} → pagas el ${hrF(best.r.pago)} (<b>${best.r.dias} días</b>).`}</div></div>`;
+    }catch(e){ return ''; }
+  }).join('')+`<div style="font-size:11px;color:var(--text3);margin-top:8px">Según el día de inicio, cierre y pago que configuraste en cada tarjeta. Las compras del día de cierre todavía entran al estado actual.</div>`;
+}
+
+// ── 6. ¿Me alcanza? ──
+function hrMaFormas(){
+  const sel=document.getElementById('hr-ma-forma'); if(!sel) return;
+  const prev=sel.value;
+  const opts=[['cuenta','Con mi dinero (cuenta)']].concat((state.tarjetas||[]).map(t=>[t.id,'Tarjeta '+(((t.banco||'')+' '+(t.cat||'')).trim()||'')]));
+  const firma=opts.map(o=>o.join('=')).join('|');
+  if(sel.dataset.firma===firma) return;
+  sel.dataset.firma=firma; sel.innerHTML=opts.map(o=>`<option value="${escapeHtml(String(o[0]))}">${escapeHtml(o[1])}</option>`).join('');
+  if(opts.some(o=>o[0]===prev)) sel.value=prev;
+}
+function hrMeAlcanza(){
+  const el=document.getElementById('hr-ma-res'); if(!el) return;
+  const monto=parseFloat(document.getElementById('hr-ma-monto').value);
+  const cur=document.getElementById('hr-ma-cur').value, forma=document.getElementById('hr-ma-forma').value||'cuenta';
+  const nC=Math.max(1,parseInt(document.getElementById('hr-ma-cuotas').value)||1);
+  const wrap=document.getElementById('hr-ma-cuotas-wrap'); if(wrap) wrap.style.display=forma==='cuenta'?'none':'';
+  if(!(monto>0)){ el.innerHTML=wxVacio('Escribe un monto para ver si te alcanza.','🤔'); return; }
+  const pen=gsPen(monto,cur), rate=gsRate();
+  let dp,R,cierre=null; try{ dp=gsDisponible(); R=gsRecomendado(dp); }catch(e){ el.innerHTML=wxVacio('No pude calcular tu disponible.','⚠️'); return; }
+  try{ cierre=calcularProyeccionCierre().proyeccionPen; }catch(e){}
+  let nivel=0; const F=[];
+  if(forma==='cuenta'){
+    const cash=dp.libreCuentas.pen+dp.libreCuentas.usd*rate;
+    F.push(['Dinero libre en tus cuentas (ya descontando tarjetas a pagar)',M(fmtS(cash)),cash>=pen?'var(--green)':'var(--red)']); if(cash<pen) nivel=2;
+    if(cierre!==null){ const q=cierre-pen; F.push(['Cierre de mes proyectado si lo pagas',M((q<0?'-':'')+fmtS(q)),q>=0?'var(--green)':'var(--red)']); if(q<0) nivel=Math.max(nivel,2); }
+    F.push(['Te queda del presupuesto del mes',M(fmtS(R.restante)),R.restante>=pen?'var(--green)':'var(--amber,#f0a53a)']); if(R.restante<pen) nivel=Math.max(nivel,1);
+    F.push(['Recomendado para hoy',M(fmtS(R.recomendado)),'var(--text)']);
+  } else {
+    const x=(dp.tarjetas||[]).find(z=>z.t.id===forma);
+    if(!x){ el.innerHTML=wxVacio('Elige una tarjeta.','💳'); return; }
+    const enCard=cur===x.cur?monto:(x.cur==='USD'?monto/rate:monto*rate);
+    if(x.linea>0){ F.push(['Línea libre de la tarjeta',M(gsFmt(x.libre,x.cur)),x.libre>=enCard?'var(--green)':'var(--red)']); if(x.libre<enCard) nivel=2; }
+    const h=hrDiasTarjeta(x.t,new Date());
+    const cuota=pen/nC;
+    F.push([nC>1?`Cuota mensual (${nC} cuotas, sin intereses)`:'Lo pagarías el '+hrF(h.pago)+' ('+h.dias+' días)',M(fmtS(cuota)),'var(--text)']);
+    if(nC>1) F.push(['Primer pago aprox.',hrF(h.pago),'var(--text)']);
+    F.push(['Te queda del presupuesto del mes',M(fmtS(R.restante)),R.restante>=cuota?'var(--green)':'var(--amber,#f0a53a)']); if(R.restante<cuota) nivel=Math.max(nivel,1);
+    if(R.ingreso>0) F.push(['La cuota pesa sobre tu ingreso del mes',(cuota/R.ingreso*100).toFixed(1)+'%',cuota/R.ingreso>0.2?'var(--amber,#f0a53a)':'var(--text)']);
+  }
+  const V=nivel===0?['✅','Sí te alcanza','var(--green)']:nivel===1?['⚠️','Te alcanza, pero te pasas de tu presupuesto del mes','var(--amber,#f0a53a)']:['❌','No te alcanza ahora','var(--red)'];
+  el.innerHTML=`<div style="font-size:15px;font-weight:700;color:${V[2]};margin:4px 0 8px">${V[0]} ${V[1]}</div>`+F.map(f=>wxFila(f[0],f[1],f[2])).join('');
+}
+
+// ── 7. Fondo de emergencia ──
+function hrAhorroNetoMensual(){
+  const hoy=new Date(), tc=(state.tc&&state.tc.compra)||3.4, arr=[];
+  for(let i=1;i<=6;i++){
+    const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);
+    const movs=getMovs(d.getFullYear(),d.getMonth()).filter(m=>aporteAhorroNeto(m)!==0);
+    if(!movs.length) continue;
+    arr.push(movs.reduce((s,m)=>s+aporteAhorroNeto(m)*(monedaDeCuenta(m.account)==='USD'?tc:1),0));
+  }
+  const r=arr.slice(0,3); return r.length?r.reduce((s,x)=>s+x,0)/r.length:0;
+}
+function hrGastoPromedio(){
+  const hoy=new Date(), arr=[];
+  for(let i=1;i<=3;i++){ const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1); const s=gsItems(d.getFullYear(),d.getMonth()).reduce((t,x)=>t+x.pen,0); if(s>0) arr.push(s); }
+  if(arr.length) return arr.reduce((s,x)=>s+x,0)/arr.length;
+  return gsItems(hoy.getFullYear(),hoy.getMonth()).reduce((t,x)=>t+x.pen,0);
+}
+function hrRenderFondo(){
+  const el=document.getElementById('hr-fondo'); if(!el) return;
+  const sel=document.getElementById('hr-fondo-meta'); const meta=Number(state.fondoEmergenciaMeses)||6; if(sel&&sel.value!==String(meta)) sel.value=String(meta);
+  const tc=(state.tc&&state.tc.compra)||3.4, ahorro=getTotalAhorroSoles()+getTotalAhorroDolares()*tc, gasto=hrGastoPromedio();
+  if(!(gasto>0)){ el.innerHTML=wxVacio('Aún no hay gastos suficientes para calcular tu gasto mensual.','🛟'); return; }
+  const meses=ahorro/gasto, objetivo=gasto*meta, falta=Math.max(0,objetivo-ahorro), neto=hrAhorroNetoMensual();
+  const col=meses>=meta?'var(--green)':meses>=3?'var(--amber,#f0a53a)':'var(--red)';
+  let ritmo=''; if(falta>0){ ritmo=neto>0?`A tu ritmo de ahorro (${M(fmtS(neto))}/mes) llegas en <b>${Math.ceil(falta/neto)} meses</b>.`:'Aún no registras ahorro mensual para estimar cuándo llegas.'; } else ritmo='🎉 Ya cubres tu meta.';
+  el.innerHTML=`<div style="font-size:26px;font-weight:800;color:${col}">${meses.toFixed(1)} <span style="font-size:13px;font-weight:600;color:var(--text2)">meses de gastos cubiertos</span></div>
+  <div style="margin:8px 0">${wxBarra(meses/meta*100,col)}</div>
+  ${wxFila('Ahorro total (dólares al TC de compra)',M(fmtS(ahorro)),'var(--text)')}${wxFila('Gasto mensual promedio (últimos 3 meses)',M(fmtS(gasto)),'var(--text)')}${wxFila('Meta ('+meta+' meses)',M(fmtS(objetivo)),'var(--text)')}${wxFila('Te falta',M(fmtS(falta)),falta>0?'var(--red)':'var(--green)')}
+  <div style="font-size:12px;color:var(--text2);margin-top:8px">${ritmo}</div>`;
+}
+function hrFondoMeta(v){ state.fondoEmergenciaMeses=Number(v)||6; saveState(); hrRenderFondo(); }
+
+// ── 8. Etiquetas (#viaje) ──
+function hrRenderEtiquetas(){
+  const el=document.getElementById('hr-tags'); if(!el) return;
+  const g={};
+  hrGastosTodos().forEach(i=>{ const m=String(i.desc||'').match(/#[\p{L}\d_]+/gu); if(!m) return; new Set(m.map(x=>x.slice(1).toLowerCase())).forEach(t=>{ const o=g[t]||(g[t]={t,pen:0,usd:0,n:0,desde:i.fecha,hasta:i.fecha,items:[]}); if(i.cur==='USD') o.usd+=i.amount; else o.pen+=i.amount; o.n++; if(i.fecha<o.desde) o.desde=i.fecha; if(i.fecha>o.hasta) o.hasta=i.fecha; o.items.push(i); }); });
+  const L=Object.values(g).sort((a,b)=>(b.pen+b.usd*gsRate())-(a.pen+a.usd*gsRate()));
+  if(!L.length){ el.innerHTML=wxVacio('Aún no usas etiquetas. Escribe <b>#cusco</b> (o cualquier #palabra) en la descripción de un gasto y aquí verás el total de ese viaje o evento.','🏷️'); return; }
+  el.innerHTML=L.map(o=>`<details style="border-bottom:1px solid var(--border);padding:6px 0"><summary style="cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px"><b style="flex:1">#${escapeHtml(o.t)}</b><span style="color:var(--text3);font-size:11px">${o.n} gasto${o.n===1?'':'s'} · ${hrFIso(o.desde)}${o.desde!==o.hasta?' → '+hrFIso(o.hasta):''}</span><b style="font-family:var(--mono)">${M(gsMix(o.pen,o.usd))}</b></summary><div style="padding:6px 0 2px">${o.items.sort((a,b)=>a.fecha<b.fecha?1:-1).map(i=>`<div style="display:flex;gap:8px;font-size:11px;padding:2px 0;color:var(--text2)"><span style="width:70px;color:var(--text3)">${hrFIso(i.fecha).slice(0,5)}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(i.desc)}</span><span style="font-family:var(--mono)">${M(gsFmt(i.amount,i.cur))}</span></div>`).join('')}</div></details>`).join('');
+}
+
+// ── 9. Metas de la lista de compras ──
+function hrRenderMetasCompras(){
+  const el=document.getElementById('hr-metas'); if(!el) return;
+  const L=(state.listaCompras||[]).filter(c=>c&&c.estado==='deseado').map(c=>({c,pen:gsPen(getUltimoPrecio(c)||0,c.moneda||'PEN'),precio:getUltimoPrecio(c)||0})).filter(x=>x.precio>0).sort((a,b)=>a.pen-b.pen);
+  if(!L.length){ el.innerHTML=wxVacio('No tienes artículos deseados con precio en tu lista de compras.','🛒'); return; }
+  let base=hrAhorroNetoMensual(), fuente='tu ahorro mensual real';
+  if(!(base>0)){ try{ base=gsRecomendado(gsDisponible()).ahorro; fuente='tu ahorro objetivo del mes'; }catch(e){ base=0; } }
+  const hoy=new Date();
+  el.innerHTML=(base>0?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Calculado con ${fuente}: ${M(fmtS(base))} al mes.</div>`:'<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Aún no hay ahorro mensual para estimar.</div>')+L.slice(0,12).map(x=>{
+    let txt='—'; if(base>0){ const n=Math.max(1,Math.ceil(x.pen/base)), d=new Date(hoy.getFullYear(),hoy.getMonth()+n,1); txt=n+(n===1?' mes':' meses')+' · '+MONTHS[d.getMonth()].slice(0,3)+' '+d.getFullYear(); }
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🛍️ ${escapeHtml(x.c.nombre||'')}</span><b style="font-family:var(--mono)">${M(gsFmt(x.precio,x.c.moneda==='USD'?'USD':'PEN'))}</b><span style="width:118px;text-align:right;color:var(--text2)">${txt}</span></div>`;
+  }).join('');
+}
+
+// ── 10. Vencimientos del auto ──
+let _hrVencEdit=null;
+function hrVencOtro(){ const s=document.getElementById('hr-v-tipo'), o=document.getElementById('hr-v-otro'); if(s&&o) o.style.display=s.value==='Otro'?'':'none'; }
+function hrVencGuardar(){
+  const sel=document.getElementById('hr-v-tipo').value, otro=document.getElementById('hr-v-otro').value.trim();
+  const nombre=sel==='Otro'?otro:sel, fecha=document.getElementById('hr-v-fecha').value, nota=document.getElementById('hr-v-nota').value.trim();
+  if(!nombre){ toast('Escribe qué vence'); return; } if(!fecha){ toast('Elige la fecha de vencimiento'); return; }
+  const arr=state.vencimientosAuto||(state.vencimientosAuto=[]);
+  if(_hrVencEdit){ const v=arr.find(x=>x.id===_hrVencEdit); if(v) Object.assign(v,{nombre,fecha,nota}); } else arr.push({id:'vc-'+Date.now(),nombre,fecha,nota});
+  _hrVencEdit=null; hrVencLimpiar(); saveState(); hrRenderVenc(); toast('Vencimiento guardado');
+}
+function hrVencLimpiar(){ _hrVencEdit=null; ['hr-v-otro','hr-v-fecha','hr-v-nota'].forEach(i=>{ const e=document.getElementById(i); if(e) e.value=''; }); const s=document.getElementById('hr-v-tipo'); if(s) s.value='SOAT'; hrVencOtro(); const b=document.getElementById('hr-v-btn'); if(b) b.textContent='Agregar'; const c=document.getElementById('hr-v-cancel'); if(c) c.style.display='none'; }
+function hrVencEditar(id){
+  const v=(state.vencimientosAuto||[]).find(x=>x.id===id); if(!v) return; _hrVencEdit=id;
+  const s=document.getElementById('hr-v-tipo'), pre=[...s.options].some(o=>o.value===v.nombre);
+  s.value=pre?v.nombre:'Otro'; document.getElementById('hr-v-otro').value=pre?'':v.nombre; hrVencOtro();
+  document.getElementById('hr-v-fecha').value=v.fecha; document.getElementById('hr-v-nota').value=v.nota||'';
+  document.getElementById('hr-v-btn').textContent='Guardar cambios'; document.getElementById('hr-v-cancel').style.display='';
+}
+function hrVencRenovar(id){ const v=(state.vencimientosAuto||[]).find(x=>x.id===id); if(!v) return; const d=new Date(v.fecha+'T12:00:00'); d.setFullYear(d.getFullYear()+1); v.fecha=wxIso(d); saveState(); hrRenderVenc(); toast('Renovado hasta '+hrFIso(v.fecha)); }
+function hrVencEliminar(id){ const v=(state.vencimientosAuto||[]).find(x=>x.id===id); if(!v) return; if(!confirm('¿Eliminar "'+v.nombre+'"?')) return; state.vencimientosAuto=state.vencimientosAuto.filter(x=>x.id!==id); saveState(); hrRenderVenc(); }
+function hrRenderVenc(){
+  const el=document.getElementById('hr-venc'); if(!el) return;
+  const L=(state.vencimientosAuto||[]).slice().sort((a,b)=>a.fecha<b.fecha?-1:1);
+  if(!L.length){ el.innerHTML=wxVacio('Agrega SOAT, revisión técnica, brevete u otros y te mostraré cuánto falta.','🚗'); return; }
+  el.innerHTML=L.map(v=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px"><div style="flex:1;min-width:0"><div style="font-weight:600">${escapeHtml(v.nombre)}</div><div style="color:var(--text3);font-size:11px">${hrFIso(v.fecha)}${v.nota?' · '+escapeHtml(v.nota):''}</div></div><span style="white-space:nowrap">${hrBadge(hrDiasHasta(v.fecha))}</span><button class="btn" style="font-size:10px;padding:3px 6px" title="Renovar un año" onclick="hrVencRenovar('${v.id}')">+1 año</button><button class="btn" style="font-size:10px;padding:3px 6px" title="Editar" onclick="hrVencEditar('${v.id}')">✏️</button><button class="btn" style="font-size:10px;padding:3px 6px;color:var(--red)" title="Eliminar" onclick="hrVencEliminar('${v.id}')">🗑</button></div>`).join('');
+}
+Object.assign(DASHBOARD_WIDGET_DEFS,{
+  'wx-vencimientos':{label:'🚗 Vencimientos del auto',size:'medium',shell:()=>wxShell('wx-vencimientos','🚗 Vencimientos del auto',"showPage('herr')",'Abrir Herramientas →')}
+});
+function wxVencimientos(){
+  const el=document.getElementById('wx-vencimientos-body'); if(!el) return;
+  const L=(state.vencimientosAuto||[]).slice().sort((a,b)=>a.fecha<b.fecha?-1:1).slice(0,4);
+  el.innerHTML=L.length?L.map(v=>wxFila(escapeHtml(v.nombre),hrBadge(hrDiasHasta(v.fecha)),'var(--text)')).join(''):wxVacio('Sin vencimientos. Agrégalos en Herramientas.','🚗');
+}
+
+function renderHerramientas(){
+  [hrMaFormas,hrMeAlcanza,hrRenderFondo,hrRenderDiaCompra,hrRenderSuscripciones,hrRenderDuplicados,hrRenderEtiquetas,hrRenderMetasCompras,hrRenderVenc].forEach(f=>{ try{ f(); }catch(e){ console.warn('Herramientas:',f.name,e); } });
+}
+
 function renderNuevosWidgetsDashboard(){
   // ── Mis Metas de Ahorro ──
   const metasEl=document.getElementById('dash-metas-list');
@@ -27866,6 +28190,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.0.0",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Nueva página 🧰 Herramientas (en Otros): ¿Me alcanza?, fondo de emergencia, mejor día para comprar con tarjeta, suscripciones olvidadas, posibles duplicados, etiquetas #viaje, metas de la lista de compras y vencimientos del auto (con widget opcional en el Resumen)."
+  ]
+ },
  {
   "v": "v1.99.0",
   "fecha": "08/11/26",
