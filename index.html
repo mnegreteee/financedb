@@ -3391,6 +3391,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <li><b>Etiquetas</b>: cualquier <code>#palabra</code> en la descripción de un gasto de cuenta o tarjeta. Usa las mismas reglas de Gastos (sin transferencias, pagos de tarjeta ni cambio de moneda).</li>
       <li><b>Metas de compras</b>: precio del artículo deseado ÷ tu ahorro neto mensual (promedio de 3 meses; si no hay, tu ahorro objetivo del mes).</li>
       <li><b>Vencimientos del auto</b>: fechas que tú registras; no afectan saldos.</li>
+      <li><b>Widgets de Herramientas</b> (ocultos por defecto; se activan en ✏️ Editar → Mi Resumen): Fondo de emergencia, ¿Me alcanza? (solo pagando con tu dinero), Mejor día para comprar, Suscripciones detectadas, Posibles duplicados, Etiquetas y viajes, Próxima meta de compra y Alertas de herramientas (vencimientos a 30 días o menos, duplicados y suscripciones). Usan exactamente los mismos cálculos de la página.</li>
     </ul></div></details>
   <details class="gd-card"><summary>🧭 Reglas que aplican en toda la app</summary><div class="gd-body">
     <ul>
@@ -4411,9 +4412,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.0.0';
-const APP_VERSION_DATE = '08/11/26 - 14:33'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva página 🧰 Herramientas (en Otros): ¿Me alcanza?, fondo de emergencia, mejor día para comprar con tarjeta, suscripciones olvidadas, posibles duplicados, etiquetas #viaje, metas de la lista de compras y vencimientos del auto (con widget opcional en el Resumen).';
+const APP_VERSION = 'v2.1.0';
+const APP_VERSION_DATE = '08/11/26 - 15:07'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Resumen: 8 widgets nuevos de Herramientas (Fondo de emergencia, ¿Me alcanza?, Mejor día para comprar, Suscripciones, Duplicados, Etiquetas y viajes, Próxima meta de compra y Alertas). Se activan en ✏️ Editar → Mi Resumen.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -18110,7 +18111,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
   {id:'alertas-presupuesto', visible:false},
-  {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false},
+  {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false}, {id:'hw-fondo', visible:false}, {id:'hw-mealcanza', visible:false}, {id:'hw-diacompra', visible:false}, {id:'hw-subs', visible:false}, {id:'hw-dups', visible:false}, {id:'hw-tags', visible:false}, {id:'hw-meta', visible:false}, {id:'hw-alertas', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -18641,6 +18642,7 @@ function renderDashDebts(){
   renderNuevosWidgetsDashboard();
   renderWidgetsExtra();
   try{ wxVencimientos(); }catch(e){ console.warn('Widget vencimientos:',e); }
+  hwTodos();
 }
 // Llena los 10 widgets NUEVOS (solo si su contenedor existe, es decir, si
 // la persona los activó) — cada uno resume su sección y lleva directo ahí.
@@ -19063,6 +19065,91 @@ function wxVencimientos(){
   const L=(state.vencimientosAuto||[]).slice().sort((a,b)=>a.fecha<b.fecha?-1:1).slice(0,4);
   el.innerHTML=L.length?L.map(v=>wxFila(escapeHtml(v.nombre),hrBadge(hrDiasHasta(v.fecha)),'var(--text)')).join(''):wxVacio('Sin vencimientos. Agrégalos en Herramientas.','🚗');
 }
+
+// ═══ Widgets del Resumen basados en 🧰 Herramientas (todos ocultos por defecto) ═══
+function hrMejorDia(t){
+  const hoy=new Date(), h=hrDiasTarjeta(t,hoy); let best=null;
+  for(let k=0;k<=35;k++){ const d=new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate()+k), r=hrDiasTarjeta(t,d); if(!best||r.dias>best.r.dias) best={d,r,k}; }
+  return {h,best};
+}
+function hrTagsDatos(){
+  const g={};
+  hrGastosTodos().forEach(i=>{ const m=String(i.desc||'').match(/#[\p{L}\d_]+/gu); if(!m) return; new Set(m.map(x=>x.slice(1).toLowerCase())).forEach(t=>{ const o=g[t]||(g[t]={t,pen:0,usd:0,n:0}); if(i.cur==='USD') o.usd+=i.amount; else o.pen+=i.amount; o.n++; }); });
+  return Object.values(g).sort((a,b)=>(b.pen+b.usd*gsRate())-(a.pen+a.usd*gsRate()));
+}
+Object.assign(DASHBOARD_WIDGET_DEFS,{
+  'hw-fondo':{label:'🛟 Fondo de emergencia',size:'medium',shell:()=>wxShell('hw-fondo','🛟 Fondo de emergencia',"showPage('herr')",'Abrir Herramientas →')},
+  'hw-mealcanza':{label:'🤔 ¿Me alcanza?',size:'medium',shell:()=>wxShell('hw-mealcanza','🤔 ¿Me alcanza?',"showPage('herr')",'Con tarjeta o cuotas →')},
+  'hw-diacompra':{label:'📅 Mejor día para comprar',size:'medium',shell:()=>wxShell('hw-diacompra','📅 Mejor día para comprar',"showPage('herr')",'Ver detalle →')},
+  'hw-subs':{label:'🔁 Suscripciones detectadas',size:'medium',shell:()=>wxShell('hw-subs','🔁 Suscripciones detectadas',"showPage('herr')",'Revisar lista →')},
+  'hw-dups':{label:'👯 Posibles duplicados',size:'medium',shell:()=>wxShell('hw-dups','👯 Posibles duplicados',"showPage('herr')",'Revisar →')},
+  'hw-tags':{label:'🏷️ Etiquetas y viajes',size:'medium',shell:()=>wxShell('hw-tags','🏷️ Etiquetas y viajes',"showPage('herr')",'Ver todas →')},
+  'hw-meta':{label:'🎯 Próxima meta de compra',size:'medium',shell:()=>wxShell('hw-meta','🎯 Próxima meta de compra',"showPage('compras')",'Lista de compras →')},
+  'hw-alertas':{label:'🧰 Alertas de herramientas',size:'medium',shell:()=>wxShell('hw-alertas','🧰 Alertas de herramientas',"showPage('herr')",'Abrir Herramientas →')}
+});
+function hwSet(id,html){ const el=document.getElementById(id+'-body'); if(el) el.innerHTML=html; }
+function hwFondo(){
+  if(!document.getElementById('hw-fondo-body')) return;
+  const tc=(state.tc&&state.tc.compra)||3.4, ahorro=getTotalAhorroSoles()+getTotalAhorroDolares()*tc, gasto=hrGastoPromedio(), meta=Number(state.fondoEmergenciaMeses)||6;
+  if(!(gasto>0)){ hwSet('hw-fondo',wxVacio('Aún no hay gastos para calcular.','🛟')); return; }
+  const meses=ahorro/gasto, falta=Math.max(0,gasto*meta-ahorro), neto=hrAhorroNetoMensual(), col=meses>=meta?'var(--green)':meses>=3?'var(--amber,#f0a53a)':'var(--red)';
+  hwSet('hw-fondo',`<div style="font-size:26px;font-weight:800;color:${col}">${meses.toFixed(1)} <span style="font-size:12px;font-weight:600;color:var(--text2)">de ${meta} meses de gastos</span></div><div style="margin:8px 0">${wxBarra(meses/meta*100,col)}</div>${falta>0?wxFila('Te falta',M(fmtS(falta)),'var(--red)')+(neto>0?wxFila('A tu ritmo llegas en',Math.ceil(falta/neto)+' meses','var(--text)'):''):'<div style="font-size:12px;color:var(--green)">🎉 Ya cubres tu meta</div>'}`);
+}
+function hwMeAlcanza(){
+  const el=document.getElementById('hw-ma-res'); if(!el) return;
+  const monto=parseFloat((document.getElementById('hw-ma-monto')||{}).value), cur=(document.getElementById('hw-ma-cur')||{}).value||'PEN';
+  if(!(monto>0)){ el.innerHTML=''; return; }
+  const pen=gsPen(monto,cur); let dp,R,cierre=null;
+  try{ dp=gsDisponible(); R=gsRecomendado(dp); }catch(e){ el.textContent='No pude calcular.'; return; }
+  try{ cierre=calcularProyeccionCierre().proyeccionPen; }catch(e){}
+  const cash=dp.libreCuentas.pen+dp.libreCuentas.usd*gsRate(); let nivel=0;
+  if(cash<pen||(cierre!==null&&cierre-pen<0)) nivel=2; else if(R.restante<pen) nivel=1;
+  const V=nivel===0?['✅','Sí te alcanza','var(--green)']:nivel===1?['⚠️','Alcanza, pero te pasas del presupuesto del mes','var(--amber,#f0a53a)']:['❌','No te alcanza ahora','var(--red)'];
+  el.innerHTML=`<div style="font-weight:700;color:${V[2]};margin:6px 0 4px">${V[0]} ${V[1]}</div>${wxFila('Te queda del presupuesto',M(fmtS(R.restante)),'var(--text)')}${cierre!==null?wxFila('Cierre proyectado si lo pagas',M((cierre-pen<0?'-':'')+fmtS(cierre-pen)),cierre-pen>=0?'var(--green)':'var(--red)'):''}`;
+}
+function hwMeAlcanzaShell(){
+  if(!document.getElementById('hw-mealcanza-body')) return;
+  hwSet('hw-mealcanza',`<div style="display:flex;gap:6px"><input type="number" id="hw-ma-monto" inputmode="decimal" step="0.01" min="0" placeholder="Monto" style="flex:1;min-width:0;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:13px" oninput="hwMeAlcanza()"><select id="hw-ma-cur" onchange="hwMeAlcanza()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px"><option value="PEN">S/</option><option value="USD">$</option></select></div><div id="hw-ma-res"></div>`);
+}
+function hwDiaCompra(){
+  if(!document.getElementById('hw-diacompra-body')) return;
+  const ts=(state.tarjetas||[]).slice(0,4); if(!ts.length){ hwSet('hw-diacompra',wxVacio('Aún no tienes tarjetas.','💳')); return; }
+  hwSet('hw-diacompra',ts.map(t=>{ try{ const {h,best}=hrMejorDia(t); const bueno=best.r.dias-h.dias<=2; return wxFila(escapeHtml(((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta')+`<div style="font-size:10px;color:var(--text3)">${bueno?'👍 hoy es buen día':'⭐ mejor: '+hrF(best.d)+' ('+best.r.dias+' d)'}</div>`,h.dias+' d','var(--text)'); }catch(e){ return ''; } }).join('')+`<div style="font-size:10px;color:var(--text3);margin-top:6px">Días para pagar si compras hoy</div>`);
+}
+function hwSubs(){
+  if(!document.getElementById('hw-subs-body')) return;
+  const L=hrSuscripciones(); if(!L.length){ hwSet('hw-subs',wxVacio('Sin suscripciones sin control.','✅')); return; }
+  const tot=L.reduce((s,x)=>s+x.anualPen,0);
+  hwSet('hw-subs',`<div style="font-size:22px;font-weight:800">${M(fmtS(tot/12))}<span style="font-size:12px;font-weight:600;color:var(--text2)"> al mes · ${L.length}</span></div><div style="font-size:11px;color:var(--text3);margin-bottom:4px">≈ ${M(fmtS(tot))} al año</div>`+L.slice(0,3).map(x=>wxFila(escapeHtml(x.nombre),M(gsFmt(x.monto,x.cur)),'var(--text)')).join(''));
+}
+function hwDups(){
+  if(!document.getElementById('hw-dups-body')) return;
+  const L=hrDuplicados(); if(!L.length){ hwSet('hw-dups',wxVacio('Todo limpio: sin gastos repetidos.','✅')); return; }
+  hwSet('hw-dups',`<div style="font-size:22px;font-weight:800;color:var(--amber,#f0a53a)">${L.length} <span style="font-size:12px;font-weight:600;color:var(--text2)">por revisar</span></div>`+L.slice(0,3).map(p=>wxFila(escapeHtml(p.x.desc||'(sin concepto)')+`<div style="font-size:10px;color:var(--text3)">${hrFIso(p.x.fecha)}</div>`,M(gsFmt(p.x.amount,p.x.cur)),'var(--text)')).join(''));
+}
+function hwTags(){
+  if(!document.getElementById('hw-tags-body')) return;
+  const L=hrTagsDatos(); if(!L.length){ hwSet('hw-tags',wxVacio('Escribe #viaje en la descripción de un gasto.','🏷️')); return; }
+  hwSet('hw-tags',L.slice(0,3).map(o=>wxFila('#'+escapeHtml(o.t)+`<div style="font-size:10px;color:var(--text3)">${o.n} gasto${o.n===1?'':'s'}</div>`,M(gsMix(o.pen,o.usd)),'var(--text)')).join(''));
+}
+function hwMeta(){
+  if(!document.getElementById('hw-meta-body')) return;
+  const L=(state.listaCompras||[]).filter(c=>c&&c.estado==='deseado').map(c=>({c,precio:getUltimoPrecio(c)||0})).filter(x=>x.precio>0).map(x=>({...x,pen:gsPen(x.precio,x.c.moneda||'PEN')})).sort((a,b)=>a.pen-b.pen);
+  if(!L.length){ hwSet('hw-meta',wxVacio('No hay artículos deseados con precio.','🛒')); return; }
+  let base=hrAhorroNetoMensual(); if(!(base>0)){ try{ base=gsRecomendado(gsDisponible()).ahorro; }catch(e){ base=0; } }
+  const x=L[0], n=base>0?Math.max(1,Math.ceil(x.pen/base)):null, d=n?new Date(new Date().getFullYear(),new Date().getMonth()+n,1):null;
+  hwSet('hw-meta',`<div style="font-size:14px;font-weight:700">🛍️ ${escapeHtml(x.c.nombre||'')}</div><div style="font-family:var(--mono);margin:2px 0 6px">${M(gsFmt(x.precio,x.c.moneda==='USD'?'USD':'PEN'))}</div>${n?`<div style="font-size:12px;color:var(--text2)">Lo juntas en <b>${n} ${n===1?'mes':'meses'}</b> (${MONTHS[d.getMonth()].slice(0,3)} ${d.getFullYear()})</div>`:'<div style="font-size:12px;color:var(--text3)">Aún no hay ahorro mensual para estimar.</div>'}${L.length>1?`<div style="font-size:10px;color:var(--text3);margin-top:6px">+${L.length-1} más en tu lista</div>`:''}`);
+}
+function hwAlertas(){
+  if(!document.getElementById('hw-alertas-body')) return;
+  const venc=(state.vencimientosAuto||[]).map(v=>({v,d:hrDiasHasta(v.fecha)})).filter(x=>x.d<=30).sort((a,b)=>a.d-b.d);
+  const nd=hrDuplicados().length, ns=hrSuscripciones().length; const F=[];
+  venc.slice(0,3).forEach(x=>F.push(wxFila('🚗 '+escapeHtml(x.v.nombre),hrBadge(x.d),'var(--text)')));
+  if(nd) F.push(wxFila('👯 Posibles duplicados',nd,'var(--amber,#f0a53a)'));
+  if(ns) F.push(wxFila('🔁 Suscripciones detectadas',ns,'var(--text)'));
+  hwSet('hw-alertas',F.length?F.join(''):'<div style="font-size:13px;color:var(--green)">✅ Todo en orden: sin vencimientos cercanos, duplicados ni suscripciones nuevas.</div>');
+}
+function hwTodos(){ [hwFondo,hwMeAlcanzaShell,hwDiaCompra,hwSubs,hwDups,hwTags,hwMeta,hwAlertas].forEach(f=>{ try{ f(); }catch(e){ console.warn('Widget omitido:',f.name,e); } }); }
 
 function renderHerramientas(){
   [hrMaFormas,hrMeAlcanza,hrRenderFondo,hrRenderDiaCompra,hrRenderSuscripciones,hrRenderDuplicados,hrRenderEtiquetas,hrRenderMetasCompras,hrRenderVenc].forEach(f=>{ try{ f(); }catch(e){ console.warn('Herramientas:',f.name,e); } });
@@ -28190,6 +28277,27 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.1.0",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Resumen: 8 widgets nuevos de Herramientas (Fondo de emergencia, ¿Me alcanza?, Mejor día para comprar, Suscripciones, Duplicados, Etiquetas y viajes, Próxima meta de compra y Alertas). Se activan en ✏️ Editar → Mi Resumen."
+  ]
+ },
+ {
+  "v": "v2.0.2",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Se quitó la placa y el botón de consulta de SOAT en APESEG (Herramientas → Vencimientos del auto) que se había agregado en la versión anterior."
+  ]
+ },
+ {
+  "v": "v2.0.1",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Herramientas → Vencimientos del auto: ahora guardas tu placa y el botón 🔎 Consultar SOAT en APESEG copia la placa y abre la consulta oficial."
+  ]
+ },
  {
   "v": "v2.0.0",
   "fecha": "08/11/26",
