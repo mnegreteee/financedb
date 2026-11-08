@@ -141,6 +141,26 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 
 /* ── LAYOUT ── */
 .page{display:none;}.page.active{display:block;}
+.gd-wrap{max-width:980px;margin:0 auto}
+.gd-intro{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px}
+.gd-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+.gd-card>summary{cursor:pointer;list-style:none;padding:14px 18px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.gd-card>summary::-webkit-details-marker{display:none}
+.gd-card>summary::after{content:'▾';margin-left:auto;color:var(--text3);transition:transform .15s}
+.gd-card[open]>summary::after{transform:rotate(180deg)}
+.gd-body{padding:0 18px 16px;font-size:13px;line-height:1.65;color:var(--text2)}
+.gd-body h4{margin:12px 0 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+.gd-body ul{margin:4px 0 0;padding-left:18px}.gd-body li{margin:3px 0}
+.gd-body code{font-family:var(--mono);font-size:12px;background:var(--bg3);padding:1px 5px;border-radius:4px;color:var(--text)}
+.gd-tabla-wrap{overflow-x:auto;margin:8px 0 18px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg2)}
+.gd-tabla{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+.gd-tabla th,.gd-tabla td{padding:9px 10px;border-bottom:1px solid var(--border);text-align:center}
+.gd-tabla th:first-child,.gd-tabla td:first-child{text-align:left;color:var(--text)}
+.gd-tabla th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);background:var(--bg3)}
+.gd-tabla .si{color:var(--green);font-weight:700}.gd-tabla .no{color:var(--text3)}.gd-tabla .ojo{color:var(--amber,#f0a53a);font-weight:700}
+.gd-nota{font-size:12px;color:var(--text3);margin:-10px 0 16px;line-height:1.5}
+.gd-ej{margin-top:8px;padding:9px 12px;border-left:3px solid var(--accent);background:var(--bg3);border-radius:6px;font-size:12px}
+
 .container{max-width:1360px;margin:0 auto;padding:24px 28px;}
 
 /* ── MONTH NAV ── */
@@ -1454,6 +1474,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <button class="nav-dropdown-item" id="nav-compras" onclick="showPage('compras')">🛒 Lista de Compras</button>
         <button class="nav-dropdown-item" id="nav-ahorros-intereses" onclick="showPage('ahorros-intereses')">💰 Ahorros e Intereses</button>
         <button class="nav-dropdown-item" id="nav-minijuegos" onclick="showPage('minijuegos')">🎮 Minijuegos</button>
+        <button class="nav-dropdown-item" id="nav-guia" onclick="showPage('guia')">📖 Cómo se calcula</button>
       </div>
     </div>
 
@@ -3194,6 +3215,175 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 </div>
 
 <!-- ══ PAGE: MINIJUEGOS ══ -->
+<div class="page" id="page-guia">
+<div class="container gd-wrap">
+  <div class="section-header" style="margin-bottom:12px"><div class="section-title">📖 Cómo se calcula</div></div>
+  <div class="gd-intro">Aquí se explica qué cuenta cada sección y qué deja fuera. La idea clave: hay dos formas de mirar tu plata. <b>Flujo de caja</b> (lo que entra y sale de tus cuentas: Finanzas, Comparativo, Año Completo) y <b>gasto real</b> (lo que consumiste, aunque aún no lo hayas pagado: Gastos, Presupuesto, recomendado, alertas e IA). Por eso un mismo mes puede dar totales distintos según la sección — no es un error.</div>
+
+  <div class="gd-tabla-wrap"><table class="gd-tabla">
+    <thead><tr><th>¿Qué pasa con…?</th><th>📊 Finanzas · Comparativo · Año</th><th>💸 Gastos</th><th>🎯 Presupuesto</th><th>Recomendado / alertas / IA</th></tr></thead>
+    <tbody>
+    <tr><td>Gasto pagado desde una cuenta</td><td class="si">Cuenta</td><td class="si">Cuenta</td><td class="si">Cuenta (si tiene categoría)</td><td class="si">Cuenta</td></tr>
+    <tr><td>Consumo con tarjeta de crédito</td><td class="no">No (aún no salió plata)</td><td class="si">Cuenta, en la fecha del consumo</td><td class="si">Cuenta (si tiene categoría)</td><td class="si">Cuenta</td></tr>
+    <tr><td>Pago del estado de tarjeta (sale de tu cuenta)</td><td class="si">Cuenta (salida de efectivo)</td><td class="no">No (ya contaste los consumos)</td><td class="no">No</td><td class="no">No</td></tr>
+    <tr><td>Transferencia entre tus cuentas</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+    <tr><td>Compra / venta de dólares (cambio de moneda)</td><td class="ojo">Cuenta como movimiento de caja</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+    <tr><td>Gasto en dólares (ej. compra con $)</td><td class="si">Sí, convertido a soles al TC de venta</td><td class="si">Sí, se muestra aparte en $ y en total convertido</td><td class="si">Sí, convertido al TC de venta</td><td class="si">Sí</td></tr>
+    <tr><td>Interés ganado en ahorros</td><td class="si">Ingreso del mes</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+    <tr><td>Cargo del banco pendiente de aprobar</td><td class="no">No</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+    </tbody></table></div>
+  <div class="gd-nota">En Finanzas el cambio de dólares se ve como movimiento porque el dinero sí cambió de bolsillo; en Gastos no, porque el gasto real es lo que compras después con esos dólares (si no, se contaría dos veces).</div>
+
+  <details class="gd-card" open><summary>🏠 Resumen (inicio)</summary><div class="gd-body">
+    <p>Es un tablero con widgets que <b>reutilizan</b> los cálculos de las demás secciones; no tiene reglas propias. Cada widget dice de dónde sale:</p>
+    <ul>
+      <li><b>Disponible / Proyección de cierre</b>: igual que Finanzas (abajo).</li>
+      <li><b>Gastos del mes, Gasto por categoría, Gastos por mes, Recomendado de hoy</b>: igual que Gastos.</li>
+      <li><b>Deuda</b>: igual que Tarjetas + Deudas.</li>
+      <li><b>Racha</b>: días seguidos con al menos un movimiento o consumo registrado. Si hoy aún no registraste nada, no se rompe hasta que pase un día completo sin registros.</li>
+      <li>Los montos con 👁 oculto se tapan solo en pantalla; no cambian los cálculos.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>📊 Finanzas (vista de mes)</summary><div class="gd-body">
+    <h4>Qué muestra</h4>
+    <ul>
+      <li><b>Ingresos / Gastos / Resultado del mes</b>: suma de los movimientos de cuentas del mes. Los dólares se pasan a soles al <b>TC de venta</b>.</li>
+      <li><b>Disponible actual</b>: saldo de tus cuentas <b>operativas</b> (BCP, BBVA, Efectivo y las que marcaste como operativas) reconstruido hasta el mes que miras. Soles y dólares no se mezclan.</li>
+      <li><b>Ahorro</b>: saldo de las cuentas tipo ahorro (aparte del disponible). <b>Total</b> = disponible + ahorro (+ ahorro en dólares × TC de compra cuando lo ves en soles).</li>
+      <li><b>Proyección de cierre</b> (solo mes actual) = disponible actual + ingresos fijos pendientes − gastos fijos pendientes − tarjetas “a pagar” este mes. Para cada pago frecuente usa el último monto real que registraste (si nunca hubo, el monto fijo). Los pagos frecuentes hechos <i>con tarjeta</i> no se restan aparte: ya están en lo que pagas de tarjeta.</li>
+    </ul>
+    <h4>Qué no cuenta</h4>
+    <ul><li>Transferencias entre tus cuentas (ni ingreso ni gasto).</li><li>Consumos de tarjeta todavía no pagados: no son salida de efectivo hasta que pagas el estado.</li></ul>
+    <div class="gd-ej">Ejemplo: compras con tarjeta S/ 300 el día 5. En <b>Gastos</b> aparecen el día 5. En <b>Finanzas</b> aparecen cuando pagas la tarjeta (como “Pago de tarjeta”).</div>
+  </div></details>
+
+  <details class="gd-card"><summary>💸 Gastos</summary><div class="gd-body">
+    <h4>Qué cuenta como gasto</h4>
+    <ul><li>Gastos de tus cuentas del mes.</li><li>Consumos de tarjeta por <b>fecha del consumo</b> (no por la fecha en que pagas el estado).</li></ul>
+    <h4>Qué NO cuenta</h4>
+    <ul><li>“Pago de tarjeta” (para no contar dos veces lo ya consumido).</li><li>Transferencias entre tus cuentas.</li><li>Compra/venta de dólares (cambio de moneda).</li></ul>
+    <h4>Monedas</h4>
+    <ul><li>Cada gasto conserva su moneda: ves soles y dólares por separado. El total convertido usa el TC de venta.</li></ul>
+    <h4>“Disponible para gastar” y “Recomendado de hoy”</h4>
+    <ul>
+      <li><b>Disponible</b> = saldos de cuentas operativas − lo que debes pagar ya de tarjetas (estados cerrados) + línea de crédito libre de tus tarjetas.</li>
+      <li><b>Ingreso del mes</b> = lo recibido este mes + ingresos programados (pagos frecuentes tipo ingreso) que aún no llegaron; si no tienes programados, el promedio de tus últimos 3 meses.</li>
+      <li><b>Ahorro objetivo</b> = entre 10% y 35% del ingreso (según lo que ahorraste en los últimos 3 meses; 10% si no hay historial).</li>
+      <li><b>Presupuesto del mes</b> = ingreso − ahorro objetivo. <b>Restante</b> = presupuesto − gastado − pagos conocidos que faltan (pagos frecuentes y cuotas de deudas).</li>
+      <li><b>Recomendado</b> = restante repartido entre los días que quedan del mes, sin pasar de lo que realmente tienes disponible.</li>
+    </ul>
+    <h4>Tabla “Por categoría y mes”</h4>
+    <ul><li>Misma regla de arriba, por categoría y mes, con soles y dólares en la misma celda. Al tocar un monto ves los consumos que lo forman.</li></ul>
+  </div></details>
+
+  <details class="gd-card"><summary>🎯 Presupuesto</summary><div class="gd-body">
+    <ul>
+      <li>Suma por categoría los gastos de cuentas <b>y</b> los consumos de tarjeta del mes (en dólares, al TC de venta).</li>
+      <li>Solo cuentan gastos <b>con categoría</b>; un gasto sin categoría no suma a ningún límite.</li>
+      <li>No cuentan: pagos de tarjeta, transferencias internas ni compra/venta de dólares.</li>
+      <li>Cada límite compara lo gastado en su categoría contra el monto que fijaste para ese mes.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>📈 Proyección</summary><div class="gd-body">
+    <ul>
+      <li><b>Cierre del mes</b>: misma fórmula que la proyección de Finanzas.</li>
+      <li><b>Metas de ahorro</b>: toma el ahorro neto mensual de los últimos 3 meses con actividad (aportes − retiros en cuentas de ahorro) y proyecta cuántos meses faltan para llegar a tu meta, por separado en soles y dólares.</li>
+      <li>El ahorro neto cuenta depósitos y retiros de las cuentas de ahorro; los intereses ganados también.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>⚖️ Comparativo</summary><div class="gd-body">
+    <ul>
+      <li>Compara dos meses con la misma lógica de <b>flujo de caja</b> de Finanzas: ingresos, gastos y resultado por mes.</li>
+      <li>Excluye transferencias entre tus cuentas. Dólares al TC de venta.</li>
+      <li>Como usa caja, el pago de la tarjeta cuenta en el mes en que lo pagas (no en el mes del consumo).</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>🗓️ Año Completo</summary><div class="gd-body">
+    <ul>
+      <li>Para cada mes del año: ingresos − gastos = balance, en soles (dólares al TC de venta). Verde si sobró, rojo si faltó.</li>
+      <li>Mismo criterio de flujo de caja que Finanzas y Comparativo; excluye transferencias entre cuentas.</li>
+      <li>Un mes sin movimientos aparece como “Sin datos”.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>🗺️ Mapa de gastos</summary><div class="gd-body">
+    <ul>
+      <li>Solo muestra gastos que tengan <b>ubicación</b> guardada (cuenta y tarjeta). Un gasto sin ubicación no aparece, aunque sí cuente en Gastos.</li>
+      <li>Agrupa por lugar: visitas y total gastado, con los filtros de la parte superior.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>💳 Tarjetas</summary><div class="gd-body">
+    <ul>
+      <li>Cada consumo se asigna al <b>estado de cuenta</b> que le toca según el día de cierre de la tarjeta; las cuotas se reparten en los estados siguientes.</li>
+      <li><b>A pagar este mes</b>: consumos sin pagar de estados ya cerrados (o vencidos). <b>En curso / próximo</b>: lo que se cerrará más adelante.</li>
+      <li><b>Línea libre</b> = línea de crédito − deuda sin pagar (en la moneda de la tarjeta).</li>
+      <li>Al pagar un estado se crea un “Pago de tarjeta” en la cuenta de donde sale el dinero y los consumos quedan marcados como pagados.</li>
+      <li>Los consumos cuentan como <b>gasto</b> en la fecha en que los hiciste, no cuando pagas.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>🤝 Deudas</summary><div class="gd-body">
+    <ul>
+      <li><b>Deuda total</b> (en soles, dólares al TC de venta) = consumos de tarjeta sin pagar + saldo pendiente de deudas mayores (préstamos con cuotas) + préstamos que tú debes y siguen pendientes.</li>
+      <li><b>Evolución</b>: cada mes se guarda una foto de la deuda al abrir la pantalla. Los meses anteriores a la primera foto se estiman solo con deudas mayores.</li>
+      <li>Pagar una cuota genera un movimiento de gasto en la cuenta elegida.</li>
+      <li><b>Pagos frecuentes</b>: son recordatorios con monto; al confirmarlos se crea el movimiento real. Si no los confirmas, no cuentan como gasto (pero sí entran como “pagos conocidos” en el recomendado y la proyección).</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>🔗 Servicios</summary><div class="gd-body">
+    <ul><li>Lista de servicios recurrentes (luz, agua, internet…) con su cuenta o tarjeta de pago. Es un registro de control; el gasto real se cuenta cuando se registra el pago como movimiento o consumo.</li></ul></div></details>
+
+  <details class="gd-card"><summary>📈 Inversiones</summary><div class="gd-body">
+    <ul><li>Registro aparte de tus posiciones y valorizaciones (los dividendos en dinero suman al valorizado de su moneda). No forma parte del disponible ni de los gastos.</li></ul></div></details>
+
+  <details class="gd-card"><summary>💱 TC (tipo de cambio)</summary><div class="gd-body">
+    <ul>
+      <li><b>TC de venta</b> (el que te cobra el mercado) se usa para pasar dólares a soles en gastos, deudas y totales. <b>TC de compra</b> se usa para valorar dólares ahorrados cuando quieres verlos en soles.</li>
+      <li>Cada compra de dólares abierta guarda su TC. <b>Si vendes hoy</b> = dólares × TC de compra actual − soles que pagaste.</li>
+      <li>Comprar o vender dólares mueve plata entre cuentas (soles ↔ dólares): <b>no es gasto ni ingreso</b>; en Finanzas se ve como movimiento de caja.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>💰 Ahorros e Intereses</summary><div class="gd-body">
+    <ul>
+      <li>Usa la <b>TREA</b> vigente de cada cuenta en cada mes (la última que registraste hasta ese mes).</li>
+      <li><b>Método diario</b>: tasa diaria = (1 + TREA)^(1/360) − 1, aplicada al saldo de <b>cada día</b> y sumada. Usa año de 360 días (calibrado con el interés real del banco).</li>
+      <li><b>Interés proyectado del mes</b> = el mes completo; <b>acumulado a hoy</b> = solo los días que ya pasaron.</li>
+      <li>El interés que realmente acredita el banco lo registras tú como ingreso en la cuenta; ese sí suma al ahorro y al ingreso del mes.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>⛽ Combustible</summary><div class="gd-body">
+    <ul><li>Calcula rendimiento y costo por carga. Al guardar una carga con gasto, se crea un movimiento con su categoría, así que <b>sí cuenta en Gastos</b>.</li></ul></div></details>
+
+  <details class="gd-card"><summary>📅 Calendario</summary><div class="gd-body">
+    <ul><li>Marca por día tu sueldo, gratificación, CTS, eventos importantes, cuotas de tarjeta, cuotas de deudas mayores, mantenimientos del auto y pagos frecuentes. Es solo una vista de fechas: no cambia saldos ni cuenta como gasto.</li></ul></div></details>
+
+  <details class="gd-card"><summary>💼 Sueldos y 🪙 AFP</summary><div class="gd-body">
+    <ul>
+      <li><b>Análisis de Sueldos</b>: guarda tus boletas y calcula con los parámetros del año (descuentos e impuesto a la renta anual). Es un análisis aparte.</li>
+      <li><b>AFP</b>: seguimiento de aportes y fondo. No afecta tu disponible.</li>
+      <li>Para que un sueldo aumente tu disponible debe estar registrado como ingreso en una cuenta (por ejemplo, desde un pago frecuente de tipo ingreso).</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>🛒 Lista de Compras</summary><div class="gd-body">
+    <ul>
+      <li>Los ítems “deseados” no son gasto. Al marcar un ítem como <b>comprado</b> puedes registrar el gasto y entonces sí cuenta en Gastos.</li>
+      <li>“En camino” = comprado y sin fecha de llegada.</li>
+    </ul></div></details>
+  <details class="gd-card"><summary>🔔 Aprobaciones</summary><div class="gd-body"><ul><li><b>🔔 Aprobaciones</b>: lista de cargos que llegaron del banco (correo) y esperan tu OK. Un cargo pendiente <b>no</b> es un gasto hasta que lo apruebas; al aprobarlo se crea un movimiento (o un consumo de tarjeta) con la fecha y hora del cargo.</li></ul></div></details>
+  <details class="gd-card"><summary>🤖 Bot de Telegram</summary><div class="gd-body">
+    <ul>
+      <li>Registra gastos e ingresos que escribes o fotografías, con el mismo criterio de la app.</li>
+      <li>Su resumen del mes de <b>gastos</b> excluye transferencias y cambio de moneda; el resumen de <b>Finanzas</b> y el año completo siguen el flujo de caja.</li>
+    </ul></div></details>
+
+  <details class="gd-card"><summary>🧭 Reglas que aplican en toda la app</summary><div class="gd-body">
+    <ul>
+      <li><b>Soles y dólares</b>: nunca se mezclan en una misma cuenta. Para totales en soles se convierte con el TC de venta (salvo ahorro en dólares, que se valora con el TC de compra).</li>
+      <li><b>Transferencias entre tus cuentas</b>: nunca son ingreso ni gasto.</li>
+      <li><b>Fechas</b>: un gasto cuenta en el mes de su fecha. Los consumos de tarjeta cuentan en la fecha del consumo; la caja, en la fecha del pago.</li>
+      <li><b>Meses pasados</b>: los saldos se reconstruyen desde los movimientos, no desde el saldo de hoy.</li>
+    </ul></div></details>
+</div>
+</div>
+
 <div class="page" id="page-minijuegos">
 <div class="container">
 
@@ -4171,9 +4361,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v1.98.0';
-const APP_VERSION_DATE = '07/11/26 - 16:27'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Resumen: 10 widgets nuevos (Gastos del mes, Gasto por categoría, Gastos por mes, Próximos pagos e ingresos, Compras en camino, Aprobaciones pendientes, Dólares comprados, Ahorros e intereses, Racha de registro y Evolución de la deuda). Se activan en ✏️ Editar → Mi Resumen.';
+const APP_VERSION = 'v1.99.0';
+const APP_VERSION_DATE = '08/11/26 - 09:26'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva sección 📖 Cómo se calcula (en Otros): explica cómo calcula cada parte de la app y qué considera o deja fuera cada sección.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -27676,6 +27866,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v1.99.0",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Nueva sección 📖 Cómo se calcula (en Otros): explica cómo calcula cada parte de la app y qué considera o deja fuera cada sección."
+  ]
+ },
  {
   "v": "v1.98.0",
   "fecha": "07/11/26",
