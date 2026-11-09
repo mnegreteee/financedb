@@ -3204,12 +3204,18 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="modal-title"><span>✏ Editar parámetros del año</span><button class="modal-close" onclick="cerrarParametrosSueldo()">✕</button></div>
     <div class="field"><label>Año</label><input id="sp-anio" type="number" readonly style="opacity:.6"></div>
     <div class="field"><label>UIT</label><input id="sp-uit" type="number" step="0.01"></div>
+    <div class="field"><label>Deducción anual (en UIT)</label><input id="sp-deduc" type="number" step="0.01"></div>
     <div class="field"><label>AFP — Aporte obligatorio (%)</label><input id="sp-afp-aporte" type="number" step="0.01"></div>
     <div class="field"><label>AFP — Prima de seguro (%)</label><input id="sp-afp-prima" type="number" step="0.01"></div>
     <div class="field"><label>ONP — Tasa (%)</label><input id="sp-onp-tasa" type="number" step="0.01"></div>
-    <div style="font-size:11px;color:var(--text3);margin:10px 0 6px">Tramos progresivos (tasas fijas por ley — normalmente no cambian, solo los montos en soles al cambiar la UIT, que ya se recalculan solos):</div>
-    <div style="font-size:12px;color:var(--text2);line-height:1.7">
-      Hasta 5 UIT: 8% · De 5 a 20 UIT: 14% · De 20 a 35 UIT: 17% · De 35 a 45 UIT: 20% · Más de 45 UIT: 30%
+    <div style="font-size:11px;color:var(--text3);margin:10px 0 6px">Tramos de la renta de 5ta. Hoy son los de la ley; edítalos si algún día cambian (solo afecta a este año).</div>
+    <div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:6px"><span style="width:62px">Tramo 1</span>hasta <input id="sp-t0-hasta" type="number" step="0.01" min="0" style="width:68px" oninput="sueldoTramoLbl()"> UIT · tasa <input id="sp-t0-tasa" type="number" step="0.01" min="0" max="100" style="width:62px"> %</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:6px"><span style="width:62px">Tramo 2</span>hasta <input id="sp-t1-hasta" type="number" step="0.01" min="0" style="width:68px" oninput="sueldoTramoLbl()"> UIT · tasa <input id="sp-t1-tasa" type="number" step="0.01" min="0" max="100" style="width:62px"> %</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:6px"><span style="width:62px">Tramo 3</span>hasta <input id="sp-t2-hasta" type="number" step="0.01" min="0" style="width:68px" oninput="sueldoTramoLbl()"> UIT · tasa <input id="sp-t2-tasa" type="number" step="0.01" min="0" max="100" style="width:62px"> %</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:6px"><span style="width:62px">Tramo 4</span>hasta <input id="sp-t3-hasta" type="number" step="0.01" min="0" style="width:68px" oninput="sueldoTramoLbl()"> UIT · tasa <input id="sp-t3-tasa" type="number" step="0.01" min="0" max="100" style="width:62px"> %</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:6px"><span style="width:62px">Tramo 5</span>más de <b id="sp-t4-lbl" style="min-width:34px;text-align:center">45</b> UIT · tasa <input id="sp-t4-tasa" type="number" step="0.01" min="0" max="100" style="width:62px"> %</div>
+      <button class="btn" style="font-size:11px;margin-top:2px" onclick="sueldoTramosReset()">↺ Restablecer a los de la ley</button>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
       <button class="btn btn-secondary" onclick="cerrarParametrosSueldo()">Cancelar</button>
@@ -3373,6 +3379,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <ul>
       <li><b>Análisis de Sueldos</b>: guarda tus boletas y calcula con los parámetros del año (descuentos e impuesto a la renta anual). Es un análisis aparte.</li>
       <li><b>AFP</b>: seguimiento de aportes y fondo. No afecta tu disponible.</li>
+      <li><b>Parámetros del año</b> (✏ Editar en Análisis de Sueldos, por año): UIT, deducción en UIT, AFP, ONP y los tramos de renta de 5ta (editables por si cambian por ley; si no los editas se usan los de la ley).</li>
       <li>Para que un sueldo aumente tu disponible debe estar registrado como ingreso en una cuenta (por ejemplo, desde un pago frecuente de tipo ingreso).</li>
     </ul></div></details>
 
@@ -4419,9 +4426,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.2.0';
-const APP_VERSION_DATE = '08/11/26 - 20:02'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Análisis de Sueldos: ahora puedes ver cada año (‹ ›, incluido 2027) con totales, columna Variable / bono y el cálculo paso a paso de Gratificación y CTS (con proyección cuando aún no hay boletas).';
+const APP_VERSION = 'v2.3.0';
+const APP_VERSION_DATE = '08/11/26 - 20:58'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Análisis de Sueldos: los tramos de renta de 5ta (% y límites en UIT) y la deducción en UIT ahora se pueden editar por año, con botón para restablecer a los de la ley.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -24885,6 +24892,12 @@ const SUELDO_TRAMOS_UIT=[
   {hastaUIT:5,tasa:0.08},{hastaUIT:20,tasa:0.14},{hastaUIT:35,tasa:0.17},
   {hastaUIT:45,tasa:0.20},{hastaUIT:Infinity,tasa:0.30},
 ];
+// Tramos de renta de 5ta del año: si los editaste (params.tramos, tasa en % y hasta en UIT; null = "el resto") se usan esos; si no, los de ley.
+function sueldoTramosDe(p){
+  const t=p&&p.tramos;
+  if(Array.isArray(t)&&t.length>=2&&t.every(x=>x&&typeof x.tasa==='number')) return t.map(x=>({hastaUIT:(x.hasta===null||x.hasta===undefined)?Infinity:x.hasta,tasa:x.tasa/100}));
+  return SUELDO_TRAMOS_UIT;
+}
 function sueldoParametrosDefault(anio){
   return {anio, uit:5500, deduccionUIT:7, afpAporte:10, afpPrima:1.37, onpTasa:13};
 }
@@ -24896,7 +24909,7 @@ function getSueldoParametros(anio){
 function calcularImpuestoAnualSueldo(rentaNeta,params){
   if(rentaNeta<=0) return 0;
   let impuesto=0,restante=rentaNeta,limiteAnterior=0;
-  for(const tramo of SUELDO_TRAMOS_UIT){
+  for(const tramo of sueldoTramosDe(params)){
     const limiteTramo=tramo.hastaUIT===Infinity?Infinity:tramo.hastaUIT*params.uit;
     const anchoTramo=limiteTramo-limiteAnterior;
     const montoEnTramo=Math.min(restante,anchoTramo);
@@ -25126,28 +25139,52 @@ function guardarConfigSueldo(){
 }
 
 function abrirParametrosSueldo(){
-  const anio=(new Date()).getFullYear();
+  const anio=sueldoAnioVista(); // el año que estás viendo (‹ ›), no siempre el actual
   const p=getSueldoParametros(anio);
   document.getElementById('sp-anio').value=p.anio;
   document.getElementById('sp-uit').value=p.uit;
   document.getElementById('sp-afp-aporte').value=p.afpAporte;
   document.getElementById('sp-afp-prima').value=p.afpPrima;
   document.getElementById('sp-onp-tasa').value=p.onpTasa;
+  document.getElementById('sp-deduc').value=p.deduccionUIT;
+  sueldoTramosCargar(sueldoTramosDe(p));
   document.getElementById('sueldo-parametros-overlay').classList.add('open');
 }
+function sueldoTramosCargar(tr){
+  for(let i=0;i<5;i++){
+    const t=tr[i]||{hastaUIT:Infinity,tasa:0};
+    if(i<4) document.getElementById('sp-t'+i+'-hasta').value=t.hastaUIT===Infinity?'':t.hastaUIT;
+    document.getElementById('sp-t'+i+'-tasa').value=parseFloat((t.tasa*100).toFixed(4));
+  }
+  sueldoTramoLbl();
+}
+function sueldoTramoLbl(){ const e=document.getElementById('sp-t4-lbl'), h=document.getElementById('sp-t3-hasta'); if(e&&h) e.textContent=h.value||'—'; }
+function sueldoTramosReset(){ sueldoTramosCargar(SUELDO_TRAMOS_UIT); }
 function cerrarParametrosSueldo(){ document.getElementById('sueldo-parametros-overlay').classList.remove('open'); }
 function guardarParametrosSueldo(){
   const anio=parseInt(document.getElementById('sp-anio').value);
   if(!state.sueldoParametros) state.sueldoParametros={};
   const antes=state.sueldoParametros[anio]?{...state.sueldoParametros[anio]}:null;
+  // Tramos: hasta (UIT) creciente y tasas entre 0 y 100. Solo se guardan si difieren de los de la ley.
+  const tramos=[]; let prev=0;
+  for(let i=0;i<5;i++){
+    const tasa=parseFloat(document.getElementById('sp-t'+i+'-tasa').value);
+    const hasta=i<4?parseFloat(document.getElementById('sp-t'+i+'-hasta').value):null;
+    if(isNaN(tasa)||tasa<0||tasa>100){ alert('Revisa la tasa del tramo '+(i+1)+': debe estar entre 0 y 100.'); return; }
+    if(i<4&&(isNaN(hasta)||hasta<=prev)){ alert('Revisa el tramo '+(i+1)+': el límite en UIT debe ser mayor que el del tramo anterior.'); return; }
+    tramos.push({hasta,tasa}); if(i<4) prev=hasta;
+  }
+  const deLey=SUELDO_TRAMOS_UIT.every((t,i)=>(t.hastaUIT===Infinity?null:t.hastaUIT)===tramos[i].hasta&&Math.abs(t.tasa*100-tramos[i].tasa)<1e-9);
+  const dedIn=parseFloat(document.getElementById('sp-deduc').value);
   state.sueldoParametros[anio]={
     anio,
     uit:parseFloat(document.getElementById('sp-uit').value)||5500,
-    deduccionUIT:7,
+    deduccionUIT:(isNaN(dedIn)||dedIn<0)?7:dedIn,
     afpAporte:parseFloat(document.getElementById('sp-afp-aporte').value)||10,
     afpPrima:parseFloat(document.getElementById('sp-afp-prima').value)||1.37,
     onpTasa:parseFloat(document.getElementById('sp-onp-tasa').value)||13,
   };
+  if(!deLey) state.sueldoParametros[anio].tramos=tramos;
   logActividad('sueldo_parametros', `Parámetros de sueldo ${anio} actualizados`, {sueldoParamAnio:anio, sueldoParamAntes:antes});
   cerrarParametrosSueldo();
   recalcularTodosLosAnios();
@@ -25319,8 +25356,9 @@ function renderSueldos(){
   document.getElementById('sueldo-anio-parametros').textContent=params.anio;
   document.getElementById('sueldo-parametros-resumen').innerHTML=`
     <div><div style="color:var(--text3)">UIT</div><div style="font-weight:600">${fmtS(params.uit)}</div></div>
-    <div><div style="color:var(--text3)">Deducción (7 UIT)</div><div style="font-weight:600">${fmtS(params.deduccionUIT*params.uit)}</div></div>
+    <div><div style="color:var(--text3)">Deducción (${params.deduccionUIT} UIT)</div><div style="font-weight:600">${fmtS(params.deduccionUIT*params.uit)}</div></div>
     <div><div style="color:var(--text3)">${cfg.sistemaPension==='onp'?'ONP':'AFP '+(cfg.afpNombre||'')}</div><div style="font-weight:600">${cfg.sistemaPension==='onp'?params.onpTasa+'%':(params.afpAporte+'% + '+params.afpPrima+'%')}${cfg.comisionFlujo?' + '+(cfg.comisionFlujoPct||0)+'%':''}</div></div>
+    <div><div style="color:var(--text3)">Tramos 5ta${params.tramos?' ⚠️ editados':''}</div><div style="font-weight:600">${sueldoTramosDe(params).map(t=>parseFloat((t.tasa*100).toFixed(2))+'%').join(' · ')}</div></div>
     <div><div style="color:var(--text3)">Tipo de sueldo</div><div style="font-weight:600">${cfg.tipoSueldo==='fijo'?'Fijo':'Variable'}</div></div>
   `;
 
@@ -28363,6 +28401,20 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.3.0",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Análisis de Sueldos: los tramos de renta de 5ta (% y límites en UIT) y la deducción en UIT ahora se pueden editar por año, con botón para restablecer a los de la ley."
+  ]
+ },
+ {
+  "v": "v2.2.1",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Análisis de Sueldos: el botón Editar de Parámetros ahora edita el año que estás viendo (ej. 2027), no siempre el año actual."
+  ]
+ },
  {
   "v": "v2.2.0",
   "fecha": "08/11/26",
