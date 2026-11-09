@@ -2599,6 +2599,12 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div id="sueldo-contenido" style="display:none">
+    <div class="month-nav" style="margin-bottom:16px">
+      <button class="month-btn" onclick="sueldoCambiarAnio(-1)" aria-label="Año anterior">‹</button>
+      <h1 id="sueldo-anio-titulo">2026</h1>
+      <button class="month-btn" onclick="sueldoCambiarAnio(1)" aria-label="Año siguiente">›</button>
+      <button class="btn" style="font-size:11px;margin-left:12px" onclick="sueldoAnioHoy()">Hoy</button>
+    </div>
     <div class="card" style="padding:16px 20px;margin-bottom:16px">
       <div class="section-header" style="margin-bottom:10px">
         <div class="section-title" style="font-size:13px">Parámetros vigentes <span id="sueldo-anio-parametros"></span> <small style="font-weight:400;color:var(--text3)">— revisar cada enero</small></div>
@@ -2659,11 +2665,12 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
 
     <div class="card" style="padding:16px 20px">
-      <div class="section-title" style="font-size:13px;margin-bottom:10px">Boletas registradas</div>
+      <div class="section-title" id="sueldo-boletas-titulo" style="font-size:13px;margin-bottom:10px">Boletas registradas</div>
       <div class="table-scroll">
-      <table class="account-table" style="width:100%;min-width:480px">
-        <thead><tr><th>Mes</th><th style="text-align:right">Ingreso</th><th style="text-align:right">5ta estimada</th><th style="text-align:right">5ta real</th><th style="text-align:right">Dif.</th><th></th></tr></thead>
+      <table class="account-table" style="width:100%;min-width:580px">
+        <thead><tr><th>Mes</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Variable / bono</th><th style="text-align:right">5ta estimada</th><th style="text-align:right">5ta real</th><th style="text-align:right">Dif.</th><th></th></tr></thead>
         <tbody id="sueldo-boletas-tbody"></tbody>
+        <tfoot id="sueldo-boletas-tfoot"></tfoot>
       </table>
       </div>
     </div>
@@ -4412,9 +4419,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.1.0';
-const APP_VERSION_DATE = '08/11/26 - 15:07'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Resumen: 8 widgets nuevos de Herramientas (Fondo de emergencia, ¿Me alcanza?, Mejor día para comprar, Suscripciones, Duplicados, Etiquetas y viajes, Próxima meta de compra y Alertas). Se activan en ✏️ Editar → Mi Resumen.';
+const APP_VERSION = 'v2.2.0';
+const APP_VERSION_DATE = '08/11/26 - 20:02'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Análisis de Sueldos: ahora puedes ver cada año (‹ ›, incluido 2027) con totales, columna Variable / bono y el cálculo paso a paso de Gratificación y CTS (con proyección cuando aún no hay boletas).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -24930,9 +24937,9 @@ function fechaInicioComoMes(cfg){
 // va afinando conforme registres más boletas de ese semestre.
 function promedioVariableSemestre(anio,mesesSemestre){
   const boletas=getBoletasAnioSueldo(anio).filter(b=>mesesSemestre.includes(b.mes));
-  if(boletas.length<3) return {promedio:0,cuenta:false,mesesRegistrados:boletas.length};
   const suma=boletas.reduce((s,b)=>s+(b.bono||0),0);
-  return {promedio:suma/6,cuenta:true,mesesRegistrados:boletas.length,completo:boletas.length===6};
+  if(boletas.length<3) return {promedio:0,cuenta:false,mesesRegistrados:boletas.length,suma};
+  return {promedio:suma/6,cuenta:true,mesesRegistrados:boletas.length,completo:boletas.length===6,suma};
 }
 // Última básica CONOCIDA en cualquier boleta registrada (de cualquier año o
 // mes) — se usa como respaldo cuando no hay ninguna boleta dentro del
@@ -24948,14 +24955,17 @@ function ultimaBasicaConocida(anioLimite,mesLimite){
   return antesOEnLimite.length?antesOEnLimite[antesOEnLimite.length-1].basica:todas[0].basica;
 }
 // tipoSemestre: 'jul' (enero-junio, se paga en julio) o 'dic' (julio-diciembre, se paga en diciembre)
-function calcularGratificacion(anio,tipoSemestre){
+function calcularGratificacion(anio,tipoSemestre,proy){
   const cfg=state.sueldoConfig||{};
   const mesesSemestre=tipoSemestre==='jul'?[0,1,2,3,4,5]:[6,7,8,9,10,11];
   const mesReferencia=tipoSemestre==='jul'?5:11; // básica de junio o de noviembre (mes anterior al pago)
   const boletas=getBoletasAnioSueldo(anio);
   const boletaRef=boletas.find(b=>b.mes===mesReferencia)||boletas.slice().reverse().find(b=>mesesSemestre.includes(b.mes));
   const basica=boletaRef?boletaRef.basica:ultimaBasicaConocida(anio,mesReferencia);
-  const {promedio:promedioVar,cuenta}=promedioVariableSemestre(anio,mesesSemestre);
+  const pv=promedioVariableSemestre(anio,mesesSemestre);
+  let promedioVar=pv.promedio, cuenta=pv.cuenta, varProyectado=false;
+  // proy=true (solo pantallas de Sueldos): si aún no hay 3 boletas del semestre y el semestre NO ha terminado, se proyecta con tu bono promedio reciente
+  if(!cuenta&&proy&&new Date(anio,mesesSemestre[5]+1,1)>new Date()){ const bp=bonoPromedioReciente(anio,mesesSemestre[0]); if(bp>0){ promedioVar=bp; cuenta=true; varProyectado=true; } }
   // Prorrateo por días (no solo meses completos) para el mes en que
   // empezaste a trabajar — si arrancaste, por ejemplo, el 10 de diciembre,
   // ese mes no cuenta como "mes completo" sino como 21/30 de un mes. Esto
@@ -24965,7 +24975,10 @@ function calcularGratificacion(anio,tipoSemestre){
   const baseGrat=(remComputable/6)*mesesCompletos+(remComputable/180)*dias;
   const pctBonif=cfg.tieneEPS?0.0675:0.09;
   const bonificacion=baseGrat*pctBonif;
-  return {baseGrat,bonificacion,total:baseGrat+bonificacion,mesesCompletos,dias,basica,promedioVar,cuenta,esEstimado:!boletaRef};
+  return {baseGrat,bonificacion,total:baseGrat+bonificacion,mesesCompletos,dias,basica,promedioVar,cuenta,esEstimado:!boletaRef,
+    anio,tipoSemestre,remComputable,pctBonif,varProyectado,sumaBonos:pv.suma,nBoletas:pv.mesesRegistrados,
+    boletaRefMes:boletaRef?boletaRef.mes:null,boletaRefAnio:boletaRef?boletaRef.anio:null,
+    bonosSem:boletas.filter(b=>mesesSemestre.includes(b.mes)).map(b=>({mes:b.mes,bono:b.bono||0}))};
 }
 // mesDeposito: 4=mayo (periodo nov[año-1]-abr[año]), 10=noviembre (periodo may-oct del mismo año)
 // Para CTS, la ley SÍ prorratea por días (no solo meses completos) cuando
@@ -24986,25 +24999,27 @@ function mesesYDiasDesdeInicio(rangoMeses,cfg){
   });
   return {mesesCompletos,dias};
 }
-function calcularCTS(anioDeposito,mesDeposito){
+function calcularCTS(anioDeposito,mesDeposito,proy){
   const cfg=state.sueldoConfig||{};
   let mesesPeriodo,mesReferencia,gratRelevante;
   if(mesDeposito===4){
     mesesPeriodo=[{anio:anioDeposito-1,mes:10},{anio:anioDeposito-1,mes:11},{anio:anioDeposito,mes:0},{anio:anioDeposito,mes:1},{anio:anioDeposito,mes:2},{anio:anioDeposito,mes:3}];
     mesReferencia={anio:anioDeposito,mes:3};
-    gratRelevante=calcularGratificacion(anioDeposito-1,'dic');
+    gratRelevante=calcularGratificacion(anioDeposito-1,'dic',proy);
   } else {
     mesesPeriodo=[{anio:anioDeposito,mes:4},{anio:anioDeposito,mes:5},{anio:anioDeposito,mes:6},{anio:anioDeposito,mes:7},{anio:anioDeposito,mes:8},{anio:anioDeposito,mes:9}];
     mesReferencia={anio:anioDeposito,mes:9};
-    gratRelevante=calcularGratificacion(anioDeposito,'jul');
+    gratRelevante=calcularGratificacion(anioDeposito,'jul',proy);
   }
   const todas=getBoletasSueldo();
   const boletaRef=todas.find(b=>b.anio===mesReferencia.anio&&b.mes===mesReferencia.mes)
     ||todas.slice().reverse().find(b=>mesesPeriodo.some(mp=>mp.anio===b.anio&&mp.mes===b.mes));
   const basica=boletaRef?boletaRef.basica:ultimaBasicaConocida(mesReferencia.anio,mesReferencia.mes);
   const boletasPeriodo=todas.filter(b=>mesesPeriodo.some(mp=>mp.anio===b.anio&&mp.mes===b.mes));
-  let promedioVar=0,cuentaVar=false;
-  if(boletasPeriodo.length>=3){ promedioVar=boletasPeriodo.reduce((s,b)=>s+(b.bono||0),0)/6; cuentaVar=true; }
+  let promedioVar=0,cuentaVar=false,varProyectado=false;
+  const sumaBonos=boletasPeriodo.reduce((s,b)=>s+(b.bono||0),0);
+  if(boletasPeriodo.length>=3){ promedioVar=sumaBonos/6; cuentaVar=true; }
+  else if(proy&&new Date(mesesPeriodo[5].anio,mesesPeriodo[5].mes+1,1)>new Date()){ const bp=bonoPromedioReciente(mesesPeriodo[0].anio,mesesPeriodo[0].mes); if(bp>0){ promedioVar=bp; cuentaVar=true; varProyectado=true; } }
   // El 1/6 de gratificación solo se suma si en el semestre anterior
   // llegaste a trabajar AL MENOS 1 mes completo — si solo tuviste unos
   // días (ej. entraste a mitad del último mes del semestre), no llegó a
@@ -25013,7 +25028,11 @@ function calcularCTS(anioDeposito,mesDeposito){
   const rc=basica+(cuentaVar?promedioVar:0)+sextoGratificacion;
   const {mesesCompletos,dias}=mesesYDiasDesdeInicio(mesesPeriodo,cfg);
   const cts=(rc/12)*mesesCompletos+(rc/360)*dias;
-  return {cts,rc,basica,promedioVar,cuentaVar,sextoGratificacion,mesesCompletos,dias,esEstimado:!boletaRef};
+  return {cts,rc,basica,promedioVar,cuentaVar,sextoGratificacion,mesesCompletos,dias,esEstimado:!boletaRef,
+    mesesPeriodo,varProyectado,sumaBonos,nBoletas:boletasPeriodo.length,gratBase:gratRelevante.baseGrat||0,
+    gratEtiqueta:mesDeposito===4?'la gratificación de diciembre '+(anioDeposito-1):'la gratificación de julio '+anioDeposito,
+    boletaRefMes:boletaRef?boletaRef.mes:null,boletaRefAnio:boletaRef?boletaRef.anio:null,
+    bonosPeriodo:boletasPeriodo.slice().sort((a,b)=>(a.anio-b.anio)||(a.mes-b.mes)).map(b=>({anio:b.anio,mes:b.mes,bono:b.bono||0}))};
 }
 
 // Calcula la renta de 5ta ESTIMADA para (anio,mesIdx) según lo que ya se
@@ -25224,6 +25243,59 @@ function renderResultadoMesSueldo(boleta,calc,pension){
   </div>`;
 }
 
+// ── Año que se está viendo en Análisis de Sueldos (no se guarda) ──
+let sueldoVistaAnio=null;
+function sueldoAnioVista(){ if(sueldoVistaAnio===null) sueldoVistaAnio=(new Date()).getFullYear(); return sueldoVistaAnio; }
+function sueldoCambiarAnio(d){
+  const hoyY=(new Date()).getFullYear(), ys=getBoletasSueldo().map(b=>b.anio);
+  const min=Math.min(hoyY,...ys), max=Math.max(hoyY+1,...ys), n=sueldoAnioVista()+d;
+  if(n<min||n>max) return;
+  sueldoVistaAnio=n; const i=document.getElementById('sb-anio'); if(i) i.value=n;
+  renderSueldos();
+}
+function sueldoAnioHoy(){ sueldoVistaAnio=(new Date()).getFullYear(); const i=document.getElementById('sb-anio'); if(i) i.value=sueldoVistaAnio; renderSueldos(); }
+// Promedio mensual de bono de tus últimas 6 boletas anteriores a (anio,mes) — solo para PROYECTAR cuando aún no hay 3 boletas del periodo.
+function bonoPromedioReciente(anio,mes){
+  const t=getBoletasSueldo().slice().sort((a,b)=>(a.anio-b.anio)||(a.mes-b.mes));
+  let prev=t.filter(b=>b.anio<anio||(b.anio===anio&&b.mes<mes)).slice(-6);
+  if(!prev.length) prev=t.slice(-6);
+  return prev.length?prev.reduce((s,b)=>s+(b.bono||0),0)/prev.length:0;
+}
+function sueldoFila(k,v,fuerte){ return `<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:11px;border-bottom:1px solid var(--border)"><span style="color:var(--text3)">${k}</span><span style="text-align:right;${fuerte?'font-weight:700;color:var(--text)':'color:var(--text2)'}">${v}</span></div>`; }
+function sueldoBonosTxt(l){ return l.length?l.map(x=>MONTHS_SHORT[x.mes]+(x.anio?' '+String(x.anio).slice(2):'')+' '+fmtS(x.bono)).join(' · '):'ninguno registrado'; }
+function sueldoPctTxt(p){ return parseFloat((p*100).toFixed(2))+'%'; }
+function sueldoVarTxt(o){
+  if(o.varProyectado) return `📈 Proyección: promedio de tus últimos 6 bonos = ${fmtS(o.promedioVar)}`;
+  if(o.cuenta) return `${fmtS(o.sumaBonos)} ÷ 6 = ${fmtS(o.promedioVar)}`;
+  return `No se suma (hacen falta 3 o más boletas registradas del periodo; hay ${o.nBoletas})`;
+}
+function sueldoDetalleGrat(g){
+  const org=g.boletaRefMes!==null?'boleta de '+MONTHS[g.boletaRefMes]+' '+g.boletaRefAnio:'tu último sueldo básico conocido';
+  return sueldoFila('Semestre',(g.tipoSemestre==='jul'?'Enero – Junio ':'Julio – Diciembre ')+g.anio)
+   +sueldoFila('Básica tomada',fmtS(g.basica)+' · '+org)
+   +sueldoFila('Boletas registradas del semestre',g.nBoletas+' de 6')
+   +sueldoFila('Bonos registrados',sueldoBonosTxt(g.bonosSem))
+   +sueldoFila('Promedio de variable',sueldoVarTxt(g))
+   +sueldoFila('Remuneración computable (RC)',`${fmtS(g.basica)} + ${fmtS(g.cuenta?g.promedioVar:0)} = ${fmtS(g.remComputable)}`)
+   +sueldoFila('Meses computables',g.mesesCompletos+(g.dias?' + '+g.dias+' días':''))
+   +sueldoFila('Gratificación base',`RC ÷ 6 × ${g.mesesCompletos}${g.dias?' + RC ÷ 180 × '+g.dias:''} = ${fmtS(g.baseGrat)}`)
+   +sueldoFila('Bonificación extraordinaria',`${sueldoPctTxt(g.pctBonif)} (${g.pctBonif<0.09?'con EPS':'sin EPS'}) × base = ${fmtS(g.bonificacion)}`)
+   +sueldoFila('Total a recibir',fmtS(g.total),true)
+   +`<div style="font-size:10px;color:var(--text3);margin-top:6px">La base suma a tu renta de 5ta del año; la bonificación es inafecta.</div>`;
+}
+function sueldoDetalleCTS(c){
+  const m0=c.mesesPeriodo[0], m1=c.mesesPeriodo[c.mesesPeriodo.length-1];
+  const org=c.boletaRefMes!==null?'boleta de '+MONTHS[c.boletaRefMes]+' '+c.boletaRefAnio:'tu último sueldo básico conocido';
+  return sueldoFila('Periodo',`${MONTHS[m0.mes]} ${m0.anio} – ${MONTHS[m1.mes]} ${m1.anio}`)
+   +sueldoFila('Básica tomada',fmtS(c.basica)+' · '+org)
+   +sueldoFila('Boletas registradas del periodo',c.nBoletas+' de 6')
+   +sueldoFila('Bonos registrados',sueldoBonosTxt(c.bonosPeriodo))
+   +sueldoFila('Promedio de variable',sueldoVarTxt({varProyectado:c.varProyectado,cuenta:c.cuentaVar,promedioVar:c.promedioVar,sumaBonos:c.sumaBonos,nBoletas:c.nBoletas}))
+   +sueldoFila('1/6 de '+c.gratEtiqueta,c.sextoGratificacion>0?`${fmtS(c.gratBase)} ÷ 6 = ${fmtS(c.sextoGratificacion)}`:'No aplica (menos de 1 mes completo en ese semestre)')
+   +sueldoFila('Remuneración computable (RC)',`${fmtS(c.basica)} + ${fmtS(c.cuentaVar?c.promedioVar:0)} + ${fmtS(c.sextoGratificacion)} = ${fmtS(c.rc)}`)
+   +sueldoFila('Meses computables',c.mesesCompletos+(c.dias?' + '+c.dias+' días':''))
+   +sueldoFila('CTS a depositar',`RC ÷ 12 × ${c.mesesCompletos}${c.dias?' + RC ÷ 360 × '+c.dias:''} = ${fmtS(c.cts)}`,true);
+}
 function renderSueldos(){
   const cfg=state.sueldoConfig;
   const sinConfig=document.getElementById('sueldo-sin-config');
@@ -25237,7 +25309,7 @@ function renderSueldos(){
   contenido.style.display='block';
 
   const hoy=new Date();
-  const anioActual=hoy.getFullYear();
+  const anioActual=sueldoAnioVista(); // año que se está viendo (‹ ›)
   document.getElementById('sb-anio').value=document.getElementById('sb-anio').value||anioActual;
   if(!document.getElementById('sb-anio').value) document.getElementById('sb-anio').value=anioActual;
   document.getElementById('sb-mes').value=hoy.getMonth();
@@ -25252,9 +25324,11 @@ function renderSueldos(){
     <div><div style="color:var(--text3)">Tipo de sueldo</div><div style="font-weight:600">${cfg.tipoSueldo==='fijo'?'Fijo':'Variable'}</div></div>
   `;
 
-  // Tabla de boletas registradas (año actual)
+  // Tabla de boletas registradas (año que se está viendo)
   const boletas=getBoletasAnioSueldo(anioActual);
-  const tbody=document.getElementById('sueldo-boletas-tbody');
+  const tbody=document.getElementById('sueldo-boletas-tbody'), tfoot=document.getElementById('sueldo-boletas-tfoot');
+  const tit=document.getElementById('sueldo-boletas-titulo'); if(tit) tit.textContent='Boletas registradas '+anioActual+' · '+boletas.length+' de 12';
+  const tt=document.getElementById('sueldo-anio-titulo'); if(tt) tt.textContent=anioActual;
   tbody.innerHTML=boletas.length?boletas.map(b=>{
     const ingreso=b.basica+b.bono+b.otros+(b.utilidades||0);
     const tieneReal=b.retencion5taReal!==null&&b.retencion5taReal!==undefined;
@@ -25264,12 +25338,22 @@ function renderSueldos(){
     return `<tr>
       <td>${MONTHS[b.mes]}</td>
       <td style="text-align:right">${fmtS(ingreso)}${utilTxt}</td>
+      <td style="text-align:right">${b.bono>0?fmtS(b.bono):'—'}</td>
       <td style="text-align:right">${fmtS(b.retencion5taEstimada)}</td>
       <td style="text-align:right">${tieneReal?fmtS(b.retencion5taReal):'—'}</td>
       <td style="text-align:right">${diffTxt}</td>
       <td style="text-align:right"><span style="cursor:pointer;color:var(--text3)" onclick="eliminarBoletaSueldo('${b.id}')">✕</span></td>
     </tr>`;
-  }).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:12px">Todavía no registraste ninguna boleta este año.</td></tr>';
+  }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:12px">Todavía no registraste ninguna boleta en '+anioActual+'.</td></tr>';
+  if(tfoot){
+    if(boletas.length){
+      const totIng=boletas.reduce((t,b)=>t+b.basica+b.bono+b.otros+(b.utilidades||0),0), totBono=boletas.reduce((t,b)=>t+(b.bono||0),0), totEst=boletas.reduce((t,b)=>t+(b.retencion5taEstimada||0),0);
+      const reales=boletas.filter(b=>b.retencion5taReal!==null&&b.retencion5taReal!==undefined), totReal=reales.reduce((t,b)=>t+b.retencion5taReal,0), difTot=reales.reduce((t,b)=>t+b.retencion5taReal-b.retencion5taEstimada,0);
+      const conBono=boletas.filter(b=>b.bono>0), mayor=conBono.slice().sort((a,b)=>b.bono-a.bono)[0];
+      tfoot.innerHTML=`<tr style="font-weight:700;border-top:2px solid var(--border)"><td>Total ${anioActual}</td><td style="text-align:right">${fmtS(totIng)}</td><td style="text-align:right">${fmtS(totBono)}</td><td style="text-align:right">${fmtS(totEst)}</td><td style="text-align:right">${reales.length?fmtS(totReal):'—'}</td><td style="text-align:right">${reales.length?`<span style="color:${Math.abs(difTot)<2?'var(--green)':'var(--red)'}">${difTot>=0?'+':'-'}${fmtS(Math.abs(difTot))}</span>`:'—'}</td><td></td></tr>
+      <tr><td colspan="7" style="font-size:11px;color:var(--text3);font-weight:400;text-align:left;font-family:inherit;white-space:normal">Variable / bono: ${conBono.length} de ${boletas.length} meses con bono · promedio ${fmtS(totBono/boletas.length)} por boleta${mayor?' · mayor '+fmtS(mayor.bono)+' ('+MONTHS[mayor.mes]+')':''}${reales.length&&reales.length<boletas.length?' · 5ta real: '+reales.length+' de '+boletas.length+' boletas':''}</td></tr>`;
+    } else tfoot.innerHTML='';
+  }
 
   // Proyección anual (usa la última boleta registrada como punto de partida)
   const proyCont=document.getElementById('sueldo-proyeccion-anual');
@@ -25289,22 +25373,24 @@ function renderSueldos(){
     proyCont.innerHTML='<div style="color:var(--text3);font-size:12px;grid-column:1/-1">Registra al menos una boleta para ver la proyección.</div>';
   }
 
-  // Gratificación y CTS
-  const gratJul=calcularGratificacion(anioActual,'jul');
-  const gratDic=calcularGratificacion(anioActual,'dic');
-  const ctsMayo=calcularCTS(anioActual,4);
-  const ctsNov=calcularCTS(anioActual,10);
+  // Gratificación y CTS — con detalle paso a paso. proy=true: si aún no hay 3 boletas del periodo, se proyecta con tu bono promedio reciente.
+  const gratJul=calcularGratificacion(anioActual,'jul',true);
+  const gratDic=calcularGratificacion(anioActual,'dic',true);
+  const ctsMayo=calcularCTS(anioActual,4,true);
+  const ctsNov=calcularCTS(anioActual,10,true);
+  const detalleBox=h=>`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--accent)">Ver cálculo paso a paso</summary><div style="margin-top:6px">${h}</div></details>`;
+  const avisos=o=>(o.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':'')+(o.varProyectado?'<div style="font-size:10px;color:var(--accent);margin-top:2px">📈 Incluye proyección con tu bono promedio reciente ('+fmtS(o.promedioVar)+'/mes)</div>':'');
   const tarjetaGrat=(titulo,g)=>`<div style="background:var(--bg3);border-radius:8px;padding:12px">
     <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${g.mesesCompletos} meses${g.dias?' + '+g.dias+' días':''})</small></div>
     <div style="font-size:16px;font-weight:600">${fmtS(g.total)}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">Base ${fmtS(g.baseGrat)} + bonif. ${fmtS(g.bonificacion)}${g.cuenta?'':' · sin bono variable aún (menos de 3 meses registrados)'}</div>
-    ${g.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':''}
+    ${avisos(g)}${detalleBox(sueldoDetalleGrat(g))}
   </div>`;
   const tarjetaCTS=(titulo,c)=>`<div style="background:var(--bg3);border-radius:8px;padding:12px">
     <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${titulo} <small>(${c.mesesCompletos} meses${c.dias?' + '+c.dias+' días':''})</small></div>
     <div style="font-size:16px;font-weight:600">${fmtS(c.cts)}</div>
     <div style="font-size:10px;color:var(--text3);margin-top:2px">Remun. computable ${fmtS(c.rc)} (incluye 1/6 grat.: ${fmtS(c.sextoGratificacion)})</div>
-    ${c.esEstimado?'<div style="font-size:10px;color:var(--amber, #b8860b);margin-top:2px">⚠️ Estimado con tu último sueldo fijo conocido — sube tus boletas de este periodo para exactitud</div>':''}
+    ${avisos(c)}${detalleBox(sueldoDetalleCTS(c))}
   </div>`;
   document.getElementById('sueldo-grat-cts').innerHTML=
     tarjetaGrat('🎁 Gratificación julio '+anioActual,gratJul)+
@@ -25323,7 +25409,7 @@ function renderSueldoChart(){
   const canvasEl=document.getElementById('sueldo-chart');
   if(!canvasEl) return;
   if(sueldoChart){ sueldoChart.destroy(); sueldoChart=null; }
-  const anioActual=(new Date()).getFullYear();
+  const anioActual=sueldoAnioVista();
   const boletas=getBoletasAnioSueldo(anioActual);
   const legend=document.getElementById('sueldo-chart-legend');
   if(!boletas.length){
@@ -28277,6 +28363,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.2.0",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Análisis de Sueldos: ahora puedes ver cada año (‹ ›, incluido 2027) con totales, columna Variable / bono y el cálculo paso a paso de Gratificación y CTS (con proyección cuando aún no hay boletas)."
+  ]
+ },
  {
   "v": "v2.1.0",
   "fecha": "08/11/26",
