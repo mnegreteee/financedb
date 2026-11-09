@@ -2070,8 +2070,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div class="card" style="padding:18px;margin-bottom:32px">
-    <div class="section-header"><div class="section-title">Resumen anual 2026</div></div>
-    <div class="table-scroll"><table class="anual-table"><thead><tr><th>Mes</th><th>Disponible</th><th style="color:var(--text3);font-size:9px">%</th><th>Ahorro Soles</th><th style="color:var(--text3);font-size:9px">%</th><th>Ahorro Dólares</th><th style="color:var(--text3);font-size:9px">%</th></tr></thead><tbody id="anual-tbody"></tbody></table></div>
+    <div class="section-header"><div class="section-title" id="anual-title">Resumen anual 2026</div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3)">Ver cambio en</span>
+        <div class="chart-tabs" id="anual-seg" style="margin:0"><div class="chart-tab" data-m="pct" onclick="setAnualCambio('pct')">%</div><div class="chart-tab" data-m="monto" onclick="setAnualCambio('monto')">Monto</div><div class="chart-tab" data-m="ambos" onclick="setAnualCambio('ambos')">Ambos</div></div></div></div>
+    <div class="table-scroll"><table class="anual-table"><thead id="anual-thead"><tr><th>Mes</th><th>Disponible</th><th style="color:var(--text3);font-size:9px">%</th><th>Ahorro Soles</th><th style="color:var(--text3);font-size:9px">%</th><th>Ahorro Dólares</th><th style="color:var(--text3);font-size:9px">%</th></tr></thead><tbody id="anual-tbody"></tbody></table></div>
   </div>
 
   <div class="card" style="padding:18px;margin-bottom:32px">
@@ -4426,9 +4428,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.3.0';
-const APP_VERSION_DATE = '08/11/26 - 20:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Análisis de Sueldos: los tramos de renta de 5ta (% y límites en UIT) y la deducción en UIT ahora se pueden editar por año, con botón para restablecer a los de la ley.';
+const APP_VERSION = 'v2.4.0';
+const APP_VERSION_DATE = '08/11/26 - 21:26'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Finanzas → Resumen anual: nuevo interruptor «Ver cambio en» (% / Monto / Ambos) para ver la variación contra el mes anterior también en soles o dólares. El título ahora muestra el año que estás viendo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -9813,6 +9815,21 @@ function pctBadge(cur, prev){
   return `<td><span style="background:${bg};color:${col};border-radius:4px;padding:1px 5px;font-size:10px;font-family:var(--mono)">${sign}${pct.toFixed(1)}%</span></td>`;
 }
 
+// ── Resumen anual: ver el cambio contra el mes anterior en %, en monto o en ambos (se recuerda por dispositivo) ──
+function getAnualCambio(){ try{ const v=localStorage.getItem('anualVerCambio'); return (v==='monto'||v==='ambos')?v:'pct'; }catch(e){ return 'pct'; } }
+function setAnualCambio(m){ try{ localStorage.setItem('anualVerCambio',m); }catch(e){} renderAnualTable(); }
+// kind: 'S' soles, 'D' dólares. cur/prev null = sin datos.
+function cambioCelda(cur,prev,kind){
+  const modo=getAnualCambio();
+  if(modo==='pct') return pctBadge(cur,prev);
+  if(cur===null||prev===null) return '<td style="color:var(--text3)">—</td>';
+  const d=cur-prev, z=Math.abs(d)<0.005;
+  const col=z?'var(--text3)':d>0?'var(--green)':'var(--red)', bg=z?'transparent':d>0?'var(--green-bg)':'var(--red-bg)';
+  const monto=(d>=0?'+':'-')+M(kind==='D'?fmtD(Math.abs(d)):fmtS(Math.abs(d)));
+  let txt=monto;
+  if(modo==='ambos'&&prev!==0){ const p=(cur/prev-1)*100; txt+=' · '+(p>=0?'+':'')+p.toFixed(1)+'%'; }
+  return `<td><span style="background:${bg};color:${col};border-radius:4px;padding:1px 5px;font-size:10px;font-family:var(--mono);white-space:nowrap">${txt}</span></td>`;
+}
 function renderAnualTable(){
   let h='';
   let totDisp=null, totAS=null, totAD=null;
@@ -9842,14 +9859,18 @@ function renderAnualTable(){
     h+=`<tr style="${isCur?'background:rgba(91,141,239,.06)':''}">
       <td style="font-weight:${isCur?600:400}">${MONTHS[i]}${isCur?' ←':''}</td>
       <td style="color:${dispCol}">${disp!==null?M(fmtS(disp)):'—'}</td>
-      ${pctBadge(disp,prev.disp)}
+      ${cambioCelda(disp,prev.disp,'S')}
       <td style="color:var(--purple)">${aS!==null?M(fmtS(aS)):'—'}</td>
-      ${pctBadge(aS,prev.aS)}
+      ${cambioCelda(aS,prev.aS,'S')}
       <td style="color:var(--amber)">${aD!==null?M(fmtD(aD)):'—'}</td>
-      ${pctBadge(aD,prev.aD)}
+      ${cambioCelda(aD,prev.aD,'D')}
     </tr>`;
   }
   document.getElementById('anual-tbody').innerHTML=h;
+  const modoA=getAnualCambio(), thc=modoA==='pct'?'<th style="color:var(--text3);font-size:9px">%</th>':'<th style="color:var(--text3);font-size:9px">Cambio</th>';
+  const thead=document.getElementById('anual-thead'); if(thead) thead.innerHTML='<tr><th>Mes</th><th>Disponible</th>'+thc+'<th>Ahorro Soles</th>'+thc+'<th>Ahorro Dólares</th>'+thc+'</tr>';
+  document.querySelectorAll('#anual-seg .chart-tab').forEach(t=>t.classList.toggle('active',t.dataset.m===modoA));
+  const tit=document.getElementById('anual-title'); if(tit) tit.textContent='Resumen anual '+state.currentYear;
 
 }
 
@@ -28401,6 +28422,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.4.0",
+  "fecha": "08/11/26",
+  "cambios": [
+   "Finanzas → Resumen anual: nuevo interruptor «Ver cambio en» (% / Monto / Ambos) para ver la variación contra el mes anterior también en soles o dólares. El título ahora muestra el año que estás viendo."
+  ]
+ },
  {
   "v": "v2.3.0",
   "fecha": "08/11/26",
