@@ -4428,9 +4428,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.4.0';
-const APP_VERSION_DATE = '08/11/26 - 21:26'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Finanzas → Resumen anual: nuevo interruptor «Ver cambio en» (% / Monto / Ambos) para ver la variación contra el mes anterior también en soles o dólares. El título ahora muestra el año que estás viendo.';
+const APP_VERSION = 'v2.5.0';
+const APP_VERSION_DATE = '09/11/26 - 19:22'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Aviso flotante «Hay cambios nuevos · Actualizar» cuando el bot u otro dispositivo guardó algo que esta pestaña todavía no muestra (por ejemplo, si estuvo horas en segundo plano). Solo lee de Firebase, no escribe.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -28423,6 +28423,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.5.0",
+  "fecha": "09/11/26",
+  "cambios": [
+   "Aviso flotante «Hay cambios nuevos · Actualizar» cuando el bot u otro dispositivo guardó algo que esta pestaña todavía no muestra (por ejemplo, si estuvo horas en segundo plano). Solo lee de Firebase, no escribe."
+  ]
+ },
+ {
   "v": "v2.4.0",
   "fecha": "08/11/26",
   "cambios": [
@@ -29230,6 +29237,8 @@ function iniciarListenerTiempoReal(){
         state[k] = remoteValue;
         _lastSyncedMeta[k] = remoteValue;
         huboCambiosAjenos = true;
+      } else if(cambioEnLaNube && remoteStr!==localStr){
+        mostrarAvisoCambiosNuevos(); // cambió en la nube y acá hay ediciones propias: no se pisa, pero se avisa
       }
     });
     if(huboCambiosAjenos){
@@ -29324,6 +29333,44 @@ function _verificarMovQuitadoDeVentana(id){
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden && _movsUnsubscribeListener && _movsListenerDesde && _ventanaMovsDesde()!==_movsListenerDesde) _iniciarListenerMovs();
 });
+// ── Aviso flotante «Hay cambios nuevos»: algo cambió en la nube (bot, otro dispositivo) y esta pestaña todavía no lo muestra ──
+// Pasa, por ejemplo, si la PC se durmió o la pestaña estuvo horas en segundo plano. Solo LEE (una consulta por revisión, que trae
+// únicamente lo posterior a lo ya leído) y nunca escribe ni pisa lo que estás editando.
+let _avisoCambiosEl=null, _avisoCambiosOculto=0, _avisoCambiosBusy=false;
+function mostrarAvisoCambiosNuevos(){
+  if(_avisoCambiosEl) return;
+  try{
+    const el=document.createElement('div');
+    el.id='aviso-cambios-nuevos';
+    el.style.cssText='position:fixed;left:16px;right:16px;margin:0 auto;width:fit-content;max-width:calc(100vw - 32px);bottom:84px;z-index:99999;display:flex;align-items:center;gap:10px;background:var(--bg3);color:var(--text);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.45);font-size:13px';
+    el.innerHTML='<span>🔄 Hay cambios nuevos. Actualiza para verlos.</span><button style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap" onclick="location.reload()">Actualizar</button><button aria-label="Cerrar" style="background:none;border:0;color:var(--text3);font-size:16px;cursor:pointer;padding:0 2px" onclick="cerrarAvisoCambiosNuevos()">✕</button>';
+    document.body.appendChild(el); _avisoCambiosEl=el;
+  }catch(e){}
+}
+function cerrarAvisoCambiosNuevos(){ try{ if(_avisoCambiosEl) _avisoCambiosEl.remove(); }catch(e){} _avisoCambiosEl=null; _avisoCambiosOculto=Date.now(); }
+async function chequearCambiosNuevos(){
+  if(_avisoCambiosBusy||_avisoCambiosEl||!DOC_REF||demoMode||!_lastSyncedMeta) return;
+  _avisoCambiosBusy=true;
+  try{
+    let q=_seccionesColl(); if(_seccMaxSavedAt) q=q.where('savedAt','>',_seccMaxSavedAt);
+    const snap=await q.get();
+    _lec.secc+=snap.size;
+    let hay=false;
+    snap.forEach(doc=>{
+      if(hay||doc.metadata.hasPendingWrites||TC_KEYS_LOCALES_NO_SYNC.has(doc.id)) return;
+      let rs; try{ rs=JSON.stringify(JSON.parse(doc.data().value)); }catch(e){ return; }
+      if(rs!==JSON.stringify(_lastSyncedMeta[doc.id]) && rs!==JSON.stringify(state[doc.id])) hay=true;
+    });
+    if(hay) mostrarAvisoCambiosNuevos();
+  }catch(e){ console.warn('No se pudo revisar si hay cambios nuevos:', e&&e.message); }
+  _avisoCambiosBusy=false;
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ _avisoCambiosOculto=Date.now(); return; }
+  if(_avisoCambiosOculto && Date.now()-_avisoCambiosOculto>=3*60*1000) chequearCambiosNuevos();
+});
+window.addEventListener('online',()=>{ chequearCambiosNuevos(); });
+setInterval(()=>{ if(!document.hidden) chequearCambiosNuevos(); }, 10*60*1000);
 function detenerListenerTiempoReal(){
   if(_tcUnsubscribeListener){ _tcUnsubscribeListener(); _tcUnsubscribeListener=null; }
   if(_movsUnsubscribeListener){ _movsUnsubscribeListener(); _movsUnsubscribeListener=null; }
