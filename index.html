@@ -2390,7 +2390,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <button class="btn btn-primary" style="font-size:11px;padding:5px 14px" onclick="openInvCompraModal()">+ Compra</button>
       <button class="btn" style="font-size:11px;padding:5px 14px" onclick="openInvVentaModal()">+ Venta</button>
       <button class="btn" style="font-size:11px;padding:5px 14px" onclick="openInvValorModal()">+ Valorización</button>
-      <button class="btn" style="font-size:11px;padding:5px 14px" onclick="openInvEfectivoModal()">+ Efectivo</button>
+      <button class="btn" style="font-size:11px;padding:5px 14px;border-color:var(--green);color:var(--green);font-weight:600" onclick="openInvEfectivoModal()" title="Registrar un dividendo que te pagaron en dinero">💵 + Dividendo</button>
       <button class="btn" style="font-size:11px;padding:5px 14px" onclick="exportInvExcel()">⬇️ Exportar</button>
     </div>
   </div>
@@ -2434,6 +2434,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div style="font-size:10px;color:var(--text3);margin-top:2px">XIRR · considera el tiempo</div>
     </div>
   </div>
+
+  <div id="inv-div-strip"></div>
 
   <!-- Posiciones actuales -->
   <div class="card" style="padding:18px;margin-bottom:22px">
@@ -2511,7 +2513,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="chart-tab" id="inv-tab-compras" onclick="setInvTab('compras')">Compras</div>
     <div class="chart-tab" id="inv-tab-ventas" onclick="setInvTab('ventas')">Ventas</div>
     <div class="chart-tab" id="inv-tab-valorizaciones" onclick="setInvTab('valorizaciones')">Valorizaciones</div>
-    <div class="chart-tab" id="inv-tab-efectivo" onclick="setInvTab('efectivo')">Efectivo (dividendos)</div>
+    <div class="chart-tab" id="inv-tab-efectivo" onclick="setInvTab('efectivo')">💵 Dividendos</div>
   </div>
 
   <div id="inv-subpage-historial" class="inv-subpage">
@@ -2548,15 +2550,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
 
   <div id="inv-subpage-efectivo" class="inv-subpage" style="display:none">
-    <div class="card" style="padding:18px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Dividendos que te pagaron en dinero (no en más acciones/ETF) — suman al valorizado de su moneda.</div>
-      <div style="overflow-x:auto">
-      <table class="account-table">
-        <thead><tr><th>Fecha</th><th>Símbolo / Nota</th><th style="text-align:right">Monto</th><th></th></tr></thead>
-        <tbody id="inv-efectivo-tbody"></tbody>
-      </table>
-      </div>
-    </div>
+    <div id="inv-efectivo-panel"></div>
   </div>
 
 </div>
@@ -3253,7 +3247,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="modal-title"><span>⚙ Ajustes de vacaciones</span><button class="modal-close" onclick="cerrarVacAjustes()">✕</button></div>
     <div class="field"><label>Días que ganas por mes trabajado</label><input id="vaj-dpm" type="number" step="0.01" min="0"><small style="color:var(--text3)">Régimen general: 2.5 (30 días al año). En MYPE son 15 días al año = 1.25.</small></div>
     <div class="field"><label>Días ya gozados antes de usar esta sección</label><input id="vaj-previos" type="number" step="0.5" min="0"><small style="color:var(--text3)">Vacaciones que ya tomaste desde tu fecha de inicio (se restan del acumulado). Las futuras agéndalas con «+ Agendar vacaciones».</small></div>
-    <div style="font-size:11px;color:var(--text3);margin:6px 0 12px">Tu fecha de inicio se toma de «⚙ Configurar» (arriba).</div>
+    <div class="field"><label>Fecha en que empezaste a trabajar</label><input id="vaj-inicio" type="date"><small style="color:var(--text3)">Desde aquí se cuentan los meses completos (2.5 días por cada mes cumplido). Si la dejas vacía se usa la fecha de «⚙ Configurar».</small></div>
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="cerrarVacAjustes()">Cancelar</button><button class="btn btn-primary" onclick="guardarVacAjustes()">💾 Guardar</button></div>
   </div>
 </div>
@@ -4485,9 +4479,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.6.0';
-const APP_VERSION_DATE = '10/11/26 - 21:38'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Sueldos → nueva sección «🏖️ Vacaciones»: acumulas 2.5 días por mes trabajado (desde tu fecha de inicio), puedes agendar vacaciones que se restan del saldo, ves adelantos y el plazo para gozarlas, y una guía de las reglas en Perú.';
+const APP_VERSION = 'v2.7.0';
+const APP_VERSION_DATE = '11/11/26 - 10:12'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Inversiones → Dividendos en efectivo rediseñado: botón verde «💵 + Dividendo», franja de resumen arriba (total, este año, 12 meses), pestaña con totales, ranking por símbolo y lista por año, y el cuadro pide el símbolo (con sugerencias de tus posiciones).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10521,7 +10515,7 @@ function renderInvHistorial(){
   });
   (state.inversiones.efectivo||[]).forEach(e=>{
     items.push({ fecha:e.fecha, tipo:'efectivo', icon:'💵', label:'Dividendo en efectivo', color:'var(--purple)',
-      texto:e.nota||'—', monto:invFmt(e.monto,e.moneda||'USD') });
+      texto:[e.simbolo,e.nota].filter(Boolean).join(' · ')||'—', monto:invFmt(e.monto,e.moneda||'USD') });
   });
   if(!items.length){ cont.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Sin movimientos registrados todavía.</div>'; return; }
   items.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
@@ -11147,23 +11141,82 @@ function deleteInvValor(id){
 }
 
 // ── CRUD: EFECTIVO (dividendos en dinero) ─────────────
-function renderInvEfectivoTable(){
-  const tb=document.getElementById('inv-efectivo-tbody');
-  if(!tb) return;
-  const rows=(state.inversiones.efectivo||[]).slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  if(!rows.length){ tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Sin dividendos en efectivo registrados.</td></tr>'; return; }
-  tb.innerHTML=rows.map(e=>{
-    const moneda=e.moneda||'USD';
-    return `<tr style="cursor:pointer" onclick="openInvEfectivoModal('${e.id}')">
-      <td>${fmtFechaCorta(e.fecha)}</td>
-      <td style="color:var(--text3)">${escapeHtml(e.nota)||'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);font-weight:600">${M(invFmt(e.monto,moneda))}</td>
-      <td style="text-align:right;white-space:nowrap"><span onclick="event.stopPropagation();openInvEfectivoModal('${e.id}')" style="cursor:pointer;color:var(--text3);margin-right:8px">✏️</span><span onclick="event.stopPropagation();deleteInvEfectivo('${e.id}')" style="cursor:pointer;color:var(--text3)">🗑</span></td>
-    </tr>`;
+// ── 💵 Dividendos en efectivo: franja de resumen + pestaña con totales, ranking por símbolo y lista por año ──
+function invSimbolosConocidos(){
+  const set=new Set(); const inv=state.inversiones||{};
+  (inv.compras||[]).forEach(c=>c.simbolo&&set.add(String(c.simbolo).toUpperCase()));
+  (inv.ventas||[]).forEach(v=>v.simbolo&&set.add(String(v.simbolo).toUpperCase()));
+  return [...set].sort();
+}
+function invDivFilas(){
+  const conocidos=invSimbolosConocidos();
+  return (state.inversiones.efectivo||[]).map(e=>{
+    let sym=(e.simbolo||'').toString().toUpperCase().trim();
+    if(!sym){ const t=String(e.nota||'').toUpperCase().split(/[^A-Z0-9.]+/).find(w=>conocidos.includes(w)); if(t) sym=t; }
+    return {id:e.id,fecha:e.fecha,moneda:e.moneda==='PEN'?'PEN':'USD',monto:Number(e.monto)||0,sym,nota:e.nota||''};
+  }).sort((a,b)=>a.fecha<b.fecha?1:(a.fecha>b.fecha?-1:0));
+}
+function invDivSumar(rows){ const t={PEN:0,USD:0}; rows.forEach(r=>{ t[r.moneda]+=r.monto; }); return t; }
+function invDivTxt(t){ const p=[]; if(t.PEN>0.004) p.push(M(fmtS(t.PEN))); if(t.USD>0.004) p.push(M(fmtD(t.USD))); return p.length?p.join(' · '):M(fmtD(0)); }
+function invDivIrLista(){ setInvTab('efectivo'); const el=document.getElementById('inv-subpage-efectivo'); if(el&&el.scrollIntoView) el.scrollIntoView({behavior:'smooth',block:'start'}); }
+function renderInvDividendos(){
+  const rows=invDivFilas(), hoy=todayLocalISO(), anio=hoy.slice(0,4);
+  const hace12=new Date(); hace12.setFullYear(hace12.getFullYear()-1); const f12=fechaLocalISO(hace12);
+  const tTot=invDivSumar(rows), tAnio=invDivSumar(rows.filter(r=>r.fecha.slice(0,4)===anio)), t12=invDivSumar(rows.filter(r=>r.fecha>=f12));
+  // ── franja arriba del todo ──
+  const strip=document.getElementById('inv-div-strip');
+  if(strip){
+    strip.innerHTML=`<div class="card" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid var(--green);display:flex;align-items:center;gap:18px;flex-wrap:wrap;cursor:pointer" onclick="invDivIrLista()">
+      <div style="min-width:150px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">💵 Dividendos cobrados</div>
+        <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--green)">${rows.length?invDivTxt(tTot):'—'}</div>
+        <div style="font-size:10px;color:var(--text3)">${rows.length?rows.length+' pago'+(rows.length===1?'':'s')+' · último '+fmtFechaCorta(rows[0].fecha):'aún no registras ninguno'}</div></div>
+      ${rows.length?`<div><div style="font-size:10px;color:var(--text3)">Este año</div><div style="font-family:var(--mono);font-size:14px;font-weight:600">${invDivTxt(tAnio)}</div></div>
+      <div><div style="font-size:10px;color:var(--text3)">Últimos 12 meses</div><div style="font-family:var(--mono);font-size:14px;font-weight:600">${invDivTxt(t12)}</div></div>`:''}
+      <div style="margin-left:auto;display:flex;gap:8px"><button class="btn" style="font-size:11px" onclick="event.stopPropagation();invDivIrLista()">Ver todos</button><button class="btn btn-primary" style="font-size:11px" onclick="event.stopPropagation();openInvEfectivoModal()">+ Registrar dividendo</button></div>
+    </div>`;
+  }
+  // ── pestaña ──
+  const panel=document.getElementById('inv-efectivo-panel'); if(!panel) return;
+  const cab=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text3);max-width:520px">Dividendos que te pagaron en <b>dinero</b> (no en más acciones/ETF). Suman al valorizado de su moneda. Toca uno para editarlo.</div>
+      <button class="btn btn-primary" onclick="openInvEfectivoModal()">+ Registrar dividendo</button></div>`;
+  if(!rows.length){ panel.innerHTML=`<div class="card" style="padding:24px;text-align:center">${cab}<div style="color:var(--text3);font-size:13px;padding:14px 0">Aún no registras dividendos en efectivo.<br>Cuando te paguen uno, toca <b>«+ Registrar dividendo»</b>, elige el símbolo y el monto.</div></div>`; return; }
+  const stat=(l,v,sub)=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">${l}</div><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--green);margin-top:2px">${v}</div><div style="font-size:10px;color:var(--text3)">${sub||''}</div></div>`;
+  const stats=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">`
+    +stat('Total cobrado',invDivTxt(tTot),rows.length+' pago'+(rows.length===1?'':'s'))
+    +stat('Este año ('+anio+')',invDivTxt(tAnio),rows.filter(r=>r.fecha.slice(0,4)===anio).length+' pagos')
+    +stat('Últimos 12 meses',invDivTxt(t12),'desde '+fmtFechaCorta(f12))
+    +stat('Último pago',M(invFmt(rows[0].monto,rows[0].moneda)),fmtFechaCorta(rows[0].fecha)+(rows[0].sym?' · '+escapeHtml(rows[0].sym):''))
+    +`</div>`;
+  // ranking por símbolo (la barra usa el equivalente en soles solo para comparar el largo)
+  const por={}; rows.forEach(r=>{ const k=r.sym||'Sin símbolo'; (por[k]=por[k]||{PEN:0,USD:0,n:0}); por[k][r.moneda]+=r.monto; por[k].n++; });
+  const rate=(typeof gsRate==='function')?gsRate():3.45;
+  const lista=Object.entries(por).map(([k,v])=>({k,v,eq:v.PEN+v.USD*rate})).sort((a,b)=>b.eq-a.eq), maxEq=Math.max(...lista.map(x=>x.eq),1);
+  const ranking=`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Por símbolo</div><div style="margin-bottom:18px">`+lista.map(x=>{
+    const col=x.k==='Sin símbolo'?'var(--text3)':invColorFor(x.k);
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12px"><span style="width:78px;flex-shrink:0;display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${escapeHtml(x.k)}</span><span style="flex:1;height:8px;background:var(--bg4);border-radius:4px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(3,Math.round(x.eq/maxEq*100))}%;background:${col};opacity:.85"></span></span><span style="font-family:var(--mono);min-width:96px;text-align:right;color:var(--green)">${invDivTxt(x.v)}</span></div>`; }).join('')+`</div>`;
+  // lista por año
+  const anios=[...new Set(rows.map(r=>r.fecha.slice(0,4)))];
+  const lis=anios.map(a=>{
+    const rs=rows.filter(r=>r.fecha.slice(0,4)===a), t=invDivSumar(rs);
+    return `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:8px 0 6px;margin-top:6px;border-bottom:1px solid var(--border2)"><span style="font-size:13px;font-weight:700">${a} <span style="font-size:10px;color:var(--text3);font-weight:400">· ${rs.length} pago${rs.length===1?'':'s'}</span></span><span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green)">${invDivTxt(t)}</span></div>`
+    +rs.map(r=>{ const col=r.sym?invColorFor(r.sym):'var(--text3)';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer" onclick="openInvEfectivoModal('${r.id}')">
+        <span style="font-size:11px;color:var(--text3);width:52px;flex-shrink:0">${fmtFechaCorta(r.fecha)}</span>
+        <span style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;overflow:hidden">${r.sym?`<span style="display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600"><span style="width:7px;height:7px;border-radius:50%;background:${col}"></span>${escapeHtml(r.sym)}</span>`:''}<span style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((r.sym&&r.nota.toUpperCase().trim()==='DIVIDENDO '+r.sym)?'':r.nota)||(r.sym?'':'—')}</span></span>
+        <span style="font-family:var(--mono);font-weight:700;color:var(--green);white-space:nowrap">+${M(invFmt(r.monto,r.moneda))}</span>
+        <span style="white-space:nowrap"><span onclick="event.stopPropagation();openInvEfectivoModal('${r.id}')" style="cursor:pointer;color:var(--text3);margin:0 6px">✏️</span><span onclick="event.stopPropagation();deleteInvEfectivo('${r.id}')" style="cursor:pointer;color:var(--text3)">🗑</span></span></div>`; }).join('');
   }).join('');
+  panel.innerHTML=`<div class="card" style="padding:18px">${cab}${stats}${ranking}${lis}</div>`;
+}
+function renderInvEfectivoTable(){ renderInvDividendos(); }
+function onInvEfSimboloChange(){
+  const sy=(document.getElementById('ie-simbolo').value||'').toUpperCase().trim();
+  if(sy && invSimbolosConocidos().includes(sy)){ const c=(state.inversiones.compras||[]).find(x=>String(x.simbolo).toUpperCase()===sy); if(c) document.getElementById('ie-moneda').value=c.moneda||'USD'; }
 }
 function openInvEfectivoModal(id){
   editingInvEfectivoId=id||null;
+  const dl=document.getElementById('ie-simbolos-lista'); if(dl) dl.innerHTML=invSimbolosConocidos().map(x=>'<option value="'+escapeHtml(x)+'">').join('');
   const dBtn=document.getElementById('ie-delete-btn');
   if(id){
     const e=(state.inversiones.efectivo||[]).find(x=>x.id===id);
@@ -11173,6 +11226,7 @@ function openInvEfectivoModal(id){
     document.getElementById('ie-moneda').value=e.moneda||'USD';
     document.getElementById('ie-monto').value=e.monto;
     document.getElementById('ie-nota').value=e.nota||'';
+    document.getElementById('ie-simbolo').value=(invDivFilas().find(x=>x.id===id)||{}).sym||'';
     dBtn.style.display='inline-flex';
   } else {
     document.getElementById('inv-efectivo-modal-title').textContent='Nuevo Dividendo en Efectivo';
@@ -11180,6 +11234,7 @@ function openInvEfectivoModal(id){
     document.getElementById('ie-moneda').value='USD';
     document.getElementById('ie-monto').value='';
     document.getElementById('ie-nota').value='';
+    document.getElementById('ie-simbolo').value='';
     dBtn.style.display='none';
   }
   document.getElementById('inv-efectivo-modal-overlay').classList.add('open');
@@ -11190,19 +11245,20 @@ function saveInvEfectivo(){
   const moneda=document.getElementById('ie-moneda').value;
   const monto=parseFloat(document.getElementById('ie-monto').value)||0;
   const nota=(document.getElementById('ie-nota').value||'').trim();
+  const simbolo=(document.getElementById('ie-simbolo').value||'').toUpperCase().trim();
   if(!fecha||monto<=0){alert('Completa fecha y monto.');return;}
   if(!state.inversiones.efectivo) state.inversiones.efectivo=[];
   if(editingInvEfectivoId){
     const e=state.inversiones.efectivo.find(x=>x.id===editingInvEfectivoId);
     if(e){
       const antes={...e};
-      e.fecha=fecha;e.moneda=moneda;e.monto=monto;e.nota=nota;
-      logActividad('inversion_editada', `Efectivo editado: ${nota||fecha}`, {invKind:'efectivo', invId:e.id, snapshotAntes:antes});
+      e.fecha=fecha;e.moneda=moneda;e.monto=monto;e.nota=nota;e.simbolo=simbolo;
+      logActividad('inversion_editada', `Efectivo editado: ${simbolo||nota||fecha}`, {invKind:'efectivo', invId:e.id, snapshotAntes:antes});
     }
   } else {
-    const nuevoEfectivo={id:'ie'+Date.now(),fecha,moneda,monto,nota};
+    const nuevoEfectivo={id:'ie'+Date.now(),fecha,moneda,monto,nota,simbolo};
     state.inversiones.efectivo.push(nuevoEfectivo);
-    logActividad('inversion', `Efectivo: ${nota||fecha}`, {invKind:'efectivo', invId:nuevoEfectivo.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
+    logActividad('inversion', `Dividendo en efectivo: ${simbolo||nota||fecha}`, {invKind:'efectivo', invId:nuevoEfectivo.id, valorizacionEraNueva:true, valorizacionPreciosAntes:null});
   }
   saveState(); closeInvEfectivoModal(); renderInversiones();
 }
@@ -25416,8 +25472,10 @@ function sueldoDetalleCTS(c){
 //  Se guarda en state.vacaciones = { diasPorMes, previos, planes:[{id,desde,hasta,nota}] }. Los días se cuentan como
 //  días naturales (inclusive). Agendar descuenta del acumulado; no toca movimientos ni dinero.
 // ══════════════════════════════════════════════════════
-function vacLeer(){ const v=state.vacaciones||{}; return {diasPorMes:v.diasPorMes>0?Number(v.diasPorMes):2.5, previos:v.previos>0?Number(v.previos):0, planes:Array.isArray(v.planes)?v.planes:[]}; }
-function vacEscribir(v){ state.vacaciones={diasPorMes:v.diasPorMes, previos:v.previos, planes:v.planes}; }
+function vacLeer(){ const v=state.vacaciones||{}; return {diasPorMes:v.diasPorMes>0?Number(v.diasPorMes):2.5, previos:v.previos>0?Number(v.previos):0, planes:Array.isArray(v.planes)?v.planes:[], fechaInicio:/^\d{4}-\d{2}-\d{2}$/.test(v.fechaInicio||'')?v.fechaInicio:''}; }
+// Fecha desde la que se acumula: la propia de Vacaciones (⚙ Ajustes) o, si no hay, la de «⚙ Configurar» del sueldo.
+function vacIni(){ const v=vacLeer(); return v.fechaInicio||((state.sueldoConfig||{}).fechaInicio)||''; }
+function vacEscribir(v){ state.vacaciones={diasPorMes:v.diasPorMes, previos:v.previos, planes:v.planes, fechaInicio:v.fechaInicio||''}; }
 function vacF(f){ const p=String(f||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:''; }
 function vacD(f){ return new Date(f+'T12:00:00'); }
 function vacDias(desde,hasta){ return Math.round((vacD(hasta)-vacD(desde))/864e5)+1; }
@@ -25427,10 +25485,10 @@ function vacMeses(ini,al){ const a=vacD(ini); let m=(al.getFullYear()-a.getFullY
 function vacEstadoPlan(p,hoyISO){ return p.hasta<hoyISO?'gozada':(p.desde<=hoyISO?'encurso':'agendada'); }
 // excluirId: para editar un plan sin contarlo dos veces
 function vacResumen(excluirId, extra){
-  const cfg=state.sueldoConfig||{}, v=vacLeer();
-  if(!cfg.fechaInicio) return {sinFecha:true,v};
+  const v=vacLeer(), ini=vacIni();
+  if(!ini) return {sinFecha:true,v};
   const hoy=new Date(); hoy.setHours(12,0,0,0); const hoyISO=fechaLocalISO(hoy);
-  const meses=vacMeses(cfg.fechaInicio,hoy), dpm=v.diasPorMes, acum=meses*dpm;
+  const meses=vacMeses(ini,hoy), dpm=v.diasPorMes, acum=meses*dpm;
   let planes=v.planes.filter(p=>p.id!==excluirId).map(p=>({...p}));
   if(extra) planes.push({...extra});
   planes.sort((a,b)=>a.desde<b.desde?-1:(a.desde>b.desde?1:0));
@@ -25439,30 +25497,31 @@ function vacResumen(excluirId, extra){
     p.n=vacDias(p.desde,p.hasta); p.estado=vacEstadoPlan(p,hoyISO);
     if(p.estado==='gozada') gozados+=p.n; else agend+=p.n;
     cum+=p.n;
-    const acumAl=vacMeses(cfg.fechaInicio,vacD(p.desde))*dpm;
+    const acumAl=vacMeses(ini,vacD(p.desde))*dpm;
     p.adelanto=Math.max(0,cum-acumAl); // días que usa por encima de lo acumulado hasta su fecha de inicio
   });
   const usado=gozados+agend, saldo=acum-usado;
   const B=dpm*12, k=Math.floor(meses/12);
   const vencido=k>=2?Math.max(0,B*(k-1)-usado):0; // de periodos cuyo año de plazo ya pasó
   const j0=Math.floor(usado/B)+1;
-  let plazo=null; if(vencido<0.001 && k>=1 && j0<=k){ const falta=B*j0-usado; if(falta>0.001) plazo={n:j0,falta,limite:vacSumarMeses(cfg.fechaInicio,12*(j0+1))}; }
-  return {v,meses,acum,gozados,agend,usado,saldo,planes,vencido,plazo,proximo:vacSumarMeses(cfg.fechaInicio,meses+1),proxAniv:vacSumarMeses(cfg.fechaInicio,12*(k+1)),k,hoyISO};
+  let plazo=null; if(vencido<0.001 && k>=1 && j0<=k){ const falta=B*j0-usado; if(falta>0.001) plazo={n:j0,falta,limite:vacSumarMeses(ini,12*(j0+1))}; }
+  return {v,meses,acum,gozados,agend,usado,saldo,planes,vencido,plazo,proximo:vacSumarMeses(ini,meses+1),proxAniv:vacSumarMeses(ini,12*(k+1)),k,hoyISO,ini};
 }
 function renderVacaciones(){
   const box=document.getElementById('vac-resumen'); if(!box) return;
   const r=vacResumen(), tb=document.getElementById('vac-tbody'), wrap=document.getElementById('vac-tabla-wrap');
-  if(r.sinFecha){ box.innerHTML='<div class="dash-empty" style="padding:10px 0">Para acumular vacaciones necesito la <b>fecha de inicio</b> en tu trabajo actual. Agrégala en «⚙ Configurar».</div>'; wrap.style.display='none'; return; }
+  if(r.sinFecha){ box.innerHTML='<div class="dash-empty" style="padding:10px 0">Para acumular vacaciones necesito la <b>fecha en que empezaste</b> a trabajar. Agrégala en <a href="#" onclick="abrirVacAjustes();return false">⚙ Ajustes</a>.</div>'; wrap.style.display='none'; return; }
   wrap.style.display='';
   const cell=(l,v,c,s)=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">${l}</div><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3)">${s||''}</div></div>`;
   const col=r.saldo<-0.001?'var(--red)':(r.saldo<0.001?'var(--text2)':'var(--green)');
   let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">'
-   +cell('Acumulado',vacN(r.acum)+' d','var(--accent)',r.meses+' mes'+(r.meses===1?'':'es')+' × '+vacN(r.v.diasPorMes))
+   +cell('Acumulado',vacN(r.acum)+' d','var(--accent)',r.meses+' mes'+(r.meses===1?'':'es')+' completo'+(r.meses===1?'':'s')+' × '+vacN(r.v.diasPorMes))
    +cell('Gozados',vacN(r.gozados)+' d','var(--text)','incluye '+vacN(r.v.previos)+' d previos')
    +cell('Agendados',vacN(r.agend)+' d','var(--amber)','por tomar o en curso')
    +cell('Saldo disponible',vacN(r.saldo)+' d',col,r.saldo<-0.001?'estás en adelanto':'sin agendar')
    +cell('Próximo +'+vacN(r.v.diasPorMes),vacF(fechaLocalISO(r.proximo)),'var(--text2)','cuando cumples el mes')
    +'</div>';
+  h+='<div style="margin-top:8px;font-size:11px;color:var(--text3)">Empezaste el <b>'+vacF(r.ini)+'</b>. Ganas '+vacN(r.v.diasPorMes)+' días solo al <b>completar cada mes</b> de trabajo (cada día '+vacD(r.ini).getDate()+'). <a href="#" onclick="abrirVacAjustes();return false" style="color:var(--accent)">Cambiar fecha</a></div>';
   const av=(c,t)=>`<div style="margin-top:10px;font-size:12px;color:${c}">${t}</div>`;
   if(r.vencido>0.001) h+=av('var(--red)','🚨 Tienes <b>'+vacN(r.vencido)+' días</b> de periodos cuyo plazo de goce ya venció: podría corresponderte el triple vacacional. Conversa con tu empleador.');
   else if(r.plazo) h+=av('var(--text2)','⏳ Del periodo que cumpliste (año '+r.plazo.n+') te faltan <b>'+vacN(r.plazo.falta)+' días</b> por agendar antes del <b>'+vacF(fechaLocalISO(r.plazo.limite))+'</b>; pasada esa fecha sin gozarlos aplica el triple vacacional.');
@@ -25518,14 +25577,16 @@ function eliminarVac(id){
   logActividad('vacaciones','Vacaciones eliminadas: '+vacF(p.desde)+' – '+vacF(p.hasta),{});
   saveState(); renderVacaciones();
 }
-function abrirVacAjustes(){ const v=vacLeer(); document.getElementById('vaj-dpm').value=v.diasPorMes; document.getElementById('vaj-previos').value=v.previos; document.getElementById('vac-ajustes-overlay').classList.add('open'); }
+function abrirVacAjustes(){ const v=vacLeer(); document.getElementById('vaj-dpm').value=v.diasPorMes; document.getElementById('vaj-previos').value=v.previos; document.getElementById('vaj-inicio').value=vacIni(); document.getElementById('vac-ajustes-overlay').classList.add('open'); }
 function cerrarVacAjustes(){ document.getElementById('vac-ajustes-overlay').classList.remove('open'); }
 function guardarVacAjustes(){
   const dpm=parseFloat(document.getElementById('vaj-dpm').value), pre=parseFloat(document.getElementById('vaj-previos').value)||0;
   if(!(dpm>0)||dpm>10){ toast('Pon los días por mes (ej. 2.5)'); return; }
   if(pre<0){ toast('Los días previos no pueden ser negativos'); return; }
-  const base=vacLeer(); base.diasPorMes=dpm; base.previos=pre; vacEscribir(base);
-  logActividad('vacaciones','Ajustes de vacaciones: '+vacN(dpm)+' d/mes, '+vacN(pre)+' d previos',{});
+  const ini=document.getElementById('vaj-inicio').value||'';
+  if(ini && ini>fechaLocalISO(new Date())){ toast('La fecha de inicio no puede ser futura'); return; }
+  const base=vacLeer(); base.diasPorMes=dpm; base.previos=pre; base.fechaInicio=ini; vacEscribir(base);
+  logActividad('vacaciones','Ajustes de vacaciones: '+vacN(dpm)+' d/mes, '+vacN(pre)+' d previos'+(ini?', inicio '+vacF(ini):''),{});
   cerrarVacAjustes(); saveState(); renderVacaciones();
 }
 
@@ -28599,6 +28660,20 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.7.0",
+  "fecha": "11/11/26",
+  "cambios": [
+   "Inversiones → Dividendos en efectivo rediseñado: botón verde «💵 + Dividendo», franja de resumen arriba (total, este año, 12 meses), pestaña con totales, ranking por símbolo y lista por año, y el cuadro pide el símbolo (con sugerencias de tus posiciones)."
+  ]
+ },
+ {
+  "v": "v2.6.1",
+  "fecha": "10/11/26",
+  "cambios": [
+   "Vacaciones: ahora puedes poner la fecha en que empezaste a trabajar en ⚙ Ajustes (si no, usa la de Configurar) y se aclara que los 2.5 días se ganan solo al completar cada mes."
+  ]
+ },
+ {
   "v": "v2.6.0",
   "fecha": "10/11/26",
   "cambios": [
@@ -31108,8 +31183,9 @@ if(state.projGoals){
       <div class="field"><label>Fecha</label><input id="ie-fecha" type="date"></div>
       <div class="field"><label>Moneda</label><select id="ie-moneda"><option value="USD">Dólares ($)</option><option value="PEN">Soles (S/)</option></select></div>
     </div>
-    <div class="field"><label>Monto</label><input id="ie-monto" type="number" step="0.01" placeholder="0.00"></div>
-    <div class="field"><label>Símbolo / Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="ie-nota" type="text" placeholder="Ej. Dividendo NUGT"></div>
+    <div class="field"><label>Símbolo <span style="font-size:10px;color:var(--text3)">(el que pagó el dividendo)</span></label><input id="ie-simbolo" type="text" list="ie-simbolos-lista" autocomplete="off" placeholder="Ej. NUGT" style="text-transform:uppercase" oninput="onInvEfSimboloChange()"><datalist id="ie-simbolos-lista"></datalist></div>
+    <div class="field"><label>Monto cobrado</label><input id="ie-monto" type="number" step="0.01" placeholder="0.00" style="font-size:16px;font-weight:600"></div>
+    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="ie-nota" type="text" placeholder="Ej. dividendo trimestral"></div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px">
       <button class="config-action-btn danger" id="ie-delete-btn" style="display:none" onclick="deleteInvEfectivo()">🗑 Eliminar</button>
       <div style="display:flex;gap:8px;margin-left:auto">
