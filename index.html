@@ -2666,6 +2666,39 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div id="sueldo-grat-cts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px"></div>
     </div>
 
+    <div class="card" id="sueldo-vacaciones" style="padding:16px 20px;margin-bottom:16px">
+      <div class="section-header" style="margin-bottom:10px">
+        <div class="section-title" style="font-size:13px">🏖️ Vacaciones</div>
+        <div style="display:flex;gap:8px">
+          <button class="config-action-btn neutral" style="font-size:10px;padding:4px 9px" onclick="abrirVacAjustes()">⚙ Ajustes</button>
+          <button class="btn btn-primary" style="font-size:11px;padding:4px 10px" onclick="abrirVacModal()">+ Agendar vacaciones</button>
+        </div>
+      </div>
+      <div id="vac-resumen"></div>
+      <div class="table-scroll" id="vac-tabla-wrap" style="margin-top:12px">
+        <table class="account-table" style="width:100%;min-width:520px">
+          <thead><tr><th>Desde</th><th>Hasta</th><th style="text-align:right">Días</th><th style="padding-left:16px">Estado</th><th>Nota</th><th></th></tr></thead>
+          <tbody id="vac-tbody"></tbody>
+        </table>
+      </div>
+      <details style="margin-top:12px;font-size:12px;color:var(--text2)">
+        <summary style="cursor:pointer;font-weight:600">📖 Reglas de las vacaciones en Perú (régimen general)</summary>
+        <ul style="margin:8px 0 0 18px;padding:0;line-height:1.6">
+          <li><b>30 días naturales</b> de descanso pagado por cada año completo de servicio (D. Leg. 713). Equivale a <b>2.5 días por mes</b>, que es lo que acumula esta sección.</li>
+          <li><b>Récord vacacional:</b> para ganar el derecho necesitas 260 días efectivos de trabajo al año (jornada de 6 días) o 210 (jornada de 5 días), con un máximo de 10 faltas injustificadas.</li>
+          <li><b>Cuándo gozarlas:</b> durante el año siguiente al que cumpliste el derecho, y la fecha se fija por acuerdo entre tú y tu empleador (si no hay acuerdo, decide el empleador según las necesidades de la empresa).</li>
+          <li><b>Fraccionamiento (D. Leg. 1405):</b> si lo pides por escrito y se acuerda, puedes dividirlas: un bloque de 15 días (seguidos, o 7 + 8) y el resto en periodos de 1 día o más.</li>
+          <li><b>Acumular:</b> por acuerdo escrito se pueden acumular hasta 2 descansos seguidos, gozando al menos 7 días cada año.</li>
+          <li><b>Adelanto:</b> se puede pedir antes de cumplir el año con acuerdo escrito. Si te vas antes, lo adelantado se descuenta de tus vacaciones truncas.</li>
+          <li><b>Reducir a 15 días:</b> con acuerdo escrito puedes gozar solo 15 y que te paguen los otros 15 (art. 19 D. Leg. 713).</li>
+          <li><b>Si no las gozas a tiempo:</b> te corresponde el <b>triple vacacional</b>: la remuneración del descanso, la remuneración por haber trabajado ese periodo y una indemnización equivalente a una remuneración (art. 23 D. Leg. 713).</li>
+          <li><b>Vacaciones truncas:</b> si cesas antes de cumplir el año, con al menos 1 mes completo, te las pagan proporcionalmente (2.5 días por mes).</li>
+          <li><b>Remuneración vacacional:</b> la remuneración habitual; si tienes variables (comisiones, bonos regulares) se promedia lo percibido.</li>
+          <li style="color:var(--text3)">Es una guía general, no asesoría legal: tu contrato, tu régimen (MYPE, etc.) o convenio pueden variar los plazos. Los días se cuentan como días naturales (incluyen sábados, domingos y feriados).</li>
+        </ul>
+      </details>
+    </div>
+
     <div class="card" style="padding:16px 20px">
       <div class="section-title" id="sueldo-boletas-titulo" style="font-size:13px;margin-bottom:10px">Boletas registradas</div>
       <div class="table-scroll">
@@ -3198,6 +3231,30 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <button class="btn btn-secondary" onclick="cerrarConfigSueldo()">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarConfigSueldo()">💾 Guardar</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="vac-overlay" onclick="if(event.target===this)cerrarVacModal()">
+  <div class="modal" style="width:420px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title"><span id="vac-modal-titulo">🏖️ Agendar vacaciones</span><button class="modal-close" onclick="cerrarVacModal()">✕</button></div>
+    <input type="hidden" id="vac-id">
+    <div class="field-row">
+      <div class="field"><label>Desde</label><input id="vac-desde" type="date" oninput="vacPreview()"></div>
+      <div class="field"><label>Hasta (último día)</label><input id="vac-hasta" type="date" oninput="vacPreview()"></div>
+    </div>
+    <div class="field"><label>Nota <small>(opcional)</small></label><input id="vac-nota" type="text" maxlength="80" placeholder="Ej. viaje a Cusco"></div>
+    <div id="vac-preview" style="font-size:12px;line-height:1.6;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:6px 0 12px;color:var(--text2)"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="cerrarVacModal()">Cancelar</button><button class="btn btn-primary" onclick="guardarVac()">💾 Guardar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="vac-ajustes-overlay" onclick="if(event.target===this)cerrarVacAjustes()">
+  <div class="modal" style="width:420px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title"><span>⚙ Ajustes de vacaciones</span><button class="modal-close" onclick="cerrarVacAjustes()">✕</button></div>
+    <div class="field"><label>Días que ganas por mes trabajado</label><input id="vaj-dpm" type="number" step="0.01" min="0"><small style="color:var(--text3)">Régimen general: 2.5 (30 días al año). En MYPE son 15 días al año = 1.25.</small></div>
+    <div class="field"><label>Días ya gozados antes de usar esta sección</label><input id="vaj-previos" type="number" step="0.5" min="0"><small style="color:var(--text3)">Vacaciones que ya tomaste desde tu fecha de inicio (se restan del acumulado). Las futuras agéndalas con «+ Agendar vacaciones».</small></div>
+    <div style="font-size:11px;color:var(--text3);margin:6px 0 12px">Tu fecha de inicio se toma de «⚙ Configurar» (arriba).</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" onclick="cerrarVacAjustes()">Cancelar</button><button class="btn btn-primary" onclick="guardarVacAjustes()">💾 Guardar</button></div>
   </div>
 </div>
 
@@ -4428,9 +4485,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.5.0';
-const APP_VERSION_DATE = '09/11/26 - 19:22'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Aviso flotante «Hay cambios nuevos · Actualizar» cuando el bot u otro dispositivo guardó algo que esta pestaña todavía no muestra (por ejemplo, si estuvo horas en segundo plano). Solo lee de Firebase, no escribe.';
+const APP_VERSION = 'v2.6.0';
+const APP_VERSION_DATE = '10/11/26 - 21:38'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Sueldos → nueva sección «🏖️ Vacaciones»: acumulas 2.5 días por mes trabajado (desde tu fecha de inicio), puedes agendar vacaciones que se restan del saldo, ves adelantos y el plazo para gozarlas, y una guía de las reglas en Perú.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4916,7 +4973,7 @@ const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄'
   acceso_rapido_editado:'⚡',acceso_rapido_eliminado:'⚡',
   trea:'📈',trea_eliminada:'📈',
   tc_empresa_nueva:'💱',tc_empresa_renombrada:'💱',tc_empresa_eliminada:'💱',
-  sueldo_config:'💼',sueldo_parametros:'💼',sueldo_boleta_nueva:'💼',sueldo_boleta_editada:'💼',sueldo_boleta_eliminada:'💼',
+  sueldo_config:'💼',sueldo_parametros:'💼',sueldo_boleta_nueva:'💼',sueldo_boleta_editada:'💼',sueldo_boleta_eliminada:'💼',vacaciones:'🏖️',
   mantenimiento_nuevo:'🔧',mantenimiento_editado:'🔧',mantenimiento_eliminado:'🔧',mantenimiento_registrado:'🔧'};
 function abrirActividadReciente(){
   renderActividadReciente();
@@ -25354,6 +25411,124 @@ function sueldoDetalleCTS(c){
    +sueldoFila('Meses computables',c.mesesCompletos+(c.dias?' + '+c.dias+' días':''))
    +sueldoFila('CTS a depositar',`RC ÷ 12 × ${c.mesesCompletos}${c.dias?' + RC ÷ 360 × '+c.dias:''} = ${fmtS(c.cts)}`,true);
 }
+// ══════════════════════════════════════════════════════
+//  🏖️ VACACIONES (Sueldos) — acumulado 2.5 días por mes trabajado (30 días naturales por año, D. Leg. 713).
+//  Se guarda en state.vacaciones = { diasPorMes, previos, planes:[{id,desde,hasta,nota}] }. Los días se cuentan como
+//  días naturales (inclusive). Agendar descuenta del acumulado; no toca movimientos ni dinero.
+// ══════════════════════════════════════════════════════
+function vacLeer(){ const v=state.vacaciones||{}; return {diasPorMes:v.diasPorMes>0?Number(v.diasPorMes):2.5, previos:v.previos>0?Number(v.previos):0, planes:Array.isArray(v.planes)?v.planes:[]}; }
+function vacEscribir(v){ state.vacaciones={diasPorMes:v.diasPorMes, previos:v.previos, planes:v.planes}; }
+function vacF(f){ const p=String(f||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:''; }
+function vacD(f){ return new Date(f+'T12:00:00'); }
+function vacDias(desde,hasta){ return Math.round((vacD(hasta)-vacD(desde))/864e5)+1; }
+function vacN(n){ return (Math.round(n*100)/100).toString().replace(/\.0+$/,''); }
+function vacSumarMeses(ini,n){ const a=vacD(ini), d=new Date(a.getFullYear(),a.getMonth()+n,1,12); const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(); d.setDate(Math.min(a.getDate(),dim)); return d; }
+function vacMeses(ini,al){ const a=vacD(ini); let m=(al.getFullYear()-a.getFullYear())*12+(al.getMonth()-a.getMonth()); while(m>0 && vacSumarMeses(ini,m)>al) m--; return Math.max(0,m); }
+function vacEstadoPlan(p,hoyISO){ return p.hasta<hoyISO?'gozada':(p.desde<=hoyISO?'encurso':'agendada'); }
+// excluirId: para editar un plan sin contarlo dos veces
+function vacResumen(excluirId, extra){
+  const cfg=state.sueldoConfig||{}, v=vacLeer();
+  if(!cfg.fechaInicio) return {sinFecha:true,v};
+  const hoy=new Date(); hoy.setHours(12,0,0,0); const hoyISO=fechaLocalISO(hoy);
+  const meses=vacMeses(cfg.fechaInicio,hoy), dpm=v.diasPorMes, acum=meses*dpm;
+  let planes=v.planes.filter(p=>p.id!==excluirId).map(p=>({...p}));
+  if(extra) planes.push({...extra});
+  planes.sort((a,b)=>a.desde<b.desde?-1:(a.desde>b.desde?1:0));
+  let gozados=v.previos, agend=0, cum=v.previos;
+  planes.forEach(p=>{
+    p.n=vacDias(p.desde,p.hasta); p.estado=vacEstadoPlan(p,hoyISO);
+    if(p.estado==='gozada') gozados+=p.n; else agend+=p.n;
+    cum+=p.n;
+    const acumAl=vacMeses(cfg.fechaInicio,vacD(p.desde))*dpm;
+    p.adelanto=Math.max(0,cum-acumAl); // días que usa por encima de lo acumulado hasta su fecha de inicio
+  });
+  const usado=gozados+agend, saldo=acum-usado;
+  const B=dpm*12, k=Math.floor(meses/12);
+  const vencido=k>=2?Math.max(0,B*(k-1)-usado):0; // de periodos cuyo año de plazo ya pasó
+  const j0=Math.floor(usado/B)+1;
+  let plazo=null; if(vencido<0.001 && k>=1 && j0<=k){ const falta=B*j0-usado; if(falta>0.001) plazo={n:j0,falta,limite:vacSumarMeses(cfg.fechaInicio,12*(j0+1))}; }
+  return {v,meses,acum,gozados,agend,usado,saldo,planes,vencido,plazo,proximo:vacSumarMeses(cfg.fechaInicio,meses+1),proxAniv:vacSumarMeses(cfg.fechaInicio,12*(k+1)),k,hoyISO};
+}
+function renderVacaciones(){
+  const box=document.getElementById('vac-resumen'); if(!box) return;
+  const r=vacResumen(), tb=document.getElementById('vac-tbody'), wrap=document.getElementById('vac-tabla-wrap');
+  if(r.sinFecha){ box.innerHTML='<div class="dash-empty" style="padding:10px 0">Para acumular vacaciones necesito la <b>fecha de inicio</b> en tu trabajo actual. Agrégala en «⚙ Configurar».</div>'; wrap.style.display='none'; return; }
+  wrap.style.display='';
+  const cell=(l,v,c,s)=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">${l}</div><div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3)">${s||''}</div></div>`;
+  const col=r.saldo<-0.001?'var(--red)':(r.saldo<0.001?'var(--text2)':'var(--green)');
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">'
+   +cell('Acumulado',vacN(r.acum)+' d','var(--accent)',r.meses+' mes'+(r.meses===1?'':'es')+' × '+vacN(r.v.diasPorMes))
+   +cell('Gozados',vacN(r.gozados)+' d','var(--text)','incluye '+vacN(r.v.previos)+' d previos')
+   +cell('Agendados',vacN(r.agend)+' d','var(--amber)','por tomar o en curso')
+   +cell('Saldo disponible',vacN(r.saldo)+' d',col,r.saldo<-0.001?'estás en adelanto':'sin agendar')
+   +cell('Próximo +'+vacN(r.v.diasPorMes),vacF(fechaLocalISO(r.proximo)),'var(--text2)','cuando cumples el mes')
+   +'</div>';
+  const av=(c,t)=>`<div style="margin-top:10px;font-size:12px;color:${c}">${t}</div>`;
+  if(r.vencido>0.001) h+=av('var(--red)','🚨 Tienes <b>'+vacN(r.vencido)+' días</b> de periodos cuyo plazo de goce ya venció: podría corresponderte el triple vacacional. Conversa con tu empleador.');
+  else if(r.plazo) h+=av('var(--text2)','⏳ Del periodo que cumpliste (año '+r.plazo.n+') te faltan <b>'+vacN(r.plazo.falta)+' días</b> por agendar antes del <b>'+vacF(fechaLocalISO(r.plazo.limite))+'</b>; pasada esa fecha sin gozarlos aplica el triple vacacional.');
+  else if(r.k===0) h+=av('var(--text3)','Aún no cumples tu primer año: el <b>'+vacF(fechaLocalISO(r.proxAniv))+'</b> completas 12 meses (derecho a '+vacN(r.v.diasPorMes*12)+' días).');
+  if(r.planes.some(p=>p.adelanto>0.001)) h+=av('var(--amber)','⚠ Hay vacaciones agendadas por encima de lo acumulado a su fecha de inicio: se consideran <b>adelanto</b> y requieren acuerdo escrito con tu empleador.');
+  box.innerHTML=h;
+  const est={gozada:'<span style="color:var(--green)">✅ Gozada</span>',encurso:'<span style="color:var(--accent)">🏖️ En curso</span>',agendada:'<span style="color:var(--amber)">📅 Agendada</span>'};
+  tb.innerHTML=r.planes.length?r.planes.slice().reverse().map(p=>`<tr><td>${vacF(p.desde)}</td><td>${vacF(p.hasta)}</td><td style="text-align:right;font-family:var(--mono)">${p.n}</td><td style="padding-left:16px">${est[p.estado]}${p.adelanto>0.001?' <span title="Usa '+vacN(p.adelanto)+' d por encima de lo acumulado a esa fecha" style="color:var(--amber)">⚠ adelanto</span>':''}</td><td style="color:var(--text3)">${escapeHtml(p.nota||'')}</td><td style="text-align:right;white-space:nowrap"><button class="config-action-btn neutral" style="font-size:10px;padding:3px 8px" onclick="abrirVacModal('${p.id}')">✏</button> <button class="config-action-btn" style="font-size:10px;padding:3px 8px;color:var(--red)" onclick="eliminarVac('${p.id}')">🗑</button></td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:14px">Aún no agendas vacaciones. Toca «+ Agendar vacaciones».</td></tr>';
+}
+function abrirVacModal(id){
+  const p=id?vacLeer().planes.find(x=>x.id===id):null;
+  document.getElementById('vac-id').value=p?p.id:'';
+  document.getElementById('vac-modal-titulo').textContent=p?'✏ Editar vacaciones':'🏖️ Agendar vacaciones';
+  document.getElementById('vac-desde').value=p?p.desde:'';
+  document.getElementById('vac-hasta').value=p?p.hasta:'';
+  document.getElementById('vac-nota').value=p?(p.nota||''):'';
+  document.getElementById('vac-overlay').classList.add('open');
+  vacPreview();
+}
+function cerrarVacModal(){ document.getElementById('vac-overlay').classList.remove('open'); }
+function vacValidar(){
+  const id=document.getElementById('vac-id').value, desde=document.getElementById('vac-desde').value, hasta=document.getElementById('vac-hasta').value;
+  if(!desde||!hasta) return {msg:'Elige las fechas de inicio y fin.'};
+  if(hasta<desde) return {msg:'La fecha final no puede ser anterior a la inicial.'};
+  const choca=vacLeer().planes.find(p=>p.id!==id && p.desde<=hasta && p.hasta>=desde);
+  if(choca) return {msg:'Se cruza con otras vacaciones ('+vacF(choca.desde)+' – '+vacF(choca.hasta)+').'};
+  return {id,desde,hasta};
+}
+function vacPreview(){
+  const el=document.getElementById('vac-preview'); if(!el) return;
+  const v=vacValidar();
+  if(v.msg){ el.innerHTML='<span style="color:var(--text3)">'+v.msg+'</span>'; return; }
+  const r=vacResumen(v.id||undefined,{id:'__nuevo',desde:v.desde,hasta:v.hasta});
+  if(r.sinFecha){ el.innerHTML='<span style="color:var(--amber)">Primero agrega tu fecha de inicio en «⚙ Configurar».</span>'; return; }
+  const n=vacDias(v.desde,v.hasta), me=r.planes.find(p=>p.id==='__nuevo');
+  el.innerHTML='Son <b>'+n+' día'+(n===1?'':'s')+' naturales</b>. Saldo después de agendarlas: <b style="color:'+(r.saldo<-0.001?'var(--red)':'var(--green)')+'">'+vacN(r.saldo)+' días</b>.'
+    +(me&&me.adelanto>0.001?'<br><span style="color:var(--amber)">⚠ Usarías '+vacN(me.adelanto)+' d más de lo acumulado a esa fecha: es un adelanto y requiere acuerdo escrito con tu empleador.</span>':'')
+    +(n<7?'<br><span style="color:var(--text3)">Recuerda: el fraccionamiento exige un bloque de 15 días (o 7 + 8); el resto puede ser de 1 día o más.</span>':'');
+}
+function guardarVac(){
+  const v=vacValidar(); if(v.msg){ toast(v.msg); return; }
+  const nota=document.getElementById('vac-nota').value.trim(), base=vacLeer(), n=vacDias(v.desde,v.hasta);
+  if(v.id){ const i=base.planes.findIndex(p=>p.id===v.id); if(i>=0) base.planes[i]={id:v.id,desde:v.desde,hasta:v.hasta,nota}; }
+  else base.planes.push({id:'vac-'+Date.now(),desde:v.desde,hasta:v.hasta,nota});
+  vacEscribir(base);
+  logActividad('vacaciones',(v.id?'Vacaciones editadas: ':'Vacaciones agendadas: ')+vacF(v.desde)+' – '+vacF(v.hasta)+' ('+n+' d)',{});
+  cerrarVacModal(); saveState(); renderVacaciones(); toast('Vacaciones guardadas');
+}
+function eliminarVac(id){
+  const base=vacLeer(), p=base.planes.find(x=>x.id===id); if(!p) return;
+  if(!confirm('¿Eliminar las vacaciones del '+vacF(p.desde)+' al '+vacF(p.hasta)+'? Los días vuelven a tu saldo.')) return;
+  base.planes=base.planes.filter(x=>x.id!==id); vacEscribir(base);
+  logActividad('vacaciones','Vacaciones eliminadas: '+vacF(p.desde)+' – '+vacF(p.hasta),{});
+  saveState(); renderVacaciones();
+}
+function abrirVacAjustes(){ const v=vacLeer(); document.getElementById('vaj-dpm').value=v.diasPorMes; document.getElementById('vaj-previos').value=v.previos; document.getElementById('vac-ajustes-overlay').classList.add('open'); }
+function cerrarVacAjustes(){ document.getElementById('vac-ajustes-overlay').classList.remove('open'); }
+function guardarVacAjustes(){
+  const dpm=parseFloat(document.getElementById('vaj-dpm').value), pre=parseFloat(document.getElementById('vaj-previos').value)||0;
+  if(!(dpm>0)||dpm>10){ toast('Pon los días por mes (ej. 2.5)'); return; }
+  if(pre<0){ toast('Los días previos no pueden ser negativos'); return; }
+  const base=vacLeer(); base.diasPorMes=dpm; base.previos=pre; vacEscribir(base);
+  logActividad('vacaciones','Ajustes de vacaciones: '+vacN(dpm)+' d/mes, '+vacN(pre)+' d previos',{});
+  cerrarVacAjustes(); saveState(); renderVacaciones();
+}
+
 function renderSueldos(){
   const cfg=state.sueldoConfig;
   const sinConfig=document.getElementById('sueldo-sin-config');
@@ -25365,6 +25540,7 @@ function renderSueldos(){
   }
   sinConfig.style.display='none';
   contenido.style.display='block';
+  try{ renderVacaciones(); }catch(e){ console.warn('Vacaciones omitidas por error:', e&&e.message); }
 
   const hoy=new Date();
   const anioActual=sueldoAnioVista(); // año que se está viendo (‹ ›)
@@ -28422,6 +28598,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.6.0",
+  "fecha": "10/11/26",
+  "cambios": [
+   "Sueldos → nueva sección «🏖️ Vacaciones»: acumulas 2.5 días por mes trabajado (desde tu fecha de inicio), puedes agendar vacaciones que se restan del saldo, ves adelantos y el plazo para gozarlas, y una guía de las reglas en Perú."
+  ]
+ },
  {
   "v": "v2.5.0",
   "fecha": "09/11/26",
