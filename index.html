@@ -3725,6 +3725,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div class="dash-section-title" style="margin:0">💡 Pagos y Ingresos Frecuentes<small style="display:block;font-weight:400;color:var(--text3);margin-top:2px">Gastos fijos (luz, teléfono) e ingresos fijos (sueldo, renta) de cada mes</small></div>
       <div style="display:flex;gap:8px">
+        <select id="pf-orden-sel" onchange="setPFOrden(this.value)" title="Ordenar la lista" style="font-size:11px;padding:5px 8px;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);border-radius:6px;max-width:190px">
+          <option value="manual">✋ Mi orden (manual)</option>
+          <option value="az">🔤 Nombre A → Z</option>
+          <option value="za">🔤 Nombre Z → A</option>
+          <option value="tipo-g">💸 Gastos primero</option>
+          <option value="tipo-i">💰 Ingresos primero</option>
+          <option value="monto-d">🔢 Monto: mayor a menor</option>
+          <option value="monto-a">🔢 Monto: menor a mayor</option>
+          <option value="pend">⏳ Pendientes primero</option>
+          <option value="dia">📅 Día de vencimiento</option>
+          <option value="cat">🏷️ Categoría</option>
+          <option value="dest">🏦 Cuenta / tarjeta</option>
+        </select>
         <button id="pf-ocultos-btn" class="config-action-btn neutral" style="font-size:11px;display:none" onclick="togglePFOcultos()"></button>
         <button class="btn btn-primary" style="font-size:11px" onclick="openPagoFrecuenteModal()">+ Nuevo</button>
       </div>
@@ -4479,9 +4492,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.7.2';
-const APP_VERSION_DATE = '12/11/26 - 14:34'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos frecuentes: si editas el monto o la fecha del movimiento que salió de uno, el registro del frecuente (Recibido/Pagado y su historial) ahora se actualiza (y corrige los ya desfasados). Los semestrales (CTS, gratificación) muestran «Recibido este mes» o «Próximo: …» en vez de seguir pidiendo «Registrar».';
+const APP_VERSION = 'v2.8.0';
+const APP_VERSION_DATE = '12/11/26 - 15:00'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pagos y Ingresos Frecuentes: ahora puedes ordenar la lista (mi orden con flechas ▲▼, nombre A→Z / Z→A, gastos o ingresos primero, monto, pendientes primero, día de vencimiento, categoría y cuenta/tarjeta). Se recuerda tu elección.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -19903,6 +19916,53 @@ function pfReconciliarMontos(){
   }catch(e){}
   if(cambio) saveState();
 }
+// ── Orden de la lista de Pagos y Ingresos Frecuentes (se guarda en state.pfOrdenModo / state.pfOrden y sincroniza) ──
+function getPFOrdenModo(){ const m=state.pfOrdenModo; return ['manual','az','za','tipo-g','tipo-i','monto-d','monto-a','pend','dia','cat','dest'].includes(m)?m:'manual'; }
+function setPFOrden(m){ state.pfOrdenModo=m; saveState(); renderPagosFrecuentes(); }
+function pfMontoRef(pf){
+  const rate=(typeof gsRate==='function')?gsRate():3.45; let v=0;
+  if(pf.tipoMonto==='variable'){ const reg=pf.pagosRegistrados||{}; const k=Object.keys(reg).sort((a,b)=>String(reg[b].fecha||b).localeCompare(String(reg[a].fecha||a)))[0]; v=k?Number(reg[k].monto)||0:0; }
+  else v=Number(pf.montoFijo)||0;
+  return pf.currency==='USD'?v*rate:v;
+}
+function pfPendienteAhora(pf){
+  const mk=mesActualKey(), reg=pf.pagosRegistrados||{}, h=new Date();
+  if(pf.frecuencia==='anual'){ const f=getPFProximaFechaAnual(pf); return !!f && !reg[String(f.getFullYear())]; }
+  if(pf.frecuencia==='semestral') return (pf.meses||[]).includes(h.getMonth()+1) && !reg[mk];
+  return pfActivoEnMes(pf,h.getFullYear(),h.getMonth()) && !reg[mk];
+}
+function pfOrdenar(lista){
+  const modo=getPFOrdenModo(), nom=(a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{sensitivity:'base'});
+  const arr=lista.slice();
+  if(modo==='manual'){
+    const ord=Array.isArray(state.pfOrden)?state.pfOrden:[];
+    const pos=id=>{ const i=ord.indexOf(id); return i<0?1e6:i; };
+    return arr.map((p,i)=>({p,i})).sort((a,b)=>(pos(a.p.id)-pos(b.p.id))||(a.i-b.i)).map(x=>x.p);
+  }
+  const tipoRank=(p,primero)=>((p.tipo==='ingreso')===(primero==='i'))?0:1;
+  const dia=p=>p.diaPago==='ultimo'?31:(parseInt(p.diaPago,10)||99);
+  const txt=(v)=>String(v||'').toLowerCase();
+  const by={
+    az:(a,b)=>nom(a,b), za:(a,b)=>nom(b,a),
+    'tipo-g':(a,b)=>tipoRank(a,'g')-tipoRank(b,'g')||nom(a,b), 'tipo-i':(a,b)=>tipoRank(a,'i')-tipoRank(b,'i')||nom(a,b),
+    'monto-d':(a,b)=>pfMontoRef(b)-pfMontoRef(a)||nom(a,b), 'monto-a':(a,b)=>pfMontoRef(a)-pfMontoRef(b)||nom(a,b),
+    pend:(a,b)=>(pfPendienteAhora(b)?1:0)-(pfPendienteAhora(a)?1:0)||dia(a)-dia(b)||nom(a,b),
+    dia:(a,b)=>dia(a)-dia(b)||nom(a,b),
+    cat:(a,b)=>(a.categoria?0:1)-(b.categoria?0:1)||txt(a.categoria).localeCompare(txt(b.categoria),'es')||nom(a,b),
+    dest:(a,b)=>txt(a.metodoPago==='cuenta'?a.destino:(getTarjeta(a.destino)||{}).banco).localeCompare(txt(b.metodoPago==='cuenta'?b.destino:(getTarjeta(b.destino)||{}).banco),'es')||nom(a,b)
+  };
+  return arr.sort(by[modo]||nom);
+}
+// Modo manual: sube/baja una fila entre las que se ven (los ocultos conservan su lugar).
+function pfMover(id,dir){
+  const todos=state.pagosFrecuentes||[];
+  const visibles=pfOrdenar(todos.filter(p=>pfMostrandoOcultos?p.oculto:!p.oculto)).map(p=>p.id);
+  const i=visibles.indexOf(id), j=i+dir; if(i<0||j<0||j>=visibles.length) return;
+  [visibles[i],visibles[j]]=[visibles[j],visibles[i]];
+  const resto=pfOrdenar(todos.filter(p=>!(pfMostrandoOcultos?p.oculto:!p.oculto))).map(p=>p.id);
+  state.pfOrden=pfMostrandoOcultos?[...resto,...visibles]:[...visibles,...resto];
+  state.pfOrdenModo='manual'; saveState(); renderPagosFrecuentes();
+}
 function renderPagosFrecuentes(){
   const el=document.getElementById('pagos-frecuentes-list');
   if(!el) return;
@@ -19914,7 +19974,9 @@ function renderPagosFrecuentes(){
     btnOcultos.style.display=ocultosCount>0?'inline-flex':'none';
     btnOcultos.textContent=pfMostrandoOcultos?'‹ Volver a la lista':`🙈 Ocultos (${ocultosCount})`;
   }
-  const pagos=pfMostrandoOcultos ? todos.filter(p=>p.oculto) : todos.filter(p=>!p.oculto);
+  const pagos=pfOrdenar(pfMostrandoOcultos ? todos.filter(p=>p.oculto) : todos.filter(p=>!p.oculto));
+  const _ordSel=document.getElementById('pf-orden-sel'); if(_ordSel) _ordSel.value=getPFOrdenModo();
+  const _modoManual=getPFOrdenModo()==='manual'&&pagos.length>1;
   if(!pagos.length){
     el.innerHTML = pfMostrandoOcultos
       ? '<div class="dash-empty">No tienes pagos ocultos.</div>'
@@ -19922,7 +19984,7 @@ function renderPagosFrecuentes(){
     return;
   }
   const mk=mesActualKey();
-  el.innerHTML=pagos.map(pf=>{
+  el.innerHTML=pagos.map((pf,pfIdx)=>{
     const esIngreso=pf.tipo==='ingreso';
     const esAnual=pf.frecuencia==='anual';
     const esSemestral=pf.frecuencia==='semestral';
@@ -20073,6 +20135,7 @@ function renderPagosFrecuentes(){
                 )
             )
         }
+        ${_modoManual?`<span style="display:inline-flex;flex-direction:column;gap:1px"><button onclick="pfMover('${pf.id}',-1)" title="Subir" ${pfIdx===0?'disabled':''} style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:9px;line-height:1;padding:1px 3px;${pfIdx===0?'opacity:.25;cursor:default':''}">▲</button><button onclick="pfMover('${pf.id}',1)" title="Bajar" ${pfIdx===pagos.length-1?'disabled':''} style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:9px;line-height:1;padding:1px 3px;${pfIdx===pagos.length-1?'opacity:.25;cursor:default':''}">▼</button></span>`:''}
         <button onclick="openPFHistorial('${pf.id}')" title="Ver historial" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px">📅</button>
         <button onclick="openPagoFrecuenteModal('${pf.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px">✏</button>
       </div>
@@ -28712,6 +28775,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.8.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Pagos y Ingresos Frecuentes: ahora puedes ordenar la lista (mi orden con flechas ▲▼, nombre A→Z / Z→A, gastos o ingresos primero, monto, pendientes primero, día de vencimiento, categoría y cuenta/tarjeta). Se recuerda tu elección."
+  ]
+ },
  {
   "v": "v2.7.2",
   "fecha": "12/11/26",
