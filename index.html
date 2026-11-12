@@ -4479,9 +4479,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.7.0';
-const APP_VERSION_DATE = '11/11/26 - 10:12'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Inversiones → Dividendos en efectivo rediseñado: botón verde «💵 + Dividendo», franja de resumen arriba (total, este año, 12 meses), pestaña con totales, ranking por símbolo y lista por año, y el cuadro pide el símbolo (con sugerencias de tus posiciones).';
+const APP_VERSION = 'v2.7.1';
+const APP_VERSION_DATE = '12/11/26 - 10:18'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Deudas: los totales (pendiente, cobrado y prestado) ahora se muestran por moneda, en soles y en dólares por separado, sin convertir.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20502,13 +20502,17 @@ function renderDeudas(){
   const deudasMeDeben = deudas.filter(d=>d.direccion!=='yo_debo');
   const pendientes = deudasMeDeben.filter(d=>d.status==='pendiente');
   const pagados    = deudasMeDeben.filter(d=>d.status==='pagado');
-  const sumPend    = pendientes.reduce((s,d)=>s+toSoles(d),0);
-  const sumPagado  = pagados.reduce((s,d)=>s+toSoles(d),0);
-  const sumTotal   = deudasMeDeben.reduce((s,d)=>s+toSoles(d),0);
-
-  const sp=document.getElementById('d-sum-pendiente'); if(sp) sp.textContent=M(fmtS(sumPend));
-  const sg=document.getElementById('d-sum-pagado');    if(sg) sg.textContent=M(fmtS(sumPagado));
-  const st=document.getElementById('d-sum-total');     if(st) st.textContent=M(fmtS(sumTotal));
+  // Los totales se muestran POR MONEDA (S/ y $ sin convertir ni mezclar); solo aparece la moneda que tenga monto.
+  const sumMon=(arr,cu)=>arr.filter(d=>(d.currency==='USD'?'USD':'PEN')===cu).reduce((s,d)=>s+(Number(d.monto)||0),0);
+  const dualHtml=(arr)=>{
+    const pen=sumMon(arr,'PEN'), usd=sumMon(arr,'USD'), p=[];
+    if(pen>0.004||usd<=0.004) p.push(`<div>${M(fmtS(pen))}</div>`);
+    if(usd>0.004) p.push(`<div${p.length?' style="font-size:.8em;margin-top:2px"':''}>${M(fmtD(usd))}</div>`);
+    return p.join('');
+  };
+  const sp=document.getElementById('d-sum-pendiente'); if(sp) sp.innerHTML=dualHtml(pendientes);
+  const sg=document.getElementById('d-sum-pagado');    if(sg) sg.innerHTML=dualHtml(pagados);
+  const st=document.getElementById('d-sum-total');     if(st) st.innerHTML=dualHtml(deudasMeDeben);
 
   // ── Filter ────────────────────────────────────────
   ['all','pendiente','pagado'].forEach(f=>{
@@ -28659,6 +28663,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.7.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Deudas: los totales (pendiente, cobrado y prestado) ahora se muestran por moneda, en soles y en dólares por separado, sin convertir."
+  ]
+ },
  {
   "v": "v2.7.0",
   "fecha": "11/11/26",
