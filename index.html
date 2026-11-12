@@ -4492,9 +4492,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.8.0';
-const APP_VERSION_DATE = '12/11/26 - 15:00'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos y Ingresos Frecuentes: ahora puedes ordenar la lista (mi orden con flechas ▲▼, nombre A→Z / Z→A, gastos o ingresos primero, monto, pendientes primero, día de vencimiento, categoría y cuenta/tarjeta). Se recuerda tu elección.';
+const APP_VERSION = 'v2.8.1';
+const APP_VERSION_DATE = '12/11/26 - 17:21'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Renombrar una cuenta ahora también actualiza la cuenta de cobro de los servicios compartidos (Spotify, YouTube…), igual que ya hacía con movimientos, pagos frecuentes, metas y deudas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -14872,6 +14872,16 @@ function renombrarCuentaGlobal(oldName, newName){
   (state.deudas||[]).forEach(d=>{
     if(d.cuentaPago===oldName) d.cuentaPago=newName;
   });
+
+  // 10. Servicios compartidos (Spotify, YouTube…) — cada uno guarda la cuenta donde cae el cobro: la general, la de cada mes
+  // guardado y, si el servicio de fábrica usaba esa cuenta, se fija su copia con el nombre nuevo.
+  try{
+    if(state.servicios) Object.values(state.servicios).forEach(sv=>{ if(sv && sv.account===oldName) sv.account=newName; });
+    if(state.serviciosByMonth) Object.values(state.serviciosByMonth).forEach(mes=>{ Object.values(mes||{}).forEach(sv=>{ if(sv && sv.account===oldName) sv.account=newName; }); });
+    if(typeof DEFAULT_SERVICIOS!=='undefined') Object.entries(DEFAULT_SERVICIOS).forEach(([id,sv])=>{
+      if(sv.account===oldName){ if(!state.servicios) state.servicios={}; if(!state.servicios[id]) state.servicios[id]={...sv,account:newName}; }
+    });
+  }catch(e){ console.warn('Servicios omitidos al renombrar cuenta:', e&&e.message); }
 
   return true;
 }
@@ -28775,6 +28785,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.8.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Renombrar una cuenta ahora también actualiza la cuenta de cobro de los servicios compartidos (Spotify, YouTube…), igual que ya hacía con movimientos, pagos frecuentes, metas y deudas."
+  ]
+ },
  {
   "v": "v2.8.0",
   "fecha": "12/11/26",
