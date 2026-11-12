@@ -4479,9 +4479,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.7.1';
-const APP_VERSION_DATE = '12/11/26 - 10:18'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Deudas: los totales (pendiente, cobrado y prestado) ahora se muestran por moneda, en soles y en dólares por separado, sin convertir.';
+const APP_VERSION = 'v2.7.2';
+const APP_VERSION_DATE = '12/11/26 - 14:34'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pagos frecuentes: si editas el monto o la fecha del movimiento que salió de uno, el registro del frecuente (Recibido/Pagado y su historial) ahora se actualiza (y corrige los ya desfasados). Los semestrales (CTS, gratificación) muestran «Recibido este mes» o «Próximo: …» en vez de seguir pidiendo «Registrar».';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -11937,6 +11937,7 @@ function saveMovimiento(){
     const sym=currency==='USD'?'$':'S/';
     logActividad('movimiento', `${desc} — ${sym} ${numFmtSigned(amount,2)} (${account})`, {movId:mov.id});
   }
+  if(_old && (Number(_old.amount)!==amount || _old.date!==date)) pfSincronizarDesdeOrigen(mov.id,_old.desc,_old.date,Number(_old.amount),date,amount);
   saveState();closeModal();render();toast(esNuevoMov?'Movimiento guardado':'Movimiento actualizado');
 }
 
@@ -16899,6 +16900,7 @@ function saveTCMov(){
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
       foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat; foundMov.currency=currency;
+      if(Number(antes.monto)!==monto || antes.fecha!==fecha) pfSincronizarDesdeOrigen(foundMov.id,antes.desc,antes.fecha,Number(antes.monto),fecha,monto);
       { const _ub=ubicLimpia(ubicTmp.tcm); if(_ub) foundMov.ubicacion=_ub; else delete foundMov.ubicacion; }
       actualizarDescuentoPorOrigenWeb(foundMov.id,monto);
       cambiarVinculosConsumoWeb('tc-m-descpf',desc,monto,foundMov.id,fecha,currency);
@@ -19867,9 +19869,44 @@ function pfDiaLabel(diaPago, diasEnMes){
   return diaPago==='ultimo' ? `el último día del mes (${diasEnMes})` : `el día ${diaPago}`;
 }
 
+// Si editas el monto/fecha de un movimiento (o consumo de tarjeta) que salió de un pago/ingreso frecuente, el registro del
+// frecuente («Recibido / Pagado» y su historial 📅) toma el valor nuevo. Se busca por el vínculo de la actividad y, si no,
+// por nombre + fecha + monto anteriores.
+function pfSincronizarDesdeOrigen(origenId, descAntes, fechaAntes, montoAntes, fechaNueva, montoNuevo){
+  try{
+    const pfs=state.pagosFrecuentes||[]; let hit=null;
+    const lg=(state.actividadLog||[]).find(a=>a&&a.ref&&a.ref.pfId&&(a.ref.movId===origenId||a.ref.consumoId===origenId));
+    const cand=lg?pfs.filter(p=>p.id===lg.ref.pfId):pfs.filter(p=>String(p.nombre||'').trim()===String(descAntes||'').trim());
+    cand.forEach(pf=>{
+      if(hit||!pf.pagosRegistrados) return;
+      let k=(lg&&lg.ref.periodoKey&&pf.pagosRegistrados[lg.ref.periodoKey])?lg.ref.periodoKey:null;
+      if(!k) k=Object.keys(pf.pagosRegistrados).find(x=>{ const r=pf.pagosRegistrados[x]; return r&&r.fecha===fechaAntes&&Math.abs((Number(r.monto)||0)-Number(montoAntes))<0.005; })||null;
+      if(k) hit={pf,k};
+    });
+    if(!hit) return false;
+    const r=hit.pf.pagosRegistrados[hit.k]; r.monto=Number(montoNuevo); r.fecha=fechaNueva; return true;
+  }catch(e){ return false; }
+}
+// Corrige registros que ya quedaron desfasados (editaste el movimiento antes de que existiera la sincronización):
+// si UN solo movimiento «pf-mov-…» con el nombre del frecuente y la fecha del registro tiene otro monto, se alinea.
+function pfReconciliarMontos(){
+  let cambio=false;
+  try{
+    const movs=state.movimientos||[];
+    (state.pagosFrecuentes||[]).forEach(pf=>{
+      Object.keys(pf.pagosRegistrados||{}).forEach(k=>{
+        const r=pf.pagosRegistrados[k]; if(!r||!r.fecha) return;
+        const m=movs.filter(x=>String(x.id||'').startsWith('pf-mov')&&String(x.desc||'').trim()===String(pf.nombre||'').trim()&&x.date===r.fecha&&(x.currency||'PEN')===(pf.currency||'PEN'));
+        if(m.length===1 && Math.abs(Number(m[0].amount)-(Number(r.monto)||0))>=0.005){ r.monto=Number(m[0].amount); cambio=true; }
+      });
+    });
+  }catch(e){}
+  if(cambio) saveState();
+}
 function renderPagosFrecuentes(){
   const el=document.getElementById('pagos-frecuentes-list');
   if(!el) return;
+  pfReconciliarMontos();
   const todos=state.pagosFrecuentes||[];
   const ocultosCount=todos.filter(p=>p.oculto).length;
   const btnOcultos=document.getElementById('pf-ocultos-btn');
@@ -19905,6 +19942,18 @@ function renderPagosFrecuentes(){
       periodoKey=mk;
     }
     const yaPagado=periodoKey && pf.pagosRegistrados && pf.pagosRegistrados[periodoKey];
+    // Semestral: «periodoKey» es el PRÓXIMO periodo sin registrar (p. ej. mayo 2027), así que nunca figuraba como hecho.
+    // Si este mes ya está registrado, se muestra «Recibido/Pagado este mes»; si todavía no toca, «Próximo: …» (sin botón principal).
+    let semBtn='';
+    if(esSemestral){
+      const mesNumS=parseInt(mk.split('-')[1],10);
+      const nomP=proximoSemestral?(MONTHS[proximoSemestral.m-1]+' '+proximoSemestral.y):'';
+      const btnSm=(t,tt)=>`<button onclick="registrarPagoFrecuente('${pf.id}')" title="${tt}" style="font-size:9px;padding:4px 7px;white-space:nowrap;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">${t}</button>`;
+      if((pf.meses||[]).includes(mesNumS) && pf.pagosRegistrados && pf.pagosRegistrados[mk])
+        semBtn=`<span style="font-size:10px;color:var(--green);white-space:nowrap">✅ ${esIngreso?'Recibido':'Pagado'} este mes</span> ${btnSm('+ Próximo ('+nomP+')','Registrar el siguiente periodo por adelantado')}`;
+      else if(proximoSemestral && proximoSemestral.m!==mesNumS)
+        semBtn=`<span style="font-size:10px;color:var(--text3);white-space:nowrap">⏳ Próximo: ${nomP}</span> ${btnSm('Registrar antes','Registrar este periodo por adelantado')}`;
+    }
     const hoyPF=new Date();
     const finalizado=!pfActivoEnMes(pf, hoyPF.getFullYear(), hoyPF.getMonth());
     const mesesFaltantes=finalizado?pfMesesSinRegistrar(pf):[];
@@ -20017,7 +20066,7 @@ function renderPagosFrecuentes(){
                   : `<span style="font-size:10px;color:var(--text3);white-space:nowrap;background:var(--bg3);padding:5px 8px;border-radius:6px">⏹ Finalizado</span>
                      <button onclick="ocultarPagoFrecuente('${pf.id}')" title="Ya no aparecerá en la lista principal (se puede volver a mostrar desde 'Ocultos')" style="font-size:9px;padding:4px 7px;white-space:nowrap;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">🙈 Ocultar</button>`
                 )
-              : (yaPagado
+              : (semBtn?semBtn:yaPagado
                   ? `<span style="font-size:10px;color:var(--green);white-space:nowrap">✅ ${esIngreso?'Recibido':'Pagado'}${esAnual?' este ciclo':' este mes'}</span>
                      ${!esAnual?`<button onclick="adelantarPagoFrecuente('${pf.id}')" title="Registrar un pago de un mes futuro por adelantado" style="font-size:9px;padding:4px 7px;white-space:nowrap;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">+ Adelantar</button>`:''}`
                   : `<button class="btn btn-primary" style="font-size:10px;padding:5px 10px;white-space:nowrap" onclick="registrarPagoFrecuente('${pf.id}')">Registrar ${esIngreso?'ingreso':'pago'}</button>`
@@ -28663,6 +28712,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.7.2",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Pagos frecuentes: si editas el monto o la fecha del movimiento que salió de uno, el registro del frecuente (Recibido/Pagado y su historial) ahora se actualiza (y corrige los ya desfasados). Los semestrales (CTS, gratificación) muestran «Recibido este mes» o «Próximo: …» en vez de seguir pidiendo «Registrar»."
+  ]
+ },
  {
   "v": "v2.7.1",
   "fecha": "12/11/26",
