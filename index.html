@@ -1473,6 +1473,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="nav-dropdown" id="navdrop-otros">
       <button class="nav-tab nav-dropdown-trigger" onclick="toggleNavDropdown('otros',event)">🗓️ Otros ▾</button>
       <div class="nav-dropdown-menu" id="navmenu-otros">
+        <button class="nav-dropdown-item" id="nav-hogar" onclick="showPage('hogar')">🏡 Hogar</button>
         <button class="nav-dropdown-item" id="nav-combustible" onclick="showPage('combustible')">⛽ Combustible</button>
         <button class="nav-dropdown-item" id="nav-calendario" onclick="showPage('calendario')">📅 Calendario</button>
         <button class="nav-dropdown-item" id="nav-sueldos" onclick="showPage('sueldos')">💼 Análisis de Sueldos</button>
@@ -2307,6 +2308,11 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </div>
   <div class="srv-grid" id="srv-grid"></div>
 </div>
+</div>
+
+<!-- ══ PAGE: HOGAR ══ -->
+<div class="page" id="page-hogar">
+<div class="container"><div id="hg-root"></div></div>
 </div>
 
 <!-- ══ PAGE: TC TRACKER (Comparador Casas de Cambio) ══ -->
@@ -4496,9 +4502,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.8.2';
-const APP_VERSION_DATE = '12/11/26 - 18:26'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Revisar datos: al eliminar una cuenta avisa qué la usa y ofrece mover pagos, metas, deudas y servicios a otra; nuevo botón 🔍 Revisar datos que encuentra y corrige datos que apuntan a cuentas inexistentes. Respaldo: recordatorio, fecha del último y copia automática antes de importar.';
+const APP_VERSION = 'v2.10.0';
+const APP_VERSION_DATE = '12/11/26 - 21:26'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Hogar: nuevo 🛒 Compras y consumos — presupuesto mensual por categoría (supermercado, farmacia…), compras sueltas, control semana por semana (lunes a domingo) y se suma a la proyección y a los meses que aguantas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6243,7 +6249,7 @@ function loadState(){
       _movDesde=p.getFullYear()+'-'+String(p.getMonth()+1).padStart(2,'0')+'-01';
     }
   }catch(e){ _movDesde=null; }
-  window._forzarSyncCompleta=false; window._cargaAcotada=!!_movDesde;
+  window._forzarSyncCompleta=false; window._cargaAcotada=!!_movDesde; window._movDesdeIso=_movDesde||'';
   // Las 3 lecturas se lanzan a la vez (antes eran en fila: documento → secciones → movimientos).
   const _pSecc = conTimeout(_readTodasLasSecciones(), 15000, 'Tiempo de espera agotado (15s) leyendo las secciones (tarjetas, servicios, deudas...) de Firestore.');
   const _pMov = conTimeout((_movDesde ? DOC_REF.collection('movimientos').where('date','>=',_movDesde) : DOC_REF.collection('movimientos')).get(), 15000, 'Tiempo de espera agotado (15s) leyendo tus movimientos de Firestore.');
@@ -7437,6 +7443,7 @@ function showPage(name){
   if(name==='ahorros-intereses') renderAhorrosIntereses();
   if(name==='minijuegos')  initMinijuegos();
   if(name==='herr')        renderHerramientas();
+  if(name==='hogar')       { HG.vista='lista'; renderHogar(); }
 }
 
 // ── HELPERS ───────────────────────────────────────────
@@ -8586,6 +8593,7 @@ function render(){
   if(active('tc-tracker'))  renderTCTracker();
   if(active('inversiones')) renderInversiones();
   if(active('calendario'))  renderCalendario();
+  if(active('hogar'))       { try{ renderHogar(); }catch(e){ console.warn('Hogar omitido por error:', e&&e.message); } }
 }
 function updateTitles(){
   const label=MONTHS[state.currentMonth]+' '+state.currentYear;
@@ -14751,13 +14759,15 @@ function _svcEfectivos(){
   const ids=new Set([...Object.keys(typeof DEFAULT_SERVICIOS!=='undefined'?DEFAULT_SERVICIOS:{}),...Object.keys(state.servicios||{})]);
   return [...ids].map(id=>{ const sv=(state.servicios||{})[id]||((typeof DEFAULT_SERVICIOS!=='undefined')?DEFAULT_SERVICIOS[id]:null); return sv?{id,nombre:sv.name||id,account:sv.account}:null; }).filter(Boolean);
 }
-function _usosVacios(){ return {movs:0,pfs:[],metas:[],deudas:[],servicios:[],cur:{}}; }
+function _hgPagadores(){ const h=state.hogar||{}; return (h.conceptos||[]).concat(h.bolsas||[]); }
+function _usosVacios(){ return {movs:0,pfs:[],metas:[],deudas:[],servicios:[],hogar:[],cur:{}}; }
 function _sumarUsos(u,n){
   (state.movimientos||[]).forEach(m=>{ if(m.account===n){ u.movs++; const c=m.currency==='USD'?'USD':'PEN'; u.cur[c]=(u.cur[c]||0)+1; } });
   (state.pagosFrecuentes||[]).forEach(p=>{ if(p.metodoPago==='cuenta' && p.destino===n) u.pfs.push(p.nombre||'(sin nombre)'); });
   (state.metasAhorro||[]).forEach(m=>{ if(m.cuentaVinculada===n || m.cuentaOrigenHabitual===n) u.metas.push(m.nombre||'(sin nombre)'); });
   (state.deudas||[]).forEach(d=>{ if(d.cuentaPago===n) u.deudas.push(d.nombre||'(sin nombre)'); });
   _svcEfectivos().forEach(sv=>{ if(sv.account===n) u.servicios.push(sv.nombre); });
+  _hgPagadores().forEach(c=>{ if(c.pagarCon==='c:'+n) u.hogar.push(c.nombre||'(sin nombre)'); });
 }
 function cuentaUsos(n){ const u=_usosVacios(); _sumarUsos(u,n); return u; }
 function _lineasUsos(u){
@@ -14766,6 +14776,7 @@ function _lineasUsos(u){
   if(u.metas.length) L.push('🎯 <b>'+u.metas.length+'</b> meta'+(u.metas.length===1?'':'s')+' de ahorro: '+lista(u.metas));
   if(u.deudas.length) L.push('🤝 <b>'+u.deudas.length+'</b> deuda'+(u.deudas.length===1?'':'s')+': '+lista(u.deudas));
   if(u.servicios.length) L.push('🎬 <b>'+u.servicios.length+'</b> servicio'+(u.servicios.length===1?'':'s')+' compartido'+(u.servicios.length===1?'':'s')+': '+lista(u.servicios));
+  if(u.hogar.length) L.push('🏡 <b>'+u.hogar.length+'</b> concepto'+(u.hogar.length===1?'':'s')+' del hogar: '+lista(u.hogar));
   if(u.movs) L.push('🧾 <b>'+u.movs+'</b> movimiento'+(u.movs===1?'':'s'));
   return L;
 }
@@ -14776,6 +14787,7 @@ function reasignarUsosCuenta(from,to,conMovs){
   (state.pagosFrecuentes||[]).forEach(p=>{ if(p.metodoPago==='cuenta' && p.destino===from){ p.destino=to; n++; } });
   (state.metasAhorro||[]).forEach(m=>{ if(m.cuentaVinculada===from){ m.cuentaVinculada=to; n++; } if(m.cuentaOrigenHabitual===from){ m.cuentaOrigenHabitual=to; n++; } });
   (state.deudas||[]).forEach(d=>{ if(d.cuentaPago===from){ d.cuentaPago=to; n++; } });
+  _hgPagadores().forEach(c=>{ if(c.pagarCon==='c:'+from){ c.pagarCon='c:'+to; n++; } });
   try{
     if(typeof DEFAULT_SERVICIOS!=='undefined') Object.entries(DEFAULT_SERVICIOS).forEach(([id,sv])=>{
       if(sv.account===from && !(state.servicios||{})[id]){ if(!state.servicios) state.servicios={}; state.servicios[id]={...sv,account:to}; n++; }
@@ -14797,12 +14809,12 @@ function _cerrarModalDin(id){ const ov=document.getElementById(id); if(ov) ov.cl
 let _delUsoKey=null;
 function startDeleteCuenta(key){
   const u=cuentaUsos(key);
-  if(u.movs||u.pfs.length||u.metas.length||u.deudas.length||u.servicios.length){ _mostrarUsosEliminar(key,u); return; }
+  if(u.movs||u.pfs.length||u.metas.length||u.deudas.length||u.servicios.length||u.hogar.length){ _mostrarUsosEliminar(key,u); return; }
   _continuarEliminarCuenta(key);
 }
 function _mostrarUsosEliminar(key,u){
   _delUsoKey=key;
-  const hayRefs=u.pfs.length||u.metas.length||u.deudas.length||u.servicios.length;
+  const hayRefs=u.pfs.length||u.metas.length||u.deudas.length||u.servicios.length||u.hogar.length;
   const mon=getAccountCurrency(key);
   const otras=getAllAccountKeys().filter(k=>k!==key);
   const orden=[...otras.filter(k=>getAccountCurrency(k)===mon),...otras.filter(k=>getAccountCurrency(k)!==mon)];
@@ -14837,7 +14849,21 @@ function _usoEliminar(mover){
 }
 
 // ── Revisar datos: busca referencias a cuentas que ya no existen ──
-let _revNombres=[];
+let _revNombres=[], _revEnl=[];
+function _enlEtiqueta(k){
+  const mm=k.match(/^(.*)-(\d{4})-(\d{2})$/); if(!mm) return k;
+  const y=+mm[2], m0=+mm[3]-1, resto=mm[1]; let nombre=resto;
+  try{ const all=getAllServices(y,m0); const sid=Object.keys(all).find(x=>resto.indexOf(x+'-')===0);
+    if(sid){ const sv=all[sid]; const p=(sv.people||[]).find(q=>q.id===resto.slice(sid.length+1)); nombre=sv.name+(p?' — '+p.name:''); } }catch(e){}
+  return nombre+' ('+MONTHS[m0]+' '+y+')';
+}
+function revEnlazar(i){
+  const e=_revEnl[i]; if(!e) return;
+  if(!state.payments) state.payments={};
+  if(e.t==='marca') delete state.payments[e.k]; else state.payments[e.k]=true;
+  saveState(); try{ renderServicios(); }catch(x){} try{ render(); }catch(x){}
+  toast(e.t==='marca'?'Marca quitada':'Marcado como pagado'); renderRevisionDatos();
+}
 function escanearHuerfanos(){
   const valid=new Set(getAllAccountKeys());
   (state.tarjetas||[]).forEach(t=>{ if(t.banco) valid.add(t.banco); if(t.id) valid.add(t.id); });
@@ -14850,22 +14876,74 @@ function escanearHuerfanos(){
   });
   (state.deudas||[]).forEach(d=>{ if(d.cuentaPago && !valid.has(d.cuentaPago)) get(d.cuentaPago).deudas.push(d.nombre||'(sin nombre)'); });
   _svcEfectivos().forEach(sv=>{ if(sv.account && !valid.has(sv.account)) get(sv.account).servicios.push(sv.nombre); });
+  _hgPagadores().forEach(c=>{ const a=String(c.pagarCon||''); if(a.startsWith('c:') && !valid.has(a.slice(2))) get(a.slice(2)).hogar.push(c.nombre||'(sin nombre)'); });
   const restos=[];
   [['ahorroTREA','TREA'],['ahorroMetodoInteres','método de interés'],['cuentaColors','color'],['cuentaForzarVisible','visibilidad'],['bancoDeCuenta','banco']].forEach(([k,et])=>{
     Object.keys(state[k]||{}).forEach(n=>{ if(!valid.has(n)) restos.push({campo:k,nombre:n,etiqueta:et}); });
   });
   (Array.isArray(state.ordenCuentas)?state.ordenCuentas:[]).forEach(n=>{ if(!valid.has(n)) restos.push({campo:'ordenCuentas',nombre:n,etiqueta:'orden'}); });
-  return {huerfanas:out,restos};
+  // Avisos generales (solo informan; no cambian nada)
+  const avisos=[];
+  try{
+    const hoyIso=todayISO(), lejos=(new Date().getFullYear()+1)+hoyIso.slice(4);
+    const movs=state.movimientos||[], vistos=new Map(); let dup=0, sinCat=0, fechaMala=0, montoMalo=0;
+    movs.forEach(m=>{
+      const f=String(m.date||'');
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(f)||f<'2000-01-01'||f>lejos) fechaMala++;
+      const a=Number(m.amount); if(!(a>0)) montoMalo++;
+      if(m.type==='expense' && !m.cat && !esTransferenciaInterna(m) && !esCambioMoneda(m)) sinCat++;
+      const k=[f,(m.desc||'').trim().toLowerCase(),a,m.account,m.type].join('|');
+      if(vistos.has(k)) dup++; else vistos.set(k,1);
+    });
+    if(dup) avisos.push({ic:'🧾',txt:dup+' movimiento'+(dup===1?'':'s')+' parece'+(dup===1?'':'n')+' repetido'+(dup===1?'':'s')+' (misma fecha, concepto, monto y cuenta). Revísalos en Finanzas por si registraste algo dos veces.'});
+    if(fechaMala) avisos.push({ic:'📅',txt:fechaMala+' movimiento'+(fechaMala===1?'':'s')+' con fecha vacía, inválida o a más de un año en el futuro.'});
+    if(montoMalo) avisos.push({ic:'💲',txt:montoMalo+' movimiento'+(montoMalo===1?'':'s')+' con monto cero o inválido.'});
+    if(sinCat) avisos.push({ic:'🏷️',txt:sinCat+' gasto'+(sinCat===1?'':'s')+' sin categoría: no aparecen bien en Presupuesto ni en los esenciales.'});
+    const h=state.hogar;
+    if(h&&Array.isArray(h.conceptos)){
+      h.conceptos.filter(c=>c.pfId&&!(state.pagosFrecuentes||[]).some(p=>p.id===c.pfId)).forEach(c=>avisos.push({ic:'🏡',txt:'El concepto de Hogar «'+c.nombre+'» apunta a un Pago frecuente que ya no existe.'}));
+      const ids=new Set(h.conceptos.map(c=>c.id)); const sueltos=(h.registros||[]).filter(r=>!ids.has(r.cid)).length;
+      if(sueltos) avisos.push({ic:'🏡',txt:sueltos+' registro'+(sueltos===1?'':'s')+' de Hogar sin su concepto.'});
+      const bids=new Set((h.bolsas||[]).map(b=>b.id)), kSueltas=(h.compras||[]).filter(k=>!bids.has(k.bid)).length;
+      if(kSueltas) avisos.push({ic:'🛒',txt:kSueltas+' compra'+(kSueltas===1?'':'s')+' de Hogar sin su presupuesto.'});
+      const dMin=(window._movDesdeIso||'').slice(0,7), idsM=new Set((state.movimientos||[]).map(m=>m.id));
+      const sinGasto=(h.compras||[]).filter(k=>k.movId&&!idsM.has(k.movId)&&!(dMin&&String(k.fecha).slice(0,7)<dMin)).length;
+      if(sinGasto) avisos.push({ic:'🛒',txt:sinGasto+' compra'+(sinGasto===1?'':'s')+' de Hogar cuyo gasto ya no está en Finanzas (se sigue contando en el presupuesto). Ábrela y elimínala si fue un error.'});
+    }
+  }catch(e){ console.warn('Avisos omitidos:', e&&e.message); }
+  const enlaces=[];
+  try{
+    const desde=(window._movDesdeIso||'').slice(0,7);
+    const movs=state.movimientos||[], ids=new Set(movs.map(m=>m.id)), pays=state.payments||{};
+    Object.keys(pays).forEach(k=>{
+      if(!pays[k]) return; const mm=k.match(/-(\d{4}-\d{2})$/); if(!mm) return;
+      if(desde && mm[1]<desde) return;
+      if(!ids.has('srv-'+k)) enlaces.push({t:'marca',k});
+    });
+    movs.forEach(m=>{
+      if(typeof m.id!=='string' || m.id.indexOf('srv-')!==0) return;
+      const k=m.id.slice(4); if(!pays[k] && /-\d{4}-\d{2}$/.test(k)) enlaces.push({t:'mov',k});
+    });
+    (state.deudas||[]).forEach(d=>{
+      if(d.status!=='pagado' || !d.fechaPago || d.cuentaPago==='(Compensación)') return;
+      if(desde && d.fechaPago.slice(0,7)<desde) return;
+      const yd=d.direccion==='yo_debo', desc=(yd?'Pago deuda — ':'Cobro préstamo — ')+d.nombre;
+      const hay=d.movPagoId ? ids.has(d.movPagoId) : movs.some(m=>m.desc===desc&&m.date===d.fechaPago);
+      if(!hay) avisos.push({ic:'🤝',txt:'La deuda «'+d.nombre+'» figura como '+(yd?'pagada':'cobrada')+' pero no encuentro su movimiento en Finanzas: el saldo de la cuenta no se movió. Revierte el pago y vuelve a registrarlo.'});
+    });
+    const dIds=new Set((state.deudas||[]).map(d=>d.movPagoId).filter(Boolean));
+  }catch(e){ console.warn('Enlaces omitidos:', e&&e.message); }
+  return {huerfanas:out,restos,avisos,enlaces};
 }
 function abrirRevisionDatos(){ renderRevisionDatos(); }
 function renderRevisionDatos(){
-  const {huerfanas,restos}=escanearHuerfanos();
-  _revNombres=Object.keys(huerfanas);
+  const {huerfanas,restos,avisos,enlaces}=escanearHuerfanos();
+  _revNombres=Object.keys(huerfanas); _revEnl=enlaces||[];
   let h='<div class="modal-title"><span>🔍 Revisar datos</span><button class="modal-close" onclick="_cerrarModalDin(\'revision-overlay\')">✕</button></div>';
-  if(!_revNombres.length && !restos.length){
+  if(!_revNombres.length && !restos.length && !avisos.length && !_revEnl.length){
     h+='<div style="text-align:center;padding:22px 8px"><div style="font-size:34px">✅</div><div style="font-size:14px;font-weight:600;margin:6px 0">Todo en orden</div><div style="font-size:12px;color:var(--text3);line-height:1.5">Ningún movimiento, pago frecuente, meta, deuda ni servicio apunta a una cuenta que no exista.</div></div>';
   } else {
-    h+='<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">Estas cuentas ya no existen, pero todavía hay datos que las mencionan. Elige a qué cuenta pasarlos.</div>';
+    if(_revNombres.length) h+='<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">Estas cuentas ya no existen, pero todavía hay datos que las mencionan. Elige a qué cuenta pasarlos.</div>';
     _revNombres.forEach((n,i)=>{
       const u=huerfanas[n];
       const cur=(u.cur.USD||0)>(u.cur.PEN||0)?'USD':'PEN';
@@ -14885,6 +14963,14 @@ function renderRevisionDatos(){
       h+='<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">🧹 Restos de configuración</div><div style="font-size:12px;line-height:1.6;color:var(--text2);margin-bottom:8px">Colores, TREA, orden u otros ajustes de cuentas eliminadas: '+nombres.slice(0,6).map(escapeHtml).join(', ')+(nombres.length>6?'…':'')+'. No afectan saldos; se pueden borrar sin riesgo.</div><button class="btn" onclick="revLimpiarRestos()">Limpiar restos ('+restos.length+')</button></div>';
     }
   }
+  if(_revEnl.length){
+    h+='<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">🔗 Servicios: marca y movimiento no coinciden</div><div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.5">Cada pago marcado en Servicios debe tener su ingreso en Finanzas, y al revés.</div>';
+    _revEnl.forEach((e,i)=>{
+      h+='<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border2)"><span style="font-size:12px;line-height:1.4">'+escapeHtml(_enlEtiqueta(e.k))+'<br><span style="color:var(--text3)">'+(e.t==='marca'?'Figura pagado, pero no hay ingreso en Finanzas':'Hay ingreso en Finanzas, pero figura sin pagar')+'</span></span><button class="btn" onclick="revEnlazar('+i+')">'+(e.t==='marca'?'Quitar marca':'Marcar pagado')+'</button></div>';
+    });
+    h+='</div>';
+  }
+  if(avisos.length) h+='<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:6px">Para revisar</div>'+avisos.map(a=>'<div style="font-size:12px;line-height:1.5;color:var(--text2);padding:3px 0">'+a.ic+' '+escapeHtml(a.txt)+'</div>').join('')+'</div>';
   _abrirModalDin('revision-overlay',h,560);
 }
 function revReasignar(i){
@@ -15084,6 +15170,15 @@ function renombrarCuentaGlobal(oldName, newName){
       if(sv.account===oldName){ if(!state.servicios) state.servicios={}; if(!state.servicios[id]) state.servicios[id]={...sv,account:newName}; }
     });
   }catch(e){ console.warn('Servicios omitidos al renombrar cuenta:', e&&e.message); }
+
+  // 11. Hogar — con qué cuenta se paga cada concepto y las cuentas elegidas como ahorro
+  try{
+    const h=state.hogar;
+    if(h){
+      (h.conceptos||[]).concat(h.bolsas||[]).forEach(c=>{ if(c.pagarCon==='c:'+oldName) c.pagarCon='c:'+newName; });
+      ['general','hogar'].forEach(k=>{ if(h.ahorroSel&&Array.isArray(h.ahorroSel[k])) h.ahorroSel[k]=h.ahorroSel[k].map(x=>x===oldName?newName:x); });
+    }
+  }catch(e){ console.warn('Hogar omitido al renombrar cuenta:', e&&e.message); }
 
   return true;
 }
@@ -18486,7 +18581,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
   {id:'alertas-presupuesto', visible:false},
-  {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false}, {id:'hw-fondo', visible:false}, {id:'hw-mealcanza', visible:false}, {id:'hw-diacompra', visible:false}, {id:'hw-subs', visible:false}, {id:'hw-dups', visible:false}, {id:'hw-tags', visible:false}, {id:'hw-meta', visible:false}, {id:'hw-alertas', visible:false},
+  {id:'wx-conectado', visible:true}, {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false}, {id:'hw-fondo', visible:false}, {id:'hw-mealcanza', visible:false}, {id:'hw-diacompra', visible:false}, {id:'hw-subs', visible:false}, {id:'hw-dups', visible:false}, {id:'hw-tags', visible:false}, {id:'hw-meta', visible:false}, {id:'hw-alertas', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
   if(!Array.isArray(state.dashboardWidgets)){
@@ -18494,7 +18589,7 @@ function ensureDashboardWidgetsDefault(){
   } else {
     const idsExistentes=new Set(state.dashboardWidgets.map(w=>w.id));
     DASHBOARD_WIDGETS_DEFAULT.forEach(w=>{
-      if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:false});
+      if(!idsExistentes.has(w.id)) state.dashboardWidgets.push({id:w.id, visible:(w.id==='wx-conectado')});
     });
     state.dashboardWidgets=state.dashboardWidgets.filter(w=>DASHBOARD_WIDGET_DEFS[w.id]);
   }
@@ -19042,8 +19137,873 @@ Object.assign(DASHBOARD_WIDGET_DEFS,{
   'wx-racha':{label:'🔥 Racha de registro',size:'small',shell:()=>wxShell('wx-racha','🔥 Racha de registro',"openModal()",'Registrar un movimiento →')},
   'wx-deuda-evolucion':{label:'📉 Evolución de la deuda',size:'medium',shell:()=>wxShell('wx-deuda-evolucion','📉 Evolución de la deuda',"showPage('deudas')",'Abrir deudas →')},
 });
+// ══════════════════════════════════════════════════════
+//  🏡 HOGAR — alquiler/hipoteca, luz, agua, internet, gas… con historial,
+//  variación, pagos que NO son mensuales (cada 2/3/6/12 meses), proyección y
+//  "cuántos meses aguantas". Se apoya en lo que ya existe:
+//   · Pagos frecuentes: un concepto puede ENLAZARSE a uno (pfId). El pago se
+//     registra con ejecutarPagoFrecuente (mismo movimiento, mismo historial) y
+//     el monto de cada mes se lee SIEMPRE de pf.pagosRegistrados.
+//   · Movimientos / tarjetas: un concepto sin enlace crea su propio gasto.
+//   · Calendario y Resumen: leen los vencimientos de aquí.
+//  Datos: state.hogar = {conceptos[], registros[], ahorroSel{}, esenciales[]}
+// ══════════════════════════════════════════════════════
+const HG={vista:'lista', cid:null, tab:'conceptos', mk:null, selModo:'general'};
+const HG_ESENCIALES_DEF=['🏠 Vivienda','🍔 Comida','💊 Salud','🚗 Transporte','📱 Servicios'];
+const HG_FREC_ETQ={1:'Mensual',2:'Cada 2 meses',3:'Cada 3 meses',4:'Cada 4 meses',6:'Cada 6 meses',12:'Anual'};
+(function(){
+  if(document.getElementById('hg-style')) return;
+  const st=document.createElement('style'); st.id='hg-style';
+  st.textContent=`
+  .hg-wrap{max-width:1100px;margin:0 auto}
+  .hg-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .hg-head h1{margin:0;font-size:22px;flex:1 1 auto}
+  .hg-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .hg-tab{background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:0 14px;min-height:40px;font-size:13px;cursor:pointer}
+  .hg-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .hg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+  .hg-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+  .hg-kpi .l{font-size:11px;letter-spacing:.05em;color:var(--text3);text-transform:uppercase}
+  .hg-kpi .v{font-family:var(--mono);font-size:22px;font-weight:600;margin-top:4px}
+  .hg-kpi .s{font-size:12px;color:var(--text3);margin-top:4px;line-height:1.4}
+  .hg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:18px}
+  .hg-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;text-align:left;color:var(--text);font:inherit}
+  .hg-card:hover{border-color:var(--accent)}
+  .hg-card.warn{border-color:var(--amber)}
+  .hg-chip{font-size:11px;color:var(--text3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;white-space:nowrap}
+  .hg-chip.az{color:var(--accent);border-color:var(--accent)}
+  .hg-sec{font-size:15px;font-weight:600;margin:6px 0 8px}
+  .hg-sec small{font-weight:400;color:var(--text3);font-size:12px;margin-left:8px}
+  .hg-up{color:var(--amber);font-weight:600}.hg-dn{color:var(--green);font-weight:600}.hg-eq{color:var(--text3)}
+  .hg-bars{display:flex;align-items:flex-end;gap:4px;height:34px}
+  .hg-bars i{flex:1;background:var(--bg4);border-radius:2px 2px 0 0;display:block}
+  .hg-bars i.cur{background:var(--accent)}
+  .hg-chart{position:relative;display:flex;align-items:flex-end;gap:10px;height:200px;padding:0 6px;border-bottom:1px solid var(--border);margin-top:44px}
+  .hg-col{position:relative;flex:1 1 0;min-width:0;height:200px;display:flex;align-items:flex-end;justify-content:center;outline:none}
+  .hg-bar{width:min(40px,80%);background:var(--bg4);border-radius:3px 3px 0 0}
+  .hg-col:hover .hg-bar,.hg-col:focus .hg-bar,.hg-col.hl .hg-bar{background:var(--accent)}
+  .hg-bar.cur{background:var(--amber)}
+  .hg-tip{display:none;position:absolute;z-index:6;background:var(--bg);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.45);color:var(--text)}
+  .hg-col:hover .hg-tip,.hg-col:focus .hg-tip{display:block}
+  .hg-avg{position:absolute;left:0;right:0;border-top:1px dashed var(--text3);pointer-events:none}
+  .hg-row{display:flex;gap:10px;padding:0 6px}
+  .hg-row>div{flex:1 1 0;min-width:0;text-align:center;font-size:11px}
+  .hg-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .hg-tbl th{font-size:12px;color:var(--text3);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--border)}
+  .hg-tbl td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);font-family:var(--mono)}
+  .hg-tbl th:first-child,.hg-tbl td:first-child{text-align:left;font-family:inherit}
+  .hg-tbl tr.hl td{background:var(--bg3)}
+  .hg-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .hg-alert{background:var(--amber-bg);border:1px solid var(--amber);border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:14px}
+  .hg-form label{display:block;font-size:12px;color:var(--text3);margin:10px 0 4px}
+  .hg-form input,.hg-form select{width:100%;box-sizing:border-box;min-height:40px;padding:0 10px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px}
+  .hg-form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .hg-form .chk,.hg-wrap .chk{display:flex;gap:10px;align-items:center;min-height:40px;font-size:13px;color:var(--text);margin:4px 0;cursor:pointer}
+  .hg-form .chk input,.hg-wrap .chk input{width:20px;height:20px;min-height:0;flex:0 0 auto}
+  .hg-bar-in{height:12px;background:var(--bg4);border-radius:6px;overflow:hidden}
+  .hg-bar-in>div{height:12px;border-radius:6px}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (pointer:coarse){.btn,.config-action-btn,.month-btn{min-height:44px}}
+  @media (max-width:640px){.hg-kpis{grid-template-columns:1fr 1fr}.hg-kpi .v{font-size:17px}.hg-chart{gap:4px}.hg-tbl{font-size:12px}.hg-tbl th,.hg-tbl td{padding:6px 4px}}
+  `;
+  document.head.appendChild(st);
+})();
+
+// ── Utilidades de meses ──
+function hgIdx(mk){ const [y,m]=String(mk).split('-').map(Number); return y*12+(m-1); }
+function hgMkDeIdx(i){ const y=Math.floor(i/12), m=i%12; return y+'-'+String(m+1).padStart(2,'0'); }
+function hgAdd(mk,n){ return hgMkDeIdx(hgIdx(mk)+n); }
+function hgMesNombre(mk,corto){ const [y,m]=mk.split('-').map(Number); const n=MONTHS[m-1]||''; return corto? n.slice(0,3): n+' '+y; }
+function hgEnsure(){
+  if(!state.hogar||typeof state.hogar!=='object'||Array.isArray(state.hogar)) state.hogar={};
+  const h=state.hogar;
+  if(!Array.isArray(h.conceptos)) h.conceptos=[];
+  if(!Array.isArray(h.registros)) h.registros=[];
+  if(!Array.isArray(h.bolsas)) h.bolsas=[];
+  if(!Array.isArray(h.compras)) h.compras=[];
+  if(!h.ahorroSel||typeof h.ahorroSel!=='object') h.ahorroSel={};
+  if(!Array.isArray(h.esenciales)) h.esenciales=HG_ESENCIALES_DEF.slice();
+  return h;
+}
+function hgConceptos(){ return hgEnsure().conceptos.filter(c=>!c.archivado); }
+function hgPF(c){ return c&&c.pfId ? (state.pagosFrecuentes||[]).find(p=>p.id===c.pfId)||null : null; }
+function hgFrec(c){
+  const pf=hgPF(c);
+  if(pf){ const f=pf.frecuencia||'mensual'; return f==='semestral'?6:(f==='anual'?12:1); }
+  return Math.max(1,parseInt(c.frecMeses)||1);
+}
+function hgCur(c){ const pf=hgPF(c); return (pf&&pf.currency)||c.moneda||'PEN'; }
+function hgFmt(v,c){ return gsFmt(v,hgCur(c)); }
+// ¿Este concepto toca pagarse en el mes mk?
+function hgAplica(c,mk){
+  const pf=hgPF(c);
+  const [y,m]=mk.split('-').map(Number);
+  if(pf){
+    const f=pf.frecuencia||'mensual';
+    if(f==='mensual') return pfActivoEnMes(pf,y,m-1) && (!pf.mesInicio||mk>=pf.mesInicio);
+    if(f==='semestral') return (pf.meses||[]).includes(m);
+    if(f==='anual') return !!pf.fechaAnual && new Date(pf.fechaAnual+'T12:00:00').getMonth()===m-1;
+    return false;
+  }
+  const f=hgFrec(c); if(f===1) return true;
+  const base=c.mesBase||mesActualKey();
+  return (((hgIdx(mk)-hgIdx(base))%f)+f)%f===0;
+}
+// Historial: mes → {monto,fecha,consumo,regId,nota}. El monto de un concepto enlazado sale SIEMPRE del pago frecuente.
+function hgHist(c){
+  const h=hgEnsure(), out={};
+  h.registros.filter(r=>r.cid===c.id).forEach(r=>{ out[r.mk]={monto:Number(r.monto)||0,fecha:r.fecha||'',consumo:(r.consumo===null||r.consumo===undefined||r.consumo==='')?null:Number(r.consumo),regId:r.id,nota:r.nota||''}; });
+  const pf=hgPF(c);
+  if(pf&&pf.pagosRegistrados) Object.entries(pf.pagosRegistrados).forEach(([k,r])=>{
+    if(!r) return;
+    let mk=k;
+    if(/^\d{4}$/.test(k)) mk=(r.fecha||'').slice(0,7)||(k+'-'+(pf.fechaAnual?pf.fechaAnual.slice(5,7):'01'));
+    const prev=out[mk]||{consumo:null,regId:null,nota:''};
+    out[mk]={...prev,monto:Number(r.monto)||0,fecha:r.fecha||prev.fecha||'',viaPF:true};
+  });
+  return out;
+}
+function hgLista(c){ const hi=hgHist(c); return Object.keys(hi).sort().map(mk=>({mk,...hi[mk]})); }
+function hgEstimado(c){ const l=hgLista(c); return l.length? l[l.length-1].monto : (Number(c.montoRef)||0); }
+function hgPromReciente(c,n){ const l=hgLista(c).slice(-(n||3)); return l.length? l.reduce((s,x)=>s+x.monto,0)/l.length : (Number(c.montoRef)||0); }
+function hgEquivMensual(c){
+  const f=hgFrec(c);
+  const base=(c.tipo==='variable'&&f===1)? hgPromReciente(c,3) : hgEstimado(c);
+  return base/f;
+}
+function hgDia(c,mk){
+  const [y,m]=mk.split('-').map(Number), D=new Date(y,m,0).getDate(), pf=hgPF(c);
+  if(pf&&pf.frecuencia==='anual'&&pf.fechaAnual) return Math.min(new Date(pf.fechaAnual+'T12:00:00').getDate(),D);
+  if(pf&&pf.diaPago) return pfDiaLimite(pf.diaPago,D);
+  return c.dia? Math.min(parseInt(c.dia)||D,D) : D;
+}
+// Próximo pago pendiente (este mes o los que vienen)
+function hgProximo(c){
+  const hist=hgHist(c), mk0=mesActualKey(), pagadoActual=hist[mk0]||null;
+  for(let k=0;k<=24;k++){
+    const mk=hgAdd(mk0,k);
+    if(!hgAplica(c,mk)) continue;
+    if(hist[mk]) continue;
+    const fecha=mk+'-'+String(hgDia(c,mk)).padStart(2,'0');
+    const dias=Math.round((new Date(fecha+'T12:00:00')-new Date(todayISO()+'T12:00:00'))/86400000);
+    return {mk,fecha,dias,vencido:dias<0,pagadoActual};
+  }
+  return {mk:null,fecha:null,dias:null,vencido:false,pagadoActual};
+}
+// Variación de un registro contra el anterior de la misma lista
+function hgVar(lista,i){
+  if(i<=0) return null;
+  const p=lista[i-1].monto, a=lista[i].monto;
+  if(!(p>0)) return null;
+  return {dv:a-p,pct:(a-p)/p*100,up:a>=p};
+}
+function hgVarTxt(v){ if(!v) return ''; if(Math.abs(v.pct)<0.05) return '= igual'; return (v.up?'▲ ':'▼ ')+Math.abs(v.pct).toFixed(1)+'%'; }
+function hgVarCls(v){ if(!v||Math.abs(v.pct)<0.05) return 'hg-eq'; return v.up?'hg-up':'hg-dn'; }
+// Mantiene al día el monto de registros propios si el gasto se editó en Movimientos
+function hgSyncMovs(){
+  const h=hgEnsure(); let cambio=false;
+  h.registros.forEach(r=>{
+    if(!r.movId) return;
+    const mv=(state.movimientos||[]).find(x=>x.id===r.movId);
+    if(mv && Math.abs((Number(mv.amount)||0)-(Number(r.monto)||0))>0.004){ r.monto=Number(mv.amount)||0; cambio=true; }
+  });
+  h.compras.forEach(r=>{
+    if(!r.movId) return;
+    const mv=(state.movimientos||[]).find(x=>x.id===r.movId); if(!mv) return;
+    if(Math.abs((Number(mv.amount)||0)-(Number(r.monto)||0))>0.004){ r.monto=Number(mv.amount)||0; cambio=true; }
+    if(mv.date && mv.date!==r.fecha){ r.fecha=mv.date; cambio=true; }
+  });
+  if(cambio) saveState();
+}
+function hgResumenMes(mk){
+  let pagadoPen=0, pendPen=0, pagadoUsd=0, pendUsd=0, pend=[];
+  const esActualOPasado=hgIdx(mk)<=hgIdx(mesActualKey());
+  hgConceptos().forEach(c=>{
+    const hi=hgHist(c), cur=hgCur(c);
+    if(hi[mk]){ if(cur==='USD') pagadoUsd+=hi[mk].monto; else pagadoPen+=hi[mk].monto; }
+    else if(esActualOPasado && hgAplica(c,mk)){ const e=hgEstimado(c); if(cur==='USD') pendUsd+=e; else pendPen+=e; pend.push({c,monto:e,mk}); }
+  });
+  hgBolsas().forEach(b=>{ const g=hgGastoMesBolsa(b,mk); if(hgBolsaCur(b)==='USD') pagadoUsd+=g; else pagadoPen+=g; });
+  return {pagadoPen,pagadoUsd,pendPen,pendUsd,pend,totalPen:pagadoPen+gsPen(pagadoUsd,'USD'),pendTotalPen:pendPen+gsPen(pendUsd,'USD')};
+}
+function hgEquivTotalPen(){ return hgConceptos().reduce((s,c)=>s+gsPen(hgEquivMensual(c),hgCur(c)),0)+hgBolsas().reduce((s,b)=>s+gsPen(hgBolsaEquiv(b),hgBolsaCur(b)),0); }
+
+// ══════════════════════════════════════════════════════
+//  PANTALLA
+// ══════════════════════════════════════════════════════
+function renderHogar(){
+  const root=document.getElementById('hg-root'); if(!root) return;
+  hgEnsure(); hgSyncMovs();
+  if(!HG.mk) HG.mk=mesActualKey();
+  if(HG.vista==='detalle'){
+    const c=hgEnsure().conceptos.find(x=>x.id===HG.cid);
+    if(c){ root.innerHTML=hgHtmlDetalle(c); return; }
+    HG.vista='lista';
+  }
+  if(HG.vista==='bolsa'){
+    const b=hgEnsure().bolsas.find(x=>x.id===HG.bid);
+    if(b){ root.innerHTML=hgHtmlBolsa(b); return; }
+    HG.vista='lista';
+  }
+  root.innerHTML='<div class="hg-wrap">'+hgHtmlCabecera()+(HG.tab==='proyeccion'?hgHtmlProyeccion():hgHtmlLista()+hgHtmlCompras())+'</div>';
+}
+function hgHtmlCabecera(){
+  const hayPFSinEnlace=hgPFDisponibles().length>0;
+  return `<div class="hg-head"><h1>🏡 Hogar</h1>
+    <button class="btn" onclick="hgModalConcepto()">+ Concepto</button>
+    ${hayPFSinEnlace?`<button class="btn" onclick="hgModalImportar()">🔗 Importar de Pagos frecuentes</button>`:''}
+    <button class="btn" onclick="hgModalCompra()">🛒 + Compra</button>
+    <button class="btn btn-primary" onclick="hgModalRegistrar()">+ Registrar recibo</button></div>
+    <div class="hg-tabs"><button class="hg-tab ${HG.tab==='conceptos'?'on':''}" onclick="HG.tab='conceptos';renderHogar()">Conceptos</button><button class="hg-tab ${HG.tab==='proyeccion'?'on':''}" onclick="HG.tab='proyeccion';renderHogar()">Proyección y aguante</button></div>`;
+}
+function hgMiniBarras(c){
+  const l=hgLista(c).slice(-6); if(l.length<2) return '';
+  const mx=Math.max(...l.map(x=>x.monto))||1;
+  return '<div class="hg-bars" aria-hidden="true">'+l.map((x,i)=>`<i class="${i===l.length-1?'cur':''}" style="height:${Math.max(8,Math.round(x.monto/mx*100))}%"></i>`).join('')+'</div>';
+}
+function hgTarjeta(c,mk){
+  const hi=hgHist(c), l=hgLista(c), f=hgFrec(c), pf=hgPF(c);
+  const px=hgProximo(c);
+  const regMes=hi[mk];
+  const idxUlt=l.length-1;
+  const v=idxUlt>=0? hgVar(l,idxUlt):null;
+  const monto=regMes? regMes.monto : (l.length? l[idxUlt].monto : (Number(c.montoRef)||0));
+  let estado='';
+  if(regMes) estado=`<span style="color:var(--green);font-weight:600">✓ Pagado${regMes.fecha?' el '+regMes.fecha.slice(8,10)+'/'+regMes.fecha.slice(5,7):''}</span>`;
+  else if(px.mk){
+    const cuando=px.dias===0?'vence hoy':(px.dias<0?'venció hace '+Math.abs(px.dias)+' d':(px.dias===1?'vence mañana':'vence en '+px.dias+' d'));
+    estado=`<span style="color:${px.vencido?'var(--red,#f05c5c)':'var(--amber)'};font-weight:600">● ${px.fecha.slice(8,10)}/${px.fecha.slice(5,7)} · ${cuando}</span>`;
+  } else estado='<span style="color:var(--text3)">Sin próximo pago</span>';
+  const warn=(!regMes&&px.vencido)?' warn':'';
+  const equiv=f>1?`<span style="font-size:12px;color:var(--text3)">≈ ${M(hgFmt(hgEquivMensual(c),c))} al mes</span>`:'';
+  return `<button class="hg-card${warn}" onclick="hgAbrir('${c.id}')" aria-label="Abrir ${escapeHtml(c.nombre)}">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:600;flex:1 1 auto">${escapeHtml(c.nombre)}</span>
+      ${f>1?`<span class="hg-chip az">${HG_FREC_ETQ[f]||('Cada '+f+' meses')}</span>`:''}<span class="hg-chip">${c.tipo==='variable'?'Variable':'Fijo'}</span>${pf?'<span class="hg-chip az" title="Enlazado a Pagos frecuentes">🔗</span>':''}</div>
+    <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-family:var(--mono);font-size:22px;font-weight:600">${M(hgFmt(monto,c))}</span>${equiv}</div>
+    <div style="font-size:12px" class="${hgVarCls(v)}">${v?hgVarTxt(v)+' vs '+(f>1?'pago anterior':'mes anterior')+' ('+M(hgFmt(l[idxUlt-1].monto,c))+')':'<span class="hg-eq">Aún sin historial para comparar</span>'}</div>
+    ${hgMiniBarras(c)}
+    <div style="font-size:12px">${estado}</div></button>`;
+}
+function hgHtmlLista(){
+  const cs=hgConceptos(), mk=HG.mk;
+  if(!cs.length){
+    return `<div class="dash-empty" style="padding:30px 14px"><div class="dash-empty-icon">🏡</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">Aún no tienes conceptos del hogar</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:480px;margin:0 auto 14px">Agrega tu alquiler, luz, agua, internet o gas. Si ya los tienes como Pagos frecuentes, impórtalos y quedan conectados: lo que registres en un lado aparece en el otro.</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn btn-primary" onclick="hgModalConcepto()">+ Agregar concepto</button>${hgPFDisponibles().length?'<button class="btn" onclick="hgModalImportar()">🔗 Importar de Pagos frecuentes</button>':''}</div></div>`;
+  }
+  const r=hgResumenMes(mk), ant=hgResumenMes(hgAdd(mk,-1));
+  const dif=r.totalPen-ant.totalPen, hayAnt=ant.totalPen>0.004;
+  const eq=hgEquivTotalPen();
+  const mensuales=cs.filter(c=>hgFrec(c)===1), periodicos=cs.filter(c=>hgFrec(c)>1);
+  const mesesNav=`<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 6px;width:fit-content;margin-bottom:14px"><button class="month-btn" onclick="hgMes(-1)" aria-label="Mes anterior">‹</button><b style="min-width:130px;text-align:center;font-size:14px">${hgMesNombre(mk)}</b><button class="month-btn" onclick="hgMes(1)" aria-label="Mes siguiente">›</button></div>`;
+  const kpis=`<div class="hg-kpis">
+    <div class="hg-kpi"><div class="l">Pagado en el mes</div><div class="v">${M(gsMix(r.pagadoPen,r.pagadoUsd))}</div><div class="s">Solo lo que ya registraste</div></div>
+    <div class="hg-kpi"><div class="l">Vs mes anterior</div><div class="v ${hayAnt?(dif>=0?'hg-up':'hg-dn'):''}">${hayAnt?(dif>=0?'▲ ':'▼ ')+M(fmtS(Math.abs(dif))):'—'}</div><div class="s">${hayAnt?((dif/ant.totalPen*100>=0?'+':'-')+Math.abs(dif/ant.totalPen*100).toFixed(1)+'% sobre '+M(fmtS(ant.totalPen))):'Sin pagos registrados el mes anterior'}</div></div>
+    <div class="hg-kpi"><div class="l">Por pagar</div><div class="v">${M(fmtS(r.pendTotalPen))}</div><div class="s">${r.pend.length?r.pend.map(p=>escapeHtml(p.c.nombre)).slice(0,3).join(' · ')+(r.pend.length>3?'…':''):'Nada pendiente en este mes'}</div></div>
+    <div class="hg-kpi"><div class="l">Equivalente mensual</div><div class="v">${M(fmtS(eq))}</div><div class="s">Reparte los pagos no mensuales (arbitrios, seguro…) en cada mes</div></div></div>`;
+  let h=mesesNav+kpis;
+  h+=`<div class="hg-sec">Pagos mensuales<small>${mensuales.length}</small></div>`;
+  h+= mensuales.length? `<div class="hg-grid">${mensuales.map(c=>hgTarjeta(c,mk)).join('')}</div>` : '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Ninguno todavía.</div>';
+  h+=`<div class="hg-sec">Pagos que no son mensuales<small>solo cuentan en el mes que se pagan</small></div>`;
+  h+= periodicos.length? `<div class="hg-grid">${periodicos.map(c=>hgTarjeta(c,mk)).join('')}</div>` : '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Ninguno todavía. Al crear un concepto elige “Cada 2, 3, 6 o 12 meses”.</div>';
+  return h;
+}
+function hgMes(d){ HG.mk=hgAdd(HG.mk||mesActualKey(),d); renderHogar(); }
+function hgAbrir(id){ HG.vista='detalle'; HG.cid=id; renderHogar(); window.scrollTo({top:0}); }
+function hgVolver(){ HG.vista='lista'; HG.cid=null; renderHogar(); }
+function hgResaltar(i,on){ document.querySelectorAll('[data-hgi="'+i+'"]').forEach(e=>e.classList.toggle('hl',!!on)); }
+
+// ── Detalle de un concepto ──
+function hgHtmlDetalle(c){
+  const lista=hgLista(c), cur=hgCur(c), f=hgFrec(c), pf=hgPF(c);
+  const vis=lista.slice(-12);
+  const off=lista.length-vis.length;
+  const proms=lista.length? lista.reduce((s,x)=>s+x.monto,0)/lista.length : 0;
+  const ult=lista[lista.length-1], mx=lista.length? lista.reduce((a,b)=>b.monto>a.monto?b:a):null, mn=lista.length? lista.reduce((a,b)=>b.monto<a.monto?b:a):null;
+  const escala=vis.length? 170/Math.max(...vis.map(x=>x.monto),1):1;
+  const avgPx=Math.round(proms*escala);
+  const unidad=c.unidad||'';
+  const alerta=(()=>{
+    if(lista.length<3||!ult) return '';
+    const base=lista.slice(0,-1).reduce((s,x)=>s+x.monto,0)/(lista.length-1);
+    if(base>0 && ult.monto>base*1.15){
+      let extra='';
+      if(unidad&&lista.length>=2){ const p=lista[lista.length-2]; if(ult.consumo>0&&p.consumo>0&&p.monto>0){ const cons=(ult.consumo/p.consumo-1)*100, tar=((ult.monto/ult.consumo)/(p.monto/p.consumo)-1)*100; extra=` Contra el pago anterior, ≈ ${cons.toFixed(1)}% fue por <b>consumo</b> y ≈ ${tar.toFixed(1)}% por <b>tarifa</b>.`; } }
+      return `<div class="hg-alert"><b style="color:var(--amber)">Aviso</b> · Tu último pago fue <b>${((ult.monto/base-1)*100).toFixed(1)}% más</b> que tu promedio anterior (${M(hgFmt(base,c))}).${extra}</div>`;
+    }
+    return '';
+  })();
+  const tarifa=x=>(unidad&&x.consumo>0)? (x.monto/x.consumo).toFixed(2):'—';
+  const barras=vis.map((x,j)=>{
+    const i=off+j, v=hgVar(lista,i), hh=Math.max(6,Math.round(x.monto*escala));
+    const ultimo=(i===lista.length-1);
+    const pos=j<2?'left:0;':(j>vis.length-3?'right:0;':'left:50%;transform:translateX(-50%);');
+    return `<div class="hg-col" tabindex="0" data-hgi="${i}" onmouseenter="hgResaltar(${i},1)" onmouseleave="hgResaltar(${i},0)" aria-label="${hgMesNombre(x.mk)}: ${hgFmt(x.monto,c)}${v?', '+hgVarTxt(v):''}">
+      <div class="hg-tip" style="bottom:${hh+10}px;${pos}"><b>${hgMesNombre(x.mk)}</b><div style="font-size:15px;font-weight:700;margin:2px 0">${hgFmt(x.monto,c)}</div>${v?`<div class="${hgVarCls(v)}">${v.up?'▲ +':'▼ -'}${Math.abs(v.dv).toFixed(2)} (${Math.abs(v.pct).toFixed(1)}%) vs ${f>1?'pago':'mes'} anterior</div>`:'<div class="hg-eq">Primer registro</div>'}${unidad&&x.consumo>0?`<div style="color:var(--text3)">${x.consumo} ${escapeHtml(unidad)} · ${cur==='USD'?'$':'S/'} ${tarifa(x)} por ${escapeHtml(unidad)}</div>`:''}</div>
+      <div class="hg-bar${ultimo?' cur':''}" style="height:${hh}px"></div></div>`;
+  }).join('');
+  const etqMes=vis.map((x,j)=>`<div style="color:var(--text3)">${hgMesNombre(x.mk,true)}${f>1||new Date().getFullYear()!==Number(x.mk.slice(0,4))?"<br><span style='font-size:10px'>"+x.mk.slice(2,4)+"</span>":''}</div>`).join('');
+  const etqVar=vis.map((x,j)=>{ const v=hgVar(lista,off+j); return `<div class="${hgVarCls(v)}" style="font-weight:600">${v?hgVarTxt(v):'—'}</div>`; }).join('');
+  const filas=lista.slice().reverse().map((x,r)=>{
+    const i=lista.length-1-r, v=hgVar(lista,i);
+    return `<tr data-hgi="${i}" onmouseenter="hgResaltar(${i},1)" onmouseleave="hgResaltar(${i},0)"><td><b>${hgMesNombre(x.mk)}</b></td><td>${hgFmt(x.monto,c)}</td><td class="${hgVarCls(v)}">${v?(v.up?'+':'-')+Math.abs(v.dv).toFixed(2):'—'}</td><td class="${hgVarCls(v)}"><b>${v?hgVarTxt(v):'—'}</b></td>${unidad?`<td>${x.consumo!==null&&x.consumo!==undefined?x.consumo:'—'}</td><td>${tarifa(x)}</td>`:''}<td style="text-align:right"><button class="btn" style="font-size:11px;min-height:32px" onclick="hgModalEditarReg('${c.id}','${x.mk}')">Editar</button></td></tr>`;
+  }).join('');
+  const px=hgProximo(c);
+  const cuando=px.mk? (px.dias===0?'vence hoy':(px.dias<0?'venció hace '+Math.abs(px.dias)+' días':'vence en '+px.dias+' días')):'';
+  return `<div class="hg-wrap">
+    <div class="hg-head"><button class="btn" onclick="hgVolver()">‹ Hogar</button><h1>${escapeHtml(c.nombre)} <span style="font-size:13px;font-weight:400;color:var(--text3)">${f>1?HG_FREC_ETQ[f]||('Cada '+f+' meses'):'Mensual'} · ${c.tipo==='variable'?'variable':'fijo'}${pf?' · 🔗 enlazado a «'+escapeHtml(pf.nombre)+'»':''}</span></h1>
+      <button class="btn" onclick="hgModalConcepto('${c.id}')">✏️ Editar</button><button class="btn btn-primary" onclick="hgModalRegistrar('${c.id}')">+ Registrar pago</button></div>
+    ${c.pfId&&!pf?'<div class="hg-alert">El pago frecuente enlazado ya no existe. Este concepto sigue funcionando por su cuenta; puedes enlazarlo de nuevo desde ✏️ Editar.</div>':''}
+    ${alerta}
+    <div class="hg-kpis">
+      <div class="hg-kpi"><div class="l">Promedio</div><div class="v">${lista.length?M(hgFmt(proms,c)):'—'}</div><div class="s">${lista.length} registro${lista.length===1?'':'s'}</div></div>
+      <div class="hg-kpi"><div class="l">Más caro</div><div class="v">${mx?M(hgFmt(mx.monto,c)):'—'}</div><div class="s">${mx?hgMesNombre(mx.mk):''}</div></div>
+      <div class="hg-kpi"><div class="l">Más barato</div><div class="v">${mn?M(hgFmt(mn.monto,c)):'—'}</div><div class="s">${mn?hgMesNombre(mn.mk):''}</div></div>
+      <div class="hg-kpi"><div class="l">Próximo pago</div><div class="v" style="font-size:18px">${px.mk?px.fecha.slice(8,10)+'/'+px.fecha.slice(5,7)+'/'+px.fecha.slice(0,4):'—'}</div><div class="s" style="color:${px.vencido?'var(--red,#f05c5c)':'var(--text3)'}">${cuando}${px.mk?' · ≈ '+M(hgFmt(hgEstimado(c),c)):''}</div></div></div>
+    ${lista.length? `<div class="hg-box"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px"><b style="flex:1 1 auto">Monto pagado${f>1?' en cada pago':' por mes'}</b><span style="font-size:12px;color:var(--text3)">Pasa el mouse (o toca) una barra · línea punteada = promedio</span></div>
+      <div class="hg-chart"><div class="hg-avg" style="bottom:${avgPx}px"></div>${barras}</div>
+      <div class="hg-row" style="margin-top:6px">${etqMes}</div>
+      <div style="font-size:11px;letter-spacing:.05em;color:var(--text3);margin:12px 0 4px;text-transform:uppercase">Variación vs ${f>1?'pago':'mes'} anterior</div><div class="hg-row">${etqVar}</div></div>
+      <div class="hg-box"><b>Historial</b><div style="overflow-x:auto;margin-top:8px"><table class="hg-tbl"><thead><tr><th>${f>1?'Pago':'Mes'}</th><th>Monto</th><th>Cambio</th><th>%</th>${unidad?`<th>${escapeHtml(unidad)}</th><th>${cur==='USD'?'$':'S/'} por ${escapeHtml(unidad)}</th>`:''}<th></th></tr></thead><tbody>${filas}</tbody></table></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">${pf?'El monto de cada mes viene del pago frecuente enlazado; si lo corriges en Movimientos, se actualiza solo.':'Si corriges el monto del gasto en Movimientos, aquí se actualiza solo.'}</div></div>`
+      : `<div class="dash-empty" style="padding:24px 12px"><div class="dash-empty-icon">🧾</div>Aún no hay pagos registrados de este concepto.<div style="margin-top:10px"><button class="btn btn-primary" onclick="hgModalRegistrar('${c.id}')">+ Registrar el primero</button></div></div>`}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  FORMULARIOS
+// ══════════════════════════════════════════════════════
+function hgModalHead(t,idModal){ return `<div class="modal-title"><span>${t}</span><button class="modal-close" onclick="_cerrarModalDin('${idModal}')">✕</button></div>`; }
+function hgOptsPagar(sel){
+  const cu=getAllAccountKeys().map(k=>`<option value="c:${escapeHtml(k)}" ${sel==='c:'+k?'selected':''}>${escapeHtml(accLabel(k))}</option>`).join('');
+  const tj=(state.tarjetas||[]).map(t=>`<option value="t:${escapeHtml(t.id)}" ${sel==='t:'+t.id?'selected':''}>💳 ${escapeHtml(((t.banco||'')+' '+(t.cat||'')).trim()||'Tarjeta')}</option>`).join('');
+  return cu+tj;
+}
+function hgOptsCat(sel){
+  return '<option value="">Sin categoría</option>'+Object.keys(getAllCategorias()).map(k=>`<option value="${escapeHtml(k)}" ${sel===k?'selected':''}>${escapeHtml(k)}</option>`).join('');
+}
+function hgCatDefault(nombre){
+  const cats=Object.keys(getAllCategorias());
+  const cand=/alquiler|hipoteca|vivienda|arbitrio|mantenim/i.test(nombre)?'🏠 Vivienda':'📱 Servicios';
+  return cats.includes(cand)?cand:'';
+}
+function hgPFDisponibles(){
+  const usados=new Set(hgEnsure().conceptos.filter(c=>c.pfId).map(c=>c.pfId));
+  return (state.pagosFrecuentes||[]).filter(p=>p&&!p.oculto&&p.tipo!=='ingreso'&&!usados.has(p.id)&&p.nombre);
+}
+function hgModalConcepto(id){
+  const h=hgEnsure(), c=id? h.conceptos.find(x=>x.id===id) : null;
+  const d=c||{nombre:'',tipo:'variable',unidad:'',frecMeses:1,pfId:'',dia:'',mesBase:mesActualKey(),montoRef:'',moneda:'PEN',pagarCon:'',cat:''};
+  const pfs=hgPFDisponibles().concat(c&&c.pfId? (state.pagosFrecuentes||[]).filter(p=>p.id===c.pfId):[]);
+  const fr=[1,2,3,4,6,12];
+  const frOpts=fr.map(n=>`<option value="${n}" ${Number(d.frecMeses)===n?'selected':''}>${HG_FREC_ETQ[n]}</option>`).join('');
+  const hi= `<div class="hg-form">${hgModalHead(c?'Editar concepto':'Nuevo concepto del hogar','hg-concepto-ov')}
+    <label for="hgc-nombre">Nombre</label><input id="hgc-nombre" value="${escapeHtml(d.nombre)}" placeholder="Luz, Agua, Alquiler…">
+    <div class="two"><div><label for="hgc-tipo">Monto</label><select id="hgc-tipo"><option value="fijo" ${d.tipo==='fijo'?'selected':''}>Fijo (siempre igual)</option><option value="variable" ${d.tipo!=='fijo'?'selected':''}>Variable (cambia cada mes)</option></select></div>
+    <div><label for="hgc-unidad">Consumo que se mide</label><select id="hgc-unidad"><option value="" ${!d.unidad?'selected':''}>Ninguno</option><option value="kWh" ${d.unidad==='kWh'?'selected':''}>kWh (luz)</option><option value="m³" ${d.unidad==='m³'?'selected':''}>m³ (agua / gas)</option></select></div></div>
+    <label for="hgc-pf">Enlazar a un Pago frecuente</label><select id="hgc-pf" onchange="hgToggleEnlace()"><option value="">Ninguno (este concepto maneja su propio calendario)</option>${pfs.map(p=>`<option value="${escapeHtml(p.id)}" ${d.pfId===p.id?'selected':''}>${escapeHtml(p.nombre)} · ${p.frecuencia==='anual'?'anual':p.frecuencia==='semestral'?'semestral':'mensual'}</option>`).join('')}</select>
+    <div id="hgc-propio">
+      <div class="two"><div><label for="hgc-frec">¿Cada cuánto se paga?</label><select id="hgc-frec">${frOpts}</select></div>
+      <div><label for="hgc-mesbase">Mes de un pago</label><input id="hgc-mesbase" type="month" value="${escapeHtml(d.mesBase||mesActualKey())}"></div></div>
+      <div class="two"><div><label for="hgc-dia">Día de vencimiento</label><input id="hgc-dia" type="number" min="1" max="31" value="${escapeHtml(String(d.dia||''))}" placeholder="15"></div>
+      <div><label for="hgc-mon">Moneda</label><select id="hgc-mon"><option value="PEN" ${d.moneda!=='USD'?'selected':''}>Soles</option><option value="USD" ${d.moneda==='USD'?'selected':''}>Dólares</option></select></div></div>
+      <label for="hgc-pagar">Se paga con</label><select id="hgc-pagar">${hgOptsPagar(d.pagarCon)}</select>
+    </div>
+    <div class="two"><div><label for="hgc-ref">Monto aproximado (opcional)</label><input id="hgc-ref" type="number" step="0.01" min="0" value="${escapeHtml(String(d.montoRef||''))}"></div>
+    <div><label for="hgc-cat">Categoría del gasto</label><select id="hgc-cat">${hgOptsCat(c?d.cat:hgCatDefault(d.nombre))}</select></div></div>
+    <div id="hgc-nota" style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">${c?`<button class="config-action-btn danger" onclick="hgEliminarConcepto('${c.id}')">Eliminar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('hg-concepto-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgGuardarConcepto('${c?c.id:''}')">Guardar</button></div></div>`;
+  _abrirModalDin('hg-concepto-ov',hi,520);
+  hgToggleEnlace();
+}
+function hgToggleEnlace(){
+  const pf=(document.getElementById('hgc-pf')||{}).value;
+  const p=document.getElementById('hgc-propio'), n=document.getElementById('hgc-nota');
+  if(p) p.style.display=pf?'none':'';
+  if(n) n.textContent=pf?'La frecuencia, el día, la moneda y la cuenta o tarjeta se toman del Pago frecuente. Los pagos se registran allí y también aquí.':'Con “Cada 2/3/6/12 meses”, el concepto solo aparece en los meses que toca pagar y se reparte en el equivalente mensual.';
+}
+function hgGuardarConcepto(id){
+  const h=hgEnsure(), g=i=>(document.getElementById(i)||{}).value;
+  const nombre=(g('hgc-nombre')||'').trim();
+  if(!nombre){ alert('Escribe un nombre.'); return; }
+  const pfId=g('hgc-pf')||'';
+  const o={nombre,tipo:g('hgc-tipo')==='fijo'?'fijo':'variable',unidad:g('hgc-unidad')||'',pfId,montoRef:parseFloat(g('hgc-ref'))||0,cat:g('hgc-cat')||''};
+  if(!pfId){
+    o.frecMeses=Math.max(1,parseInt(g('hgc-frec'))||1);
+    o.mesBase=g('hgc-mesbase')||mesActualKey();
+    const dia=parseInt(g('hgc-dia')); o.dia=(dia>=1&&dia<=31)?dia:'';
+    o.moneda=g('hgc-mon')==='USD'?'USD':'PEN';
+    o.pagarCon=g('hgc-pagar')||'';
+    if(!o.pagarCon){ alert('Elige con qué se paga.'); return; }
+  } else {
+    const pf=(state.pagosFrecuentes||[]).find(p=>p.id===pfId); if(!pf){ alert('Ese pago frecuente ya no existe.'); return; }
+    o.frecMeses=pf.frecuencia==='semestral'?6:(pf.frecuencia==='anual'?12:1);
+    o.moneda=pf.currency||'PEN'; o.dia=pf.diaPago&&pf.diaPago!=='ultimo'?pf.diaPago:''; o.pagarCon='';
+    if(!o.montoRef&&pf.montoFijo) o.montoRef=Number(pf.montoFijo)||0;
+  }
+  if(id){ const c=h.conceptos.find(x=>x.id===id); if(c) Object.assign(c,o); }
+  else h.conceptos.push({id:'hg-'+Date.now(),creado:todayISO(),archivado:false,...o});
+  saveState(); _cerrarModalDin('hg-concepto-ov'); renderHogar(); toast(id?'Concepto actualizado':'Concepto agregado');
+}
+function hgEliminarConcepto(id){
+  const h=hgEnsure(), c=h.conceptos.find(x=>x.id===id); if(!c) return;
+  if(!confirm('¿Eliminar «'+c.nombre+'» y su historial del hogar?\n\nLos gastos ya registrados en Movimientos y el Pago frecuente enlazado NO se borran.')) return;
+  h.conceptos=h.conceptos.filter(x=>x.id!==id);
+  h.registros=h.registros.filter(r=>r.cid!==id);
+  saveState(); _cerrarModalDin('hg-concepto-ov'); HG.vista='lista'; renderHogar(); toast('Concepto eliminado');
+}
+function hgModalImportar(){
+  const pfs=hgPFDisponibles();
+  if(!pfs.length){ toast('No hay pagos frecuentes sin enlazar','info'); return; }
+  const sug=/luz|agua|internet|alquiler|renta|gas|cable|arbitri|hipoteca|mantenim|seguro/i;
+  const fila=p=>`<label class="chk"><input type="checkbox" class="hgimp" value="${escapeHtml(p.id)}" ${sug.test(p.nombre)?'checked':''}><span style="flex:1">${escapeHtml(p.nombre)} <span style="color:var(--text3)">· ${p.frecuencia==='anual'?'anual':p.frecuencia==='semestral'?'semestral':'mensual'}</span></span></label>`;
+  _abrirModalDin('hg-importar-ov',`<div class="hg-form">${hgModalHead('Importar de Pagos frecuentes','hg-importar-ov')}
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:6px">Los marcados se convierten en conceptos del hogar. Siguen siendo Pagos frecuentes: pagar en un lado se refleja en el otro y el historial se toma de lo ya registrado.</div>
+    ${pfs.map(fila).join('')}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="_cerrarModalDin('hg-importar-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgImportar()">Importar</button></div></div>`,480);
+}
+function hgImportar(){
+  const h=hgEnsure(); let n=0;
+  document.querySelectorAll('.hgimp:checked').forEach(ch=>{
+    const pf=(state.pagosFrecuentes||[]).find(p=>p.id===ch.value); if(!pf) return;
+    h.conceptos.push({id:'hg-'+Date.now()+'-'+n,creado:todayISO(),archivado:false,nombre:pf.nombre,tipo:pf.tipoMonto==='variable'?'variable':'fijo',unidad:/luz|electric/i.test(pf.nombre)?'kWh':(/agua|gas/i.test(pf.nombre)?'m³':''),pfId:pf.id,
+      frecMeses:pf.frecuencia==='semestral'?6:(pf.frecuencia==='anual'?12:1),moneda:pf.currency||'PEN',dia:pf.diaPago&&pf.diaPago!=='ultimo'?pf.diaPago:'',pagarCon:'',montoRef:Number(pf.montoFijo)||0,cat:pf.categoria||hgCatDefault(pf.nombre)});
+    n++;
+  });
+  if(!n){ toast('No marcaste ninguno','info'); return; }
+  saveState(); _cerrarModalDin('hg-importar-ov'); HG.tab='conceptos'; renderHogar(); toast(n+' concepto'+(n===1?'':'s')+' importado'+(n===1?'':'s'));
+}
+function hgModalRegistrar(cid){
+  const cs=hgConceptos();
+  if(!cs.length){ toast('Primero agrega un concepto','info'); hgModalConcepto(); return; }
+  const c=cs.find(x=>x.id===cid)||cs.find(x=>{ const p=hgProximo(x); return p.mk && hgIdx(p.mk)<=hgIdx(mesActualKey()); })||cs[0];
+  _abrirModalDin('hg-reg-ov',`<div class="hg-form">${hgModalHead('Registrar recibo','hg-reg-ov')}
+    <label for="hgr-c">Concepto</label><select id="hgr-c" onchange="hgRegCambio()">${cs.map(x=>`<option value="${x.id}" ${x.id===c.id?'selected':''}>${escapeHtml(x.nombre)}</option>`).join('')}</select>
+    <div class="two"><div><label for="hgr-mk">Periodo</label><input id="hgr-mk" type="month"></div><div><label for="hgr-fecha">Fecha de pago</label><input id="hgr-fecha" type="date" value="${todayISO()}"></div></div>
+    <div class="two"><div><label for="hgr-monto" id="hgr-lmonto">Monto</label><input id="hgr-monto" type="number" step="0.01" min="0" inputmode="decimal"></div><div id="hgr-wcons"><label for="hgr-cons" id="hgr-lcons">Consumo</label><input id="hgr-cons" type="number" step="0.01" min="0" inputmode="decimal"></div></div>
+    <div id="hgr-tarifa" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
+    <div id="hgr-wpagar"><label for="hgr-pagar">Pagado con</label><select id="hgr-pagar"></select></div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="hgr-gasto" checked>Crear el gasto en Movimientos (baja el saldo)</label>
+    <div id="hgr-nota" style="font-size:12px;color:var(--text3);line-height:1.5"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="_cerrarModalDin('hg-reg-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgGuardarRegistro()">Guardar recibo</button></div></div>`,500);
+  ['hgr-monto','hgr-cons'].forEach(i=>{ const e=document.getElementById(i); if(e) e.addEventListener('input',hgRegTarifa); });
+  hgRegCambio();
+}
+function hgRegCambio(){
+  const h=hgEnsure(), c=h.conceptos.find(x=>x.id===(document.getElementById('hgr-c')||{}).value); if(!c) return;
+  const px=hgProximo(c), pf=hgPF(c);
+  const mk=px.mk&&hgIdx(px.mk)<=hgIdx(mesActualKey())+0?px.mk:mesActualKey();
+  document.getElementById('hgr-mk').value=(px.mk&&hgIdx(px.mk)<=hgIdx(mesActualKey()))?px.mk:mesActualKey();
+  document.getElementById('hgr-lmonto').textContent='Monto ('+(hgCur(c)==='USD'?'$':'S/')+')';
+  const wc=document.getElementById('hgr-wcons'); wc.style.display=c.unidad?'':'none';
+  document.getElementById('hgr-lcons').textContent='Consumo ('+(c.unidad||'')+')';
+  const m=document.getElementById('hgr-monto'); if(!m.value) m.placeholder=hgEstimado(c)?'≈ '+hgEstimado(c).toFixed(2):'';
+  const sel=document.getElementById('hgr-pagar'), wp=document.getElementById('hgr-wpagar');
+  sel.innerHTML=hgOptsPagar(c.pagarCon||'');
+  wp.style.display=pf?'none':'';
+  document.getElementById('hgr-nota').textContent=pf? 'Enlazado a «'+pf.nombre+'»: el gasto se crea con la cuenta o tarjeta de ese Pago frecuente y queda marcado como pagado allí.':'';
+  hgRegTarifa();
+}
+function hgRegTarifa(){
+  const c=hgEnsure().conceptos.find(x=>x.id===(document.getElementById('hgr-c')||{}).value); const el=document.getElementById('hgr-tarifa'); if(!el||!c) return;
+  const m=parseFloat(document.getElementById('hgr-monto').value), k=parseFloat(document.getElementById('hgr-cons').value);
+  el.textContent=(c.unidad&&m>0&&k>0)? 'Costo por '+c.unidad+': '+(hgCur(c)==='USD'?'$':'S/')+' '+(m/k).toFixed(2):'';
+}
+function hgGuardarRegistro(){
+  const h=hgEnsure(), g=i=>(document.getElementById(i)||{}).value;
+  const c=h.conceptos.find(x=>x.id===g('hgr-c')); if(!c){ alert('Elige un concepto.'); return; }
+  const mk=g('hgr-mk'), fecha=g('hgr-fecha')||todayISO(), monto=parseFloat(g('hgr-monto'));
+  if(!/^\d{4}-\d{2}$/.test(mk)){ alert('Elige el periodo.'); return; }
+  if(!(monto>0)){ alert('Escribe el monto.'); return; }
+  const consRaw=parseFloat(g('hgr-cons')), consumo=(c.unidad&&consRaw>0)?consRaw:null;
+  const crearGasto=!!(document.getElementById('hgr-gasto')||{}).checked;
+  if(hgHist(c)[mk] && !confirm('Ya hay un pago registrado en '+hgMesNombre(mk)+'. ¿Registrar otro igualmente?')) return;
+  const pf=hgPF(c), [y,m]=mk.split('-').map(Number);
+  if(pf){
+    let ok=true;
+    if(crearGasto) ok=ejecutarPagoFrecuente(pf,monto,y,m-1,null,fecha,null);
+    else { if(!pf.pagosRegistrados) pf.pagosRegistrados={}; pf.pagosRegistrados[pf.frecuencia==='anual'?String(y):mk]={monto,fecha}; }
+    if(ok===false) return;
+    h.registros=h.registros.filter(r=>!(r.cid===c.id&&r.mk===mk));
+    h.registros.push({id:'hr-'+Date.now(),cid:c.id,mk,monto,consumo,fecha,movId:null,nota:''});
+  } else {
+    const cur=hgCur(c), destino=g('hgr-pagar')||c.pagarCon||'';
+    let movId=null, refAct=null;
+    if(crearGasto){
+      const desc=c.nombre+' · '+hgMesNombre(mk);
+      if(destino.startsWith('t:')){
+        const t=getTarjeta(destino.slice(2));
+        if(!t){ alert('Esa tarjeta ya no existe.'); return; }
+        if(!t.movs) t.movs={};
+        const bk=getBillingMonthKey(fecha,t); if(!t.movs[bk]) t.movs[bk]=[];
+        const cons={id:'hg-tcm-'+Date.now(),desc,fecha,monto,pagado:false,currency:cur,hora:horaLimaActual()};
+        if(c.cat) cons.cat=c.cat;
+        t.movs[bk].push(cons); movId=null; refAct={tarjetaId:t.id,monthKey:bk,consumoId:cons.id};
+        h.registros.push({id:'hr-'+Date.now(),cid:c.id,mk,monto,consumo,fecha,movId:null,consumoId:cons.id,tid:t.id,nota:''});
+      } else {
+        const acc=destino.startsWith('c:')?destino.slice(2):destino;
+        if(!acc){ alert('Elige con qué pagaste.'); return; }
+        const mov={id:'hg-mov-'+Date.now(),type:'expense',desc,amount:monto,account:acc,date:fecha,currency:cur};
+        if(c.cat) mov.cat=c.cat;
+        pushMovimiento(mov); movId=mov.id; refAct={movId:mov.id};
+        h.registros.push({id:'hr-'+Date.now(),cid:c.id,mk,monto,consumo,fecha,movId,nota:''});
+      }
+      logActividad('movimiento',`${desc} — ${cur==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`,refAct);
+    } else h.registros.push({id:'hr-'+Date.now(),cid:c.id,mk,monto,consumo,fecha,movId:null,nota:''});
+  }
+  saveState(); _cerrarModalDin('hg-reg-ov'); render(); renderHogar(); toast(c.nombre+' registrado');
+}
+function hgModalEditarReg(cid,mk){
+  const h=hgEnsure(), c=h.conceptos.find(x=>x.id===cid); if(!c) return;
+  const x=hgHist(c)[mk]; if(!x) return;
+  const pf=hgPF(c), viaPF=!!(pf&&x.viaPF);
+  _abrirModalDin('hg-edit-ov',`<div class="hg-form">${hgModalHead('Editar '+escapeHtml(c.nombre)+' · '+hgMesNombre(mk),'hg-edit-ov')}
+    <div class="two"><div><label for="hge-monto">Monto</label><input id="hge-monto" type="number" step="0.01" value="${x.monto}" ${viaPF?'disabled':''}></div>${c.unidad?`<div><label for="hge-cons">Consumo (${escapeHtml(c.unidad)})</label><input id="hge-cons" type="number" step="0.01" value="${x.consumo===null||x.consumo===undefined?'':x.consumo}"></div>`:''}</div>
+    ${viaPF?'<div style="font-size:12px;color:var(--text3);margin-top:6px;line-height:1.5">El monto de un pago enlazado se corrige editando el gasto en Movimientos (o el Pago frecuente); aquí solo puedes anotar el consumo.</div>':''}
+    <label for="hge-nota">Nota</label><input id="hge-nota" value="${escapeHtml(x.nota||'')}">
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">${(!viaPF&&x.regId)?`<button class="config-action-btn danger" onclick="hgBorrarReg('${cid}','${mk}')">Eliminar registro</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('hg-edit-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgGuardarEdicionReg('${cid}','${mk}')">Guardar</button></div></div>`,460);
+}
+function hgGuardarEdicionReg(cid,mk){
+  const h=hgEnsure(), c=h.conceptos.find(x=>x.id===cid); if(!c) return;
+  let r=h.registros.find(x=>x.cid===cid&&x.mk===mk);
+  const x=hgHist(c)[mk]; if(!x) return;
+  const pf=hgPF(c), viaPF=!!(pf&&x.viaPF);
+  const consRaw=parseFloat((document.getElementById('hge-cons')||{}).value), nota=(document.getElementById('hge-nota')||{}).value||'';
+  if(!r){ r={id:'hr-'+Date.now(),cid,mk,monto:x.monto,consumo:null,fecha:x.fecha,movId:null,nota:''}; h.registros.push(r); }
+  r.consumo=(c.unidad&&consRaw>0)?consRaw:null; r.nota=nota;
+  if(!viaPF){
+    const m=parseFloat((document.getElementById('hge-monto')||{}).value);
+    if(m>0){ r.monto=m; if(r.movId){ const mv=(state.movimientos||[]).find(z=>z.id===r.movId); if(mv) mv.amount=m; clearSaldoCache(); } }
+  }
+  saveState(); _cerrarModalDin('hg-edit-ov'); render(); renderHogar(); toast('Registro actualizado');
+}
+function hgBorrarReg(cid,mk){
+  if(!confirm('¿Eliminar este registro del historial del hogar?\n\nEl gasto en Movimientos NO se borra; si quieres quitarlo, bórralo allí.')) return;
+  const h=hgEnsure(); h.registros=h.registros.filter(r=>!(r.cid===cid&&r.mk===mk));
+  saveState(); _cerrarModalDin('hg-edit-ov'); renderHogar(); toast('Registro eliminado');
+}
+
+// ══════════════════════════════════════════════════════
+//  PROYECCIÓN Y AGUANTE
+// ══════════════════════════════════════════════════════
+function hgProyMonto(c,mk){
+  if(!hgAplica(c,mk)) return 0;
+  const l=hgLista(c); if(!l.length) return Number(c.montoRef)||0;
+  if(c.tipo!=='variable') return l[l.length-1].monto;
+  const base=l.slice(-3).reduce((s,x)=>s+x.monto,0)/Math.min(3,l.length);
+  const ly=hgAdd(mk,-12), prev=l.find(x=>x.mk===ly);
+  return prev? (base+prev.monto)/2 : base;
+}
+function hgGastoPromedio(cats){
+  const hoy=new Date(); let sum=0,n=0;
+  for(let i=1;i<=6;i++){
+    const d=new Date(hoy.getFullYear(),hoy.getMonth()-i,1);
+    const t=gsItems(d.getFullYear(),d.getMonth()).filter(x=>!cats||cats.includes(x.cat)).reduce((s,x)=>s+x.pen,0);
+    if(t>0.004){ sum+=t; n++; }
+  }
+  return {prom:n?sum/n:0,meses:n};
+}
+function hgAhorroSel(modo){
+  const h=hgEnsure(), todas=getAllAccountKeys();
+  const sel=h.ahorroSel[modo];
+  return Array.isArray(sel)? sel.filter(k=>todas.includes(k)) : todas.filter(k=>getAccountType(k)==='ahorro');
+}
+function hgAhorroTotal(modo){
+  const hoy=new Date(), saldos=reconstructSaldoAt(hoy.getFullYear(),hoy.getMonth())||{};
+  return hgAhorroSel(modo).reduce((s,k)=>s+gsPen(saldos[k]||0,getAccountCurrency(k)),0);
+}
+function hgAguante(){
+  const h=hgEnsure();
+  const todos=hgGastoPromedio(null), esen=hgGastoPromedio(h.esenciales), hogarMes=hgEquivTotalPen();
+  const aGen=hgAhorroTotal('general'), aHog=hgAhorroTotal('hogar');
+  return {
+    gen:{ahorro:aGen,gasto:todos.prom,meses:todos.prom>0?aGen/todos.prom:null,nMeses:todos.meses},
+    esen:{ahorro:aGen,gasto:esen.prom,meses:esen.prom>0?aGen/esen.prom:null},
+    hog:{ahorro:aHog,gasto:hogarMes,meses:hogarMes>0?aHog/hogarMes:null}
+  };
+}
+function hgFmtMeses(n){ return n===null||n===undefined?'—':(n>=100?'99+':n.toFixed(1))+' meses'; }
+function hgHtmlProyeccion(){
+  const h=hgEnsure(), cs=hgConceptos(), A=hgAguante();
+  const col=(m)=> m===null?'var(--text3)':(m<3?'var(--red,#f05c5c)':(m<6?'var(--amber)':'var(--green)'));
+  const barra=(m,c)=>`<div class="hg-bar-in"><div style="width:${m===null?0:Math.min(100,m/12*100)}%;background:${c}"></div></div>`;
+  const fila=(t,o,extra)=>`<div style="margin-bottom:12px"><div style="display:flex;font-size:13px;margin-bottom:4px;gap:8px"><span style="flex:1">${t}${extra?`<span style="color:var(--text3);font-size:12px"> · ${extra}</span>`:''}</span><b style="color:${col(o.meses)}">${hgFmtMeses(o.meses)}</b></div>${barra(o.meses,col(o.meses))}</div>`;
+  const todas=getAllAccountKeys(), selActual=hgAhorroSel(HG.selModo);
+  const hoy=new Date(), saldos=reconstructSaldoAt(hoy.getFullYear(),hoy.getMonth())||{};
+  const listaCuentas=todas.map(k=>{ const cu=getAccountCurrency(k), v=saldos[k]||0; return `<label class="chk"><input type="checkbox" ${selActual.includes(k)?'checked':''} onchange="hgToggleCuenta('${escapeHtml(k).replace(/'/g,"\\'")}',this.checked)"><span style="flex:1">${escapeHtml(accLabel(k))}</span><b style="font-family:var(--mono)">${M(gsFmt(v,cu))}</b></label>`; }).join('');
+  const cabecera=`<div class="hg-box">
+    <div style="font-size:11px;letter-spacing:.05em;color:var(--text3);text-transform:uppercase">Tus ahorros podrían cubrir (todos tus gastos)</div>
+    <div style="font-family:var(--mono);font-size:40px;font-weight:700;color:${col(A.gen.meses)};margin:4px 0">${hgFmtMeses(A.gen.meses)}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.5">${A.gen.meses===null?'Aún no hay gastos de meses completos para calcular el promedio.':M(fmtS(A.gen.ahorro))+' de las cuentas elegidas ÷ '+M(fmtS(A.gen.gasto))+' de gasto mensual promedio (últimos '+A.gen.nMeses+' mes'+(A.gen.nMeses===1?'':'es')+' completos, con tarjetas)'}</div>
+    ${fila('Todos tus gastos',A.gen,M(fmtS(A.gen.gasto))+' al mes')}
+    ${fila('Solo gastos esenciales',A.esen,M(fmtS(A.esen.gasto))+' al mes')}
+    ${fila('Solo Hogar',A.hog,M(fmtS(A.hog.gasto))+' al mes (equivalente) · con las cuentas de “Solo Hogar”')}
+    <div style="font-size:11px;color:var(--text3)">La barra completa equivale a 12 meses. Supone que dejas de recibir ingresos.</div></div>`;
+  const cuentasBox=`<div class="hg-box"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="hg-tab ${HG.selModo==='general'?'on':''}" onclick="HG.selModo='general';renderHogar()">Cuentas para gastos generales</button><button class="hg-tab ${HG.selModo==='hogar'?'on':''}" onclick="HG.selModo='hogar';renderHogar()">Cuentas para Solo Hogar</button></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;line-height:1.5">Marca qué cuentas cuentan como ahorro. Por ejemplo, tu “Ahorro” para los gastos generales y tu “Ahorro Hogar” para Solo Hogar. Las cuentas en dólares se convierten con el tipo de cambio del app.</div>
+    ${listaCuentas}<div style="display:flex;border-top:1px solid var(--border);padding-top:8px;margin-top:6px;font-size:13px"><span style="flex:1">Contado: ${selActual.length} de ${todas.length} cuentas</span><b>${M(fmtS(hgAhorroTotal(HG.selModo)))}</b></div>
+    <div style="margin-top:10px"><button class="btn" onclick="hgModalEsenciales()">Elegir categorías esenciales</button></div></div>`;
+  // Proyección 6 meses
+  const mk0=mesActualKey(), meses=[1,2,3,4,5,6].map(i=>hgAdd(mk0,i));
+  let tabla='';
+  if(!cs.length && !hgBolsas().length) tabla='<div style="font-size:12px;color:var(--text3)">Agrega conceptos para ver la proyección.</div>';
+  else {
+    const tot=meses.map(()=>0);
+    const filas=cs.map(c=>{
+      const vals=meses.map((mk,j)=>{ const v=gsPen(hgProyMonto(c,mk),hgCur(c)); tot[j]+=v; return v; });
+      const f=hgFrec(c);
+      return `<tr><td>${escapeHtml(c.nombre)}${f>1?` <span style="font-size:11px;color:var(--accent)">· ${HG_FREC_ETQ[f]||'cada '+f+' meses'}</span>`:''}</td>${vals.map(v=>`<td style="${f>1&&v>0?'color:var(--amber)':''}">${v>0?numFmt(v):'—'}</td>`).join('')}</tr>`;
+    }).join('')+hgBolsas().map(b=>{
+      const v=gsPen(hgBolsaEquiv(b),hgBolsaCur(b)); meses.forEach((_,j)=>{ tot[j]+=v; });
+      return `<tr><td>${escapeHtml(b.nombre)} <span style="font-size:11px;color:var(--accent)">· promedio real</span></td>${meses.map(()=>`<td>${numFmt(v)}</td>`).join('')}</tr>`;
+    }).join('');
+    const suma=tot.reduce((a,b)=>a+b,0);
+    tabla=`<div style="overflow-x:auto"><table class="hg-tbl"><thead><tr><th>Concepto</th>${meses.map(mk=>`<th>${hgMesNombre(mk,true)} ${mk.slice(2,4)}</th>`).join('')}</tr></thead><tbody>${filas}<tr style="font-weight:700"><td>Total</td>${tot.map(v=>`<td>${numFmt(v)}</td>`).join('')}</tr></tbody></table></div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:13px"><span>Total 6 meses: <b>${M(fmtS(suma))}</b></span><span>Promedio de estos 6 meses: <b>${M(fmtS(suma/6))}</b></span><span>Equivalente mensual (prorrateado): <b>${M(fmtS(hgEquivTotalPen()))}</b></span></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">Fijos: último monto pagado. Variables: promedio de los últimos 3 pagos (mezclado con el mismo mes del año pasado si existe). Naranja = pago que no es mensual. No incluye reajustes de alquiler: edita el monto cuando cambie.</div>`;
+  }
+  return cabecera+cuentasBox+`<div class="hg-box"><b>Proyección del Hogar · próximos 6 meses</b><div style="margin-top:10px">${tabla}</div></div>`;
+}
+function hgToggleCuenta(k,on){
+  const h=hgEnsure(); const cur=hgAhorroSel(HG.selModo).slice();
+  const i=cur.indexOf(k); if(on&&i<0) cur.push(k); if(!on&&i>=0) cur.splice(i,1);
+  h.ahorroSel[HG.selModo]=cur; saveState(); renderHogar();
+}
+function hgModalEsenciales(){
+  const h=hgEnsure(), cats=Object.keys(getAllCategorias());
+  _abrirModalDin('hg-esen-ov',`<div class="hg-form">${hgModalHead('Categorías esenciales','hg-esen-ov')}
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:6px">Los gastos de estas categorías cuentan como esenciales en el escenario “Solo gastos esenciales”.</div>
+    ${cats.map(k=>`<label class="chk"><input type="checkbox" class="hgesen" value="${escapeHtml(k)}" ${h.esenciales.includes(k)?'checked':''}>${escapeHtml(k)}</label>`).join('')}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" onclick="_cerrarModalDin('hg-esen-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgGuardarEsenciales()">Guardar</button></div></div>`,420);
+}
+function hgGuardarEsenciales(){
+  hgEnsure().esenciales=[...document.querySelectorAll('.hgesen:checked')].map(e=>e.value);
+  saveState(); _cerrarModalDin('hg-esen-ov'); renderHogar();
+}
+
+// ══════════════════════════════════════════════════════
+//  CONEXIONES: Calendario y Resumen
+// ══════════════════════════════════════════════════════
+// Vencimientos de conceptos SIN enlace (los enlazados ya salen por Pagos frecuentes)
+function getOcurrenciasHogarMes(year,month){
+  const out=[]; const mk=year+'-'+String(month+1).padStart(2,'0');
+  hgConceptos().forEach(c=>{
+    if(hgPF(c)) return;
+    if(!hgAplica(c,mk)) return;
+    if(hgIdx(mk)<hgIdx(c.mesBase||mk) && hgFrec(c)>1) { /* meses anteriores a la base también valen */ }
+    const hecho=!!hgHist(c)[mk];
+    out.push({fecha:mk+'-'+String(hgDia(c,mk)).padStart(2,'0'),event:{id:'auto-hg-'+c.id+'-'+mk,titulo:c.nombre,tipo:'pf_gasto',auto:true,origenPage:'hogar',hecho:hecho,icono:hecho?'✅':'🏡'}});
+  });
+  return out;
+}
+function wxConectado(){
+  const el=document.getElementById('wx-conectado-body'); if(!el) return;
+  const hoy=new Date(), y=hoy.getFullYear(), m=hoy.getMonth(), diaHoy=hoy.getDate();
+  let pf=[]; try{ pf=gsPagosConocidos(y,m,diaHoy); }catch(e){ pf=[]; }
+  const pfPen=pf.reduce((s,p)=>s+(p.pen||0),0);
+  const hg=hgResumenMes(mesActualKey());
+  const hgPend=hg.pend.filter(p=>!hgPF(p.c)).reduce((s,p)=>s+gsPen(p.monto,hgCur(p.c)),0);
+  const porPagar=pfPen+hgPend;
+  let libre=null; try{ const d=gsDisponible(); libre=d.libreCuentas.pen+gsPen(d.libreCuentas.usd,'USD')-porPagar; }catch(e){}
+  const A=hgAguante();
+  const cls=A.gen.meses===null?'var(--text3)':(A.gen.meses<3?'var(--red,#f05c5c)':(A.gen.meses<6?'var(--amber)':'var(--green)'));
+  el.innerHTML=wxFila('Por pagar este mes',M(fmtS(porPagar)))
+    +wxFila('Libre después de pagar',libre===null?'—':M((libre<0?'-':'')+fmtS(libre)),libre!==null&&libre<0?'var(--red,#f05c5c)':'')
+    +wxFila('Tus ahorros cubren',A.gen.meses===null?'—':hgFmtMeses(A.gen.meses),cls)
+    +`<div style="font-size:11px;color:var(--text3);line-height:1.5;padding-top:8px">Incluye pagos frecuentes y conceptos del hogar pendientes; la parte de tarjetas ya está descontada en “libre”. Las cuentas de ahorro se eligen en Hogar → Proyección y aguante.</div>`;
+}
+Object.assign(DASHBOARD_WIDGET_DEFS,{'wx-conectado':{label:'🧭 Por pagar y aguante',size:'medium',shell:()=>wxShell('wx-conectado','🧭 Por pagar y aguante',"showPage('hogar');HG.tab='proyeccion';renderHogar()",'Ver proyección y aguante →')}});
+
+// ══════════════════════════════════════════════════════
+//  🛒 COMPRAS Y CONSUMOS DEL HOGAR — gastos sin fecha fija (supermercado,
+//  farmacia, limpieza…). Cada "bolsa" tiene un PRESUPUESTO MENSUAL y recibe
+//  compras sueltas (la semana va de lunes a domingo). Cada compra crea su
+//  gasto en Movimientos (o su consumo en la tarjeta).
+//  Datos: state.hogar.bolsas[{id,nombre,presupuestoMes,moneda,cat,pagarCon,archivado}]
+//         state.hogar.compras[{id,bid,fecha,monto,nota,movId|consumoId,tid}]
+// ══════════════════════════════════════════════════════
+function _hgRnd(){ return '-'+Math.random().toString(36).slice(2,6); }
+function hgBolsas(){ return hgEnsure().bolsas.filter(b=>!b.archivado); }
+function hgBolsaCur(b){ return b.moneda==='USD'?'USD':'PEN'; }
+function hgBolsaFmt(v,b){ return gsFmt(v,hgBolsaCur(b)); }
+function hgComprasDe(b){ return hgEnsure().compras.filter(x=>x.bid===b.id); }
+function hgIsoDe(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function hgLunes(iso){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()-((d.getDay()+6)%7)); return hgIsoDe(d); }
+function hgSumaDias(iso,n){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return hgIsoDe(d); }
+function hgGastoRango(b,ini,fin){ return hgComprasDe(b).reduce((s,x)=>(x.fecha>=ini&&x.fecha<=fin)?s+(Number(x.monto)||0):s,0); }
+function hgGastoMesBolsa(b,mk){ return hgComprasDe(b).reduce((s,x)=>String(x.fecha||'').slice(0,7)===mk?s+(Number(x.monto)||0):s,0); }
+function hgDiasMes(mk){ const [y,m]=mk.split('-').map(Number); return new Date(y,m,0).getDate(); }
+function hgGuiaSemanal(b,mk){ return (Number(b.presupuestoMes)||0)*7/hgDiasMes(mk); }
+function hgSemanasDelMes(mk){
+  const D=hgDiasMes(mk), ult=mk+'-'+String(D).padStart(2,'0'); let ini=hgLunes(mk+'-01'); const out=[];
+  while(ini<=ult){ out.push({ini,fin:hgSumaDias(ini,6)}); ini=hgSumaDias(ini,7); }
+  return out;
+}
+function hgFmtCorto(iso){ return Number(iso.slice(8,10))+' '+MONTHS[Number(iso.slice(5,7))-1].slice(0,3).toLowerCase(); }
+// Promedio de las últimas 4 semanas completas (lunes-domingo) antes de la actual
+function hgPromSemanal(b){
+  const lun=hgLunes(todayISO()); let s=0;
+  for(let i=1;i<=4;i++){ const ini=hgSumaDias(lun,-7*i); s+=hgGastoRango(b,ini,hgSumaDias(ini,6)); }
+  return s/4;
+}
+// Lo que cuenta cada mes para proyección/aguante: promedio real de los últimos 3 meses con gasto; si no hay, el presupuesto
+function hgBolsaEquiv(b){
+  const mk0=mesActualKey(), prev=[1,2,3].map(i=>hgGastoMesBolsa(b,hgAdd(mk0,-i))).filter(v=>v>0);
+  if(prev.length) return prev.reduce((s,v)=>s+v,0)/prev.length;
+  return Number(b.presupuestoMes)||hgGastoMesBolsa(b,mk0)||0;
+}
+function hgBolsaColor(p){ return p>=100?'var(--red,#f05c5c)':(p>=80?'var(--amber)':'var(--green)'); }
+
+function hgTarjetaBolsa(b,mk){
+  const gasto=hgGastoMesBolsa(b,mk), pres=Number(b.presupuestoMes)||0, pct=pres>0?gasto/pres*100:0;
+  const hoy=todayISO(), lun=hgLunes(hoy), sem=hgGastoRango(b,lun,hgSumaDias(lun,6)), guia=hgGuiaSemanal(b,mk);
+  return `<div class="hg-card" role="button" tabindex="0" onclick="hgAbrirBolsa('${b.id}')" onkeydown="if(event.key==='Enter')hgAbrirBolsa('${b.id}')" aria-label="Abrir ${escapeHtml(b.nombre)}">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:600;flex:1 1 auto">${escapeHtml(b.nombre)}</span><span class="hg-chip">Presupuesto mensual</span></div>
+    <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-family:var(--mono);font-size:22px;font-weight:600">${M(hgBolsaFmt(gasto,b))}</span><span style="font-size:12px;color:var(--text3)">${pres>0?'de '+M(hgBolsaFmt(pres,b)):'sin presupuesto'}</span></div>
+    ${pres>0?`<div class="hg-bar-in" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${Math.min(100,pct).toFixed(1)}%;background:${hgBolsaColor(pct)}"></div></div><div style="font-size:12px;color:${hgBolsaColor(pct)};font-weight:600">${pct.toFixed(0)}% usado · ${gasto<=pres?'quedan '+M(hgBolsaFmt(pres-gasto,b)):'te pasaste por '+M(hgBolsaFmt(gasto-pres,b))}</div>`:''}
+    <div style="font-size:12px;color:var(--text2)">Esta semana (lun–dom): <b>${M(hgBolsaFmt(sem,b))}</b>${pres>0?' · guía '+M(hgBolsaFmt(guia,b)):''}</div>
+    <div style="display:flex;justify-content:flex-end"><button class="btn" onclick="event.stopPropagation();hgModalCompra('${b.id}')">+ Compra</button></div></div>`;
+}
+function hgHtmlCompras(){
+  const bs=hgBolsas(), mk=HG.mk||mesActualKey();
+  let h=`<div class="hg-sec">🛒 Compras y consumos<small>presupuesto mensual · compras sueltas por semana</small></div>`;
+  if(!bs.length) return h+`<div class="hg-box" style="font-size:13px;line-height:1.6;color:var(--text2)">Para gastos que no tienen fecha fija —supermercado, farmacia, limpieza— crea un presupuesto mensual y ve anotando cada compra. Verás cuánto llevas en el mes y en cada semana (lunes a domingo).<div style="margin-top:10px"><button class="btn btn-primary" onclick="hgModalBolsa()">+ Crear presupuesto (ej. Supermercado)</button></div></div>`;
+  return h+`<div class="hg-grid">${bs.map(b=>hgTarjetaBolsa(b,mk)).join('')}</div><div style="margin-bottom:18px"><button class="btn" onclick="hgModalBolsa()">+ Otro presupuesto</button></div>`;
+}
+function hgAbrirBolsa(id){ HG.vista='bolsa'; HG.bid=id; renderHogar(); window.scrollTo({top:0}); }
+function hgHtmlBolsa(b){
+  const mk=HG.mk||mesActualKey(), cur=hgBolsaCur(b), F=v=>M(hgBolsaFmt(v,b));
+  const gasto=hgGastoMesBolsa(b,mk), pres=Number(b.presupuestoMes)||0, pct=pres>0?gasto/pres*100:0;
+  const hoy=todayISO(), esActual=(mk===mesActualKey()), lun=hgLunes(hoy), sem=hgGastoRango(b,lun,hgSumaDias(lun,6)), guia=hgGuiaSemanal(b,mk);
+  const D=hgDiasMes(mk), diaHoy=Number(hoy.slice(8,10)), restDias=Math.max(1,D-diaHoy+1);
+  const ant=hgGastoMesBolsa(b,hgAdd(mk,-1)), vAnt=ant>0?{dv:gasto-ant,pct:(gasto-ant)/ant*100,up:gasto>=ant}:null;
+  let aviso='';
+  if(pres>0){
+    if(gasto>pres) aviso=`<div class="hg-alert"><b style="color:var(--amber)">Te pasaste</b> del presupuesto de ${hgMesNombre(mk)} por ${F(gasto-pres)}.</div>`;
+    else if(esActual && diaHoy>=5 && gasto>0){ const proy=gasto/diaHoy*D; if(proy>pres*1.05) aviso=`<div class="hg-alert"><b style="color:var(--amber)">Ojo con el ritmo</b> · A este paso cerrarías el mes en ≈ ${F(proy)} (presupuesto ${F(pres)}). Te conviene no pasar de ≈ ${F((pres-gasto)/restDias*7)} por semana lo que queda.</div>`; }
+  }
+  const semanas=hgSemanasDelMes(mk).map((w,i)=>{
+    const ini=w.ini<mk+'-01'?mk+'-01':w.ini, fin=w.fin>mk+'-'+String(D).padStart(2,'0')?mk+'-'+String(D).padStart(2,'0'):w.fin;
+    const t=hgGastoRango(b,ini,fin), n=hgComprasDe(b).filter(x=>x.fecha>=ini&&x.fecha<=fin).length;
+    const actual=(hoy>=w.ini&&hoy<=w.fin), parcial=(ini!==w.ini||fin!==w.fin);
+    const dif=pres>0&&!parcial&&guia>0&&w.ini<=hoy?(t-guia)/guia*100:null;
+    return `<tr class="${actual?'hl':''}"><td>Sem ${i+1} · ${hgFmtCorto(ini)}–${hgFmtCorto(fin)}${actual?' <span class="hg-chip az">hoy</span>':''}${parcial?' <span style="font-size:11px;color:var(--text3)">(parcial)</span>':''}</td><td>${n}</td><td>${hgBolsaFmt(t,b)}</td><td>${pres>0&&!parcial?hgBolsaFmt(guia,b):'—'}</td><td class="${dif===null?'hg-eq':(dif>0?'hg-up':'hg-dn')}">${dif===null?'—':(dif>0?'▲ ':'▼ ')+Math.abs(dif).toFixed(0)+'%'}</td></tr>`;
+  }).join('');
+  const compras=hgComprasDe(b).filter(x=>String(x.fecha||'').slice(0,7)===mk).sort((a,c)=>(c.fecha||'').localeCompare(a.fecha||''));
+  const lista=compras.length?compras.map(x=>`<tr><td>${x.fecha.slice(8,10)}/${x.fecha.slice(5,7)}${x.nota?' · <span style="color:var(--text2)">'+escapeHtml(x.nota)+'</span>':''}</td><td>${hgBolsaFmt(x.monto,b)}</td><td style="width:1%;white-space:nowrap"><button class="btn" onclick="hgModalCompra('${b.id}','${x.id}')" aria-label="Editar compra">✎</button></td></tr>`).join(''):'<tr><td colspan="3" style="text-align:left;color:var(--text3)">Aún no hay compras en este mes.</td></tr>';
+  const meses=[5,4,3,2,1,0].map(i=>hgAdd(mk,-i)), vals=meses.map(m=>hgGastoMesBolsa(b,m));
+  const hist=meses.map((m,i)=>{ const v=i>0&&vals[i-1]>0?{pct:(vals[i]-vals[i-1])/vals[i-1]*100,up:vals[i]>=vals[i-1]}:null; return `<tr class="${m===mk?'hl':''}"><td>${hgMesNombre(m)}</td><td>${hgBolsaFmt(vals[i],b)}</td><td>${pres>0?(vals[i]/pres*100).toFixed(0)+'%':'—'}</td><td class="${hgVarCls(v)}">${v?hgVarTxt(v):'—'}</td></tr>`; }).join('');
+  return `<div class="hg-wrap"><div class="hg-head"><button class="btn" onclick="hgVolver()">‹ Hogar</button><h1>${escapeHtml(b.nombre)}</h1>
+    <button class="btn" onclick="hgModalBolsa('${b.id}')">Editar presupuesto</button><button class="btn btn-primary" onclick="hgModalCompra('${b.id}')">+ Compra</button></div>
+    <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 6px;width:fit-content;margin-bottom:14px"><button class="month-btn" onclick="hgMes(-1)" aria-label="Mes anterior">‹</button><span style="min-width:130px;text-align:center;font-weight:600;font-size:14px">${hgMesNombre(mk)}</span><button class="month-btn" onclick="hgMes(1)" aria-label="Mes siguiente">›</button></div>
+    ${aviso}
+    <div class="hg-kpis">
+      <div class="hg-kpi"><div class="l">Gastado en el mes</div><div class="v">${F(gasto)}</div><div class="s">${pres>0?pct.toFixed(0)+'% de '+F(pres):'Sin presupuesto definido'}</div></div>
+      <div class="hg-kpi"><div class="l">${gasto>pres&&pres>0?'Excedido':'Te queda'}</div><div class="v" style="color:${pres>0?hgBolsaColor(pct):'inherit'}">${pres>0?F(Math.abs(pres-gasto)):'—'}</div><div class="s">${pres>0&&esActual&&gasto<pres?'≈ '+F((pres-gasto)/restDias)+' por día hasta fin de mes':' '}</div></div>
+      <div class="hg-kpi"><div class="l">Esta semana (lun–dom)</div><div class="v">${F(sem)}</div><div class="s">${pres>0?'Guía semanal '+F(guia):' '}</div></div>
+      <div class="hg-kpi"><div class="l">Promedio semanal</div><div class="v">${F(hgPromSemanal(b))}</div><div class="s">Últimas 4 semanas completas</div></div>
+      <div class="hg-kpi"><div class="l">Vs mes anterior</div><div class="v ${hgVarCls(vAnt)}">${vAnt?hgVarTxt(vAnt):'—'}</div><div class="s">${ant>0?'antes '+F(ant):'Sin datos del mes anterior'}</div></div></div>
+    <div class="hg-box"><div class="hg-sec" style="margin-top:0">Semana por semana<small>lunes a domingo</small></div><div style="overflow-x:auto"><table class="hg-tbl"><thead><tr><th>Semana</th><th>Compras</th><th>Gastado</th><th>Guía</th><th>Vs guía</th></tr></thead><tbody>${semanas}</tbody></table></div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">La guía es el presupuesto repartido en semanas (${pres>0?F(guia):'—'}). Una semana que cruza de mes se muestra parcial: cada compra cuenta en el mes de su fecha.</div></div>
+    <div class="hg-box"><div class="hg-sec" style="margin-top:0">Compras de ${hgMesNombre(mk)}<small>${compras.length}</small></div><div style="overflow-x:auto"><table class="hg-tbl"><tbody>${lista}</tbody></table></div></div>
+    <div class="hg-box"><div class="hg-sec" style="margin-top:0">Últimos 6 meses</div><div style="overflow-x:auto"><table class="hg-tbl"><thead><tr><th>Mes</th><th>Gastado</th><th>% del presupuesto</th><th>Cambio</th></tr></thead><tbody>${hist}</tbody></table></div></div></div>`;
+}
+
+function hgModalBolsa(id){
+  const h=hgEnsure(), b=id?h.bolsas.find(x=>x.id===id):null;
+  const d=b||{nombre:'',presupuestoMes:'',moneda:'PEN',cat:'',pagarCon:''};
+  const catDef=b?d.cat:(Object.keys(getAllCategorias()).find(k=>/comida|aliment|super/i.test(k))||'');
+  _abrirModalDin('hg-bolsa-ov',`<div class="hg-form">${hgModalHead(b?'Editar presupuesto':'Nuevo presupuesto del hogar','hg-bolsa-ov')}
+    <label for="hgb-nombre">Nombre</label><input id="hgb-nombre" value="${escapeHtml(d.nombre)}" placeholder="🛒 Supermercado">
+    <div class="two"><div><label for="hgb-pres">Presupuesto mensual</label><input id="hgb-pres" type="number" step="0.01" min="0" inputmode="decimal" value="${escapeHtml(String(d.presupuestoMes||''))}"></div>
+    <div><label for="hgb-mon">Moneda</label><select id="hgb-mon"><option value="PEN" ${d.moneda!=='USD'?'selected':''}>Soles</option><option value="USD" ${d.moneda==='USD'?'selected':''}>Dólares</option></select></div></div>
+    <label for="hgb-pagar">Se paga normalmente con</label><select id="hgb-pagar">${hgOptsPagar(d.pagarCon)}</select>
+    <label for="hgb-cat">Categoría del gasto</label><select id="hgb-cat">${hgOptsCat(catDef)}</select>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">${b?`<button class="config-action-btn danger" onclick="hgEliminarBolsa('${b.id}')">Eliminar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('hg-bolsa-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgGuardarBolsa('${b?b.id:''}')">Guardar</button></div></div>`,500);
+}
+function hgGuardarBolsa(id){
+  const h=hgEnsure(), g=i=>(document.getElementById(i)||{}).value;
+  const nombre=(g('hgb-nombre')||'').trim(); if(!nombre){ alert('Escribe un nombre.'); return; }
+  const pres=parseFloat(g('hgb-pres')); if(!(pres>0)){ alert('Escribe el presupuesto mensual.'); return; }
+  let b=id?h.bolsas.find(x=>x.id===id):null;
+  if(!b){ b={id:'hb-'+Date.now()}; h.bolsas.push(b); }
+  Object.assign(b,{nombre,presupuestoMes:pres,moneda:g('hgb-mon')==='USD'?'USD':'PEN',pagarCon:g('hgb-pagar')||'',cat:g('hgb-cat')||''});
+  saveState(); _cerrarModalDin('hg-bolsa-ov'); render(); renderHogar(); toast('Presupuesto guardado');
+}
+function hgEliminarBolsa(id){
+  const h=hgEnsure(), b=h.bolsas.find(x=>x.id===id); if(!b) return;
+  const n=h.compras.filter(x=>x.bid===id).length;
+  if(!confirm('¿Eliminar «'+b.nombre+'»?'+(n?'\n\nSe quitan sus '+n+' compras de esta sección. Los gastos en Movimientos NO se borran.':''))) return;
+  h.bolsas=h.bolsas.filter(x=>x.id!==id); h.compras=h.compras.filter(x=>x.bid!==id);
+  saveState(); _cerrarModalDin('hg-bolsa-ov'); HG.vista='lista'; render(); renderHogar(); toast('Presupuesto eliminado');
+}
+function hgModalCompra(bid,cid){
+  const h=hgEnsure(), bs=hgBolsas();
+  if(!bs.length){ hgModalBolsa(); return; }
+  const k=cid?h.compras.find(x=>x.id===cid):null, b=bs.find(x=>x.id===(k?k.bid:bid))||bs[0];
+  _abrirModalDin('hg-compra-ov',`<div class="hg-form">${hgModalHead(k?'Editar compra':'Registrar compra','hg-compra-ov')}
+    <label for="hgk-b">Presupuesto</label><select id="hgk-b" ${k?'disabled':''} onchange="hgCompraCambio()">${bs.map(x=>`<option value="${x.id}" ${x.id===b.id?'selected':''}>${escapeHtml(x.nombre)}</option>`).join('')}</select>
+    <div class="two"><div><label for="hgk-monto">Monto</label><input id="hgk-monto" type="number" step="0.01" min="0" inputmode="decimal" value="${k?k.monto:''}"></div>
+    <div><label for="hgk-fecha">Fecha</label><input id="hgk-fecha" type="date" value="${k?k.fecha:todayISO()}" ${k&&k.tid?'disabled':''}></div></div>
+    <label for="hgk-nota">Nota (opcional)</label><input id="hgk-nota" value="${k?escapeHtml(k.nota||''):''}" placeholder="Compra semanal, Tottus…">
+    ${k?`<div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.5">${k.movId||k.consumoId?'Al guardar, el gasto en Movimientos también se actualiza.':'Esta compra no tiene gasto en Movimientos.'}</div>`:`<div id="hgk-wpagar"><label for="hgk-pagar">Pagado con</label><select id="hgk-pagar">${hgOptsPagar(b.pagarCon)}</select></div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="hgk-gasto" checked>Crear el gasto en Movimientos (baja el saldo)</label>`}
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">${k?`<button class="config-action-btn danger" onclick="hgBorrarCompra('${k.id}')">Eliminar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('hg-compra-ov')">Cancelar</button><button class="btn btn-primary" onclick="hgGuardarCompra('${k?k.id:''}')">Guardar</button></div></div>`,480);
+}
+function hgCompraCambio(){
+  const b=hgEnsure().bolsas.find(x=>x.id===(document.getElementById('hgk-b')||{}).value), s=document.getElementById('hgk-pagar');
+  if(b&&s) s.innerHTML=hgOptsPagar(b.pagarCon);
+}
+function hgGuardarCompra(cid){
+  const h=hgEnsure(), g=i=>(document.getElementById(i)||{}).value;
+  const monto=parseFloat(g('hgk-monto')), nota=(g('hgk-nota')||'').trim();
+  if(!(monto>0)){ alert('Escribe el monto.'); return; }
+  if(cid){
+    const k=h.compras.find(x=>x.id===cid); if(!k) return;
+    const fecha=k.tid?k.fecha:(g('hgk-fecha')||k.fecha);
+    k.monto=monto; k.nota=nota; k.fecha=fecha;
+    if(k.movId){ const mv=(state.movimientos||[]).find(z=>z.id===k.movId); if(mv){ mv.amount=monto; mv.date=fecha; clearSaldoCache(); } }
+    if(k.consumoId){ const t=getTarjeta(k.tid); if(t) Object.values(t.movs||{}).forEach(arr=>arr.forEach(c=>{ if(c.id===k.consumoId) c.monto=monto; })); }
+    saveState(); _cerrarModalDin('hg-compra-ov'); render(); renderHogar(); toast('Compra actualizada'); return;
+  }
+  const b=h.bolsas.find(x=>x.id===g('hgk-b')); if(!b){ alert('Elige un presupuesto.'); return; }
+  const fecha=g('hgk-fecha')||todayISO(), cur=hgBolsaCur(b), destino=g('hgk-pagar')||b.pagarCon||'';
+  const k={id:'hk-'+Date.now()+_hgRnd(),bid:b.id,fecha,monto,nota};
+  if((document.getElementById('hgk-gasto')||{}).checked){
+    const desc=b.nombre+(nota?' · '+nota:'');
+    if(destino.startsWith('t:')){
+      const t=getTarjeta(destino.slice(2)); if(!t){ alert('Esa tarjeta ya no existe.'); return; }
+      if(!t.movs) t.movs={};
+      const bk=getBillingMonthKey(fecha,t); if(!t.movs[bk]) t.movs[bk]=[];
+      const cons={id:'hg-tcm-'+Date.now()+_hgRnd(),desc,fecha,monto,pagado:false,currency:cur,hora:horaLimaActual()};
+      if(b.cat) cons.cat=b.cat;
+      t.movs[bk].push(cons); k.consumoId=cons.id; k.tid=t.id;
+      logActividad('movimiento',`${desc} — ${cur==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`,{tarjetaId:t.id,monthKey:bk,consumoId:cons.id});
+    } else {
+      const acc=destino.startsWith('c:')?destino.slice(2):destino;
+      if(!acc){ alert('Elige con qué pagaste.'); return; }
+      const mov={id:'hg-cmp-'+Date.now()+_hgRnd(),type:'expense',desc,amount:monto,account:acc,date:fecha,currency:cur};
+      if(b.cat) mov.cat=b.cat;
+      pushMovimiento(mov); k.movId=mov.id;
+      logActividad('movimiento',`${desc} — ${cur==='USD'?'$':'S/'} ${numFmtSigned(monto,2)}`,{movId:mov.id});
+    }
+  }
+  h.compras.push(k);
+  saveState(); _cerrarModalDin('hg-compra-ov'); render(); renderHogar(); toast('Compra registrada');
+}
+function hgBorrarCompra(cid){
+  const h=hgEnsure(), k=h.compras.find(x=>x.id===cid); if(!k) return;
+  const tiene=!!(k.movId||k.consumoId);
+  if(!confirm('¿Eliminar esta compra?'+(tiene?'\n\nTambién se borra su gasto en Movimientos.':''))) return;
+  if(k.movId){ _movimientosBorradosExplicitamente.push(k.movId); state.movimientos=(state.movimientos||[]).filter(m=>m.id!==k.movId); clearSaldoCache(); }
+  if(k.consumoId){ const t=getTarjeta(k.tid); if(t) Object.keys(t.movs||{}).forEach(bk=>{ t.movs[bk]=t.movs[bk].filter(c=>c.id!==k.consumoId); }); }
+  h.compras=h.compras.filter(x=>x.id!==cid);
+  saveState(); _cerrarModalDin('hg-compra-ov'); render(); renderHogar(); toast('Compra eliminada');
+}
+
 function renderWidgetsExtra(){
-  [wxGastosMes,wxGastoCategoria,wxGastosPorMes,wxProximosPagos,wxComprasCamino,wxAprobaciones,wxDolares,wxAhorros,wxRacha,wxDeudaEvolucion].forEach(f=>{ try{ f(); }catch(e){ console.warn('Widget omitido por error ('+f.name+'):',e&&e.message); } });
+  [wxGastosMes,wxGastoCategoria,wxGastosPorMes,wxProximosPagos,wxComprasCamino,wxAprobaciones,wxDolares,wxAhorros,wxRacha,wxDeudaEvolucion,wxConectado].forEach(f=>{ try{ f(); }catch(e){ console.warn('Widget omitido por error ('+f.name+'):',e&&e.message); } });
 }
 function wxGastosMes(){
   const el=document.getElementById('wx-gastos-mes-body'); if(!el) return;
@@ -21159,12 +22119,13 @@ function confirmarDeudaPago(){
   const montoMovido = (!isNaN(parcial)&&parcial>0) ? parcial : d.monto;
   if(!fechaPago){alert(esYoDebo?'Selecciona la fecha de pago.':'Selecciona la fecha de cobro.');return;}
 
+  const _movId='deu-pay-'+Date.now();
   const esParcial = !isNaN(parcial) && parcial>0 && parcial < d.monto - 0.004;
   if(!isNaN(parcial) && parcial > d.monto + 0.004){ alert('El monto parcial no puede ser mayor que la deuda ('+d.monto.toFixed(2)+').'); return; }
   if(esParcial){
     // Pago parcial: la deuda sigue pendiente por el saldo que falta
     if(!Array.isArray(d.pagosParciales)) d.pagosParciales=[];
-    d.pagosParciales.push({fecha:fechaPago,monto:parcial,cuenta});
+    d.pagosParciales.push({fecha:fechaPago,monto:parcial,cuenta,movId:_movId});
     d.monto = Math.round((d.monto-parcial)*100)/100;
     if(Array.isArray(d.items)) d.items.push({id:'pp'+Date.now(),desc:(esYoDebo?'Pago parcial':'Cobro parcial'),fecha:fechaPago,monto:-parcial});
   } else {
@@ -21172,6 +22133,7 @@ function confirmarDeudaPago(){
     d.status    = 'pagado';
     d.fechaPago = fechaPago;
     d.cuentaPago= cuenta;
+    d.movPagoId = _movId;
   }
 
   // Si es una deuda que YO debo, el dinero SALE de la cuenta (se resta);
@@ -21184,7 +22146,7 @@ function confirmarDeudaPago(){
   if(!state.movimientos) state.movimientos=[];
   const currency = d.currency||'PEN';
   pushMovimiento({
-    id:'deu-pay-'+Date.now(),
+    id:_movId,
     type: esYoDebo?'expense':'income',
     desc:(esYoDebo?'Pago deuda — ':'Cobro préstamo — ')+d.nombre,
     amount:montoMovido,
@@ -21204,12 +22166,14 @@ function revertDeudaPago(id){
   if(!confirm(`¿Revertir ${esYoDebo?'el pago':'el cobro'} de ${d.nombre}? Se ${esYoDebo?'devolverá':'descontará'} el monto ${esYoDebo?'a':'de'} la cuenta ${d.cuentaPago}.`)) return;
   // Remove payment movements tied to this debt (match by desc+date for safety)
   const tipoMov = esYoDebo?'expense':'income';
-  const movAQuitar=(state.movimientos||[]).filter(m=>m.desc===desc&&m.date===d.fechaPago&&m.type===tipoMov);
+  const _porId=d.movPagoId?(state.movimientos||[]).filter(m=>m.id===d.movPagoId):[];
+  const movAQuitar=_porId.length?_porId:(state.movimientos||[]).filter(m=>m.desc===desc&&m.date===d.fechaPago&&m.type===tipoMov);
   _movimientosBorradosExplicitamente.push(...movAQuitar.map(m=>m.id).filter(Boolean));
-  state.movimientos=(state.movimientos||[]).filter(m=>!(m.desc===desc&&m.date===d.fechaPago&&m.type===tipoMov));
+  const _quitar=new Set(movAQuitar);
+  state.movimientos=(state.movimientos||[]).filter(m=>!_quitar.has(m));
   // Revertir el efecto en la cuenta (si salió, se devuelve; si entró, se quita)
   state.cuentas[d.cuentaPago]=(state.cuentas[d.cuentaPago]||0)+(esYoDebo?d.monto:-d.monto);
-  d.status='pendiente'; d.fechaPago=null; d.cuentaPago=null;
+  d.status='pendiente'; d.fechaPago=null; d.cuentaPago=null; d.movPagoId=null;
   saveState(); renderDeudas(); render();
 }
 
@@ -24567,6 +25531,7 @@ function getEventOccurrencesForMonth(year, month){
     }
   });
   getOcurrenciasFrecuentesMes(year,month).forEach(o=>occurrences.push(o));
+  try{ getOcurrenciasHogarMes(year,month).forEach(o=>occurrences.push(o)); }catch(e){ console.warn('Hogar omitido en el calendario:', e&&e.message); }
   return occurrences;
 }
 
@@ -28987,6 +29952,36 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.10.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Hogar → 🛒 Compras y consumos: crea un presupuesto mensual (ej. Supermercado) y anota cada compra suelta; cada compra crea su gasto en Movimientos o en la tarjeta.",
+   "Detalle con semana por semana (lunes a domingo), guía semanal, promedio de las últimas 4 semanas, ritmo del mes y comparación con meses anteriores.",
+   "Se suma al total de Hogar, a la proyección de 6 meses y a los meses que aguantas (promedio real de los últimos 3 meses).",
+   "Revisar datos avisa de compras sin presupuesto o sin su gasto en Finanzas; renombrar o eliminar una cuenta también considera los presupuestos."
+  ]
+ },
+ {
+  "v": "v2.9.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Revisar datos detecta pagos de Servicios marcados sin su ingreso en Finanzas (y al revés) y los corrige con un botón.",
+   "Las deudas guardan el enlace al movimiento de su pago; al revertir se borra exactamente ese movimiento.",
+   "Avisa si una deuda figura como pagada sin movimiento en Finanzas."
+  ]
+ },
+ {
+  "v": "v2.9.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Nueva sección 🏡 Hogar (menú Otros): conceptos del hogar con historial, variación contra el mes anterior, gráfico con detalle al pasar el mouse y pagos que no son mensuales.",
+   "Hogar se enlaza a Pagos frecuentes (el pago se registra en ambos lados), crea el gasto en Movimientos y aparece en el Calendario.",
+   "Proyección de 6 meses y cuántos meses aguantas con las cuentas de ahorro que elijas.",
+   "Widget “Por pagar y aguante” en el Resumen.",
+   "Revisar datos avisa de movimientos repetidos, fechas y montos raros y gastos sin categoría."
+  ]
+ },
  {
   "v": "v2.8.2",
   "fecha": "12/11/26",
