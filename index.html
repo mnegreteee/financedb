@@ -3637,22 +3637,22 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <!-- ══ SECCIÓN GLP ══ -->
   <div id="fuel-section-glp">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">🔵 Gas Licuado de Petróleo (GLP)</div>
-      <button class="btn btn-primary" style="font-size:11px;padding:5px 14px" onclick="addFuelRow('glp')">+ Nueva recarga GLP</button>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)" id="fuel-glp-titulo">🔵 Gas Licuado de Petróleo (GLP)</div>
+      <button class="btn btn-primary" id="fuel-glp-addbtn" style="font-size:11px;padding:5px 14px" onclick="addFuelRow('glp')">+ Nueva recarga GLP</button>
     </div>
     <div class="fuel-summary" id="fs-glp">
       <div class="fuel-sum-card" style="border-top-color:var(--accent)"><div class="fuel-sum-label">KM Totales</div><div class="fuel-sum-val" id="fs-glp-km" style="color:var(--accent)">—</div></div>
-      <div class="fuel-sum-card" style="border-top-color:var(--teal)"><div class="fuel-sum-label">KxG Promedio</div><div class="fuel-sum-val" id="fs-glp-kxg" style="color:var(--teal)">—</div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--teal)"><div class="fuel-sum-label" id="fuel-glp-l-kxg">KxG Promedio</div><div class="fuel-sum-val" id="fs-glp-kxg" style="color:var(--teal)">—</div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--amber)"><div class="fuel-sum-label">Total Gastado</div><div class="fuel-sum-val" id="fs-glp-gasto" style="color:var(--amber)">—</div></div>
-      <div class="fuel-sum-card" style="border-top-color:var(--purple)"><div class="fuel-sum-label">Galones Total</div><div class="fuel-sum-val" id="fs-glp-gal" style="color:var(--purple)">—</div></div>
-      <div class="fuel-sum-card" style="border-top-color:var(--green)"><div class="fuel-sum-label">PxG Actual</div><div class="fuel-sum-val" id="fs-glp-pxg" style="color:var(--green)">—</div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--purple)"><div class="fuel-sum-label" id="fuel-glp-l-gal">Galones Total</div><div class="fuel-sum-val" id="fs-glp-gal" style="color:var(--purple)">—</div></div>
+      <div class="fuel-sum-card" style="border-top-color:var(--green)"><div class="fuel-sum-label" id="fuel-glp-l-pxg">PxG Actual</div><div class="fuel-sum-val" id="fs-glp-pxg" style="color:var(--green)">—</div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--red)"><div class="fuel-sum-label">Costo por km</div><div class="fuel-sum-val" id="fs-glp-ckm" style="color:var(--red)">—</div><div class="fuel-sum-sub" id="fs-glp-ckm-sub"></div></div>
       <div class="fuel-sum-card" style="border-top-color:var(--teal)"><div class="fuel-sum-label">Próxima recarga</div><div class="fuel-sum-val" id="fs-glp-prox" style="color:var(--teal);font-size:15px">—</div><div class="fuel-sum-sub" id="fs-glp-prox-sub"></div></div>
     </div>
     <div class="fuel-chart-wrap">
       <div class="fuel-chart-tabs" id="ftabs-glp">
-        <button class="fuel-chart-tab active" onclick="setFuelChart('glp',0,this)">KxG</button>
-        <button class="fuel-chart-tab" onclick="setFuelChart('glp',1,this)">PxG</button>
+        <button class="fuel-chart-tab active" id="fuel-glp-c-kxg" onclick="setFuelChart('glp',0,this)">KxG</button>
+        <button class="fuel-chart-tab" id="fuel-glp-c-pxg" onclick="setFuelChart('glp',1,this)">PxG</button>
         <button class="fuel-chart-tab" onclick="setFuelChart('glp',2,this)">Total</button>
         <button class="fuel-chart-tab" onclick="setFuelChart('glp',3,this)">KM Diarios</button>
       </div>
@@ -3671,10 +3671,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <table class="fuel-table"><thead><tr>
         <th>F. INICIAL</th><th>F. FINAL</th><th>KM INICIAL</th><th>KM FINAL</th>
         <th>KM USADO</th><th>DT<br><span style="font-size:8px;font-weight:400">(días)</span></th>
-        <th>KM DIARIOS</th><th>GALONES</th>
-        <th>KxG<br><span style="font-size:8px;font-weight:400">(km/gal)</span></th>
-        <th>PxG<br><span style="font-size:8px;font-weight:400">(S/)</span></th>
-        <th>MONTO<br>DIARIO</th><th>TOTAL GLP</th><th>%PxG</th><th>GASTO</th><th></th>
+        <th>KM DIARIOS</th><th id="fuel-glp-th-cant">GALONES</th>
+        <th id="fuel-glp-th-kxg">KxG<br><span style="font-size:8px;font-weight:400">(km/gal)</span></th>
+        <th id="fuel-glp-th-pxg">PxG<br><span style="font-size:8px;font-weight:400">(S/)</span></th>
+        <th>MONTO<br>DIARIO</th><th id="fuel-glp-th">TOTAL GLP</th><th>%PxG</th><th>GASTO</th><th></th>
       </tr></thead><tbody id="fuel-tbody-glp"></tbody></table>
     </div>
     <div id="fuel-cards-glp"></div>
@@ -3684,8 +3684,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <!-- ══ SECCIÓN GASOLINA ══ -->
   <div id="fuel-section-gas" style="display:none">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)">🟡 Gasolina</div>
-      <button class="btn btn-primary" style="font-size:11px;padding:5px 14px" onclick="addFuelRow('gas')">+ Nueva recarga Gasolina</button>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3)" id="fuel-gas-titulo">🟡 Gasolina</div>
+      <button class="btn btn-primary" id="fuel-gas-addbtn" style="font-size:11px;padding:5px 14px" onclick="addFuelRow('gas')">+ Nueva recarga Gasolina</button>
     </div>
     <div class="fuel-summary" id="fs-gas">
       <div class="fuel-sum-card" style="border-top-color:var(--accent)"><div class="fuel-sum-label">KM Totales</div><div class="fuel-sum-val" id="fs-gas-km" style="color:var(--accent)">—</div></div>
@@ -4513,9 +4513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.16.2';
-const APP_VERSION_DATE = '12/11/26 - 23:50'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pestañas de Hogar y Auto igualan siempre al botón estándar (también en celular).';
+const APP_VERSION = 'v2.17.0';
+const APP_VERSION_DATE = '13/11/26 - 00:10'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Combustible GNV y GNV + Gasolina; las recargas usan el nombre del combustible de cada auto.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20394,7 +20394,7 @@ function autoPrestamoCardHTML(v){
 }
 function autoHeroHTML(v){
   const V=autoVehs(), esPr=autoVidPrincipal()===v.id, k=getKmActualVehiculo(v.id), mk=mesActualKey();
-  const ult=['combustibleGlp','combustibleGas'].flatMap(key=>computeFuelRows(autoFA(key,v.id)).filter(r=>r.fFinal&&r.totalGlp!==null).map(r=>({f:r.fFinal,t:r.totalGlp,c:key==='combustibleGlp'?'GLP':'Gasolina'}))).sort((a,b)=>String(a.f).localeCompare(String(b.f))).pop();
+  const ult=['combustibleGlp','combustibleGas'].flatMap(key=>computeFuelRows(autoFA(key,v.id)).filter(r=>r.fFinal&&r.totalGlp!==null).map(r=>({f:r.fFinal,t:r.totalGlp,c:fuelEtq(key==='combustibleGlp'?'glp':'gas',v.id)}))).sort((a,b)=>String(a.f).localeCompare(String(b.f))).pop();
   const e=autoEstadoVeh(v);
   return `<div class="ar-hero"><div class="ar-top"><div class="ar-ic">${escapeHtml(v.icono||'🚗')}</div><div style="flex:1;min-width:150px"><div class="ar-name">${autoDotHTML(v)}<span>${escapeHtml(v.nombre||'Mi auto')}</span>${esPr?'<span class="av-pill">⭐ Principal</span>':''}</div>
     <div class="ar-sub">${[v.placa?escapeHtml(v.placa):'',v.anio?escapeHtml(String(v.anio)):'',v.combustible?escapeHtml(v.combustible):''].filter(Boolean).join(' · ')||'Edita para agregar placa, año y combustible'}</div></div>
@@ -20487,7 +20487,7 @@ function autoModalVeh(id){
   const esPr=!!(v&&autoPrincipal()&&autoPrincipal().id===v.id)||(!v&&V.length===0);
   const f=(i,l,val,ph,tp)=>`<div><label for="${i}">${l}</label><input id="${i}" type="${tp||'text'}" value="${escapeHtml(String(val||''))}" placeholder="${ph||''}" ${tp==='text'||!tp?'autocomplete="off"':''}></div>`;
   const doc=(ic,n,sub,i,val)=>`<div class="av-doc"><div class="ic">${ic}</div><div class="n">${n}<small>${sub}</small></div><input id="${i}" type="date" value="${escapeHtml(String(val||''))}" aria-label="${n}"></div>`;
-  const combs=['GLP','Gasolina','GLP + Gasolina','Diésel','Híbrido','Eléctrico'];
+  const combs=['GLP','GNV','Gasolina','GLP + Gasolina','GNV + Gasolina','Diésel','Híbrido','Eléctrico'];
   _abrirModalDin('auto-veh-ov',`<div class="av-form">
     <div class="av-head"><div class="av-ico" id="av-ico-prev">${escapeHtml(v&&v.icono||'🚗')}</div><div class="t">${v?'Editar auto':'Agregar auto'}<small>${v?escapeHtml(v.nombre||''):'Registra tu vehículo para controlarlo por separado'}</small></div><button class="modal-close" onclick="_cerrarModalDin('auto-veh-ov')" aria-label="Cerrar">✕</button></div>
     <div class="av-sec">Datos del auto</div>
@@ -20514,7 +20514,7 @@ function autoGuardarVeh(id){
   v.nombre=g('av-nom').trim()||'Mi auto'; v.icono=g('av-ico')||'🚗'; v.placa=g('av-placa').trim().toUpperCase(); v.anio=g('av-anio').trim(); v.combustible=g('av-comb');
   v.soatVence=g('av-soat'); v.revVence=g('av-rev'); v.seguroVence=g('av-seg'); v.notas=g('av-notas').trim();
   const c=document.getElementById('av-pr'); if(c&&c.checked){ V.forEach(x=>x.principal=false); v.principal=true; }
-  saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); toast('Auto guardado');
+  saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); try{ fuelAplicarEtiquetas(); renderFuelSection('glp'); renderFuelSection('gas'); }catch(e){} toast('Auto guardado');
 }
 function autoBorrarVeh(id){
   const A=autoEnsure(); A.vehiculos=autoVehs().filter(x=>x.id!==id); A.prestamos.forEach(p=>{ if(p.vid===id) p.vid=''; }); ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(r.vid===id) delete r.vid; })); if(AUTO.vid===id){ AUTO.vid=''; try{ localStorage.removeItem('auto_vid'); }catch(e){} }
@@ -22893,8 +22893,8 @@ let fuelChartIdx = {glp:0, gas:0};
 let fuelChartRango = {glp:'todo', gas:'todo'};
 let fuelVerTodo = {glp:false, gas:false};
 // Vista de recargas: 'tarjetas' (por defecto, como la app anterior) o 'tabla'. Se recuerda en el dispositivo.
-function _fuelEsGnv(t){ return t==='glp' && typeof APP_LITE!=='undefined' && APP_LITE; }
-function _fuelNombre(t){ return t==='glp'?(_fuelEsGnv(t)?'GNV':'GLP'):'Gasolina'; }
+function _fuelEsGnv(t){ return t==='glp' && fuelEtq('glp')==='GNV'; }
+function _fuelNombre(t){ return fuelEtq(t); }
 const _FUEL_VISTA_KEY=((typeof APP_LITE!=='undefined'&&APP_LITE)?'papalite':'miguel')+'_fuel_vista';
 let fuelVista = (()=>{ try{ return JSON.parse(localStorage.getItem(_FUEL_VISTA_KEY))||{glp:'tarjetas', gas:'tarjetas'}; }catch(e){ return {glp:'tarjetas', gas:'tarjetas'}; } })();
 function setFuelVista(type, v){ fuelVista[type]=v; try{ localStorage.setItem(_FUEL_VISTA_KEY, JSON.stringify(fuelVista)); }catch(e){ console.warn('No se pudo guardar la vista:', e&&e.message); } renderFuelSection(type); }
@@ -22916,6 +22916,28 @@ function setFuelRango(type, r){
   renderFuelChart(type, computeFuelRows(state[fuelStateKey(type)]||[]));
 }
 function toggleFuelVerTodo(type){ fuelVerTodo[type]=!fuelVerTodo[type]; renderFuelSection(type); }
+// Etiqueta del combustible según el auto activo: la pestaña "glp" guarda el gas (GLP o GNV) y la "gas" el líquido (Gasolina o Diésel)
+function fuelEtq(t,vid){
+  let c=''; try{ const V=autoVehs(); const v=V.find(x=>x.id===(vid||autoVidAct()))||autoPrincipal(); c=(v&&v.combustible)||''; }catch(e){}
+  if(t==='glp') return /GNV/i.test(c)?'GNV':(/GLP/i.test(c)?'GLP':((typeof APP_LITE!=='undefined'&&APP_LITE)?'GNV':'GLP'));
+  return /di[eé]sel/i.test(c)?'Diésel':'Gasolina';
+}
+function fuelAplicarEtiquetas(){
+  const g=fuelEtq('glp'), d=fuelEtq('gas');
+  const set=(id,t)=>{ const e=document.getElementById(id); if(e) e.textContent=t; };
+  set('ftab-glp','🔵 '+g); set('ftab-gas','🟡 '+d);
+  set('fuel-glp-titulo','🔵 '+(g==='GNV'?'Gas Natural Vehicular (GNV)':'Gas Licuado de Petróleo (GLP)'));
+  set('fuel-glp-addbtn','+ Nueva recarga '+g); set('fuel-glp-th','TOTAL '+g);
+  set('fuel-gas-titulo','🟡 '+d); set('fuel-gas-addbtn','+ Nueva recarga '+d);
+  const m3=g==='GNV', h=(id,t)=>{ const e=document.getElementById(id); if(e) e.innerHTML=t; };
+  set('fuel-glp-l-kxg',m3?'Km/m³ Promedio':'KxG Promedio'); set('fuel-glp-l-gal',m3?'m³ Total':'Galones Total'); set('fuel-glp-l-pxg',m3?'Precio/m³ Actual':'PxG Actual');
+  set('fuel-glp-c-kxg',m3?'Km/m³':'KxG'); set('fuel-glp-c-pxg',m3?'Precio/m³':'PxG');
+  set('fuel-glp-th-cant',m3?'M³':'GALONES');
+  h('fuel-glp-th-kxg',(m3?'Km/m³':'KxG')+'<br><span style="font-size:8px;font-weight:400">('+(m3?'km/m³':'km/gal')+')</span>');
+  h('fuel-glp-th-pxg',(m3?'Px m³':'PxG')+'<br><span style="font-size:8px;font-weight:400">(S/)</span>');
+}
+// Unidad de medida: el GNV se mide en m³; el GLP, la gasolina y el diésel en galones
+function fuelUni(t){ return fuelEtq(t)==='GNV'?'m³':'gal'; }
 let activeFuelType = 'glp'; // currently visible tab
 
 // ── TYPE SWITCH ───────────────────────────────────────
@@ -22982,7 +23004,7 @@ function fuelBotonRegistrar(type, r){
     return `<span style="font-size:10px;color:var(--green)" title="Ya registraste este gasto desde la app">✅ Registrado</span>`;
   }
   const total=r.totalGlp;
-  if(total===null||!(total>0)) return `<span style="font-size:10px;color:var(--text3)" title="Completa galones y precio por galón para poder registrar el gasto">—</span>`;
+  if(total===null||!(total>0)) return `<span style="font-size:10px;color:var(--text3)" title="Completa la cantidad (galones o m³) y el precio para poder registrar el gasto">—</span>`;
   return `<button onclick="openFuelGastoModal('${type}','${r.id}')" style="font-size:10px;padding:3px 8px;white-space:nowrap;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);cursor:pointer">+ Registrar</button>`;
 }
 function desmarcarFuelManual(type, rowId){
@@ -23004,10 +23026,10 @@ function openFuelGastoModal(type, rowId){
   const fecha=r.fFinal||r.fInicial||todayLocalISO();
   fuelGastoCtx={type,rowId,total,fecha};
 
-  const label=type==='glp'?'GLP':'GASOLINA';
+  const label=fuelEtq(type).toUpperCase();
   const fechaLabel=fecha? new Date(fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '';
   document.getElementById('fuel-gasto-title').textContent=`⛽ Registrar gasto — ${label}`;
-  document.getElementById('fuel-gasto-calc').innerHTML=`${fuelFmt(r.galones,2)} galones × S/ ${fuelFmt(r.pxg,2)} = <b>S/ ${fuelFmt(total,2)}</b>`;
+  document.getElementById('fuel-gasto-calc').innerHTML=`${fuelFmt(r.galones,2)} ${fuelUni(type)==='m³'?'m³':'galones'} × S/ ${fuelFmt(r.pxg,2)} = <b>S/ ${fuelFmt(total,2)}</b>`;
   document.getElementById('fuel-gasto-monto').value=total.toFixed(2);
   document.getElementById('fuel-gasto-fecha').value=fecha;
   document.getElementById('fuel-gasto-desc').value=`${label} - ${fechaLabel}`;
@@ -23183,7 +23205,7 @@ function obtenerHistorialKm(){
     if(isNaN(km)||!row.fechaHora) return;
     lecturas.push({km, ts:row.fechaHora, tipo:'manual', origen:row.origen||'web', id:row.id, motivo:row.motivo||''});
   });
-  [['combustibleGlp','GLP'],['combustibleGas','Gasolina']].forEach(([key,label])=>{
+  [['combustibleGlp',fuelEtq('glp')],['combustibleGas',fuelEtq('gas')]].forEach(([key,label])=>{
     autoFA(key).forEach(row=>{
       const km=parseFloat(row.kmFinal);
       if(isNaN(km)||!row.fFinal) return;
@@ -23932,7 +23954,7 @@ function exportarCombustibleExcel(){
     if(g.tipo==='tarjeta'){ const t=getTarjeta(g.tarjetaId); return 'Tarjeta: '+(t?(t.banco+(t.cat?' '+t.cat:'')):''); }
     return 'Registrado aparte'; };
   const hoja=(key, esGas)=>{
-    const gnv=lite && !esGas;
+    const gnv=!esGas && fuelEtq('glp')==='GNV';
     const cab=['F. INICIAL','F. FINAL','KM INICIAL','KM FINAL','KM USADO','DÍAS','KM DIARIOS',
       gnv?'M3':'GALONES', gnv?'KM/M3':'KXG', gnv?'PXM3':'PXG', gnv?'PRECIO SOLO GNV':'PRECIO', 'MONTO DIARIO'];
     if(gnv) cab.push('RECAUDO','GNV + RECAUDO');
@@ -23966,10 +23988,10 @@ function exportarCombustibleExcel(){
   const wb=XLSX.utils.book_new();
   const a=hoja('combustibleGlp', false), b=hoja('combustibleGas', true);
   if(!a.n && !b.n){ alert('Todavía no hay recargas para exportar.'); return; }
-  XLSX.utils.book_append_sheet(wb, a.ws, lite?'GNV':'GLP');
-  XLSX.utils.book_append_sheet(wb, b.ws, 'Gasolina');
+  XLSX.utils.book_append_sheet(wb, a.ws, fuelEtq('glp'));
+  XLSX.utils.book_append_sheet(wb, b.ws, fuelEtq('gas'));
   XLSX.writeFile(wb, 'combustible_'+todayLocalISO()+'.xlsx');
-  toast(`Excel descargado: ${a.n} recarga${a.n===1?'':'s'} de ${lite?'GNV':'GLP'} y ${b.n} de gasolina`);
+  toast(`Excel descargado: ${a.n} recarga${a.n===1?'':'s'} de ${fuelEtq('glp')} y ${b.n} de ${fuelEtq('gas').toLowerCase()}`);
 }
 function _fFecha(d){ if(!d) return '—'; const p=String(d).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0].slice(2)}`:d; }
 function renderFuelCards(type, rows){
@@ -24164,6 +24186,7 @@ function computeFuelRows(rows){
 
 // ── RENDER ────────────────────────────────────────────
 function renderCombustible(){
+  try{ fuelAplicarEtiquetas(); }catch(e){}
   renderFuelSection('glp');
   renderFuelSection('gas');
   renderMantenimiento();
@@ -24173,7 +24196,7 @@ function renderCombustible(){
 
 function renderFuelSection(type){
   const key  = fuelStateKey(type);
-  const label= type==='glp'?'Total GLP':'Total Gas';
+  const label= 'Total '+fuelEtq(type);
   if(!state[key]) state[key]=[];
   const rows = computeFuelRows(autoFA(key));
   const tbody= document.getElementById('fuel-tbody-'+type);
@@ -24181,7 +24204,7 @@ function renderFuelSection(type){
 
   if(!rows.length){
     tbody.innerHTML=`<tr><td colspan="15" style="text-align:center;color:var(--text3);padding:24px;font-size:12px">
-      Sin recargas de ${type==='glp'?'GLP':'Gasolina'}. Agrega la primera con el botón de arriba.</td></tr>`;
+      Sin recargas de ${fuelEtq(type)}. Agrega la primera con el botón de arriba.</td></tr>`;
   } else {
     const _ini=(fuelVerTodo[type]||rows.length<=FUEL_FILAS_VISIBLES)?0:rows.length-FUEL_FILAS_VISIBLES;
     tbody.innerHTML=rows.slice(_ini).map((r,_j)=>{
@@ -24197,7 +24220,7 @@ function renderFuelSection(type){
         <td style="color:var(--teal)">${r.kmUsado!==null?fuelFmt(r.kmUsado,0):'—'}</td>
         <td>${r.dt!==null?r.dt:'—'}</td>
         <td style="color:var(--accent)">${r.kmDiarios!==null?fuelFmt(r.kmDiarios,1):'—'}</td>
-        <td><input class="fuel-inp" type="number" step="0.01" value="${r.galones||''}" onchange="updateFuelField('${type}','${r.id}','galones',this.value)" style="width:65px" placeholder="Gal"></td>
+        <td><input class="fuel-inp" type="number" step="0.01" value="${r.galones||''}" onchange="updateFuelField('${type}','${r.id}','galones',this.value)" style="width:65px" placeholder="${fuelUni(type)==='m³'?'m³':'Gal'}"></td>
         <td style="color:var(--purple);font-weight:600">${r.kxg!==null?fuelFmt(r.kxg,2):'—'}</td>
         <td><input class="fuel-inp" type="number" step="0.01" value="${r.pxg||''}" onchange="updateFuelField('${type}','${r.id}','pxg',this.value)" style="width:60px" placeholder="S/"></td>
         <td style="color:var(--amber)">${r.montoDiario!==null?'S/ '+fuelFmt(r.montoDiario,2):'—'}</td>
@@ -24234,9 +24257,9 @@ function renderFuelSummary(type, rows){
   const lastPxg =[...rows].reverse().find(r=>parseFloat(r.pxg)>0);
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   set(`fs-${type}-km`,    kmTotal >0?fuelFmt(kmTotal,0)+' km':'—');
-  set(`fs-${type}-kxg`,   kxgAvg!==null?fuelFmt(kxgAvg,2)+' km/gal':'—');
+  set(`fs-${type}-kxg`,   kxgAvg!==null?fuelFmt(kxgAvg,2)+' km/'+fuelUni(type):'—');
   set(`fs-${type}-gasto`, gasTotal>0?'S/ '+fuelFmt(gasTotal,2):'—');
-  set(`fs-${type}-gal`,   galTotal>0?fuelFmt(galTotal,2)+' gal':'—');
+  set(`fs-${type}-gal`,   galTotal>0?fuelFmt(galTotal,2)+' '+fuelUni(type):'—');
   set(`fs-${type}-pxg`,   lastPxg?'S/ '+fuelFmt(parseFloat(lastPxg.pxg),2):'—');
   fuelCostoYProxima(type, rows);
 }
@@ -24284,9 +24307,9 @@ function renderFuelChart(type, rows){
   const glpColor='#5b8def', gasColor='#f0a53c';
   const baseColor=type==='glp'?glpColor:gasColor;
   const configs=[
-    {key:'kxg',     label:'KM por Galón (KxG)', color:baseColor,           fmt:v=>fuelFmt(v,2)},
-    {key:'pxg',     label:'Precio por Galón (S/)',color:type==='glp'?'#a78bfa':'#f05c5c',fmt:v=>'S/ '+fuelFmt(v,2)},
-    {key:'totalGlp',label:type==='glp'?'Total GLP':'Total Gas', color:'#2dd4bf',fmt:v=>'S/ '+fuelFmt(v,2)},
+    {key:'kxg',     label:fuelUni(type)==='m³'?'KM por m³ (Km/m³)':'KM por Galón (KxG)', color:baseColor,           fmt:v=>fuelFmt(v,2)},
+    {key:'pxg',     label:fuelUni(type)==='m³'?'Precio por m³ (S/)':'Precio por Galón (S/)',color:type==='glp'?'#a78bfa':'#f05c5c',fmt:v=>'S/ '+fuelFmt(v,2)},
+    {key:'totalGlp',label:'Total '+fuelEtq(type), color:'#2dd4bf',fmt:v=>'S/ '+fuelFmt(v,2)},
     {key:'kmDiarios',label:'KM Diarios',          color:'#3ec96e',           fmt:v=>fuelFmt(v,1)+' km'},
   ];
   const cfg=configs[fuelChartIdx[type]||0];
@@ -24373,7 +24396,7 @@ function deleteFuelRow(type, id){
   const key=fuelStateKey(type);
   const filaBorrada=(state[key]||[]).find(r=>r.id===id);
   state[key]=(state[key]||[]).filter(r=>r.id!==id);
-  if(filaBorrada) logActividad('combustible_registro_eliminado', `Recarga ${type==='glp'?'GLP':'Gasolina'} eliminada`, {fuelTipo:type, filaSnapshot:filaBorrada});
+  if(filaBorrada) logActividad('combustible_registro_eliminado', `Recarga ${fuelEtq(type)} eliminada`, {fuelTipo:type, filaSnapshot:filaBorrada});
   saveState();
   renderFuelSection(type);
 }
@@ -30571,6 +30594,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.17.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "Nuevas opciones de combustible para el auto: GNV y GNV + Gasolina.",
+   "En Combustible, las pestañas, títulos y botones de recarga usan el combustible de cada auto (GLP o GNV, Gasolina o Diésel)."
+  ]
+ },
  {
   "v": "v2.16.1",
   "fecha": "12/11/26",
