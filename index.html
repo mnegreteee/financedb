@@ -4237,7 +4237,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div style="font-size:10px;color:var(--text3);margin-bottom:10px">El plazo se cuenta desde la fecha del último cambio. Al marcar ✅ Hecho se reinicia con la fecha que pongas ahí.</div>
     </div>
     <div style="display:flex;gap:8px;justify-content:space-between">
-      <button class="config-action-btn danger" id="mant-delete-btn" style="display:none;font-size:11px" onclick="eliminarTipoMantenimiento()">🗑 Eliminar</button>
+      <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="config-action-btn danger" id="mant-delete-btn" style="display:none;font-size:11px" onclick="eliminarTipoMantenimiento()">🗑 Eliminar</button><button type="button" class="config-action-btn neutral" id="mov-mant" style="display:none;font-size:11px" onclick="autoMoverAbrir('mant')">🔀 Mover a otro auto</button></span>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn" onclick="cerrarConfigMantenimiento()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarConfigMantenimiento()">Guardar</button>
@@ -4260,7 +4260,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="field"><label>Se usa en <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><select id="rep-mant"><option value="">—</option></select></div>
     <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="rep-nota" type="text" placeholder="Ej. Cambiar junto con el filtro de cabina"></div>
     <div style="display:flex;gap:8px;justify-content:space-between">
-      <button class="config-action-btn danger" id="rep-delete-btn" style="display:none;font-size:11px" onclick="eliminarRepuesto()">🗑 Eliminar</button>
+      <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="config-action-btn danger" id="rep-delete-btn" style="display:none;font-size:11px" onclick="eliminarRepuesto()">🗑 Eliminar</button><button type="button" class="config-action-btn neutral" id="mov-rep" style="display:none;font-size:11px" onclick="autoMoverAbrir('rep')">🔀 Mover a otro auto</button></span>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn" onclick="cerrarRepuesto()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarRepuesto()">Guardar</button>
@@ -4352,7 +4352,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:6px;cursor:pointer"><input type="checkbox" id="fre-sinrend" style="margin-top:2px" onchange="freCalc()"><span>No llené el tanque <span style="color:var(--text3)">(esta recarga no cuenta para el rendimiento)</span></span></label>
     <div id="fre-gasto" style="font-size:12px;margin:8px 0"></div>
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap">
-      <button class="config-action-btn danger" id="fre-del" style="font-size:11px;padding:5px 10px" onclick="eliminarDesdeEditarRecarga()">🗑 Eliminar</button>
+      <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="config-action-btn danger" id="fre-del" style="font-size:11px;padding:5px 10px" onclick="eliminarDesdeEditarRecarga()">🗑 Eliminar</button><button type="button" class="config-action-btn neutral" id="mov-fuel" style="display:none;font-size:11px" onclick="autoMoverAbrir('fuel')">🔀 Mover a otro auto</button></span>
       <div style="display:flex;gap:8px;margin-left:auto">
         <button class="btn" onclick="cerrarEditarRecarga()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarEditarRecarga()">Guardar</button>
@@ -4513,9 +4513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.18.0';
-const APP_VERSION_DATE = '13/11/26 - 00:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Orden del menú: crear grupos nuevos en el menú principal y renombrar cualquier grupo.';
+const APP_VERSION = 'v2.19.0';
+const APP_VERSION_DATE = '13/11/26 - 02:10'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Mover recargas, km, mantenimientos y repuestos entre autos (uno por uno o todo); Deudas muestra a qué auto u Hogar pertenece cada préstamo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8792,7 +8792,7 @@ function checkBrowserNotifications(forzar){
   const diaHoy=hoy.getDate();
 
   // 1. Fechas Importantes próximas (0-3 días)
-  getEventCountdowns().filter(it=>!it.isPast && it.diffDays<=3).forEach(it=>{
+  getEventCountdowns().filter(it=>!it.isPast && it.diffDays<=3 && it.event.tipo!=='vencimiento_auto').forEach(it=>{
     mensajes.push(`📅 ${it.event.titulo} — ${it.diffDays===0?'¡Hoy!':'en '+it.diffDays+' días'}`);
   });
 
@@ -8884,6 +8884,14 @@ function checkBrowserNotifications(forzar){
       mensajes.push(`🔧 ${item.nombre}${autoPref(item)} ${mantTextoProximo(item,proyMant)}${proyMant.vencePor==='tiempo'?'':fechaTxt}`);
     }
   });
+
+  // 🛡️ Documentos del auto (SOAT, revisión técnica, seguro): vencidos o a ≤15 días
+  try{ autoVehs().forEach(v=>{
+    [['SOAT',v.soatVence],['Revisión técnica',v.revVence],['Seguro',v.seguroVence]].forEach(([n,fe])=>{
+      const dd=autoDiasA(fe); if(dd===null||dd>15) return;
+      mensajes.push(`🚗 ${n}${_autoV().length>1?' de '+(v.nombre||'auto'):''} ${dd<0?'venció hace '+(-dd)+' d':dd===0?'vence hoy':'vence en '+dd+' d'}`);
+    });
+  }); }catch(e){}
 
   if(mensajes.length){
     new Notification('🔔 Recordatorios de hoy', {
@@ -20542,6 +20550,7 @@ function autoModalVeh(id){
     <textarea id="av-notas" rows="1" placeholder="Algo que quieras recordar (opcional)" oninput="this.style.height='auto';this.style.height=Math.min(120,this.scrollHeight)+'px'">${escapeHtml(v&&v.notas||'')}</textarea>
     ${esPr?`<div class="av-princ fijo"><div style="font-size:20px">⭐</div><div class="tx">${V.length?'Es tu auto principal':'Será tu auto principal'}<small>Se usa por defecto para el bot y para datos antiguos sin auto asignado.</small></div></div>`
     :`<label class="av-princ"><div style="font-size:20px">⭐</div><div class="tx">Hacer mi auto principal<small>Se usa por defecto para el bot y para datos antiguos sin auto asignado.</small></div><span class="av-sw"><input type="checkbox" id="av-pr"><i></i></span></label>`}
+    ${autoMoverTodoHTML(v)}
     <div class="av-foot">${v?`<button class="av-del" onclick="if(confirm('¿Quitar este auto? Sus recargas, km, mantenimientos y repuestos pasarán al auto principal.'))autoBorrarVeh('${v.id}')">🗑 Quitar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('auto-veh-ov')">Cancelar</button><button class="btn btn-primary" onclick="autoGuardarVeh('${v?v.id:''}')">Guardar</button></div></div>`,500);
   const ta=document.getElementById('av-notas'); if(ta&&ta.value){ ta.style.height='auto'; ta.style.height=Math.min(120,ta.scrollHeight)+'px'; }
 }
@@ -20554,6 +20563,57 @@ function autoGuardarVeh(id){
   v.soatVence=g('av-soat'); v.revVence=g('av-rev'); v.seguroVence=g('av-seg'); v.notas=g('av-notas').trim();
   const c=document.getElementById('av-pr'); if(c&&c.checked){ V.forEach(x=>x.principal=false); v.principal=true; }
   saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); try{ fuelAplicarEtiquetas(); renderFuelSection('glp'); renderFuelSection('gas'); }catch(e){} toast('Auto guardado');
+}
+// ── 🔀 Mover registros entre autos (uno por uno, o todo el historial desde «Editar auto») ──
+function autoMoverBtn(kind,id,ref){ const b=document.getElementById('mov-'+kind); if(!b) return; b.style.display=(autoVehs().length>=2&&id)?'inline-flex':'none'; b.dataset.id=id||''; b.dataset.t=ref||''; }
+function _autoMovLista(kind,t){ return kind==='fuel'?(state[fuelStateKey(t)]||[]):kind==='km'?(state.kmManual||[]):kind==='mant'?(state.mantenimientos||[]):(state.repuestos||[]); }
+function autoMoverAbrir(kind,id,t){
+  if(!id){ const b=document.getElementById('mov-'+kind); id=b&&b.dataset.id; t=b&&b.dataset.t; }
+  const r=_autoMovLista(kind,t).find(x=>x.id===id); if(!r) return;
+  const V=autoVehs(), act=autoDeVid(r), aV=V.find(v=>v.id===act);
+  const nom={fuel:'esta recarga',km:'esta lectura de km',mant:'este mantenimiento',rep:'este repuesto'}[kind];
+  const extra=kind==='fuel'?' Los km del tramo se calcularán con el odómetro del otro auto: revisa la fecha y el km después de moverla.':kind==='mant'?' Se mueve con todo su historial.':'';
+  _abrirModalDin('auto-mov-ov',`<div class="av-form"><div class="av-head"><div class="av-ico">🔀</div><div class="t">Mover a otro auto<small>Ahora está en ${aV?escapeHtml((aV.icono||'🚗')+' '+(aV.nombre||'Auto')):'—'}</small></div><button class="modal-close" onclick="_cerrarModalDin('auto-mov-ov')" aria-label="Cerrar">✕</button></div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">¿A qué auto pasas ${nom}?${extra}</div>
+    ${V.filter(v=>v.id!==act).map(v=>`<button type="button" class="btn" style="width:100%;justify-content:flex-start;text-align:left;margin-bottom:6px;min-height:40px" onclick="autoMoverReg('${kind}','${String(id).replace(/'/g,'')}','${t||''}','${v.id}')">${escapeHtml(v.icono||'🚗')} ${escapeHtml(v.nombre||'Auto')}${v.principal?' ⭐':''}</button>`).join('')}</div>`,380);
+}
+function autoMoverReg(kind,id,t,dest){
+  const r=_autoMovLista(kind,t).find(x=>x.id===id); if(!r) return;
+  r.vid=dest; saveState(); _cerrarModalDin('auto-mov-ov');
+  ['fre-overlay','km-editar-overlay','mant-config-overlay','rep-overlay'].forEach(i=>{ const e=document.getElementById(i); if(e) e.classList.remove('open'); });
+  try{ freCtx=null; }catch(e){} try{ editingMantId=null; }catch(e){} try{ editingRepId=null; }catch(e){} try{ editandoKmManualId=null; }catch(e){}
+  renderCombustible();
+  const v=autoVehs().find(x=>x.id===dest); toast('Movido a '+(v?v.nombre:'otro auto'));
+}
+function _autoMovConteos(fromId){
+  const de=(arr)=>(arr||[]).filter(x=>autoDeVid(x)===fromId);
+  return { fuel:de(state.combustibleGlp).length+de(state.combustibleGas).length, km:de(state.kmManual).length, mant:de(state.mantenimientos).length, rep:de(state.repuestos).length, pres:de(autoEnsure().prestamos).length };
+}
+function autoMoverTodoHTML(v){
+  const V=autoVehs(); if(V.length<2||!v) return '';
+  const c=_autoMovConteos(v.id);
+  const fila=(k,tx)=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0;cursor:${c[k]?'pointer':'default'};${c[k]?'':'opacity:.5'}"><input type="checkbox" id="av-mv-${k}" ${c[k]?'checked':'disabled'} style="width:auto;margin:0"><span>${tx} <b>(${c[k]})</b></span></label>`;
+  return `<div class="av-sec">Mover historial a otro auto</div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:6px">Pasa de una vez lo que registraste en este auto a otro. Si solo quieres mover uno, abre ese registro y usa «Mover a otro auto».</div>
+    ${fila('fuel','⛽ Recargas de combustible')}${fila('km','📍 Lecturas de kilometraje')}${fila('mant','🔧 Mantenimientos (con su historial)')}${fila('rep','🧩 Repuestos')}${fila('pres','🏦 Préstamos vinculados')}
+    <label for="av-mv-dest" style="margin-top:8px">Mover a</label>
+    <select id="av-mv-dest" style="width:100%;min-height:42px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:0 10px;font-size:14px">${V.filter(x=>x.id!==v.id).map(x=>`<option value="${x.id}">${escapeHtml((x.icono||'🚗')+' '+(x.nombre||'Auto'))}</option>`).join('')}</select>
+    <button type="button" class="btn" style="margin-top:10px;min-height:40px" onclick="autoMoverTodo('${v.id}')">🔀 Mover lo seleccionado</button>`;
+}
+function autoMoverTodo(fromId){
+  const dest=(document.getElementById('av-mv-dest')||{}).value; if(!dest||dest===fromId) return;
+  const on=k=>{ const e=document.getElementById('av-mv-'+k); return !!(e&&e.checked&&!e.disabled); };
+  const listas={ fuel:[].concat(state.combustibleGlp||[],state.combustibleGas||[]), km:state.kmManual||[], mant:state.mantenimientos||[], rep:state.repuestos||[], pres:autoEnsure().prestamos };
+  const sel=Object.keys(listas).filter(on).map(k=>({k,items:listas[k].filter(x=>autoDeVid(x)===fromId)}));
+  const total=sel.reduce((s,x)=>s+x.items.length,0);
+  if(!total){ toast('No hay nada seleccionado para mover','info'); return; }
+  const V=autoVehs(), a=V.find(v=>v.id===fromId), b=V.find(v=>v.id===dest);
+  const nom={fuel:'recarga',km:'lectura de km',mant:'mantenimiento',rep:'repuesto',pres:'préstamo'};
+  const det=sel.filter(x=>x.items.length).map(x=>x.items.length+' '+nom[x.k]+(x.items.length===1?'':(x.k==='km'?'s':'s'))).join(', ');
+  if(!confirm('¿Mover '+det+' de «'+(a?a.nombre:'este auto')+'» a «'+(b?b.nombre:'otro auto')+'»?\n\nLos km y promedios de ambos autos se recalculan con lo que quede en cada uno.')) return;
+  sel.forEach(x=>x.items.forEach(r=>{ r.vid=dest; }));
+  saveState(); _cerrarModalDin('auto-veh-ov'); try{ autoRender(); }catch(e){} try{ renderCombustible(); }catch(e){}
+  toast(total+' registro'+(total===1?'':'s')+' movido'+(total===1?'':'s')+' a '+(b?b.nombre:'otro auto'));
 }
 function autoBorrarVeh(id){
   const A=autoEnsure(); A.vehiculos=autoVehs().filter(x=>x.id!==id); A.prestamos.forEach(p=>{ if(p.vid===id) p.vid=''; }); ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(r.vid===id) delete r.vid; })); if(AUTO.vid===id){ AUTO.vid=''; try{ localStorage.removeItem('auto_vid'); }catch(e){} }
@@ -21234,11 +21294,16 @@ function renderNuevosWidgetsDashboard(){
   const combEl=document.getElementById('dash-combustible-list');
   if(combEl){
     const lineas=[];
-    [['combustibleGas','⛽ Gasolina'],['combustibleGlp','🔥 GLP']].forEach(([key,label])=>{
-      const arr=state[key]||[];
-      const ultimo=arr.length?arr[arr.length-1]:null;
-      if(ultimo) lineas.push(`<div style="font-size:12px;padding:4px 0">${label}: última recarga ${ultimo.fFinal||ultimo.fInicial||'—'}</div>`);
+    const _vs=autoVehs().length?autoVehs():[null];
+    _vs.forEach(v=>{
+      const pre=(v&&_vs.length>1)?(escapeHtml(v.icono||'🚗')+' '+escapeHtml(v.nombre||'Auto')+' · '):'';
+      [['combustibleGas','gas','⛽'],['combustibleGlp','glp','🔥']].forEach(([key,t,ic])=>{
+        const arr=(v?autoFA(key,v.id):(state[key]||[]));
+        const ultimo=arr.length?[...arr].sort((a,b)=>String(a.fFinal||a.fInicial||'').localeCompare(String(b.fFinal||b.fInicial||''))).pop():null;
+        if(ultimo) lineas.push(`<div style="font-size:12px;padding:4px 0">${pre}${ic} ${fuelEtq(t,v&&v.id)}: última recarga ${ultimo.fFinal||ultimo.fInicial||'—'}</div>`);
+      });
     });
+    try{ autoAlertas().filter(a=>/SOAT|Revisión técnica|Seguro/.test(a.t)).slice(0,3).forEach(a=>lineas.push(`<div style="font-size:12px;padding:4px 0;color:${a.d<=5?'var(--red)':'var(--amber)'};cursor:pointer" onclick="showPage('combustible')">🛡️ ${a.t}</div>`)); }catch(e){}
     const proyMant=(state.mantenimientos||[])
       .map(item=>({item, proy:getProyeccionMantenimientoItem(item)}))
       .filter(x=>x.proy).sort((a,b)=>mantUrgencia(a.proy)-mantUrgencia(b.proy))[0];
@@ -23437,7 +23502,7 @@ let editandoKmManualId=null;
 function abrirEditarKm(id){
   const item=(state.kmManual||[]).find(x=>x.id===id);
   if(!item) return;
-  editandoKmManualId=id;
+  editandoKmManualId=id; autoMoverBtn('km',id);
   document.getElementById('km-editar-valor').value=item.km;
   const [fecha,hora]=(item.fechaHora||'').split('T');
   document.getElementById('km-editar-fecha').value=fecha||'';
@@ -23749,7 +23814,7 @@ function renderMantenimiento(){
 let mantPlanificadosTemp=[]; // copia editable mientras el modal está abierto
 let editingMantId=null; // id del tipo que se está editando, null = creando uno nuevo
 function abrirNuevoTipoMantenimiento(){
-  editingMantId=null;
+  editingMantId=null; autoMoverBtn('mant',null);
   document.getElementById('mant-config-title').textContent='+ Nuevo Tipo de Mantenimiento';
   document.getElementById('mant-icono').value='🔧';
   document.getElementById('mant-nombre').value='';
@@ -23768,7 +23833,7 @@ function abrirNuevoTipoMantenimiento(){
 function abrirEditarTipoMantenimiento(id){
   const item=(state.mantenimientos||[]).find(x=>x.id===id);
   if(!item) return;
-  editingMantId=id;
+  editingMantId=id; autoMoverBtn('mant',id);
   document.getElementById('mant-config-title').textContent='⚙️ '+item.nombre;
   document.getElementById('mant-icono').value=item.icono||'🔧';
   document.getElementById('mant-nombre').value=item.nombre;
@@ -24122,6 +24187,7 @@ function abrirEditarRecarga(type, id){
   else if(g) gEl.innerHTML=`<span style="color:var(--green)">✅ Gasto registrado</span>${g.tipo==='cuenta'?' en '+escapeHtml(accLabel(g.cuenta||'')):g.tipo==='tarjeta'?' con tarjeta '+escapeHtml((getTarjeta(g.tarjetaId)||{}).banco||''):' (aparte)'}${g.tipo==='manual'?` · <span style="cursor:pointer;color:var(--red)" onclick="cerrarEditarRecarga();desmarcarFuelManual('${type}','${id}')">quitar marca</span>`:''}`;
   else gEl.innerHTML=`<span style="color:var(--amber);font-weight:700">Gasto sin registrar</span> · <button class="config-action-btn neutral" style="font-size:11px;padding:3px 9px" onclick="registrarGastoDesdeEditarRecarga()">+ Registrar gasto</button>`;
   freCalc();
+  autoMoverBtn('fuel',id,type);
   document.getElementById('fre-overlay').classList.add('open');
 }
 function cerrarEditarRecarga(){ document.getElementById('fre-overlay').classList.remove('open'); freCtx=null; }
@@ -24266,7 +24332,7 @@ function renderFuelSection(type){
         <td style="font-weight:600">${r.totalGlp!==null?'S/ '+fuelFmt(r.totalGlp,2):'—'}</td>
         <td class="${pxgCol}">${pxgStr}</td>
         <td>${fuelBotonRegistrar(type, r)}</td>
-        <td><button onclick="deleteFuelRow('${type}','${r.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 5px">✕</button></td>
+        <td style="white-space:nowrap">${autoVehs().length>1?`<button title="Mover a otro auto" onclick="autoMoverAbrir('fuel','${r.id}','${type}')" style="background:none;border:none;cursor:pointer;font-size:13px;padding:2px 5px">🔀</button>`:''}<button onclick="deleteFuelRow('${type}','${r.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 5px">✕</button></td>
       </tr>`;
     }).join('');
   }
@@ -25273,9 +25339,25 @@ function saveDMAmortizado(){
   renderDeudasMayores();
 }
 
+// ── Quién usa cada deuda mayor: Auto (con qué auto) u Hogar ──
+function dmUsoDe(dmId){
+  const ap=((state.auto||{}).prestamos||[]).find(p=>p.dmId===dmId);
+  if(ap){ const V=_autoV(); const v=V.find(x=>x.id===autoDeVid(ap)); return {tipo:'auto',vid:v?v.id:'',txt:v?((v.icono||'🚗')+' '+(v.nombre||'Auto')):'🚗 Auto'}; }
+  const hp=((state.hogar||{}).prestamos||[]).find(p=>p.dmId===dmId);
+  if(hp) return {tipo:'hogar',vid:'',txt:'🏡 Hogar'};
+  return null;
+}
+function dmIrAUso(dmId){
+  const u=dmUsoDe(dmId); if(!u) return;
+  if(u.tipo==='hogar'){ showPage('hogar'); try{ HG.tab='prestamo'; renderHogar(); }catch(e){} }
+  else { showPage('combustible'); try{ if(u.vid) autoSelVeh(u.vid); autoTab('prestamo'); }catch(e){} }
+}
+function dmUsoChip(d){ const u=dmUsoDe(d.id); return u?`<span style="display:inline-block;font-size:10px;font-weight:600;color:var(--accent);background:rgba(91,141,238,.12);border:1px solid rgba(91,141,238,.35);border-radius:10px;padding:1px 8px;margin-top:4px">${escapeHtml(u.txt)}</span>`:''; }
 function deleteDeudaMayor(id){
   if(!id) return;
-  if(!confirm('¿Eliminar esta deuda mayor y todo su historial de cuotas?')) return;
+  const _uso=dmUsoDe(id);
+  if(!confirm('¿Eliminar esta deuda mayor y todo su historial de cuotas?'+(_uso?'\n\nEstá vinculada a «'+_uso.txt+'»: ese vínculo también se quitará y el préstamo dejará de verse allí.':''))) return;
+  if(_uso){ try{ const A=state.auto; if(A&&Array.isArray(A.prestamos)) A.prestamos=A.prestamos.filter(p=>p.dmId!==id); const H=state.hogar; if(H&&Array.isArray(H.prestamos)) H.prestamos=H.prestamos.filter(p=>p.dmId!==id); }catch(e){} }
   const dmBorrada=(state.deudasMayores||[]).find(d=>d.id===id);
   state.deudasMayores=(state.deudasMayores||[]).filter(d=>d.id!==id);
   if(dmBorrada) logActividad('deuda_mayor_eliminada', `Deuda mayor eliminada: ${dmBorrada.nombre}`, {deudaMayorSnapshot:dmBorrada});
@@ -25342,7 +25424,7 @@ function renderDeudasMayores(){
       : '✅ Completado';
     return `<div class="dm-card dm-${d.tipo}" onclick="openDMDetail('${d.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:15px;font-weight:700">${escapeHtml(d.nombre)}</div>
+        <div><div style="font-size:15px;font-weight:700">${escapeHtml(d.nombre)}</div>${dmUsoChip(d)}</div>
         <span class="dm-tipo-badge ${d.tipo}">${d.tipo==='fijo'?'Cuota Fija':'Amortizado'}</span>
       </div>
       <div style="font-size:11px;color:var(--text2)">
@@ -25493,10 +25575,11 @@ function dmSyncPFDesdeCuota(d,c,checked){
 }
 function dmPintarVinculo(d){
   const box=document.getElementById('dm-pf-link'); if(!box) return;
+  const _u=dmUsoDe(d.id);
   const pfs=(state.pagosFrecuentes||[]).filter(p=>p.id===d.pfId||(p.tipo!=='ingreso'&&(p.frecuencia||'mensual')==='mensual'));
   const _nt=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
   const sug=!d.pfId?pfs.find(p=>{ const a=_nt(p.nombre), b=_nt(d.nombre); return a.length>=4&&b.length>=4&&(a.includes(b)||b.includes(a)); }):null;
-  box.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">
+  box.innerHTML=(_u?`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:rgba(91,141,238,.08);border:1px solid rgba(91,141,238,.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px"><span>📌 <b>Usada en:</b> ${escapeHtml(_u.txt)}</span><button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="dmIrAUso('${d.id}')">Ver en ${_u.tipo==='hogar'?'Hogar':'Auto'} →</button></div>`:'')+`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px">
     <span>🔗 <b>Pago frecuente vinculado:</b></span>
     <select id="dm-pf-sel" onchange="dmVincularPF(this.value)" style="font-size:12px;padding:6px 8px;border-radius:7px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);max-width:230px">
       <option value="">— Ninguno —</option>${pfs.map(p=>`<option value="${p.id}" ${p.id===d.pfId?'selected':''}>${escapeHtml(p.nombre)}</option>`).join('')}
@@ -25980,6 +26063,7 @@ const CAL_TIPOS = {
   cuota_tc:      {icon:'💳', label:'Cuota de tarjeta',      color:'#2dd4bf'},
   deuda_mayor:   {icon:'🏛️', label:'Cuota deuda mayor',     color:'#f472b6'},
   mantenimiento: {icon:'🔧', label:'Mantenimiento del auto', color:'#fb923c'},
+  vencimiento_auto: {icon:'🛡️', label:'Vencimiento del auto', color:'#ef4444'},
   pf_gasto:      {icon:'💸', label:'Pago frecuente',        color:'#f08a7e'},
   pf_ingreso:    {icon:'💵', label:'Ingreso frecuente',     color:'#34d399'},
   otro:          {icon:'📝', label:'Otro',                 color:'#6b7280'},
@@ -26065,6 +26149,13 @@ function getEventosAutomaticos(){
       auto:true, origenPage:'combustible',
     });
   });
+  // 🛡️ Vencimientos de cada auto (SOAT, revisión técnica, seguro) — vienen de Auto → Editar auto
+  try{ autoVehs().forEach(v=>{
+    [['soat','🛡️ SOAT',v.soatVence],['rev','🔍 Revisión técnica',v.revVence],['seg','📄 Seguro',v.seguroVence]].forEach(([k,n,fe])=>{
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(String(fe||''))) return;
+      autos.push({ id:'auto-doc-'+v.id+'-'+k, titulo:`${n}${_autoV().length>1?' — '+(v.nombre||'auto'):''} vence`, fecha:fe, tipo:'vencimiento_auto', auto:true, origenPage:'combustible' });
+    });
+  }); }catch(e){}
   return autos;
 }
 function getEventCountdowns(){
@@ -26870,7 +26961,7 @@ function copiarCodigoRepuesto(id){
   try{ navigator.clipboard.writeText(r.codigo).then(ok,()=>{ prompt('Copia el código:',r.codigo); }); }catch(e){ prompt('Copia el código:',r.codigo); }
 }
 function abrirRepuesto(id){
-  editingRepId=id||null;
+  editingRepId=id||null; autoMoverBtn('rep',id);
   const r=id?(state.repuestos||[]).find(x=>x.id===id):null;
   if(id&&!r) return;
   const sel=document.getElementById('rep-mant');
@@ -30634,6 +30725,24 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.19.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "Mover registros entre autos: botón «🔀 Mover a otro auto» al abrir una recarga, lectura de km, mantenimiento o repuesto (y en la tabla de recargas).",
+   "Editar auto → «Mover historial a otro auto»: pasa de una vez recargas, km, mantenimientos, repuestos y préstamos a otro auto, con confirmación.",
+   "Deudas mayores: cada deuda muestra si la usa un auto (cuál) o el Hogar, con botón para ir a verla; al borrarla se avisa y se quita ese vínculo."
+  ]
+ },
+ {
+  "v": "v2.18.1",
+  "fecha": "13/11/26",
+  "cambios": [
+   "SOAT, revisión técnica y seguro de cada auto ahora aparecen en el Calendario y en las notificaciones del navegador.",
+   "Dashboard: la última recarga y los vencimientos se muestran por auto, con el nombre del combustible de cada uno.",
+   "Asistente IA: las recargas se calculan por auto (cada uno con su odómetro) e indican si la cantidad es en galones o m³."
+  ]
+ },
+ {
   "v": "v2.18.0",
   "fecha": "13/11/26",
   "cambios": [
@@ -31973,8 +32082,14 @@ function construirContextoParaIA(){
     // en pantalla.
     try{
       if(typeof computeFuelRows==='function'){
-        datosCompletos.combustibleGlp = computeFuelRows(state.combustibleGlp||[]).map(r=>({ ...r, montoPagado: r.totalGlp }));
-        datosCompletos.combustibleGas = computeFuelRows(state.combustibleGas||[]).map(r=>({ ...r, montoPagado: r.totalGlp }));
+        // Por AUTO (cada uno tiene su odómetro); cada fila indica de qué auto es y en qué unidad está la cantidad.
+        const _porAuto=(t)=>{
+          const key=t==='glp'?'combustibleGlp':'combustibleGas', V=autoVehs();
+          if(!V.length) return computeFuelRows(state[key]||[]).map(r=>({ ...r, montoPagado: r.totalGlp }));
+          return V.flatMap(v=>computeFuelRows(autoFA(key,v.id)).map(r=>({ ...r, auto:v.nombre||'Auto', combustible:fuelEtq(t,v.id), unidadCantidad:fuelEtq(t,v.id)==='GNV'?'m3 (el campo galones está en m³)':'galones', montoPagado: r.totalGlp })));
+        };
+        datosCompletos.combustibleGlp = _porAuto('glp');
+        datosCompletos.combustibleGas = _porAuto('gas');
       }
     }catch(e){ console.warn('Cálculo omitido por error:', e&&e.message); }
 
@@ -31985,6 +32100,7 @@ function construirContextoParaIA(){
     let resumenRapido = {};
     try{
       resumenRapido.kilometrajeActual = (typeof getKmActualVehiculo==='function') ? getKmActualVehiculo() : null;
+      try{ const _V=autoVehs(); if(_V.length>1){ resumenRapido.kilometrajePorAuto={}; _V.forEach(v=>{ const k=getKmActualVehiculo(v.id); resumenRapido.kilometrajePorAuto[v.nombre||v.id]=k&&k.km!==undefined?k.km:k; }); } }catch(e){}
       let deudaTCTotal = 0;
       (state.tarjetas||[]).forEach(t=>{
         try{
@@ -34068,7 +34184,7 @@ if(state.projGoals){
     </div>
     <div class="field"><label>Motivo <small>(opcional)</small></label><input id="km-editar-motivo" type="text" placeholder="Ej. viaje al trabajo"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
-      <button class="config-action-btn" style="color:var(--red)" onclick="eliminarLecturaKm()">🗑 Eliminar</button>
+      <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="config-action-btn" style="color:var(--red)" onclick="eliminarLecturaKm()">🗑 Eliminar</button><button type="button" class="config-action-btn neutral" id="mov-km" style="display:none;font-size:11px" onclick="autoMoverAbrir('km')">🔀 Mover a otro auto</button></span>
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="cerrarEditarKm()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarEdicionKm()">Guardar</button>
