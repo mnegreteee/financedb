@@ -1516,6 +1516,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" onclick="toggleTheme()">🌙 / ☀️ Cambiar tema</button>
           </div>
           <div class="config-row">
+            <div class="config-row-label">Orden del menú<small>Reordena las secciones y subsecciones, o muévelas de un grupo a otro</small></div>
+            <button class="config-action-btn neutral" onclick="abrirOrdenMenu()">↕ Ordenar</button>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Color de acento<small>Botones, enlaces y resaltados — elige el que quieras</small></div>
             <div style="display:flex;align-items:center;gap:6px">
               <input type="color" id="cfg-accent-picker" value="#5b8def" style="width:34px;height:30px;padding:2px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer" onchange="setAccentColor(this.value)" title="Elegir color de acento">
@@ -4502,9 +4506,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.10.0';
-const APP_VERSION_DATE = '12/11/26 - 21:26'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Hogar: nuevo 🛒 Compras y consumos — presupuesto mensual por categoría (supermercado, farmacia…), compras sueltas, control semana por semana (lunes a domingo) y se suma a la proyección y a los meses que aguantas.';
+const APP_VERSION = 'v2.11.1';
+const APP_VERSION_DATE = '12/11/26 - 21:55'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Hogar: botón «Hoy» junto al selector de mes para volver al mes actual.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8568,6 +8572,7 @@ function calcularProyeccionCierre(){
 function isPageActive(name){ const e=document.getElementById('page-'+name); return e&&e.classList.contains('active'); }
 
 function render(){
+  try{ aplicarOrdenMenu(); }catch(e){ console.warn('Orden del menú omitido:', e&&e.message); }
   updateTitles();
   renderPaisConfigBtn();
   aplicarChatIAIcono(); // sincroniza el ícono del botón flotante del chat con lo elegido en Config → Apariencia
@@ -19297,6 +19302,12 @@ function hgVar(lista,i){
   if(!(p>0)) return null;
   return {dv:a-p,pct:(a-p)/p*100,up:a>=p};
 }
+// Variación contra el MISMO mes del año anterior (solo si hay dato de ese mes)
+function hgVarAnio(lista,i){
+  const p=lista.find(x=>x.mk===hgAdd(lista[i].mk,-12)); if(!p||!(p.monto>0)) return null;
+  const a=lista[i].monto;
+  return {dv:a-p.monto,pct:(a-p.monto)/p.monto*100,up:a>=p.monto,prev:p.monto,mk:p.mk};
+}
 function hgVarTxt(v){ if(!v) return ''; if(Math.abs(v.pct)<0.05) return '= igual'; return (v.up?'▲ ':'▼ ')+Math.abs(v.pct).toFixed(1)+'%'; }
 function hgVarCls(v){ if(!v||Math.abs(v.pct)<0.05) return 'hg-eq'; return v.up?'hg-up':'hg-dn'; }
 // Mantiene al día el monto de registros propios si el gasto se editó en Movimientos
@@ -19396,7 +19407,7 @@ function hgHtmlLista(){
   const dif=r.totalPen-ant.totalPen, hayAnt=ant.totalPen>0.004;
   const eq=hgEquivTotalPen();
   const mensuales=cs.filter(c=>hgFrec(c)===1), periodicos=cs.filter(c=>hgFrec(c)>1);
-  const mesesNav=`<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 6px;width:fit-content;margin-bottom:14px"><button class="month-btn" onclick="hgMes(-1)" aria-label="Mes anterior">‹</button><b style="min-width:130px;text-align:center;font-size:14px">${hgMesNombre(mk)}</b><button class="month-btn" onclick="hgMes(1)" aria-label="Mes siguiente">›</button></div>`;
+  const mesesNav=`<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 6px;width:fit-content;margin-bottom:14px"><button class="month-btn" onclick="hgMes(-1)" aria-label="Mes anterior">‹</button><b style="min-width:130px;text-align:center;font-size:14px">${hgMesNombre(mk)}</b><button class="month-btn" onclick="hgMes(1)" aria-label="Mes siguiente">›</button><button class="btn" style="min-height:32px;padding:0 12px;font-size:12px;font-weight:600" onclick="hgHoy()" ${mk===mesActualKey()?'disabled':''} aria-label="Ir al mes actual">Hoy</button></div>`;
   const kpis=`<div class="hg-kpis">
     <div class="hg-kpi"><div class="l">Pagado en el mes</div><div class="v">${M(gsMix(r.pagadoPen,r.pagadoUsd))}</div><div class="s">Solo lo que ya registraste</div></div>
     <div class="hg-kpi"><div class="l">Vs mes anterior</div><div class="v ${hayAnt?(dif>=0?'hg-up':'hg-dn'):''}">${hayAnt?(dif>=0?'▲ ':'▼ ')+M(fmtS(Math.abs(dif))):'—'}</div><div class="s">${hayAnt?((dif/ant.totalPen*100>=0?'+':'-')+Math.abs(dif/ant.totalPen*100).toFixed(1)+'% sobre '+M(fmtS(ant.totalPen))):'Sin pagos registrados el mes anterior'}</div></div>
@@ -19409,6 +19420,7 @@ function hgHtmlLista(){
   h+= periodicos.length? `<div class="hg-grid">${periodicos.map(c=>hgTarjeta(c,mk)).join('')}</div>` : '<div style="font-size:12px;color:var(--text3);margin-bottom:14px">Ninguno todavía. Al crear un concepto elige “Cada 2, 3, 6 o 12 meses”.</div>';
   return h;
 }
+function hgHoy(){ HG.mk=mesActualKey(); renderHogar(); }
 function hgMes(d){ HG.mk=hgAdd(HG.mk||mesActualKey(),d); renderHogar(); }
 function hgAbrir(id){ HG.vista='detalle'; HG.cid=id; renderHogar(); window.scrollTo({top:0}); }
 function hgVolver(){ HG.vista='lista'; HG.cid=null; renderHogar(); }
@@ -19436,18 +19448,20 @@ function hgHtmlDetalle(c){
   })();
   const tarifa=x=>(unidad&&x.consumo>0)? (x.monto/x.consumo).toFixed(2):'—';
   const barras=vis.map((x,j)=>{
-    const i=off+j, v=hgVar(lista,i), hh=Math.max(6,Math.round(x.monto*escala));
+    const i=off+j, v=hgVar(lista,i), va=hgVarAnio(lista,i), hh=Math.max(6,Math.round(x.monto*escala));
     const ultimo=(i===lista.length-1);
     const pos=j<2?'left:0;':(j>vis.length-3?'right:0;':'left:50%;transform:translateX(-50%);');
     return `<div class="hg-col" tabindex="0" data-hgi="${i}" onmouseenter="hgResaltar(${i},1)" onmouseleave="hgResaltar(${i},0)" aria-label="${hgMesNombre(x.mk)}: ${hgFmt(x.monto,c)}${v?', '+hgVarTxt(v):''}">
-      <div class="hg-tip" style="bottom:${hh+10}px;${pos}"><b>${hgMesNombre(x.mk)}</b><div style="font-size:15px;font-weight:700;margin:2px 0">${hgFmt(x.monto,c)}</div>${v?`<div class="${hgVarCls(v)}">${v.up?'▲ +':'▼ -'}${Math.abs(v.dv).toFixed(2)} (${Math.abs(v.pct).toFixed(1)}%) vs ${f>1?'pago':'mes'} anterior</div>`:'<div class="hg-eq">Primer registro</div>'}${unidad&&x.consumo>0?`<div style="color:var(--text3)">${x.consumo} ${escapeHtml(unidad)} · ${cur==='USD'?'$':'S/'} ${tarifa(x)} por ${escapeHtml(unidad)}</div>`:''}</div>
+      <div class="hg-tip" style="bottom:${hh+10}px;${pos}"><b>${hgMesNombre(x.mk)}</b><div style="font-size:15px;font-weight:700;margin:2px 0">${hgFmt(x.monto,c)}</div>${v?`<div class="${hgVarCls(v)}">${v.up?'▲ +':'▼ -'}${Math.abs(v.dv).toFixed(2)} (${Math.abs(v.pct).toFixed(1)}%) vs ${f>1?'pago':'mes'} anterior</div>`:'<div class="hg-eq">Primer registro</div>'}${va?`<div class="${hgVarCls(va)}">${va.up?'▲ +':'▼ -'}${Math.abs(va.dv).toFixed(2)} (${Math.abs(va.pct).toFixed(1)}%) vs ${hgMesNombre(va.mk)} (${hgFmt(va.prev,c)})</div>`:''}${unidad&&x.consumo>0?`<div style="color:var(--text3)">${x.consumo} ${escapeHtml(unidad)} · ${cur==='USD'?'$':'S/'} ${tarifa(x)} por ${escapeHtml(unidad)}</div>`:''}</div>
       <div class="hg-bar${ultimo?' cur':''}" style="height:${hh}px"></div></div>`;
   }).join('');
   const etqMes=vis.map((x,j)=>`<div style="color:var(--text3)">${hgMesNombre(x.mk,true)}${f>1||new Date().getFullYear()!==Number(x.mk.slice(0,4))?"<br><span style='font-size:10px'>"+x.mk.slice(2,4)+"</span>":''}</div>`).join('');
   const etqVar=vis.map((x,j)=>{ const v=hgVar(lista,off+j); return `<div class="${hgVarCls(v)}" style="font-weight:600">${v?hgVarTxt(v):'—'}</div>`; }).join('');
+  const hayAnio=lista.some((x,i)=>hgVarAnio(lista,i));
+  const etqVarA=vis.map((x,j)=>{ const va=hgVarAnio(lista,off+j); return `<div class="${hgVarCls(va)}" style="font-weight:600">${va?hgVarTxt(va):'—'}</div>`; }).join('');
   const filas=lista.slice().reverse().map((x,r)=>{
-    const i=lista.length-1-r, v=hgVar(lista,i);
-    return `<tr data-hgi="${i}" onmouseenter="hgResaltar(${i},1)" onmouseleave="hgResaltar(${i},0)"><td><b>${hgMesNombre(x.mk)}</b></td><td>${hgFmt(x.monto,c)}</td><td class="${hgVarCls(v)}">${v?(v.up?'+':'-')+Math.abs(v.dv).toFixed(2):'—'}</td><td class="${hgVarCls(v)}"><b>${v?hgVarTxt(v):'—'}</b></td>${unidad?`<td>${x.consumo!==null&&x.consumo!==undefined?x.consumo:'—'}</td><td>${tarifa(x)}</td>`:''}<td style="text-align:right"><button class="btn" style="font-size:11px;min-height:32px" onclick="hgModalEditarReg('${c.id}','${x.mk}')">Editar</button></td></tr>`;
+    const i=lista.length-1-r, v=hgVar(lista,i), va=hgVarAnio(lista,i);
+    return `<tr data-hgi="${i}" onmouseenter="hgResaltar(${i},1)" onmouseleave="hgResaltar(${i},0)"><td><b>${hgMesNombre(x.mk)}</b></td><td>${hgFmt(x.monto,c)}</td><td class="${hgVarCls(v)}">${v?(v.up?'+':'-')+Math.abs(v.dv).toFixed(2):'—'}</td><td class="${hgVarCls(v)}"><b>${v?hgVarTxt(v):'—'}</b></td>${hayAnio?`<td class="${hgVarCls(va)}" title="${va?'Antes '+hgFmt(va.prev,c):''}"><b>${va?hgVarTxt(va):'—'}</b>${va?`<div style="font-size:10px;font-weight:400;color:var(--text3)">antes ${hgFmt(va.prev,c)}</div>`:''}</td>`:''}${unidad?`<td>${x.consumo!==null&&x.consumo!==undefined?x.consumo:'—'}</td><td>${tarifa(x)}</td>`:''}<td style="text-align:right"><button class="btn" style="font-size:11px;min-height:32px" onclick="hgModalEditarReg('${c.id}','${x.mk}')">Editar</button></td></tr>`;
   }).join('');
   const px=hgProximo(c);
   const cuando=px.mk? (px.dias===0?'vence hoy':(px.dias<0?'venció hace '+Math.abs(px.dias)+' días':'vence en '+px.dias+' días')):'';
@@ -19464,8 +19478,8 @@ function hgHtmlDetalle(c){
     ${lista.length? `<div class="hg-box"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px"><b style="flex:1 1 auto">Monto pagado${f>1?' en cada pago':' por mes'}</b><span style="font-size:12px;color:var(--text3)">Pasa el mouse (o toca) una barra · línea punteada = promedio</span></div>
       <div class="hg-chart"><div class="hg-avg" style="bottom:${avgPx}px"></div>${barras}</div>
       <div class="hg-row" style="margin-top:6px">${etqMes}</div>
-      <div style="font-size:11px;letter-spacing:.05em;color:var(--text3);margin:12px 0 4px;text-transform:uppercase">Variación vs ${f>1?'pago':'mes'} anterior</div><div class="hg-row">${etqVar}</div></div>
-      <div class="hg-box"><b>Historial</b><div style="overflow-x:auto;margin-top:8px"><table class="hg-tbl"><thead><tr><th>${f>1?'Pago':'Mes'}</th><th>Monto</th><th>Cambio</th><th>%</th>${unidad?`<th>${escapeHtml(unidad)}</th><th>${cur==='USD'?'$':'S/'} por ${escapeHtml(unidad)}</th>`:''}<th></th></tr></thead><tbody>${filas}</tbody></table></div>
+      <div style="font-size:11px;letter-spacing:.05em;color:var(--text3);margin:12px 0 4px;text-transform:uppercase">Variación vs ${f>1?'pago':'mes'} anterior</div><div class="hg-row">${etqVar}</div>${hayAnio?`<div style="font-size:11px;letter-spacing:.05em;color:var(--text3);margin:12px 0 4px;text-transform:uppercase">Variación vs el mismo mes del año anterior</div><div class="hg-row">${etqVarA}</div>`:''}</div>
+      <div class="hg-box"><b>Historial</b><div style="overflow-x:auto;margin-top:8px"><table class="hg-tbl"><thead><tr><th>${f>1?'Pago':'Mes'}</th><th>Monto</th><th>Cambio</th><th>%</th>${hayAnio?'<th>Vs año ant.</th>':''}${unidad?`<th>${escapeHtml(unidad)}</th><th>${cur==='USD'?'$':'S/'} por ${escapeHtml(unidad)}</th>`:''}<th></th></tr></thead><tbody>${filas}</tbody></table></div>
       <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">${pf?'El monto de cada mes viene del pago frecuente enlazado; si lo corriges en Movimientos, se actualiza solo.':'Si corriges el monto del gasto en Movimientos, aquí se actualiza solo.'}</div></div>`
       : `<div class="dash-empty" style="padding:24px 12px"><div class="dash-empty-icon">🧾</div>Aún no hay pagos registrados de este concepto.<div style="margin-top:10px"><button class="btn btn-primary" onclick="hgModalRegistrar('${c.id}')">+ Registrar el primero</button></div></div>`}
   </div>`;
@@ -19896,7 +19910,7 @@ function hgHtmlBolsa(b){
   const hist=meses.map((m,i)=>{ const v=i>0&&vals[i-1]>0?{pct:(vals[i]-vals[i-1])/vals[i-1]*100,up:vals[i]>=vals[i-1]}:null; return `<tr class="${m===mk?'hl':''}"><td>${hgMesNombre(m)}</td><td>${hgBolsaFmt(vals[i],b)}</td><td>${pres>0?(vals[i]/pres*100).toFixed(0)+'%':'—'}</td><td class="${hgVarCls(v)}">${v?hgVarTxt(v):'—'}</td></tr>`; }).join('');
   return `<div class="hg-wrap"><div class="hg-head"><button class="btn" onclick="hgVolver()">‹ Hogar</button><h1>${escapeHtml(b.nombre)}</h1>
     <button class="btn" onclick="hgModalBolsa('${b.id}')">Editar presupuesto</button><button class="btn btn-primary" onclick="hgModalCompra('${b.id}')">+ Compra</button></div>
-    <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 6px;width:fit-content;margin-bottom:14px"><button class="month-btn" onclick="hgMes(-1)" aria-label="Mes anterior">‹</button><span style="min-width:130px;text-align:center;font-weight:600;font-size:14px">${hgMesNombre(mk)}</span><button class="month-btn" onclick="hgMes(1)" aria-label="Mes siguiente">›</button></div>
+    <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 6px;width:fit-content;margin-bottom:14px"><button class="month-btn" onclick="hgMes(-1)" aria-label="Mes anterior">‹</button><span style="min-width:130px;text-align:center;font-weight:600;font-size:14px">${hgMesNombre(mk)}</span><button class="month-btn" onclick="hgMes(1)" aria-label="Mes siguiente">›</button><button class="btn" style="min-height:32px;padding:0 12px;font-size:12px;font-weight:600" onclick="hgHoy()" ${mk===mesActualKey()?'disabled':''} aria-label="Ir al mes actual">Hoy</button></div>
     ${aviso}
     <div class="hg-kpis">
       <div class="hg-kpi"><div class="l">Gastado en el mes</div><div class="v">${F(gasto)}</div><div class="s">${pres>0?pct.toFixed(0)+'% de '+F(pres):'Sin presupuesto definido'}</div></div>
@@ -20000,6 +20014,100 @@ function hgBorrarCompra(cid){
   if(k.consumoId){ const t=getTarjeta(k.tid); if(t) Object.keys(t.movs||{}).forEach(bk=>{ t.movs[bk]=t.movs[bk].filter(c=>c.id!==k.consumoId); }); }
   h.compras=h.compras.filter(x=>x.id!==cid);
   saveState(); _cerrarModalDin('hg-compra-ov'); render(); renderHogar(); toast('Compra eliminada');
+}
+
+// ══════════════════════════════════════════════════════
+//  ↕ ORDEN DEL MENÚ — el usuario reordena las secciones generales (Resumen,
+//  Finanzas, grupos desplegables…) y las subsecciones de cada grupo, y puede
+//  mover una subsección a otro grupo. Se guarda en state.menuOrden y se aplica
+//  moviendo los botones que YA existen (conservan su onclick). Lo que no esté
+//  en el orden guardado (secciones nuevas de futuras versiones) va al final de
+//  su grupo original.  Config → Apariencia → «Orden del menú».
+// ══════════════════════════════════════════════════════
+let _menuDef=null, _mnDraft=null;
+function _menuTexto(el){ const c=el.cloneNode(true); c.querySelectorAll('.nav-badge').forEach(x=>x.remove()); return (c.textContent||'').replace('▾','').replace(/\s+/g,' ').trim(); }
+function _menuLeerDefecto(){
+  const nc=document.querySelector('.nav-center'); if(!nc) return null;
+  const d={top:[],grupos:{},etq:{},gEtq:{}};
+  [...nc.children].forEach(el=>{
+    if(el.classList.contains('nav-dropdown')){
+      const g=el.id.replace('navdrop-',''), tr=el.querySelector('.nav-dropdown-trigger');
+      d.top.push('g:'+g); d.gEtq[g]=tr?_menuTexto(tr):g;
+      d.grupos[g]=[...el.querySelectorAll('.nav-dropdown-item')].map(b=>{ d.etq[b.id]=_menuTexto(b); return b.id; });
+    } else if(el.id){ d.top.push(el.id); d.etq[el.id]=_menuTexto(el); }
+  });
+  return d;
+}
+function _menuEfectivo(){
+  const d=_menuDef||(_menuDef=_menuLeerDefecto()); if(!d) return null;
+  const o=(state&&state.menuOrden)||{}, todos=new Set(Object.values(d.grupos).flat()), usados=new Set(), grupos={};
+  Object.keys(d.grupos).forEach(g=>{ grupos[g]=[]; });
+  Object.keys(d.grupos).forEach(g=>{ ((o.grupos||{})[g]||[]).forEach(id=>{ if(todos.has(id)&&!usados.has(id)){ grupos[g].push(id); usados.add(id); } }); });
+  Object.keys(d.grupos).forEach(g=>d.grupos[g].forEach(id=>{ if(!usados.has(id)){ grupos[g].push(id); usados.add(id); } }));
+  const top=[]; (o.top||[]).forEach(t=>{ if(d.top.includes(t)&&!top.includes(t)) top.push(t); });
+  d.top.forEach(t=>{ if(!top.includes(t)) top.push(t); });
+  return {top,grupos};
+}
+function aplicarOrdenMenu(){
+  const nc=document.querySelector('.nav-center'); if(!nc) return;
+  const e=_menuEfectivo(); if(!e) return;
+  const sig=JSON.stringify(e); if(sig===window._menuSig) return; window._menuSig=sig;
+  e.top.forEach(t=>{ const el=document.getElementById(t.startsWith('g:')?'navdrop-'+t.slice(2):t); if(el) nc.appendChild(el); });
+  Object.keys(e.grupos).forEach(g=>{
+    const m=document.getElementById('navmenu-'+g); if(!m) return;
+    e.grupos[g].forEach(id=>{ const b=document.getElementById(id); if(b) m.appendChild(b); });
+    const dd=document.getElementById('navdrop-'+g); if(dd) dd.style.display=e.grupos[g].length?'':'none';
+  });
+}
+function abrirOrdenMenu(){
+  const e=_menuEfectivo(); if(!e){ toast('El menú no está disponible','info'); return; }
+  _mnDraft=JSON.parse(JSON.stringify(e)); _mnRender();
+}
+function _mnRender(){
+  const d=_menuDef, e=_mnDraft, esc=escapeHtml;
+  const btn=(fn,txt,lab,dis)=>`<button class="btn" style="min-width:40px;min-height:36px;padding:0 8px" ${dis?'disabled':''} onclick="${fn}" aria-label="${lab}">${txt}</button>`;
+  const fila=(etq,arrUp,arrDn,extra)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border2,var(--border))"><span style="flex:1;min-width:0;font-size:13px">${etq}</span>${extra||''}${arrUp}${arrDn}</div>`;
+  let h='<div class="modal-title"><span>↕ Orden del menú</span><button class="modal-close" onclick="_cerrarModalDin(\'menu-orden-overlay\')">✕</button></div>';
+  h+='<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">Usa ▲ ▼ para subir o bajar. En las subsecciones puedes elegir otro grupo con «Mover a». Los cambios se aplican al guardar.</div>';
+  h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">Menú principal</div>';
+  e.top.forEach((t,i)=>{
+    const g=t.startsWith('g:')?t.slice(2):null, n=g?e.grupos[g].length:0;
+    const nom=g?esc(d.gEtq[g])+' <span style="color:var(--text3);font-size:11px">· grupo, '+n+' sección'+(n===1?'':'es')+'</span>':esc(d.etq[t]||t);
+    h+=fila(nom,btn(`mnMover('t',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('t',${i},1)`,'▼','Bajar',i===e.top.length-1));
+  });
+  h+='</div>';
+  Object.keys(e.grupos).forEach(g=>{
+    const ids=e.grupos[g];
+    h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">'+esc(d.gEtq[g])+'</div>';
+    if(!ids.length) h+='<div style="font-size:12px;color:var(--text3)">Vacío (el grupo se oculta del menú).</div>';
+    ids.forEach((id,i)=>{
+      const sel='<select aria-label="Mover a otro grupo" style="max-width:110px;min-height:36px;font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px" onchange="mnMoverA(\''+id+'\',this.value)"><option value="">Mover a…</option>'+Object.keys(e.grupos).filter(x=>x!==g).map(x=>'<option value="'+x+'">'+esc(d.gEtq[x])+'</option>').join('')+'</select>';
+      h+=fila(esc(d.etq[id]||id),btn(`mnMover('${g}',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('${g}',${i},1)`,'▼','Bajar',i===ids.length-1),sel);
+    });
+    h+='</div>';
+  });
+  h+='<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button class="config-action-btn neutral" onclick="mnRestablecer()">Restablecer orden original</button><span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin(\'menu-orden-overlay\')">Cancelar</button><button class="btn btn-primary" onclick="mnGuardar()">Guardar</button></div>';
+  const y=(document.querySelector('#menu-orden-overlay .modal')||{}).scrollTop||0;
+  _abrirModalDin('menu-orden-overlay',h,520);
+  const m=document.querySelector('#menu-orden-overlay .modal'); if(m) m.scrollTop=y;
+}
+function mnMover(donde,i,dl){
+  const arr=donde==='t'?_mnDraft.top:_mnDraft.grupos[donde], j=i+dl;
+  if(!arr||j<0||j>=arr.length) return;
+  [arr[i],arr[j]]=[arr[j],arr[i]]; _mnRender();
+}
+function mnMoverA(id,g2){
+  if(!g2||!_mnDraft.grupos[g2]) return;
+  Object.keys(_mnDraft.grupos).forEach(g=>{ _mnDraft.grupos[g]=_mnDraft.grupos[g].filter(x=>x!==id); });
+  _mnDraft.grupos[g2].push(id); _mnRender();
+}
+function mnGuardar(){
+  state.menuOrden={top:_mnDraft.top.slice(),grupos:JSON.parse(JSON.stringify(_mnDraft.grupos))};
+  window._menuSig=null; aplicarOrdenMenu(); saveState(); _cerrarModalDin('menu-orden-overlay'); toast('Orden del menú guardado');
+}
+function mnRestablecer(){
+  if(!confirm('¿Volver al orden original del menú?')) return;
+  delete state.menuOrden; window._menuSig=null; aplicarOrdenMenu(); saveState(); _cerrarModalDin('menu-orden-overlay'); toast('Menú restablecido');
 }
 
 function renderWidgetsExtra(){
@@ -29952,6 +30060,27 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.11.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Hogar: botón «Hoy» al lado del mes para volver al mes actual (en la pantalla principal y en el detalle de Compras y consumos)."
+  ]
+ },
+ {
+  "v": "v2.11.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Configuración → Apariencia → Orden del menú: sube o baja las secciones generales (Resumen, Finanzas, grupos…) y las subsecciones de cada grupo, y muévelas a otro grupo. Se guarda en tu cuenta y hay un botón para volver al orden original."
+  ]
+ },
+ {
+  "v": "v2.10.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Hogar: variación contra el mismo mes del año anterior en el gráfico, en el detalle al pasar el mouse y en una columna del historial (solo aparece si hay datos de hace 12 meses)."
+  ]
+ },
  {
   "v": "v2.10.0",
   "fecha": "12/11/26",
