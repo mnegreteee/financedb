@@ -1522,7 +1522,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <button class="eye-btn" id="demo-btn" onclick="toggleDemoMode()" title="Modo demo (números aleatorios)" style="font-size:15px">🎭</button>
     <button class="eye-btn" id="lock-btn" onclick="lockApp()" title="Bloquear y cerrar sesión" style="font-size:15px">🔒</button>
     <button class="eye-btn" id="eye-btn" onclick="toggleHide()" title="Ocultar / mostrar cifras">👁</button>
-    <button class="eye-btn" id="revision-btn" onclick="abrirRevisionDatos()" title="Revisar datos (movimientos repetidos, deudas sin su pago, cuentas huérfanas, etc.)" style="font-size:15px;position:relative">🚨<span id="revision-badge" class="nav-badge" style="display:none">0</span></button>
+    <button class="eye-btn" id="revision-btn" onclick="abrirRevisionDatosCompleta()" title="Revisar datos de toda la app (movimientos y consumos repetidos, deudas sin su pago, cuentas huérfanas, etc.)" style="font-size:15px;position:relative">🚨<span id="revision-badge" class="nav-badge" style="display:none">0</span></button>
     <div class="last-updated" id="last-updated-wrap">
       <div class="last-updated-label">Última actualización</div>
       <div class="last-updated-val" id="last-updated-val">—</div>
@@ -4538,9 +4538,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.27.0';
-const APP_VERSION_DATE = '13/11/26 - 01:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo acceso rápido 🚨 arriba a la derecha: abre «Revisar datos» directo, con un numerito rojo (como las notificaciones) cuando hay algo pendiente.';
+const APP_VERSION = 'v2.29.0';
+const APP_VERSION_DATE = '13/11/26 - 02:21'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'El 🚨 ahora también revisa Tarjetas de crédito (duplicados, fechas y montos inválidos) además de todo lo demás. Y en cada aviso de «Revisar datos» (🚨 y Gestión de Cuentas) puedes tocar el detalle para ir directo al movimiento/consumo/deuda exacto, sin buscarlo manualmente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -10100,7 +10100,7 @@ function renderMovimientos(){
     const clickHandler=movBulkMode?`onclick="if(this.dataset.blockClick)return;const cb=this.querySelector('input[type=checkbox]');cb.checked=!cb.checked;onMovCheckToggle('${m.id}',cb.checked)"`:`onclick="if(this.dataset.blockClick)return;editMovimiento('${m.id}')"`;
     return `<div class="swipe-wrap">
       <div class="swipe-delete-bg" onclick="deleteMovimiento('${m.id}',event)">🗑 Eliminar</div>
-      <div class="mov-item ${cls} swipe-target" ${clickHandler} ontouchstart="swipeStart(event,this)" ontouchmove="swipeMove(event,this)" ontouchend="swipeEnd(event,this,'${m.id}')">
+      <div class="mov-item ${cls} swipe-target" id="mov-row-${m.id}" ${clickHandler} ontouchstart="swipeStart(event,this)" ontouchmove="swipeMove(event,this)" ontouchend="swipeEnd(event,this,'${m.id}')">
       <div class="mov-left">${checkbox}<div class="mov-dot ${cls}">${ic}</div>
         <div><div class="mov-name">${escapeHtml(m.desc)}${catHtml}${ubicPinCatHtml('mov',m.id,m.ubicacion)}</div><div class="mov-meta">${dateStr} · ${escapeHtml(m.account)}${paisHtml}${m.mesServicio?` · <span style="color:var(--yellow,#d9a441);font-weight:600">⏩ Adelanto de ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(m.mesServicio.slice(5,7),10)-1]} ${m.mesServicio.slice(0,4)}</span>`:''}</div>${noteHtml}</div>
       </div>
@@ -15128,38 +15128,62 @@ function escanearHuerfanos(){
     Object.keys(state[k]||{}).forEach(n=>{ if(!valid.has(n)) restos.push({campo:k,nombre:n,etiqueta:et}); });
   });
   (Array.isArray(state.ordenCuentas)?state.ordenCuentas:[]).forEach(n=>{ if(!valid.has(n)) restos.push({campo:'ordenCuentas',nombre:n,etiqueta:'orden'}); });
-  // Avisos generales (solo informan; no cambian nada)
+  // Avisos generales (solo informan; no cambian nada). Cada uno lleva un
+  // "id" estable para poder marcarlo como "ya lo revisé" (state.revisionIgnorados)
+  // sin tener que ocultar avisos futuros distintos que caigan en la misma categoría,
+  // y (cuando aplica) un "detalle" con ítems clicables que llevan directo al
+  // movimiento/consumo/registro exacto, para no tener que buscarlo a mano mes por mes.
   const avisos=[];
   try{
     const hoyIso=todayISO(), lejos=(new Date().getFullYear()+1)+hoyIso.slice(4);
-    const movs=state.movimientos||[], vistos=new Map(), dupDetalle=[]; let dup=0, sinCat=0, fechaMala=0, montoMalo=0;
+    const movs=state.movimientos||[], vistos=new Map(), dupDetalle=[], dupKeys=[]; let dup=0, sinCat=0, fechaMala=0, montoMalo=0;
+    const sinCatItems=[], fechaMalaItems=[], montoMaloItems=[];
     movs.forEach(m=>{
       const f=String(m.date||'');
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(f)||f<'2000-01-01'||f>lejos) fechaMala++;
-      const a=Number(m.amount); if(!(a>0)) montoMalo++;
-      if(m.type==='expense' && !m.cat && !esTransferenciaInterna(m) && !esCambioMoneda(m)) sinCat++;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(f)||f<'2000-01-01'||f>lejos){ fechaMala++; if(fechaMalaItems.length<5) fechaMalaItems.push(m); }
+      const a=Number(m.amount); if(!(a>0)){ montoMalo++; if(montoMaloItems.length<5) montoMaloItems.push(m); }
+      if(m.type==='expense' && !m.cat && !esTransferenciaInterna(m) && !esCambioMoneda(m)){ sinCat++; if(sinCatItems.length<5) sinCatItems.push(m); }
       const k=[f,(m.desc||'').trim().toLowerCase(),a,m.account,m.type].join('|');
-      if(vistos.has(k)){ dup++; if(dupDetalle.length<5) dupDetalle.push(m); } else vistos.set(k,1);
+      if(vistos.has(k)){ dup++; dupKeys.push(k); if(dupDetalle.length<5) dupDetalle.push(m); } else vistos.set(k,1);
     });
+    const simbMov=c=>c==='USD'?'$':'S/';
+    const irAMov=m=>()=>irAMovimiento(m.id,m.date);
+    const labelMov=m=>fmtFechaCorta(m.date)+' — "'+(m.desc||'(sin descripción)')+'" — '+simbMov(m.currency)+' '+numFmtSigned(Number(m.amount),2)+' ('+accLabel(m.account)+')';
     if(dup){
-      const simb=c=>c==='USD'?'$':'S/';
-      const detalleTxt=dupDetalle.map(m=>'\n· '+fmtFechaCorta(m.date)+' — "'+(m.desc||'(sin descripción)')+'" — '+simb(m.currency)+' '+numFmtSigned(Number(m.amount),2)+' ('+accLabel(m.account)+')').join('');
-      avisos.push({ic:'🧾',txt:dup+' movimiento'+(dup===1?'':'s')+' parece'+(dup===1?'':'n')+' repetido'+(dup===1?'':'s')+' (misma fecha, concepto, monto y cuenta). Revísalos en Finanzas por si registraste algo dos veces:'+detalleTxt+(dup>dupDetalle.length?'\n… y '+(dup-dupDetalle.length)+' más.':'')});
+      avisos.push({ic:'🧾',id:'dup:'+_revHash(dupKeys.slice().sort().join('·')),
+        txt:dup+' movimiento'+(dup===1?'':'s')+' parece'+(dup===1?'':'n')+' repetido'+(dup===1?'':'s')+' (misma fecha, concepto, monto y cuenta). Revísalos en Finanzas por si registraste algo dos veces:',
+        detalle:dupDetalle.map(m=>({label:labelMov(m),accion:irAMov(m)})),
+        masInfo:dup>dupDetalle.length?('… y '+(dup-dupDetalle.length)+' más.'):null});
     }
-    if(fechaMala) avisos.push({ic:'📅',txt:fechaMala+' movimiento'+(fechaMala===1?'':'s')+' con fecha vacía, inválida o a más de un año en el futuro.'});
-    if(montoMalo) avisos.push({ic:'💲',txt:montoMalo+' movimiento'+(montoMalo===1?'':'s')+' con monto cero o inválido.'});
-    if(sinCat) avisos.push({ic:'🏷️',txt:sinCat+' gasto'+(sinCat===1?'':'s')+' sin categoría: no aparecen bien en Presupuesto ni en los esenciales.'});
-    (((state.auto||{}).prestamos)||[]).filter(p=>!(state.deudasMayores||[]).some(d=>d.id===p.dmId)).forEach(p=>avisos.push({ic:'🚗',txt:'El préstamo vinculado en Auto («'+(p.vehiculo||'sin nombre')+'») apunta a una deuda mayor que ya no existe.'}));
+    if(fechaMala) avisos.push({ic:'📅',id:'fechaMala:'+fechaMala,
+      txt:fechaMala+' movimiento'+(fechaMala===1?'':'s')+' con fecha vacía, inválida o a más de un año en el futuro:',
+      detalle:fechaMalaItems.map(m=>({label:(m.desc||'(sin descripción)')+' ('+accLabel(m.account)+')',accion:irAMov(m)})),
+      masInfo:fechaMala>fechaMalaItems.length?('… y '+(fechaMala-fechaMalaItems.length)+' más.'):null});
+    if(montoMalo) avisos.push({ic:'💲',id:'montoMalo:'+montoMalo,
+      txt:montoMalo+' movimiento'+(montoMalo===1?'':'s')+' con monto cero o inválido:',
+      detalle:montoMaloItems.map(m=>({label:labelMov(m),accion:irAMov(m)})),
+      masInfo:montoMalo>montoMaloItems.length?('… y '+(montoMalo-montoMaloItems.length)+' más.'):null});
+    if(sinCat) avisos.push({ic:'🏷️',id:'sinCat:'+sinCat,
+      txt:sinCat+' gasto'+(sinCat===1?'':'s')+' sin categoría: no aparecen bien en Presupuesto ni en los esenciales.'+(sinCatItems.length?' Algunos ejemplos:':''),
+      detalle:sinCatItems.map(m=>({label:labelMov(m),accion:irAMov(m)})),
+      masInfo:sinCat>sinCatItems.length?('… y '+(sinCat-sinCatItems.length)+' más.'):null});
+    (((state.auto||{}).prestamos)||[]).filter(p=>!(state.deudasMayores||[]).some(d=>d.id===p.dmId)).forEach(p=>avisos.push({ic:'🚗',id:'autoPrestamoRoto:'+p.id,
+      txt:'El préstamo vinculado en Auto («'+(p.vehiculo||'sin nombre')+'») apunta a una deuda mayor que ya no existe.',
+      detalle:[{label:'Ver préstamo en Auto',accion:()=>{ showPage('combustible'); try{ if(p.vid) autoSelVeh(p.vid); }catch(e){} autoTab('prestamo'); }}]}));
     const h=state.hogar;
     if(h&&Array.isArray(h.conceptos)){
-      h.conceptos.filter(c=>c.pfId&&!(state.pagosFrecuentes||[]).some(p=>p.id===c.pfId)).forEach(c=>avisos.push({ic:'🏡',txt:'El concepto de Hogar «'+c.nombre+'» apunta a un Pago frecuente que ya no existe.'}));
+      h.conceptos.filter(c=>c.pfId&&!(state.pagosFrecuentes||[]).some(p=>p.id===c.pfId)).forEach(c=>avisos.push({ic:'🏡',id:'hogarConceptoRoto:'+c.id,
+        txt:'El concepto de Hogar «'+c.nombre+'» apunta a un Pago frecuente que ya no existe.',
+        detalle:[{label:'Ver concepto en Hogar',accion:()=>{ showPage('hogar'); HG.tab='conceptos'; renderHogar(); }}]}));
       const ids=new Set(h.conceptos.map(c=>c.id)); const sueltos=(h.registros||[]).filter(r=>!ids.has(r.cid)).length;
-      if(sueltos) avisos.push({ic:'🏡',txt:sueltos+' registro'+(sueltos===1?'':'s')+' de Hogar sin su concepto.'});
+      if(sueltos) avisos.push({ic:'🏡',id:'hogarRegSueltos:'+sueltos,txt:sueltos+' registro'+(sueltos===1?'':'s')+' de Hogar sin su concepto.'});
       const bids=new Set((h.bolsas||[]).map(b=>b.id)), kSueltas=(h.compras||[]).filter(k=>!bids.has(k.bid)).length;
-      if(kSueltas) avisos.push({ic:'🛒',txt:kSueltas+' compra'+(kSueltas===1?'':'s')+' de Hogar sin su presupuesto.'});
+      if(kSueltas) avisos.push({ic:'🛒',id:'hogarComprasSueltas:'+kSueltas,txt:kSueltas+' compra'+(kSueltas===1?'':'s')+' de Hogar sin su presupuesto.'});
       const dMin=(window._movDesdeIso||'').slice(0,7), idsM=new Set((state.movimientos||[]).map(m=>m.id));
       const sinGasto=(h.compras||[]).filter(k=>k.movId&&!idsM.has(k.movId)&&!(dMin&&String(k.fecha).slice(0,7)<dMin)).length;
-      if(sinGasto) avisos.push({ic:'🛒',txt:sinGasto+' compra'+(sinGasto===1?'':'s')+' de Hogar cuyo gasto ya no está en Finanzas (se sigue contando en el presupuesto). Ábrela y elimínala si fue un error.'});
+      if(sinGasto) avisos.push({ic:'🛒',id:'hogarCompraSinGasto:'+sinGasto,
+        txt:sinGasto+' compra'+(sinGasto===1?'':'s')+' de Hogar cuyo gasto ya no está en Finanzas (se sigue contando en el presupuesto). Ábrela y elimínala si fue un error.',
+        detalle:[{label:'Ver Lista de compras del hogar',accion:()=>{ showPage('hogar'); HG.vista='lista'; HG.tab='conceptos'; renderHogar(); }}]});
     }
   }catch(e){ console.warn('Avisos omitidos:', e&&e.message); }
   const enlaces=[];
@@ -15182,29 +15206,128 @@ function escanearHuerfanos(){
       const hay=d.movPagoId ? ids.has(d.movPagoId) : movs.some(m=>m.desc===desc&&m.date===d.fechaPago);
       if(!hay){
         const detalleDeuda='\nBusqué un movimiento con descripción exacta "'+desc+'" en la fecha '+fmtFechaCorta(d.fechaPago)+(d.cuentaPago?' en la cuenta "'+accLabel(d.cuentaPago)+'"':'')+(d.movPagoId?' (con el id guardado "'+d.movPagoId+'")':' (no tiene un id de movimiento guardado, así que busqué por texto y fecha exactos)')+'. Si tu movimiento tiene otra fecha, otra cuenta o la descripción editada, por eso no lo encuentro — aunque tú SÍ lo veas en la lista.';
-        avisos.push({ic:'🤝',txt:'La deuda «'+d.nombre+'» figura como '+(yd?'pagada':'cobrada')+' pero no encuentro su movimiento en Finanzas: el saldo de la cuenta no se movió. Revierte el pago y vuelve a registrarlo.'+detalleDeuda});
+        avisos.push({ic:'🤝',id:'deudaSinMov:'+d.id,txt:'La deuda «'+d.nombre+'» figura como '+(yd?'pagada':'cobrada')+' pero no encuentro su movimiento en Finanzas: el saldo de la cuenta no se movió. Revierte el pago y vuelve a registrarlo.'+detalleDeuda,
+          detalle:[{label:'Ver deuda «'+d.nombre+'»',accion:()=>{ deudaFilter='all'; showPage('deudas'); resaltarElemento('deuda-card-'+d.id); }}]});
       }
     });
     const dIds=new Set((state.deudas||[]).map(d=>d.movPagoId).filter(Boolean));
   }catch(e){ console.warn('Enlaces omitidos:', e&&e.message); }
-  return {huerfanas:out,restos,avisos,enlaces};
+  const ignorados=state.revisionIgnorados||{};
+  const avisosOcultos=avisos.filter(a=>a.id&&ignorados[a.id]);
+  const avisosVisibles=avisos.filter(a=>!(a.id&&ignorados[a.id]));
+  return {huerfanas:out,restos,avisos:avisosVisibles,avisosOcultos,enlaces};
 }
-function abrirRevisionDatos(){ renderRevisionDatos(); }
+function _revHash(s){ let h=0; s=String(s); for(let i=0;i<s.length;i++){ h=((h<<5)-h+s.charCodeAt(i))|0; } return (h>>>0).toString(36); }
+// Navegación directa desde "Revisar datos": llevan al movimiento/consumo exacto
+// (en vez de obligar a buscarlo a mano mes por mes) y lo resaltan un momento.
+function irAMovimiento(movId, fechaStr){
+  try{
+    const fecha=new Date(fechaStr+'T12:00:00');
+    state.currentYear=fecha.getFullYear(); state.currentMonth=fecha.getMonth();
+    state.currentTab='todos'; selectedAccounts.clear(); movQuickFilter=null;
+    const cf=document.getElementById('cat-filter'); if(cf) cf.value='';
+    const sb=document.getElementById('mov-search'); if(sb) sb.value='';
+    showPage('finanzas');
+    resaltarElemento('mov-row-'+movId);
+  }catch(e){ console.warn('No se pudo ir al movimiento:', e&&e.message); }
+}
+function irAConsumoTC(tarjetaId, monthKey, consumoId){
+  try{
+    tcSearchQuery='';
+    showPage('tarjetas');
+    openTCDetail(tarjetaId, monthKey);
+    resaltarElemento('tc-row-'+consumoId);
+  }catch(e){ console.warn('No se pudo ir al consumo:', e&&e.message); }
+}
+// ── Revisión de TODA la app (solo para el acceso rápido 🚨) — además de lo
+// que ya revisa escanearHuerfanos() (cuentas, restos, avisos generales,
+// enlaces de Servicios), suma problemas de Tarjetas de crédito. El botón
+// "🔍 Revisar datos" de Gestionar Cuentas sigue usando SOLO escanearHuerfanos(),
+// sin este agregado, a propósito.
+function escanearTarjetasProblemas(){
+  const avisos=[];
+  try{
+    const hoyIso=todayISO(), lejos=(new Date().getFullYear()+1)+hoyIso.slice(4);
+    const vistos=new Map(), dupDetalle=[], dupKeys=[], fechaMalaItems=[], montoMaloItems=[]; let dup=0, fechaMala=0, montoMalo=0;
+    (state.tarjetas||[]).forEach(t=>{
+      Object.entries(t.movs||{}).forEach(([mk,movs])=>{
+        (movs||[]).forEach(m=>{
+          const f=String(m.fecha||'');
+          if(!/^\d{4}-\d{2}-\d{2}$/.test(f)||f<'2000-01-01'||f>lejos){ fechaMala++; if(fechaMalaItems.length<5) fechaMalaItems.push({t,mk,m}); }
+          const a=Number(m.monto); if(!(a>0)){ montoMalo++; if(montoMaloItems.length<5) montoMaloItems.push({t,mk,m}); }
+          const k=[t.id,f,(m.desc||'').trim().toLowerCase(),a,m.currency||t.currency].join('|');
+          if(vistos.has(k)){ dup++; dupKeys.push(k); if(dupDetalle.length<5) dupDetalle.push({t,mk,m}); } else vistos.set(k,1);
+        });
+      });
+    });
+    const simb=c=>c==='USD'?'$':'S/';
+    const nomT=t=>t.banco+(t.cat?' '+t.cat:'');
+    const irACons=(t,mk,m)=>()=>irAConsumoTC(t.id,mk,m.id);
+    const labelCons=({t,mk,m})=>fmtFechaCorta(m.fecha)+' — "'+(m.desc||'(sin descripción)')+'" — '+simb(m.currency||t.currency)+' '+numFmtSigned(Number(m.monto),2)+' ('+nomT(t)+')';
+    if(dup){
+      avisos.push({ic:'💳',id:'tcDup:'+_revHash(dupKeys.slice().sort().join('·')),
+        txt:dup+' consumo'+(dup===1?'':'s')+' de tarjeta parece'+(dup===1?'':'n')+' repetido'+(dup===1?'':'s')+' (misma fecha, concepto, monto y tarjeta). Revísalos por si se cargó un consumo dos veces:',
+        detalle:dupDetalle.map(x=>({label:labelCons(x),accion:irACons(x.t,x.mk,x.m)})),
+        masInfo:dup>dupDetalle.length?('… y '+(dup-dupDetalle.length)+' más.'):null});
+    }
+    if(fechaMala) avisos.push({ic:'📅',id:'tcFechaMala:'+fechaMala,
+      txt:fechaMala+' consumo'+(fechaMala===1?'':'s')+' de tarjeta con fecha vacía, inválida o a más de un año en el futuro:',
+      detalle:fechaMalaItems.map(x=>({label:(x.m.desc||'(sin descripción)')+' ('+nomT(x.t)+')',accion:irACons(x.t,x.mk,x.m)})),
+      masInfo:fechaMala>fechaMalaItems.length?('… y '+(fechaMala-fechaMalaItems.length)+' más.'):null});
+    if(montoMalo) avisos.push({ic:'💲',id:'tcMontoMalo:'+montoMalo,
+      txt:montoMalo+' consumo'+(montoMalo===1?'':'s')+' de tarjeta con monto cero o inválido:',
+      detalle:montoMaloItems.map(x=>({label:labelCons(x),accion:irACons(x.t,x.mk,x.m)})),
+      masInfo:montoMalo>montoMaloItems.length?('… y '+(montoMalo-montoMaloItems.length)+' más.'):null});
+  }catch(e){ console.warn('Avisos de tarjetas omitidos:', e&&e.message); }
+  return {avisos};
+}
+function escanearTodoApp(){
+  const base=escanearHuerfanos();
+  const tc=escanearTarjetasProblemas();
+  const ignorados=state.revisionIgnorados||{};
+  const tcVisibles=tc.avisos.filter(a=>!(a.id&&ignorados[a.id]));
+  const tcOcultos=tc.avisos.filter(a=>a.id&&ignorados[a.id]);
+  return {...base, avisos:base.avisos.concat(tcVisibles), avisosOcultos:base.avisosOcultos.concat(tcOcultos)};
+}
+function revIgnorarAviso(id){
+  if(!id) return;
+  if(!state.revisionIgnorados) state.revisionIgnorados={};
+  state.revisionIgnorados[id]=true;
+  saveState();
+  renderRevisionDatos();
+  toast('Marcado como revisado — no se mostrará de nuevo mientras no cambie');
+}
+function revMostrarAvisoOculto(id){
+  if(state.revisionIgnorados) delete state.revisionIgnorados[id];
+  saveState();
+  renderRevisionDatos();
+}
+function revMostrarTodosOcultos(){
+  state.revisionIgnorados={};
+  saveState();
+  renderRevisionDatos();
+  toast('Todos los avisos ocultados vuelven a mostrarse');
+}
+function abrirRevisionDatos(){ renderRevisionDatos(false); }
+function abrirRevisionDatosCompleta(){ renderRevisionDatos(true); }
 function updateRevisionBadge(){
   const badge=document.getElementById('revision-badge');
   if(!badge) return;
   try{
-    const {huerfanas,restos,avisos,enlaces}=escanearHuerfanos();
+    const {huerfanas,restos,avisos,enlaces}=escanearTodoApp();
     const n=Object.keys(huerfanas).length + (restos?restos.length:0) + (avisos?avisos.length:0) + (enlaces?enlaces.length:0);
     badge.style.display = n ? 'block' : 'none';
     badge.textContent = n>9 ? '9+' : String(n);
   }catch(e){ console.warn('Badge de Revisar datos omitido:', e&&e.message); }
 }
-function renderRevisionDatos(){
-  const {huerfanas,restos,avisos,enlaces}=escanearHuerfanos();
+function renderRevisionDatos(modoCompleto){
+  window._revisionModoCompleto=modoCompleto;
+  window._revisionAcciones=[];
+  const {huerfanas,restos,avisos,avisosOcultos,enlaces}=modoCompleto?escanearTodoApp():escanearHuerfanos();
   _revNombres=Object.keys(huerfanas); _revEnl=enlaces||[];
   { const badge=document.getElementById('revision-badge'); if(badge){ const n=_revNombres.length+(restos?restos.length:0)+(avisos?avisos.length:0)+_revEnl.length; badge.style.display=n?'block':'none'; badge.textContent=n>9?'9+':String(n); } }
-  let h='<div class="modal-title"><span>🔍 Revisar datos</span><button class="modal-close" onclick="_cerrarModalDin(\'revision-overlay\')">✕</button></div>';
+  let h='<div class="modal-title"><span>🔍 Revisar datos'+(modoCompleto?' — toda la app':'')+'</span><button class="modal-close" onclick="_cerrarModalDin(\'revision-overlay\')">✕</button></div>';
+  if(modoCompleto) h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Incluye cuentas, tarjetas de crédito y el resto de la app.</div>';
   if(!_revNombres.length && !restos.length && !avisos.length && !_revEnl.length){
     h+='<div style="text-align:center;padding:22px 8px"><div style="font-size:34px">✅</div><div style="font-size:14px;font-weight:600;margin:6px 0">Todo en orden</div><div style="font-size:12px;color:var(--text3);line-height:1.5">Ningún movimiento, pago frecuente, meta, deuda ni servicio apunta a una cuenta que no exista.</div></div>';
   } else {
@@ -15235,7 +15358,17 @@ function renderRevisionDatos(){
     });
     h+='</div>';
   }
-  if(avisos.length) h+='<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:6px">Para revisar</div>'+avisos.map(a=>'<div style="font-size:12px;line-height:1.5;color:var(--text2);padding:3px 0;white-space:pre-line">'+a.ic+' '+escapeHtml(a.txt)+'</div>').join('')+'</div>';
+  if(avisos.length) h+='<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:6px">Para revisar</div>'+avisos.map(a=>{
+    const detalleHtml=(a.detalle||[]).map(d=>{
+      const idx=window._revisionAcciones.length; window._revisionAcciones.push(d.accion);
+      return '<div style="font-size:11.5px;color:var(--accent);cursor:pointer;padding:3px 0 3px 20px" onclick="_cerrarModalDin(\'revision-overlay\');window._revisionAcciones['+idx+']()">→ '+escapeHtml(d.label)+'</div>';
+    }).join('');
+    const masHtml=a.masInfo?'<div style="font-size:11px;color:var(--text3);padding-left:20px">'+escapeHtml(a.masInfo)+'</div>':'';
+    return '<div style="padding:6px 0;border-top:1px solid var(--border2)"><div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between"><div style="font-size:12px;line-height:1.5;color:var(--text2);white-space:pre-line;flex:1">'+a.ic+' '+escapeHtml(a.txt)+'</div>'+(a.id?'<button class="config-action-btn neutral" style="flex-shrink:0;font-size:11px;padding:4px 8px" onclick="revIgnorarAviso(\''+a.id+'\')" title="Ya lo revisé y está bien — no mostrar de nuevo mientras no cambie">✓ Ya lo revisé</button>':'')+'</div>'+detalleHtml+masHtml+'</div>';
+  }).join('')+'</div>';
+  if(avisosOcultos&&avisosOcultos.length){
+    h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>🙈 '+avisosOcultos.length+' aviso'+(avisosOcultos.length===1?'':'s')+' marcado'+(avisosOcultos.length===1?'':'s')+' como "ya lo revisé" ('+avisosOcultos.map(a=>'<a href="javascript:revMostrarAvisoOculto(\''+a.id+'\')" style="color:var(--accent)">mostrar</a>').join(', ')+')</span><button class="btn" style="font-size:11px;padding:4px 8px" onclick="revMostrarTodosOcultos()">Mostrar todos</button></div>';
+  }
   _abrirModalDin('revision-overlay',h,560);
 }
 function revReasignar(i){
@@ -31058,6 +31191,24 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.29.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "El acceso rápido 🚨 «Revisar datos» ahora también analiza Tarjetas de crédito: consumos repetidos, fechas inválidas y montos inválidos en cualquier mes de cualquier tarjeta (antes solo revisaba cuentas, movimientos, deudas, etc.). El «🔍 Revisar datos» de Gestión de Cuentas se mantiene igual que antes, sin tarjetas, tal como se pidió.",
+   "En «Revisar datos» (🚨 y Gestión de Cuentas), cada aviso con un detalle (movimiento repetido, consumo repetido, deuda sin su pago, etc.) ahora es clicleable: te lleva directo a ese registro exacto — al mes/movimiento en Finanzas, al consumo exacto dentro de la tarjeta, o a la deuda/préstamo/concepto correspondiente — en vez de tener que buscarlo mes por mes."
+  ]
+ },
+ {
+  "v": "v2.28.0 / v2.27.0 / v2.26.1 / v2.26.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "«Revisar datos»: cada aviso informativo ahora tiene un botón «✓ Ya lo revisé» para marcarlo como visto (se puede deshacer); el numerito del 🚨 solo cuenta lo pendiente, y si la situación cambia el aviso vuelve a aparecer.",
+   "Nuevo acceso rápido 🚨 con numerito tipo notificación que muestra directo el panel de «Revisar datos».",
+   "«Revisar datos» ahora detalla exactamente qué movimiento parece repetido y de qué deuda falta el pago, en vez de solo mostrar un número.",
+   "Auditoría completa de «Ver y deshacer últimas acciones»: se agregaron ~29 tipos de acción que antes no quedaban registrados en el historial ni se podían deshacer."
+  ]
+ },
  {
   "v": "v2.25.1",
   "fecha": "13/11/26",
