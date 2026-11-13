@@ -1477,7 +1477,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <button class="nav-tab nav-dropdown-trigger" onclick="toggleNavDropdown('otros',event)">🗓️ Otros ▾</button>
       <div class="nav-dropdown-menu" id="navmenu-otros">
         <button class="nav-dropdown-item" id="nav-hogar" onclick="showPage('hogar')">🏡 Hogar</button>
-        <button class="nav-dropdown-item" id="nav-combustible" onclick="showPage('combustible')">⛽ Combustible</button>
+        <button class="nav-dropdown-item" id="nav-combustible" onclick="showPage('combustible')">🚗 Auto</button>
         <button class="nav-dropdown-item" id="nav-calendario" onclick="showPage('calendario')">📅 Calendario</button>
         <button class="nav-dropdown-item" id="nav-sueldos" onclick="showPage('sueldos')">💼 Análisis de Sueldos</button>
         <button class="nav-dropdown-item" id="nav-afp" onclick="showPage('afp')">🪙 AFP</button>
@@ -3554,9 +3554,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="container">
 
   <div class="month-nav" style="margin-bottom:6px">
-    <h1>⛽ Control de Combustible</h1>
+    <h1>🚗 Auto</h1>
     <button class="config-action-btn neutral" style="font-size:11px;padding:5px 12px" onclick="exportarCombustibleExcel()" title="Descargar un Excel con todas las recargas de GLP y gasolina">⬇ Exportar Excel</button>
   </div>
+
+  <div class="auto-tabs" id="auto-tabs"></div>
+  <div id="auto-resumen"></div>
+  <div id="auto-prestamo"></div>
 
   <!-- MANTENIMIENTO DEL AUTO — proyección basada en el kilometraje registrado -->
   <div class="card" id="mant-card" style="padding:18px;margin-bottom:20px">
@@ -3619,7 +3623,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   </template>
 
   <!-- Tabs GLP / Gasolina -->
-  <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border)">
+  <div id="fuel-tabs-bar" style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border)">
     <button class="fuel-type-tab active" id="ftab-glp" onclick="switchFuelType('glp')"
       style="padding:8px 24px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px;font-family:var(--font)">
       🔵 GLP
@@ -4509,9 +4513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.11.4';
-const APP_VERSION_DATE = '12/11/26 - 22:03'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Orden del menú: ahora también puedes sacar una subsección al menú principal, o meter una sección del menú principal dentro de un grupo.';
+const APP_VERSION = 'v2.15.0';
+const APP_VERSION_DATE = '12/11/26 - 23:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Cada auto tiene su propio control: selector de auto en Combustible, Mantenimiento y Préstamo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -8877,7 +8881,7 @@ function checkBrowserNotifications(forzar){
     const cercaPorDias = proyMant.diasFaltan!==null && proyMant.diasFaltan<=15;
     if(proyMant.vencido || cercaPorKm || cercaPorDias){
       const fechaTxt=proyMant.fechaEstimada?(' — estimado '+String(proyMant.fechaEstimada.getDate()).padStart(2,'0')+'/'+String(proyMant.fechaEstimada.getMonth()+1).padStart(2,'0')):'';
-      mensajes.push(`🔧 ${item.nombre} ${mantTextoProximo(item,proyMant)}${proyMant.vencePor==='tiempo'?'':fechaTxt}`);
+      mensajes.push(`🔧 ${item.nombre}${autoPref(item)} ${mantTextoProximo(item,proyMant)}${proyMant.vencePor==='tiempo'?'':fechaTxt}`);
     }
   });
 
@@ -14907,6 +14911,7 @@ function escanearHuerfanos(){
     if(fechaMala) avisos.push({ic:'📅',txt:fechaMala+' movimiento'+(fechaMala===1?'':'s')+' con fecha vacía, inválida o a más de un año en el futuro.'});
     if(montoMalo) avisos.push({ic:'💲',txt:montoMalo+' movimiento'+(montoMalo===1?'':'s')+' con monto cero o inválido.'});
     if(sinCat) avisos.push({ic:'🏷️',txt:sinCat+' gasto'+(sinCat===1?'':'s')+' sin categoría: no aparecen bien en Presupuesto ni en los esenciales.'});
+    (((state.auto||{}).prestamos)||[]).filter(p=>!(state.deudasMayores||[]).some(d=>d.id===p.dmId)).forEach(p=>avisos.push({ic:'🚗',txt:'El préstamo vinculado en Auto («'+(p.vehiculo||'sin nombre')+'») apunta a una deuda mayor que ya no existe.'}));
     const h=state.hogar;
     if(h&&Array.isArray(h.conceptos)){
       h.conceptos.filter(c=>c.pfId&&!(state.pagosFrecuentes||[]).some(p=>p.id===c.pfId)).forEach(c=>avisos.push({ic:'🏡',txt:'El concepto de Hogar «'+c.nombre+'» apunta a un Pago frecuente que ya no existe.'}));
@@ -19229,6 +19234,7 @@ function hgEnsure(){
   if(!Array.isArray(h.registros)) h.registros=[];
   if(!Array.isArray(h.bolsas)) h.bolsas=[];
   if(!Array.isArray(h.compras)) h.compras=[];
+  if(!Array.isArray(h.prestamos)) h.prestamos=[];
   if(!h.ahorroSel||typeof h.ahorroSel!=='object') h.ahorroSel={};
   if(!Array.isArray(h.esenciales)) h.esenciales=HG_ESENCIALES_DEF.slice();
   return h;
@@ -19359,7 +19365,33 @@ function renderHogar(){
     if(b){ root.innerHTML=hgHtmlBolsa(b); return; }
     HG.vista='lista';
   }
-  root.innerHTML='<div class="hg-wrap">'+hgHtmlCabecera()+(HG.tab==='proyeccion'?hgHtmlProyeccion():hgHtmlLista()+hgHtmlCompras())+'</div>';
+  root.innerHTML='<div class="hg-wrap">'+hgHtmlCabecera()+(HG.tab==='proyeccion'?hgHtmlProyeccion():HG.tab==='prestamo'?hgHtmlPrestamo():hgHtmlLista()+hgHtmlCompras())+'</div>';
+}
+function hgHtmlPrestamo(){
+  const P=hgEnsure().prestamos, dms=state.deudasMayores||[], usados=dmUsadosSecciones(), libres=dms.filter(d=>!usados.has(d.id));
+  const sel=libres.length?`<select id="hg-sel-dm" style="min-height:40px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:14px">${libres.map(d=>`<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}</select> <button class="btn btn-primary" onclick="hgVincularPrestamo()">🔗 Vincular${(state.hogar&&state.hogar.prestamos&&state.hogar.prestamos.length)?' otro préstamo':''}</button>`:'';
+  if(!P.length) return `<div class="auto-box" style="text-align:center;padding:26px 14px"><div style="font-size:34px">🏦</div><div style="font-size:15px;font-weight:600;margin:6px 0">Préstamo del hogar</div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:520px;margin:0 auto 14px">Vincula la deuda mayor de tu casa (hipotecario, construcción, etc.). Verás cuánto debes, el cronograma completo y cómo vas con el avance, conectado a su Pago frecuente. No se duplica nada.</div>
+    ${libres.length?`<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center">${sel}</div>`:`<div style="font-size:12px;color:var(--amber);margin-bottom:10px">No tienes deudas mayores libres. Crea una en Créditos → Deudas y vuelve aquí.</div><button class="btn" onclick="showPage('deudas')">Ir a Deudas</button>`}</div>`;
+  let h=dmTotalesHTML(P.map(p=>(state.deudasMayores||[]).find(x=>x.id===p.dmId)).filter(Boolean),'Todos los préstamos del hogar');
+  P.forEach(p=>{
+    const d=(state.deudasMayores||[]).find(x=>x.id===p.dmId);
+    if(!d){ h+=`<div class="hg-alert">El préstamo vinculado («${escapeHtml(p.nombre||'Hogar')}») ya no existe en Deudas mayores. <button class="btn" onclick="hgDesvincularPrestamo('${p.id}')">Quitar vínculo</button></div>`; return; }
+    h+=`<div class="auto-box"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h3 style="margin:0;flex:1 1 auto">🏡 ${escapeHtml(p.nombre||d.nombre)}</h3>
+      <button class="btn" onclick="hgEditarPrestamo('${p.id}')">✏️ Renombrar</button><button class="btn" onclick="autoAbrirDeuda('${d.id}')">Abrir en Deudas →</button><button class="btn" onclick="if(confirm('¿Quitar el vínculo? La deuda mayor no se borra.'))hgDesvincularPrestamo('${p.id}')">Quitar vínculo</button></div>${dmDetalleHTML(d,{abierto:P.length<2})}</div>`;
+  });
+  return h+`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${sel}</div>`;
+}
+function hgVincularPrestamo(){
+  const id=(document.getElementById('hg-sel-dm')||{}).value; const d=(state.deudasMayores||[]).find(x=>x.id===id); if(!d) return;
+  hgEnsure().prestamos.push({id:'hp-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),dmId:id,nombre:''});
+  saveState(); renderHogar(); toast('Préstamo vinculado al Hogar');
+}
+function hgDesvincularPrestamo(pid){ const h=hgEnsure(); h.prestamos=h.prestamos.filter(p=>p.id!==pid); saveState(); renderHogar(); toast('Vínculo quitado (la deuda no se borra)'); }
+function hgEditarPrestamo(pid){
+  const p=hgEnsure().prestamos.find(x=>x.id===pid); if(!p) return;
+  const n=prompt('Nombre del préstamo del hogar',p.nombre||''); if(n===null) return;
+  p.nombre=n.trim(); saveState(); renderHogar();
 }
 function hgHtmlCabecera(){
   const hayPFSinEnlace=hgPFDisponibles().length>0;
@@ -19368,7 +19400,7 @@ function hgHtmlCabecera(){
     ${hayPFSinEnlace?`<button class="btn" onclick="hgModalImportar()">🔗 Importar de Pagos frecuentes</button>`:''}
     <button class="btn" onclick="hgModalCompra()">🛒 + Compra</button>
     <button class="btn btn-primary" onclick="hgModalRegistrar()">+ Registrar recibo</button></div>
-    <div class="hg-tabs"><button class="hg-tab ${HG.tab==='conceptos'?'on':''}" onclick="HG.tab='conceptos';renderHogar()">Conceptos</button><button class="hg-tab ${HG.tab==='proyeccion'?'on':''}" onclick="HG.tab='proyeccion';renderHogar()">Proyección y aguante</button></div>`;
+    <div class="hg-tabs"><button class="hg-tab ${HG.tab==='conceptos'?'on':''}" onclick="HG.tab='conceptos';renderHogar()">Conceptos</button><button class="hg-tab ${HG.tab==='proyeccion'?'on':''}" onclick="HG.tab='proyeccion';renderHogar()">Proyección y aguante</button><button class="hg-tab ${HG.tab==='prestamo'?'on':''}" onclick="HG.tab='prestamo';renderHogar()">🏦 Préstamo</button></div>`;
 }
 function hgMiniBarras(c){
   const l=hgLista(c).slice(-6); if(l.length<2) return '';
@@ -20132,6 +20164,313 @@ function mnRestablecer(){
   delete state.menuOrden; window._menuSig=null; aplicarOrdenMenu(); saveState(); _cerrarModalDin('menu-orden-overlay'); toast('Menú restablecido');
 }
 
+// ══════════════════════════════════════════════════════
+//  🚗 AUTO — antes «Combustible». Pestañas: Resumen · Combustible ·
+//  Mantenimiento · Préstamo. El préstamo vehicular NO duplica datos: se
+//  VINCULA a una Deuda mayor (cronograma, saldo, cuotas) y, a través de ella,
+//  a su Pago frecuente (pfId) — marcar la cuota o registrar el pago frecuente
+//  se refleja aquí. Datos propios: state.auto.prestamos[{id,dmId,vehiculo,valor}]
+// ══════════════════════════════════════════════════════
+const AUTO={tab:'resumen',vid:(function(){ try{ return localStorage.getItem('auto_vid')||''; }catch(e){ return ''; } })()};
+const AUTO_BLOQUES={resumen:['auto-resumen'],comb:['fuel-tabs-bar','fuel-section-glp','fuel-section-gas'],mant:['mant-card','rep-card'],prestamo:['auto-prestamo']};
+(function(){
+  if(document.getElementById('auto-style')) return;
+  const st=document.createElement('style'); st.id='auto-style';
+  st.textContent=`
+  .auto-oculto{display:none!important}
+  .auto-tabs{display:flex;gap:6px;margin:10px 0 16px;flex-wrap:wrap}
+  .auto-tab{background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:0 14px;min-height:40px;font-size:13px;cursor:pointer}
+  .auto-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .auto-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+  .auto-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+  .auto-kpi .l{font-size:11px;letter-spacing:.05em;color:var(--text3);text-transform:uppercase}
+  .auto-kpi .v{font-family:var(--mono);font-size:21px;font-weight:600;margin-top:4px}
+  .auto-kpi .s{font-size:12px;color:var(--text3);margin-top:4px;line-height:1.4}
+  .auto-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+  .auto-box h3{margin:0 0 10px;font-size:15px}
+  .auto-fila{display:flex;gap:8px;align-items:baseline;padding:6px 0;border-top:1px solid var(--border);font-size:13px}
+  .auto-fila:first-of-type{border-top:0}
+  .auto-fila b{font-family:var(--mono)}
+  .auto-bar{height:12px;background:var(--bg4);border-radius:6px;overflow:hidden}
+  .auto-bar>div{height:12px;border-radius:6px;background:var(--accent)}
+  .auto-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .auto-tbl th{font-size:12px;color:var(--text3);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--border)}
+  .auto-tbl td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);font-family:var(--mono)}
+  .auto-tbl th:first-child,.auto-tbl td:first-child{text-align:left}
+  .auto-tbl tr.prox td{background:var(--bg3)}
+  .auto-pf{border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--bg3)}
+  @media (max-width:640px){.auto-kpis{grid-template-columns:1fr 1fr}.auto-kpi .v{font-size:17px}.auto-tbl{font-size:12px}.auto-tbl th,.auto-tbl td{padding:6px 4px}}
+  `;
+  document.head.appendChild(st);
+})();
+// ── Control POR AUTO: cada recarga, lectura de km, mantenimiento y repuesto lleva `vid` (id del auto).
+//    Sin `vid` (datos antiguos, bot) = auto principal. Sin autos registrados no se filtra nada.
+function _autoV(){ return ((state.auto||{}).vehiculos)||[]; }
+function autoVidPrincipal(){ const V=_autoV(), p=V.find(v=>v.principal)||V[0]; return p?p.id:''; }
+function autoVidAct(){ const V=_autoV(); if(!V.length) return ''; let a=''; try{ a=AUTO.vid; }catch(e){} return (a&&V.some(v=>v.id===a))?a:autoVidPrincipal(); }
+function autoDeVid(x){ const V=_autoV(); if(!V.length) return ''; const r=x&&x.vid; return (r&&V.some(v=>v.id===r))?r:autoVidPrincipal(); }
+function autoEs(x,vid){ if(!_autoV().length) return true; return autoDeVid(x)===(vid||autoVidAct()); }
+function autoFA(key,vid){ return (state[key]||[]).filter(r=>autoEs(r,vid)); }
+function autoKA(vid){ return autoFA('kmManual',vid); }
+function autoMA(vid){ return autoFA('mantenimientos',vid); }
+function autoRA(vid){ return autoFA('repuestos',vid); }
+function autoStamp(o){ const v=autoVidAct(); if(v) o.vid=v; return o; }
+function autoSellar(){ const pr=autoVidPrincipal(); if(!pr) return; const V=_autoV(); ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(!r.vid||!V.some(v=>v.id===r.vid)) r.vid=pr; })); }
+function autoPref(item){ const V=_autoV(); if(V.length<2) return ''; const v=V.find(x=>x.id===autoDeVid(item)); return v?' ('+escapeHtml(v.nombre||'auto')+')':''; }
+function autoSelVeh(id){ AUTO.vid=id; try{ localStorage.setItem('auto_vid',id); }catch(e){} renderCombustible(); }
+function autoEnsure(){
+  if(!state.auto||typeof state.auto!=='object'||Array.isArray(state.auto)) state.auto={};
+  if(!Array.isArray(state.auto.prestamos)) state.auto.prestamos=[];
+  return state.auto;
+}
+function autoDM(p){ return (state.deudasMayores||[]).find(d=>d.id===p.dmId)||null; }
+function autoCombMes(mk,vid){
+  let s=0; const vs=vid?[vid]:(_autoV().length?_autoV().map(v=>v.id):['']);
+  vs.forEach(v=>['combustibleGlp','combustibleGas'].forEach(key=>computeFuelRows(v?autoFA(key,v):(state[key]||[])).forEach(r=>{
+    if(r.fFinal&&r.totalGlp!==null&&String(r.fFinal).slice(0,7)===mk) s+=r.totalGlp;
+  })));
+  return s;
+}
+function autoMantMes(mk,vid){
+  let s=0;
+  (state.mantenimientos||[]).filter(it=>!vid||autoEs(it,vid)).forEach(it=>(it.historial||[]).forEach(h=>{ if(String(h.fecha||'').slice(0,7)===mk) s+=Number(h.total)||0; }));
+  return s;
+}
+// Cuota del mes de un préstamo: primero lo registrado en su Pago frecuente; si no, la cuota del cronograma
+function autoCuotaMes(d,mk){
+  const pf=dmPFDe(d), r=pf&&pf.pagosRegistrados&&pf.pagosRegistrados[mk];
+  if(r) return {monto:Number(r.monto)||0,pagada:true,fecha:r.fecha||'',pf};
+  const c=(d.cuotas||[]).find(x=>String(x.fecha||'').slice(0,7)===mk);
+  if(c) return {monto:Number(c.monto)||0,pagada:!!c.pagado,fecha:c.fecha,pf};
+  return null;
+}
+function autoGastoMes(mk,vid){
+  const cur=n=>gsPen(n,'PEN');
+  let cuotaPag=0, cuotaPend=0;
+  autoEnsure().prestamos.filter(p=>!vid||autoEs(p,vid)).forEach(p=>{ const d=autoDM(p); if(!d) return; const c=autoCuotaMes(d,mk); if(!c) return; const v=gsPen(c.monto,d.currency||'PEN'); if(c.pagada) cuotaPag+=v; else cuotaPend+=v; });
+  const comb=autoCombMes(mk,vid), mant=autoMantMes(mk,vid);
+  return {comb,mant,cuotaPag,cuotaPend,total:comb+mant+cuotaPag};
+}
+function autoPromMeses(vid){
+  const mk0=mesActualKey(); let c=0,m=0,q=0,n=0;
+  for(let i=1;i<=3;i++){ const g=autoGastoMes(hgAdd(mk0,-i),vid); if(g.total>0){ c+=g.comb; m+=g.mant; q+=g.cuotaPag; n++; } }
+  return n?{comb:c/n,mant:m/n,cuota:q/n,total:(c+m+q)/n,n}:null;
+}
+function autoTab(t){ AUTO.tab=t; autoAplicarTab(); try{ autoSelector(document.getElementById('auto-tabs')); }catch(e){} try{ if(t==='prestamo') autoRenderPrestamo(); }catch(e){} }
+function autoAplicarTab(){
+  Object.keys(AUTO_BLOQUES).forEach(k=>AUTO_BLOQUES[k].forEach(id=>{ const e=document.getElementById(id); if(e) e.classList.toggle('auto-oculto',k!==AUTO.tab); }));
+  document.querySelectorAll('#auto-tabs .auto-tab').forEach(b=>b.classList.toggle('on',b.dataset.t===AUTO.tab));
+}
+function autoSelector(wrap){
+  let vs=document.getElementById('auto-vsel');
+  if(!vs){ vs=document.createElement('div'); vs.id='auto-vsel'; wrap.parentNode.insertBefore(vs,wrap.nextSibling); }
+  const V=autoVehs();
+  if(V.length<2||AUTO.tab==='resumen'){ vs.innerHTML=''; vs.style.display='none'; return; }
+  const act=autoVidAct();
+  vs.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px';
+  vs.innerHTML='<span style="font-size:12px;color:var(--text3)">Auto:</span>'+V.map(v=>`<button class="auto-tab ${v.id===act?'on':''}" onclick="autoSelVeh('${v.id}')">🚗 ${escapeHtml(v.nombre||'Auto')}</button>`).join('');
+}
+function autoRender(){
+  const wrap=document.getElementById('auto-tabs'); if(!wrap) return;
+  const hay=autoEnsure().prestamos.length;
+  wrap.innerHTML=[['resumen','🚗 Resumen'],['comb','⛽ Combustible'],['mant','🔧 Mantenimiento'],['prestamo','🏦 Préstamo'+(hay?'':'')]].map(([k,t])=>`<button class="auto-tab" data-t="${k}" onclick="autoTab('${k}')">${t}</button>`).join('');
+  try{ autoSelector(wrap); }catch(e){ console.warn('Auto selector:',e&&e.message); }
+  try{ autoRenderResumen(); }catch(e){ console.warn('Auto resumen:',e&&e.message); }
+  try{ autoRenderPrestamo(); }catch(e){ console.warn('Auto préstamo:',e&&e.message); }
+  autoAplicarTab();
+}
+// ── Resumen general: «Mis autos» (fichas) + alertas + gastos ──
+function autoVehs(){ const A=autoEnsure(); if(!Array.isArray(A.vehiculos)) A.vehiculos=[]; return A.vehiculos; }
+function autoDiasA(iso){ if(!iso) return null; return Math.round((new Date(iso+'T12:00:00')-new Date(todayISO()+'T12:00:00'))/86400000); }
+function autoPrincipal(){ const V=autoVehs(); return V.find(v=>v.principal)||V[0]||null; }
+function autoPrestamosDe(v){ return autoEnsure().prestamos.filter(p=>autoDeVid(p)===v.id); }
+function autoChipDoc(txt,iso){
+  const d=autoDiasA(iso);
+  if(d===null) return `<div class="auto-fila"><span style="flex:1">${txt}</span><span style="color:var(--text3)">sin fecha</span></div>`;
+  const col=d<0||d<=7?'var(--red)':d<=30?'var(--amber)':'var(--accent)';
+  const t=d<0?`venció hace ${-d} d`:d===0?'vence hoy':`en ${d} d`;
+  return `<div class="auto-fila"><span style="flex:1">${txt}</span><span style="color:var(--text3);font-size:12px;margin-right:8px">${dmFechaCorta(iso)}</span><b style="color:${col}">${t}</b></div>`;
+}
+function autoAlertas(){
+  const out=[];
+  autoVehs().forEach(v=>{
+    [['SOAT',v.soatVence],['Revisión técnica',v.revVence],['Seguro',v.seguroVence]].forEach(([n,f])=>{
+      const d=autoDiasA(f); if(d!==null&&d<=30) out.push({d,t:`${n} de ${escapeHtml(v.nombre||'tu auto')}: ${d<0?'venció hace '+(-d)+' d':d===0?'vence hoy':'vence en '+d+' d'}`});
+    });
+  });
+  { (state.mantenimientos||[]).forEach(it=>{ try{
+    const py=getProyeccionMantenimientoItem(it); if(!py) return; const u=mantUrgencia(py);
+    if(u<=30) out.push({d:u,t:`${it.icono||'🔧'} ${escapeHtml(it.nombre)}${autoPref(it)}: ${py.vencido?'ya toca':mantTextoProximo(it,py)}`});
+  }catch(e){} }); }
+  autoEnsure().prestamos.forEach(p=>{ const d=autoDM(p); if(!d) return;
+    const prox=(d.cuotas||[]).filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))[0];
+    const dd=prox?autoDiasA(prox.fecha):null; if(dd!==null&&dd<=7) out.push({d:dd,t:`🏦 Cuota de ${escapeHtml(d.nombre||'préstamo')}: ${dd<0?'venció hace '+(-dd)+' d':dd===0?'vence hoy':'vence en '+dd+' d'}`});
+  });
+  return out.sort((a,b)=>a.d-b.d);
+}
+function autoFichaVeh(v){
+  const V=autoVehs(), pr=autoPrincipal(), esPr=pr&&pr.id===v.id, mk=mesActualKey();
+  let h=`<div class="auto-box"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><h3 style="margin:0;flex:1 1 auto">🚗 ${escapeHtml(v.nombre||'Mi auto')}${esPr&&V.length>1?' <span style="font-size:11px;font-weight:600;color:var(--accent)">· principal</span>':''}</h3><button class="btn" onclick="autoSelVeh('${v.id}');autoTab('comb')">⛽ Abrir</button><button class="btn" onclick="autoModalVeh('${v.id}')">✏️ Editar</button></div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${[v.placa?'Placa '+escapeHtml(v.placa):'',v.anio?'Año '+escapeHtml(String(v.anio)):'',v.combustible?escapeHtml(v.combustible):''].filter(Boolean).join(' · ')||'Edita para agregar placa, año y combustible'}</div>`;
+  const k=getKmActualVehiculo(v.id), ult=['combustibleGlp','combustibleGas'].flatMap(key=>computeFuelRows(autoFA(key,v.id)).filter(r=>r.fFinal&&r.totalGlp!==null).map(r=>({f:r.fFinal,t:r.totalGlp,c:key==='combustibleGlp'?'GLP':'Gasolina'}))).sort((a,b)=>String(a.f).localeCompare(String(b.f))).pop();
+  h+=`<div class="auto-fila"><span style="flex:1">Kilometraje</span><b>${k?Math.round(k.km).toLocaleString('es-PE')+' km':'—'}</b></div>`;
+  if(k) h+=`<div class="auto-fila"><span style="flex:1">Última lectura</span><span style="color:var(--text3)">${dmFechaCorta(k.fecha)}</span></div>`;
+  if(ult) h+=`<div class="auto-fila"><span style="flex:1">Última recarga (${ult.c})</span><b>${M(fmtS(ult.t))} <span style="color:var(--text3);font-weight:400;font-size:12px">· ${dmFechaCorta(ult.f)}</span></b></div>`;
+  let prox=null; autoMA(v.id).forEach(it=>{ try{ const py=getProyeccionMantenimientoItem(it); if(!py) return; const u=mantUrgencia(py); if(!prox||u<prox.u) prox={it,py,u}; }catch(e){} });
+  h+=`<div class="auto-fila"><span style="flex:1">Próximo mantenimiento</span>${prox?`<b style="color:${prox.u<=7?'var(--red)':prox.u<=30?'var(--amber)':'inherit'}">${prox.it.icono||'🔧'} ${escapeHtml(prox.it.nombre)} <span style="font-weight:400;font-size:12px;color:var(--text3)">· ${prox.py.vencido?'ya toca':mantTextoProximo(prox.it,prox.py)}</span></b>`:`<span style="color:var(--text3)">sin configurar</span>`}</div>`;
+  const gm=autoGastoMes(mk,v.id); if(gm.total>0) h+=`<div class="auto-fila"><span style="flex:1">Gasto en ${hgMesNombre(mk)}</span><b>${M(fmtS(gm.total))}</b></div>`;
+  h+=autoChipDoc('🛡️ SOAT',v.soatVence)+autoChipDoc('🔍 Revisión técnica',v.revVence)+autoChipDoc('📄 Seguro',v.seguroVence);
+  autoPrestamosDe(v).forEach(p=>{ const d=autoDM(p); if(!d) return; const r=getDMResumen(d), cur=d.currency||'PEN';
+    const px=(d.cuotas||[]).filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))[0];
+    h+=`<div class="auto-fila"><span style="flex:1">🏦 Préstamo · ${r.pagadas}/${r.total} cuotas</span><b>${px?M(dmFmt(px.monto,cur))+' <span style="font-weight:400;font-size:12px;color:var(--text3)">· '+dmFechaCorta(px.fecha)+'</span>':'✅ Pagado'}</b></div>
+    <div class="auto-fila"><span style="flex:1">Saldo pendiente</span><b style="color:var(--amber)">${M(dmFmt(r.saldoPendiente,cur))}</b></div>`; });
+  if(v.notas) h+=`<div style="font-size:12px;color:var(--text3);margin-top:8px;white-space:pre-wrap">${escapeHtml(v.notas)}</div>`;
+  return h+'</div>';
+}
+function autoRenderResumen(){
+  const el=document.getElementById('auto-resumen'); if(!el) return;
+  const mk=mesActualKey(), g=autoGastoMes(mk), pr=autoPromMeses(), P=autoEnsure().prestamos, V=autoVehs();
+  const fila=(t,v,s)=>`<div class="auto-fila"><span style="flex:1">${t}${s?`<span style="color:var(--text3);font-size:12px"> · ${s}</span>`:''}</span><b>${M(fmtS(v))}</b></div>`;
+  let h='';
+  const al=autoAlertas();
+  if(al.length) h+=`<div class="auto-box" style="border-color:var(--amber)"><h3>⚠️ Por atender</h3>${al.map(a=>`<div class="auto-fila"><span style="flex:1">${a.t}</span></div>`).join('')}</div>`;
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px"><h3 style="margin:0;flex:1;font-size:15px">Mis autos</h3><button class="btn btn-primary" onclick="autoModalVeh()">+ Agregar auto</button></div>`;
+  if(!V.length) h+=`<div class="auto-box" style="text-align:center;padding:22px 14px"><div style="font-size:32px">🚗</div><div style="font-size:14px;font-weight:600;margin:6px 0">Aún no registraste tu auto</div><div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:480px;margin:0 auto">Agrega nombre, placa y fechas de SOAT, revisión técnica y seguro para ver aquí todo de un vistazo y recibir avisos antes de que venzan.</div></div>`;
+  else h+=V.map(autoFichaVeh).join('');
+  h+=`<div class="auto-kpis">
+    <div class="auto-kpi"><div class="l">Gasto del auto en ${hgMesNombre(mk)}</div><div class="v">${M(fmtS(g.total))}</div><div class="s">Combustible + mantenimiento + cuota pagada</div></div>
+    <div class="auto-kpi"><div class="l">Cuesta tenerlo al mes</div><div class="v">${pr?M(fmtS(pr.total)):'—'}</div><div class="s">${pr?'Promedio de los últimos '+pr.n+' mes'+(pr.n===1?'':'es')+' con gasto':'Aún no hay meses completos'}</div></div>
+    <div class="auto-kpi"><div class="l">Cuota por pagar este mes</div><div class="v" style="color:${g.cuotaPend>0?'var(--amber)':'inherit'}">${g.cuotaPend>0?M(fmtS(g.cuotaPend)):(P.length?'Al día':'—')}</div><div class="s">${P.length?'De tu préstamo vinculado':'Sin préstamo vinculado'}</div></div></div>
+  <div class="auto-box"><h3>Cómo se reparte el mes</h3>${fila('⛽ Combustible',g.comb)}${fila('🔧 Mantenimiento y repuestos',g.mant)}${fila('🏦 Cuota del préstamo',g.cuotaPag,g.cuotaPend>0?'faltan '+fmtS(g.cuotaPend):'')}
+    <div class="auto-fila" style="font-weight:700"><span style="flex:1">Total del mes</span><b>${M(fmtS(g.total))}</b></div></div>`;
+  if(pr) h+=`<div class="auto-box"><h3>Promedio mensual (últimos ${pr.n} mes${pr.n===1?'':'es'})</h3>${fila('⛽ Combustible',pr.comb)}${fila('🔧 Mantenimiento',pr.mant)}${fila('🏦 Cuota',pr.cuota)}<div class="auto-fila" style="font-weight:700"><span style="flex:1">Total</span><b>${M(fmtS(pr.total))}</b></div></div>`;
+  if(V.length>1) h+=`<div style="font-size:11px;color:var(--text3);margin:4px 0 10px">Los gastos de arriba suman todos tus autos. En Combustible, Mantenimiento y Préstamo elige el auto con los botones de arriba.</div>`;
+  el.innerHTML=h;
+}
+function autoModalVeh(id){
+  const v=id?autoVehs().find(x=>x.id===id):null, V=autoVehs();
+  const f=(i,l,val,ph,tp)=>`<label for="${i}">${l}</label><input id="${i}" type="${tp||'text'}" value="${escapeHtml(String(val||''))}" placeholder="${ph||''}">`;
+  _abrirModalDin('auto-veh-ov',`<div class="hg-form">${hgModalHead(v?'Editar auto':'Agregar auto','auto-veh-ov')}
+    ${f('av-nom','Nombre',v&&v.nombre,'Toyota Yaris 2022')}${f('av-placa','Placa',v&&v.placa,'ABC-123')}${f('av-anio','Año',v&&v.anio,'2022','number')}
+    <label for="av-comb">Combustible</label><select id="av-comb">${['','GLP','Gasolina','GLP + Gasolina','Diésel','Híbrido','Eléctrico'].map(o=>`<option ${v&&v.combustible===o?'selected':''}>${o}</option>`).join('')}</select>
+    ${f('av-soat','Vence SOAT',v&&v.soatVence,'','date')}${f('av-rev','Vence revisión técnica',v&&v.revVence,'','date')}${f('av-seg','Vence seguro',v&&v.seguroVence,'','date')}
+    <label for="av-notas">Notas</label><textarea id="av-notas" rows="2" style="width:100%">${escapeHtml(v&&v.notas||'')}</textarea>
+    ${V.length>0&&(!v||!v.principal)?`<label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="av-pr" ${v&&v.principal?'checked':''}> Es mi auto principal (km, recargas y mantenimientos)</label>`:''}
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">${v?`<button class="config-action-btn danger" onclick="if(confirm('¿Quitar este auto? Sus recargas, km, mantenimientos y repuestos pasarán al auto principal.'))autoBorrarVeh('${v.id}')">Quitar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('auto-veh-ov')">Cancelar</button><button class="btn btn-primary" onclick="autoGuardarVeh('${v?v.id:''}')">Guardar</button></div></div>`,480);
+}
+function autoGuardarVeh(id){
+  const V=autoVehs(); let v=id?V.find(x=>x.id===id):null;
+  autoSellar();
+  if(!v){ v={id:'av-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}; V.push(v); }
+  const g=i=>(document.getElementById(i)||{}).value||'';
+  v.nombre=g('av-nom').trim()||'Mi auto'; v.placa=g('av-placa').trim().toUpperCase(); v.anio=g('av-anio').trim(); v.combustible=g('av-comb');
+  v.soatVence=g('av-soat'); v.revVence=g('av-rev'); v.seguroVence=g('av-seg'); v.notas=g('av-notas').trim();
+  const c=document.getElementById('av-pr'); if(c&&c.checked){ V.forEach(x=>x.principal=false); v.principal=true; }
+  saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); toast('Auto guardado');
+}
+function autoBorrarVeh(id){
+  const A=autoEnsure(); A.vehiculos=autoVehs().filter(x=>x.id!==id); A.prestamos.forEach(p=>{ if(p.vid===id) p.vid=''; }); ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(r.vid===id) delete r.vid; })); if(AUTO.vid===id){ AUTO.vid=''; try{ localStorage.removeItem('auto_vid'); }catch(e){} }
+  saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); toast('Auto quitado');
+}
+// ── Detalle de préstamo reutilizable (Auto y Hogar): saldo, avance, Pago frecuente y cronograma completo ──
+function dmUsadosSecciones(){
+  const s=new Set(); ((state.auto||{}).prestamos||[]).forEach(p=>s.add(p.dmId)); ((state.hogar||{}).prestamos||[]).forEach(p=>s.add(p.dmId)); return s;
+}
+function dmTotalesHTML(ds,tit){
+  if(!ds||ds.length<2) return '';
+  const T={}; let n=0;
+  ds.forEach(d=>{ const cur=d.currency||'PEN', r=getDMResumen(d); const t=T[cur]||(T[cur]={saldo:0,cuota:0}); t.saldo+=r.saldoPendiente;
+    const p=(d.cuotas||[]).filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))[0]; if(p) t.cuota+=Number(p.monto)||0; n++; });
+  const fm=(o)=>Object.keys(o).map(cur=>M(dmFmt(o[cur],cur))).join(' + ')||'—';
+  const sal={},cuo={}; Object.keys(T).forEach(c=>{sal[c]=T[c].saldo;cuo[c]=T[c].cuota;});
+  return `<div class="auto-box"><h3>${tit||'Todos los préstamos'} (${n})</h3><div class="auto-kpis"><div class="auto-kpi"><div class="l">Saldo total pendiente</div><div class="v" style="color:var(--amber)">${fm(sal)}</div><div class="s">Suma de ${n} préstamos</div></div><div class="auto-kpi"><div class="l">Próximas cuotas (suma)</div><div class="v">${fm(cuo)}</div><div class="s">La siguiente de cada préstamo</div></div></div></div>`;
+}
+function dmDetalleHTML(d,opt){
+  opt=opt||{};
+  const r=getDMResumen(d), cur=d.currency||'PEN', F=v=>M(dmFmt(v,cur)), mk=mesActualKey();
+  const cu=(d.cuotas||[]).slice().sort((a,b)=>(a.numero||0)-(b.numero||0));
+  const noPag=cu.filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  const prox=noPag[0], ult=noPag[noPag.length-1], amort=d.tipo!=='fijo';
+  const pct=r.total>0?r.pagadas/r.total*100:0;
+  const pagado=cu.filter(c=>c.pagado).reduce((s,c)=>s+(Number(c.montoReal!==undefined?c.montoReal:c.monto)||0),0);
+  const porPagar=noPag.reduce((s,c)=>s+(Number(c.monto)||0),0);
+  const intPag=amort?cu.filter(c=>c.pagado).reduce((s,c)=>s+Math.max(0,(Number(c.monto)||0)-(Number(c.amort)||0)),0):null;
+  const intRest=amort?noPag.reduce((s,c)=>s+Math.max(0,(Number(c.monto)||0)-(Number(c.amort)||0)),0):null;
+  const capital=amort?(Number(d.importe)||0):null, pctCap=amort&&capital>0?Math.max(0,Math.min(100,(1-r.saldoPendiente/capital)*100)):null;
+  const dias=prox?Math.round((new Date(prox.fecha+'T12:00:00')-new Date(todayISO()+'T12:00:00'))/86400000):null;
+  const cm=autoCuotaMes(d,mk), pf=dmPFDe(d), valor=Number(opt.valor)||0;
+  let pfTxt;
+  if(pf){
+    const dl=pf.diaPago?pfDiaLimite(pf.diaPago,new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate()):null;
+    pfTxt=`🔗 Pago frecuente <b>«${escapeHtml(pf.nombre)}»</b> · ${cm&&cm.pagada?`✅ pagado este mes (${F(cm.monto)}${cm.fecha?' el '+cm.fecha.slice(8,10)+'/'+cm.fecha.slice(5,7):''})`:`⏳ pendiente este mes${dl?' · vence el día '+dl:''}`}<div style="font-size:12px;color:var(--text3)">Al registrar el pago frecuente se tilda la cuota del préstamo, y al marcar la cuota se actualiza el pago frecuente.</div>`;
+  } else pfTxt=`⚠️ Este préstamo aún no tiene Pago frecuente vinculado. <button class="btn" onclick="autoAbrirDeuda('${d.id}')">Vincularlo o crearlo</button>`;
+  const sub=amort?`Amortizado · Importe ${F(d.importe)} · Tasa ${d.tasa}% mensual · ${d.plazo} meses`:`Cuota fija ${F(d.montoCuota)}/mes · ${d.numCuotas} cuotas`;
+  let h=`<div style="font-size:12px;color:var(--text3);margin:-4px 0 10px">${escapeHtml(d.nombre)} · ${sub}</div>
+  <div class="auto-kpis">
+    <div class="auto-kpi"><div class="l">Saldo pendiente</div><div class="v" style="color:var(--amber)">${F(r.saldoPendiente)}</div><div class="s">${valor>0?'Valor '+F(valor)+' · pagado ≈ '+Math.max(0,Math.min(100,(1-r.saldoPendiente/valor)*100)).toFixed(0)+'%':(amort?'Capital que aún debes':'Suma de las cuotas que faltan')}</div></div>
+    <div class="auto-kpi"><div class="l">Próxima cuota</div><div class="v">${prox?F(prox.monto):'—'}</div><div class="s">${prox?dmFechaCorta(prox.fecha)+' · '+(dias<0?'venció hace '+Math.abs(dias)+' d':(dias===0?'vence hoy':'en '+dias+' d')):'✅ Préstamo completado'}</div></div>
+    <div class="auto-kpi"><div class="l">Cuotas</div><div class="v">${r.pagadas}/${r.total}</div><div class="s">Faltan ${r.restantes}${ult?' · termina '+dmFechaCorta(ult.fecha):''}</div></div>
+    <div class="auto-kpi"><div class="l">Ya pagaste</div><div class="v">${F(pagado)}</div><div class="s">${amort?'De intereses ≈ '+F(intPag):'En '+r.pagadas+' cuota'+(r.pagadas===1?'':'s')}</div></div>
+    <div class="auto-kpi"><div class="l">Falta pagar en total</div><div class="v">${F(porPagar)}</div><div class="s">${amort?'De eso, intereses ≈ '+F(intRest):'En '+r.restantes+' cuota'+(r.restantes===1?'':'s')}</div></div></div>
+  <div class="auto-bar" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct.toFixed(1)}%"></div></div>
+  <div style="font-size:12px;color:var(--text3);margin:6px 0 12px">${pct.toFixed(0)}% de las cuotas pagadas${pctCap!==null?' · '+pctCap.toFixed(0)+'% del capital amortizado':''}</div>
+  <div class="auto-pf">${pfTxt}</div>`;
+  if(cu.length){
+    h+=`<details ${opt.abierto===false?'':'open'} style="margin-top:14px"><summary style="font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px">Cronograma completo (${cu.length} cuotas)</summary><div style="overflow:auto;max-height:380px;border:1px solid var(--border);border-radius:10px"><table class="auto-tbl"><thead><tr><th>N.º</th><th>Fecha</th>${amort?'<th>Saldo</th><th>Interés</th><th>Amort.</th>':''}<th>Cuota</th><th style="text-align:center">Estado</th></tr></thead><tbody>${cu.map(c=>{
+      const esProx=prox&&c.numero===prox.numero&&!c.pagado, ic=Math.max(0,(Number(c.monto)||0)-(Number(c.amort)||0));
+      return `<tr class="${esProx?'prox':''}" style="${c.pagado?'opacity:.6':''}"><td>${c.numero||''}</td><td>${dmFechaCorta(c.fecha)}</td>${amort?`<td>${F(c.saldoInicial||0)}</td><td>${F(c.interes!==undefined?c.interes:ic)}</td><td>${F(c.amort||0)}</td>`:''}<td>${F(c.monto)}${c.montoReal!==undefined?`<div style="font-size:10px;color:var(--amber)">cobró ${F(c.montoReal)}</div>`:''}</td><td style="text-align:center">${c.pagado?'✅':(esProx?'▶️':'⏳')}</td></tr>`;}).join('')}</tbody></table></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">Para marcar cuotas, adelantar pagos o cambiar fechas usa «Abrir en Deudas».</div></details>`;
+  }
+  return h;
+}
+function autoRenderPrestamo(){
+  const el=document.getElementById('auto-prestamo'); if(!el) return;
+  const PT=autoEnsure().prestamos, P=autoVehs().length>1?PT.filter(p=>autoEs(p,autoVidAct())):PT, dms=state.deudasMayores||[];
+  const usados=dmUsadosSecciones(), libres=dms.filter(d=>!usados.has(d.id));
+  const selVincular=libres.length?`<select id="auto-sel-dm" style="min-height:40px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:14px">${libres.map(d=>`<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}</select> <button class="btn btn-primary" onclick="autoVincular()">🔗 Vincular${P.length?' otro préstamo':''}</button>`:'';
+  if(!P.length){
+    el.innerHTML=`<div class="auto-box" style="text-align:center;padding:26px 14px"><div style="font-size:34px">🏦</div><div style="font-size:15px;font-weight:600;margin:6px 0">Seguimiento del préstamo vehicular</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:520px;margin:0 auto 14px">Vincula la deuda mayor de tu auto (por ejemplo Ripley). Aquí verás cuánto debes, cuántas cuotas faltan y la próxima fecha, conectado a su Pago frecuente y al gasto total del auto. No se duplica nada: sigues registrando los pagos como siempre.</div>
+      ${libres.length?`<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center">${selVincular}</div>`:`<div style="font-size:12px;color:var(--amber);margin-bottom:10px">Aún no tienes deudas mayores. Crea una en Créditos → Deudas y vuelve aquí.</div><button class="btn" onclick="showPage('deudas')">Ir a Deudas</button>`}</div>`;
+    return;
+  }
+  let h=dmTotalesHTML(P.map(autoDM).filter(Boolean),'Todos los préstamos del auto');
+  P.forEach((p,pi)=>{
+    const d=autoDM(p);
+    if(!d){ h+=`<div class="hg-alert">El préstamo vinculado («${escapeHtml(p.vehiculo||'Auto')}») ya no existe en Deudas mayores. <button class="btn" onclick="autoDesvincular('${p.id}')">Quitar vínculo</button></div>`; return; }
+    h+=`<div class="auto-box"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><h3 style="margin:0;flex:1 1 auto">🏦 ${escapeHtml(p.vehiculo||'Mi auto')}</h3>
+      <button class="btn" onclick="autoModalEditar('${p.id}')">✏️ Editar</button><button class="btn" onclick="autoAbrirDeuda('${d.id}')">Abrir en Deudas →</button></div>${dmDetalleHTML(d,{valor:p.valor,abierto:P.length<2})}</div>`;
+  });
+  h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${selVincular}${!libres.length?'':''}</div>`;
+  el.innerHTML=h;
+}
+function autoVincular(){
+  const id=(document.getElementById('auto-sel-dm')||{}).value; if(!id) return;
+  const d=(state.deudasMayores||[]).find(x=>x.id===id); if(!d) return;
+  autoEnsure().prestamos.push(autoStamp({id:'ap-'+Date.now(),dmId:id,vehiculo:'',valor:''}));
+  saveState(); autoRender(); toast('Préstamo vinculado al Auto');
+  if(!dmPFDe(d)) toast('Tip: enlázalo a un Pago frecuente desde «Abrir en Deudas»','info');
+}
+function autoDesvincular(pid){
+  const A=autoEnsure(); A.prestamos=A.prestamos.filter(p=>p.id!==pid);
+  saveState(); _cerrarModalDin('auto-edit-ov'); autoRender(); toast('Vínculo quitado (la deuda no se borra)');
+}
+function autoAbrirDeuda(dmId){ showPage('deudas'); try{ openDMDetail(dmId); }catch(e){} }
+function autoModalEditar(pid){
+  const p=autoEnsure().prestamos.find(x=>x.id===pid); if(!p) return;
+  _abrirModalDin('auto-edit-ov',`<div class="hg-form">${hgModalHead('Editar préstamo del auto','auto-edit-ov')}
+    <label for="aut-veh">Nombre del auto</label><input id="aut-veh" value="${escapeHtml(p.vehiculo||'')}" placeholder="Toyota Yaris 2022">
+    ${autoVehs().length?`<label for="aut-vid">Auto al que pertenece</label><select id="aut-vid"><option value="">Auto principal</option>${autoVehs().map(v=>`<option value="${v.id}" ${p.vid===v.id?'selected':''}>${escapeHtml(v.nombre||'Mi auto')}</option>`).join('')}</select>`:''}
+    <label for="aut-valor">Valor del auto (opcional)</label><input id="aut-valor" type="number" step="0.01" min="0" inputmode="decimal" value="${escapeHtml(String(p.valor||''))}">
+    <div style="font-size:12px;color:var(--text3);margin-top:6px;line-height:1.5">Con el valor del auto se muestra qué porcentaje ya pagaste. Los montos del préstamo salen de la deuda mayor vinculada.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px"><button class="config-action-btn danger" onclick="if(confirm('¿Quitar el vínculo? La deuda mayor no se borra.'))autoDesvincular('${p.id}')">Quitar vínculo</button><span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('auto-edit-ov')">Cancelar</button><button class="btn btn-primary" onclick="autoGuardarEdicion('${p.id}')">Guardar</button></div></div>`,480);
+}
+function autoGuardarEdicion(pid){
+  const p=autoEnsure().prestamos.find(x=>x.id===pid); if(!p) return;
+  p.vehiculo=(document.getElementById('aut-veh').value||'').trim(); p.vid=(document.getElementById('aut-vid')||{}).value||''; const v=parseFloat(document.getElementById('aut-valor').value); p.valor=v>0?v:'';
+  saveState(); _cerrarModalDin('auto-edit-ov'); autoRender(); toast('Guardado');
+}
+
 function renderWidgetsExtra(){
   [wxGastosMes,wxGastoCategoria,wxGastosPorMes,wxProximosPagos,wxComprasCamino,wxAprobaciones,wxDolares,wxAhorros,wxRacha,wxDeudaEvolucion,wxConectado].forEach(f=>{ try{ f(); }catch(e){ console.warn('Widget omitido por error ('+f.name+'):',e&&e.message); } });
 }
@@ -20716,7 +21055,7 @@ function renderNuevosWidgetsDashboard(){
     const proyMant=(state.mantenimientos||[])
       .map(item=>({item, proy:getProyeccionMantenimientoItem(item)}))
       .filter(x=>x.proy).sort((a,b)=>mantUrgencia(a.proy)-mantUrgencia(b.proy))[0];
-    if(proyMant) lineas.push(`<div style="font-size:12px;padding:4px 0">${proyMant.item.icono||'🔧'} Próximo: ${proyMant.item.nombre} ${mantTextoProximo(proyMant.item,proyMant.proy)}</div>`);
+    if(proyMant) lineas.push(`<div style="font-size:12px;padding:4px 0">${proyMant.item.icono||'🔧'} Próximo: ${proyMant.item.nombre}${autoPref(proyMant.item)} ${mantTextoProximo(proyMant.item,proyMant.proy)}</div>`);
     combEl.innerHTML = lineas.length ? lineas.join('') : '<div class="dash-empty"><div class="dash-empty-icon">⛽</div>Sin registros de combustible.</div>';
   }
 
@@ -22640,7 +22979,7 @@ function guardarKmManual(){
   const fechaHora=`${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
   const motivoInp=document.getElementById('mant-km-manual-motivo');
   const motivo=motivoInp?motivoInp.value.trim():'';
-  const nuevoKm={id:'kmm-'+Date.now(), km, fechaHora, origen:'web', motivo};
+  const nuevoKm=autoStamp({id:'kmm-'+Date.now(), km, fechaHora, origen:'web', motivo});
   state.kmManual.push(nuevoKm);
   logActividad('km_manual', `Kilometraje actualizado: ${km} km`, {kmManualId:nuevoKm.id});
   saveState();
@@ -22652,7 +22991,7 @@ function guardarKmManual(){
 function renderKmManualUltimo(){
   const el=document.getElementById('mant-km-manual-ultimo');
   if(!el) return;
-  const arr=(state.kmManual||[]).slice().sort((a,b)=>a.fechaHora<b.fechaHora?1:a.fechaHora>b.fechaHora?-1:0);
+  const arr=autoKA().slice().sort((a,b)=>a.fechaHora<b.fechaHora?1:a.fechaHora>b.fechaHora?-1:0);
   if(!arr.length){ el.textContent='Aún no has registrado ninguna lectura manual.'; return; }
   const ult=arr[0];
   const d=new Date(ult.fechaHora);
@@ -22691,13 +23030,13 @@ function renderKmManualUltimo(){
 // cargues o cuándo actualizas el km a mano).
 function obtenerHistorialKm(){
   const lecturas=[];
-  (state.kmManual||[]).forEach(row=>{
+  autoKA().forEach(row=>{
     const km=parseFloat(row.km);
     if(isNaN(km)||!row.fechaHora) return;
     lecturas.push({km, ts:row.fechaHora, tipo:'manual', origen:row.origen||'web', id:row.id, motivo:row.motivo||''});
   });
   [['combustibleGlp','GLP'],['combustibleGas','Gasolina']].forEach(([key,label])=>{
-    (state[key]||[]).forEach(row=>{
+    autoFA(key).forEach(row=>{
       const km=parseFloat(row.kmFinal);
       if(isNaN(km)||!row.fFinal) return;
       lecturas.push({km, ts:row.fFinal+'T12:00:00', tipo:'combustible', combustibleTipo:label, id:row.id});
@@ -22962,10 +23301,10 @@ function exportarHistorialKmExcel(){
   XLSX.utils.book_append_sheet(wb,ws,'Historial Km');
   XLSX.writeFile(wb,'historial_km_'+todayLocalISO()+'.xlsx');
 }
-function getKmActualVehiculo(){
+function getKmActualVehiculo(vid){
   let mejor=null;
   ['combustibleGlp','combustibleGas'].forEach(key=>{
-    (state[key]||[]).forEach(row=>{
+    autoFA(key,vid).forEach(row=>{
       const km=parseFloat(row.kmFinal);
       const fecha=row.fFinal;
       if(isNaN(km)||!fecha) return;
@@ -22973,7 +23312,7 @@ function getKmActualVehiculo(){
       if(!mejor || ts>mejor.ts) mejor={km, ts};
     });
   });
-  (state.kmManual||[]).forEach(row=>{
+  autoKA(vid).forEach(row=>{
     const km=parseFloat(row.km);
     if(isNaN(km)||!row.fechaHora) return;
     if(!mejor || row.fechaHora>mejor.ts) mejor={km, ts:row.fechaHora};
@@ -22984,7 +23323,7 @@ function getKmActualVehiculo(){
 // Promedio de km recorridos por día — ponderado (suma de km ÷ suma de días
 // de TODAS las recargas completas), más preciso que promediar cada tasa
 // individual, porque no le da el mismo peso a un tramo de 2 días que a uno de 20.
-function getKmPromedioDiario(){
+function getKmPromedioDiario(vid){
   // GLP, Gasolina y las lecturas manuales miden el MISMO odómetro del auto.
   // Sumar los km de cada fuente por separado corre el riesgo de contar el
   // mismo recorrido físico dos veces si sus períodos se traslapan en el
@@ -22993,12 +23332,12 @@ function getKmPromedioDiario(){
   // forma correcta: juntar TODAS las lecturas en una sola línea de tiempo.
   const lecturas=[];
   ['combustibleGlp','combustibleGas'].forEach(key=>{
-    (state[key]||[]).forEach(row=>{
+    autoFA(key,vid).forEach(row=>{
       const km=parseFloat(row.kmFinal);
       if(!isNaN(km) && row.fFinal) lecturas.push({fecha:row.fFinal, ts:row.fFinal+'T12:00:00', km});
     });
   });
-  (state.kmManual||[]).forEach(row=>{
+  autoKA(vid).forEach(row=>{
     const km=parseFloat(row.km);
     if(!isNaN(km) && row.fechaHora) lecturas.push({fecha:row.fechaHora.slice(0,10), ts:row.fechaHora, km});
   });
@@ -23052,8 +23391,9 @@ function getProyeccionMantenimientoItem(item){
   const usaTiempo=meses>0&&!!fUlt;
   if(!usaKm&&!usaTiempo) return null;
   const hoy=new Date(); hoy.setHours(0,0,0,0);
-  const actual=getKmActualVehiculo();
-  const out={usaKm,usaTiempo,kmActual:actual?actual.km:(usaKm?kmU:null),kmProximo:null,kmFaltan:null,promDiario:getKmPromedioDiario(),
+  const _vi=autoDeVid(item);
+  const actual=getKmActualVehiculo(_vi);
+  const out={usaKm,usaTiempo,kmActual:actual?actual.km:(usaKm?kmU:null),kmProximo:null,kmFaltan:null,promDiario:getKmPromedioDiario(_vi),
     diasFaltan:null,fechaEstimada:null,avance:0,sinDatosKm:!actual,esPlanificado:false,
     fechaLimite:null,diasTiempo:null,mesesIntervalo:meses,vencePor:null,vencido:false};
   let diasKm=null, avKm=0, avT=0;
@@ -23112,7 +23452,7 @@ function renderMantenimiento(){
   const listaEl=document.getElementById('mant-lista');
   const tpl=document.getElementById('mant-item-template');
   if(!sinConfigEl||!listaEl||!tpl) return;
-  const items=state.mantenimientos||[];
+  const items=autoMA();
   if(!items.length){
     sinConfigEl.style.display='block';
     listaEl.innerHTML='';
@@ -23298,7 +23638,7 @@ function guardarConfigMantenimiento(){
       logActividad('mantenimiento_editado', `Mantenimiento editado: ${nombre}`, {mantId:editingMantId, snapshotAntes:antes});
     }
   } else {
-    const nuevoMant={id:'mant-'+Date.now(), ...campos, historial:[]};
+    const nuevoMant=autoStamp({id:'mant-'+Date.now(), ...campos, historial:[]});
     state.mantenimientos.push(nuevoMant);
     logActividad('mantenimiento_nuevo', `Tipo de mantenimiento nuevo: ${nombre}`, {mantId:nuevoMant.id});
   }
@@ -23343,8 +23683,8 @@ function mantRegAgregarDesdeRepuesto(sel){
 }
 function mantRegPrepararSelectRepuestos(){
   const sel=document.getElementById('mant-reg-rep'); if(!sel) return;
-  sel.innerHTML='<option value="">🧩 + Desde mis repuestos…</option>'+(state.repuestos||[]).map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.nombre+(r.codigo?' — '+r.codigo:''))}</option>`).join('');
-  sel.style.display=(state.repuestos||[]).length?'':'none';
+  sel.innerHTML='<option value="">🧩 + Desde mis repuestos…</option>'+autoRA().map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.nombre+(r.codigo?' — '+r.codigo:''))}</option>`).join('');
+  sel.style.display=autoRA().length?'':'none';
 }
 function abrirRegistrarMantenimiento(id){
   const item=(state.mantenimientos||[]).find(x=>x.id===id);
@@ -23449,7 +23789,7 @@ function exportarCombustibleExcel(){
       gnv?'M3':'GALONES', gnv?'KM/M3':'KXG', gnv?'PXM3':'PXG', gnv?'PRECIO SOLO GNV':'PRECIO', 'MONTO DIARIO'];
     if(gnv) cab.push('RECAUDO','GNV + RECAUDO');
     cab.push('% PRECIO','RENDIMIENTO','GASTO');
-    const rows=computeFuelRows(state[key]||[]);
+    const rows=computeFuelRows(autoFA(key));
     const data=[cab];
     let tKm=0,tCant=0,tTot=0,tRec=0;
     rows.forEach(r=>{
@@ -23545,7 +23885,7 @@ function renderFuelCards(type, rows){
 // ── Formulario de recarga (vista de tarjetas) ──
 let freCtx=null; // {type, id|null}
 function abrirEditarRecarga(type, id){
-  const key=fuelStateKey(type), arr=state[key]||[];
+  const key=fuelStateKey(type), arr=autoFA(key);
   const rows=computeFuelRows(arr);
   const idx=id?arr.findIndex(r=>r.id===id):-1;
   if(id && idx<0) return;
@@ -23595,7 +23935,7 @@ function guardarEditarRecarga(){
   if(!freCtx) return;
   const {type,id}=freCtx, gnv=_fuelEsGnv(type), key=fuelStateKey(type);
   if(!state[key]) state[key]=[];
-  const arr=state[key];
+  const arr=autoFA(key);
   const fF=document.getElementById('fre-ffinal').value;
   const kmF=_freNum('fre-kmfinal'), cant=_freNum('fre-cant'), pxg=_freNum('fre-pxg');
   if(!fF){ alert('Pon la fecha de la recarga.'); return; }
@@ -23604,7 +23944,7 @@ function guardarEditarRecarga(){
   const fI=document.getElementById('fre-finicial').value, kmIraw=document.getElementById('fre-kminicial').value.replace(/,/g,'').trim();
   let row=id?arr.find(r=>r.id===id):null;
   const nueva=!row;
-  if(nueva){ row={id:'fuel-'+Date.now()}; arr.push(row); }
+  if(nueva){ row=autoStamp({id:'fuel-'+Date.now()}); arr.push(row); state[key].push(row); }
   const antesFFinal=row.fFinal, antesKmFinal=row.kmFinal;
   row.fFinal=fF; row.kmFinal=String(kmF); row.galones=String(cant); row.pxg=String(pxg);
   // Inicio del tramo: manual solo si es distinto al final de la recarga anterior
@@ -23680,13 +24020,14 @@ function renderCombustible(){
   renderFuelSection('gas');
   renderMantenimiento();
   renderRepuestos();
+  try{ autoRender(); }catch(e){ console.warn('Auto omitido:', e&&e.message); }
 }
 
 function renderFuelSection(type){
   const key  = fuelStateKey(type);
   const label= type==='glp'?'Total GLP':'Total Gas';
   if(!state[key]) state[key]=[];
-  const rows = computeFuelRows(state[key]);
+  const rows = computeFuelRows(autoFA(key));
   const tbody= document.getElementById('fuel-tbody-'+type);
   if(!tbody) return;
 
@@ -23832,7 +24173,7 @@ function addFuelRow(type){
   if((fuelVista[type]||'tarjetas')==='tarjetas'){ abrirEditarRecarga(type, null); return; }
   const key=fuelStateKey(type);
   if(!state[key]) state[key]=[];
-  const arr=state[key];
+  const arr=autoFA(key);
   const last=arr.length>0?arr[arr.length-1]:null;
   const newRow={
     id:'fuel-'+Date.now(),
@@ -23843,7 +24184,7 @@ function addFuelRow(type){
     galones  :'',
     pxg      :''
   };
-  arr.push(newRow);
+  autoStamp(newRow); arr.push(newRow); state[key].push(newRow);
   saveState();
   renderFuelSection(type);
   setTimeout(()=>{
@@ -23867,9 +24208,9 @@ function updateFuelField(type, id, field, value){
     row.kmInicialManual = true;
   }
 
-  const idx=(state[key]||[]).findIndex(r=>r.id===id);
-  if(idx>=0&&idx<state[key].length-1){
-    const next=state[key][idx+1];
+  const _fa=autoFA(key), idx=_fa.findIndex(r=>r.id===id);
+  if(idx>=0&&idx<_fa.length-1){
+    const next=_fa[idx+1];
     // Solo propagar F.FINAL → F.INICIAL / KM FINAL → KM INICIAL de la siguiente fila
     // si esa fila NO tiene un override manual establecido por el usuario.
     if(field==='fFinal'  && !next.fInicialManual)  next.fInicial  = value;
@@ -26294,7 +26635,7 @@ let editingRepId=null;
 function renderRepuestos(){
   const cont=document.getElementById('rep-lista'); if(!cont) return;
   const q=(document.getElementById('rep-buscar')?.value||'').trim().toLowerCase();
-  const todos=state.repuestos||[];
+  const todos=autoRA();
   const mantNombre=id=>{ const m=(state.mantenimientos||[]).find(x=>x.id===id); return m?((m.icono||'🔧')+' '+m.nombre):''; };
   const lista=todos.filter(r=>!q||[r.nombre,r.codigo,r.desc,r.tienda,r.nota,mantNombre(r.mantId)].some(v=>String(v||'').toLowerCase().includes(q)))
     .sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
@@ -26323,7 +26664,7 @@ function abrirRepuesto(id){
   const r=id?(state.repuestos||[]).find(x=>x.id===id):null;
   if(id&&!r) return;
   const sel=document.getElementById('rep-mant');
-  sel.innerHTML='<option value="">—</option>'+(state.mantenimientos||[]).map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml((m.icono||'🔧')+' '+m.nombre)}</option>`).join('');
+  sel.innerHTML='<option value="">—</option>'+autoMA().map(m=>`<option value="${escapeHtml(m.id)}">${escapeHtml((m.icono||'🔧')+' '+m.nombre)}</option>`).join('');
   document.getElementById('rep-title').textContent=r?'🧩 '+(r.nombre||'Repuesto'):'+ Nuevo repuesto';
   document.getElementById('rep-nombre').value=r?r.nombre||'':'';
   document.getElementById('rep-codigo').value=r?r.codigo||'':'';
@@ -26345,7 +26686,7 @@ function guardarRepuesto(){
   const datos={nombre, codigo, desc, tienda:v('rep-tienda'), precio:isNaN(precio)||precio<=0?0:precio, mantId:document.getElementById('rep-mant').value||'', nota:v('rep-nota')};
   if(!Array.isArray(state.repuestos)) state.repuestos=[];
   if(editingRepId){ const r=state.repuestos.find(x=>x.id===editingRepId); if(r) Object.assign(r,datos); }
-  else state.repuestos.push({id:'rep-'+Date.now()+Math.random().toString(36).slice(2,6), ...datos});
+  else state.repuestos.push(autoStamp({id:'rep-'+Date.now()+Math.random().toString(36).slice(2,6), ...datos}));
   saveState(); cerrarRepuesto(); renderRepuestos();
   toast(editingRepId?'Repuesto actualizado':'Repuesto agregado');
 }
@@ -30082,6 +30423,47 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.15.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "🚗 Auto: cada auto tiene su propio control. Selector de auto en Combustible, Mantenimiento y Préstamo; recargas, km, mantenimientos, repuestos y préstamos se guardan por auto.",
+   "Proyección de mantenimiento, promedio de km por día y gasto del mes se calculan por auto. Tus datos actuales quedan en tu auto principal."
+  ]
+ },
+ {
+  "v": "v2.14.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Varios préstamos por Hogar o Auto: resumen con el saldo total y la suma de próximas cuotas, y cronogramas plegables por préstamo."
+  ]
+ },
+ {
+  "v": "v2.14.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "🏡 Hogar tiene la pestaña 🏦 Préstamo: vincula una deuda mayor y ve saldo, intereses, avance y cronograma completo.",
+   "🚗 Auto → Préstamo ahora muestra el cronograma completo (cuotas pagadas, próxima y pendientes), intereses pagados/restantes y avance de capital."
+  ]
+ },
+ {
+  "v": "v2.13.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "La pestaña Resumen de 🚗 Auto ahora es general: fichas de tus autos con placa, año, combustible, km, SOAT / revisión técnica / seguro con días restantes, préstamo vinculado y próximo mantenimiento.",
+   "Bloque «Por atender» con documentos, mantenimientos (30 d) y cuotas (7 d) por vencer."
+  ]
+ },
+ {
+  "v": "v2.12.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "La sección Combustible se renombra a 🚗 Auto y se organiza en pestañas: Resumen, Combustible, Mantenimiento (con Repuestos) y Préstamo.",
+   "Nuevo seguimiento del préstamo vehicular: vincula una Deuda mayor (por ejemplo Ripley) y ve saldo, próxima cuota, cuotas pagadas, cuánto falta pagar, intereses y su Pago frecuente, sin duplicar datos.",
+   "Resumen del auto: gasto del mes (combustible + mantenimiento + cuota) y cuánto cuesta tenerlo al mes en promedio.",
+   "Revisar datos avisa si el préstamo vinculado ya no existe."
+  ]
+ },
  {
   "v": "v2.11.4",
   "fecha": "12/11/26",
