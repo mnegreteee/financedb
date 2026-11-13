@@ -773,11 +773,25 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
      el body y deje una franja vacía al desplazarse a la derecha (ej.
      Tarjetas de crédito: +Agregar tarjeta / +Nuevo consumo / 📦 Mis Cuotas). */
   .month-nav{flex-wrap:wrap;row-gap:8px;}
+  /* Mismo riesgo en Comparativo Mensual: 2 selects + el botón «📅 Este mes
+     vs. año pasado» quedaban justo al límite del ancho de pantalla (sin
+     margen) y en Safari real se pasaban, partiendo el texto del botón y
+     empujando todo el body hacia la derecha. */
+  .compare-selectors{flex-wrap:wrap;row-gap:8px;}
+  .compare-selectors select{flex:1 1 140px;}
+  .compare-selectors button{flex:1 1 100%;}
   /* Filas de pestañas internas (Auto, Hogar, selector de auto): en vez de
      partirse en 2 líneas, se deslizan en horizontal como el menú principal. */
   .auto-tabs,.hg-tabs,.auto-vsel-row{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
   .auto-tabs::-webkit-scrollbar,.hg-tabs::-webkit-scrollbar,.auto-vsel-row::-webkit-scrollbar{display:none;}
   .auto-tab,.hg-tab{white-space:nowrap;flex-shrink:0;}
+  /* Mismo trato para las pestañas de gráficos (Movimientos: 8 pestañas;
+     Inversiones: 5; también sirven las de 2-3, no cambia nada ahí) y los
+     rangos de los gráficos de Combustible (7 opciones, antes se apilaban
+     en 2-3 líneas feas). */
+  .chart-tabs,.fuel-chart-rango,.fuel-chart-tabs{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+  .chart-tabs::-webkit-scrollbar,.fuel-chart-rango::-webkit-scrollbar,.fuel-chart-tabs::-webkit-scrollbar{display:none;}
+  .chart-tab,.fuel-chart-tab{white-space:nowrap;flex-shrink:0;}
   /* Dashboard */
   .dash-kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
   #relojes-mundiales{flex-wrap:wrap;justify-content:flex-start!important;gap:10px!important;}
@@ -4523,8 +4537,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.24.0';
-const APP_VERSION_DATE = '13/11/26 - 03:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION = 'v2.25.1';
+const APP_VERSION_DATE = '13/11/26 - 03:45'; // hora de Lima, Perú (UTC-5)
 const APP_VERSION_NOTE = 'Corrige botones que se partían en 2 líneas en celular (ej. «+ Nueva deuda»).';
 
 // ══════════════════════════════════════════════════════
@@ -30841,6 +30855,20 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.25.1",
+  "fecha": "13/11/26",
+  "cambios": [
+   "Comparativo Mensual (en Análisis): el botón «📅 Este mes vs. año pasado» quedaba justo al límite del ancho de pantalla junto a los 2 selectores de mes (sin margen de sobra), y en algunos celulares se pasaba del borde y partía el texto del botón, empujando toda la página hacia la derecha — mismo tipo de problema que «Mis Cuotas» en Tarjetas. Ahora el botón baja a su propia línea con ancho completo."
+  ]
+ },
+ {
+  "v": "v2.25.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "Mismo deslizamiento horizontal ahora también en: las pestañas de gráficos de Movimientos (8: Ing/Gas, Ahorro S/, Ahorro $, Saldo, Total Soles, Categorías, Tendencia, Patrimonio Neto) e Inversiones (Historial/Compras/Ventas/Valorizaciones/💵 Dividendos), que antes se apilaban en 2-3 líneas; y el selector de rango de los gráficos de Combustible (Esta semana/Este mes/Últimos 3 meses/.../Todo, 7 opciones)."
+  ]
+ },
  {
   "v": "v2.24.0",
   "fecha": "13/11/26",
