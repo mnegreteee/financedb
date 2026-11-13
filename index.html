@@ -4513,9 +4513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.17.0';
-const APP_VERSION_DATE = '13/11/26 - 00:10'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Combustible GNV y GNV + Gasolina; las recargas usan el nombre del combustible de cada auto.';
+const APP_VERSION = 'v2.18.0';
+const APP_VERSION_DATE = '13/11/26 - 00:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Orden del menú: crear grupos nuevos en el menú principal y renombrar cualquier grupo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20066,6 +20066,7 @@ function _menuLeerDefecto(){
   const d={top:[],grupos:{},etq:{},gEtq:{}};
   [...nc.children].forEach(el=>{
     if(el.classList.contains('nav-dropdown')){
+      if(el.dataset.custom) return;
       const g=el.id.replace('navdrop-',''), tr=el.querySelector('.nav-dropdown-trigger');
       d.top.push('g:'+g); d.gEtq[g]=tr?_menuTexto(tr):g;
       d.grupos[g]=[...el.querySelectorAll('.nav-dropdown-item')].map(b=>{ d.etq[b.id]=_menuTexto(b); return b.id; });
@@ -20076,18 +20077,23 @@ function _menuLeerDefecto(){
 function _menuEfectivo(){
   const d=_menuDef||(_menuDef=_menuLeerDefecto()); if(!d) return null;
   const o=(state&&state.menuOrden)||{}, grupos={}, top=[], usados=new Set();
+  const custom=(Array.isArray(o.custom)?o.custom:[]).filter(c=>c&&c.id&&!d.grupos[c.id]);
+  const gids=Object.keys(d.grupos).concat(custom.map(c=>c.id));
+  const nombres={}; Object.keys(d.grupos).forEach(g=>{ nombres[g]=((o.gNombres||{})[g])||d.gEtq[g]; }); custom.forEach(c=>{ nombres[c.id]=((o.gNombres||{})[c.id])||c.nombre||'Nuevo grupo'; });
   const hojas=new Set([...d.top.filter(t=>t.indexOf('g:')!==0),...Object.values(d.grupos).flat()]);
-  Object.keys(d.grupos).forEach(g=>{ grupos[g]=[]; });
+  gids.forEach(g=>{ grupos[g]=[]; });
+  const gTop=gids.map(g=>'g:'+g);
   // 1) lo guardado: primero el menú principal, luego cada grupo (una sección solo puede estar en un sitio)
   (o.top||[]).forEach(t=>{
-    if(t.indexOf('g:')===0){ if(d.top.includes(t)&&!top.includes(t)) top.push(t); }
+    if(t.indexOf('g:')===0){ if(gTop.includes(t)&&!top.includes(t)) top.push(t); }
     else if(hojas.has(t)&&!usados.has(t)){ top.push(t); usados.add(t); }
   });
-  Object.keys(d.grupos).forEach(g=>{ ((o.grupos||{})[g]||[]).forEach(id=>{ if(hojas.has(id)&&!usados.has(id)){ grupos[g].push(id); usados.add(id); } }); });
+  gids.forEach(g=>{ ((o.grupos||{})[g]||[]).forEach(id=>{ if(hojas.has(id)&&!usados.has(id)){ grupos[g].push(id); usados.add(id); } }); });
   // 2) lo que no está guardado (secciones nuevas) va a su sitio original, al final
   d.top.forEach(t=>{ if(t.indexOf('g:')===0){ if(!top.includes(t)) top.push(t); } else if(!usados.has(t)){ top.push(t); usados.add(t); } });
+  custom.forEach(c=>{ if(!top.includes('g:'+c.id)) top.push('g:'+c.id); });
   Object.keys(d.grupos).forEach(g=>d.grupos[g].forEach(id=>{ if(!usados.has(id)){ grupos[g].push(id); usados.add(id); } }));
-  return {top,grupos};
+  return {top,grupos,custom:custom.map(c=>({id:c.id,nombre:c.nombre})),nombres};
 }
 function _menuForma(b,comoTab){
   if(!b) return;
@@ -20099,15 +20105,25 @@ function aplicarOrdenMenu(){
   const nc=document.querySelector('.nav-center'); if(!nc) return;
   const e=_menuEfectivo(); if(!e) return;
   const sig=JSON.stringify(e); if(sig===window._menuSig) return; window._menuSig=sig;
+  // grupos creados por el usuario: se crean como los demás desplegables (y se quitan los borrados)
+  const cids=new Set(e.custom.map(c=>c.id));
+  nc.querySelectorAll('.nav-dropdown[data-custom]').forEach(el=>{ if(!cids.has(el.id.replace('navdrop-',''))){ el.querySelectorAll('.nav-dropdown-item').forEach(b=>{ b.style.display='none'; document.body.appendChild(b); }); el.remove(); } });
+  e.custom.forEach(c=>{
+    if(document.getElementById('navdrop-'+c.id)) return;
+    const dd=document.createElement('div'); dd.className='nav-dropdown'; dd.id='navdrop-'+c.id; dd.dataset.custom='1';
+    dd.innerHTML='<button class="nav-tab nav-dropdown-trigger" onclick="toggleNavDropdown(\''+c.id+'\',event)"></button><div class="nav-dropdown-menu" id="navmenu-'+c.id+'"></div>';
+    nc.appendChild(dd);
+  });
+  Object.keys(e.nombres).forEach(g=>{ const tr=document.querySelector('#navdrop-'+g+' .nav-dropdown-trigger'); if(tr) tr.textContent=e.nombres[g]+' ▾'; });
   e.top.forEach(t=>{
     const el=document.getElementById(t.indexOf('g:')===0?'navdrop-'+t.slice(2):t);
     if(!el) return;
-    if(t.indexOf('g:')!==0) _menuForma(el,true);
+    if(t.indexOf('g:')!==0){ el.style.display=''; _menuForma(el,true); }
     nc.appendChild(el);
   });
   Object.keys(e.grupos).forEach(g=>{
     const m=document.getElementById('navmenu-'+g); if(!m) return;
-    e.grupos[g].forEach(id=>{ const b=document.getElementById(id); if(b){ _menuForma(b,false); m.appendChild(b); } });
+    e.grupos[g].forEach(id=>{ const b=document.getElementById(id); if(b){ b.style.display=''; _menuForma(b,false); m.appendChild(b); } });
     const dd=document.getElementById('navdrop-'+g); if(dd) dd.style.display=e.grupos[g].length?'':'none';
   });
 }
@@ -20119,21 +20135,21 @@ function _mnRender(){
   const d=_menuDef, e=_mnDraft, esc=escapeHtml;
   const btn=(fn,txt,lab,dis)=>`<button class="btn" style="min-width:40px;min-height:36px;padding:0 8px" ${dis?'disabled':''} onclick="${fn}" aria-label="${lab}">${txt}</button>`;
   const selEst='max-width:120px;min-height:36px;font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px';
-  const selMover=(id,actual)=>'<select aria-label="Mover a otro lugar del menú" style="'+selEst+'" onchange="mnMoverA(\''+id+'\',this.value)"><option value="">Mover a…</option>'+(actual!=='top'?'<option value="top">⬆ Menú principal</option>':'')+Object.keys(e.grupos).filter(x=>x!==actual).map(x=>'<option value="'+x+'">'+esc(d.gEtq[x])+'</option>').join('')+'</select>';
+  const selMover=(id,actual)=>'<select aria-label="Mover a otro lugar del menú" style="'+selEst+'" onchange="mnMoverA(\''+id+'\',this.value)"><option value="">Mover a…</option>'+(actual!=='top'?'<option value="top">⬆ Menú principal</option>':'')+Object.keys(e.grupos).filter(x=>x!==actual).map(x=>'<option value="'+x+'">'+esc(e.nombres[x])+'</option>').join('')+'</select>';
   const fila=(etq,arrUp,arrDn,extra)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border2,var(--border))"><span style="flex:1;min-width:0;font-size:13px">${etq}</span>${extra||''}${arrUp}${arrDn}</div>`;
   let h='<div class="modal-title"><span>↕ Orden del menú</span><button class="modal-close" onclick="_cerrarModalDin(\'menu-orden-overlay\')">✕</button></div>';
   h+='<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">Usa ▲ ▼ para subir o bajar. Con «Mover a…» pasas una sección al menú principal o a otro grupo. Los cambios se aplican al guardar.</div>';
   h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">Menú principal</div>';
   e.top.forEach((t,i)=>{
     const g=t.indexOf('g:')===0?t.slice(2):null, n=g?e.grupos[g].length:0;
-    const nom=g?esc(d.gEtq[g])+' <span style="color:var(--text3);font-size:11px">· grupo, '+n+' sección'+(n===1?'':'es')+'</span>':esc(d.etq[t]||t);
+    const nom=g?esc(e.nombres[g])+' <span style="color:var(--text3);font-size:11px">· grupo, '+n+' sección'+(n===1?'':'es')+'</span>':esc(d.etq[t]||t);
     h+=fila(nom,btn(`mnMover('t',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('t',${i},1)`,'▼','Bajar',i===e.top.length-1),g?'':selMover(t,'top'));
   });
-  h+='</div>';
+  h+='<div style="margin-top:8px"><button class="btn" style="min-height:36px" onclick="mnNuevoGrupo()">➕ Nuevo grupo</button></div></div>';
   Object.keys(e.grupos).forEach(g=>{
-    const ids=e.grupos[g];
-    h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">'+esc(d.gEtq[g])+'</div>';
-    if(!ids.length) h+='<div style="font-size:12px;color:var(--text3)">Vacío (el grupo se oculta del menú).</div>';
+    const ids=e.grupos[g], esC=e.custom.some(c=>c.id===g);
+    h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="font-weight:600;font-size:13px;flex:1;min-width:0">'+esc(e.nombres[g])+(esC?' <span style="color:var(--text3);font-size:11px;font-weight:400">· creado por ti</span>':'')+'</div><button class="btn" style="min-height:32px;padding:0 8px" onclick="mnRenombrarGrupo(\''+g+'\')" aria-label="Renombrar grupo">✏️ Renombrar</button>'+(esC?'<button class="btn" style="min-height:32px;padding:0 8px;color:var(--red)" onclick="mnBorrarGrupo(\''+g+'\')" aria-label="Eliminar grupo">🗑</button>':'')+'</div>';
+    if(!ids.length) h+='<div style="font-size:12px;color:var(--text3)">Vacío (el grupo se oculta del menú hasta que le pases secciones con «Mover a…»).</div>';
     ids.forEach((id,i)=>{ h+=fila(esc(d.etq[id]||id),btn(`mnMover('${g}',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('${g}',${i},1)`,'▼','Bajar',i===ids.length-1),selMover(id,g)); });
     h+='</div>';
   });
@@ -20155,12 +20171,35 @@ function mnMoverA(id,dest){
   if(dest==='top') _mnDraft.top.push(id); else _mnDraft.grupos[dest].push(id);
   _mnRender();
 }
+function mnNuevoGrupo(){
+  let n=prompt('Nombre del nuevo grupo (puedes empezar con un emoji, ej. 🏠 Casa):','');
+  n=(n||'').replace(/\s+/g,' ').trim(); if(!n) return;
+  if(n.length>24){ toast('Usa un nombre de máximo 24 caracteres','info'); return; }
+  const id='cx'+Date.now().toString(36);
+  _mnDraft.custom.push({id,nombre:n}); _mnDraft.nombres[id]=n; _mnDraft.grupos[id]=[]; _mnDraft.top.push('g:'+id);
+  _mnRender(); toast('Grupo «'+n+'» creado. Pásale secciones con «Mover a…» y guarda.','info');
+}
+function mnRenombrarGrupo(g){
+  let n=prompt('Nuevo nombre del grupo:',_mnDraft.nombres[g]||'');
+  n=(n||'').replace(/\s+/g,' ').trim(); if(!n) return;
+  if(n.length>24){ toast('Usa un nombre de máximo 24 caracteres','info'); return; }
+  _mnDraft.nombres[g]=n; const c=_mnDraft.custom.find(x=>x.id===g); if(c) c.nombre=n; _mnRender();
+}
+function mnBorrarGrupo(g){
+  if(!_mnDraft.custom.some(c=>c.id===g)) return;
+  const k=(_mnDraft.grupos[g]||[]).length;
+  if(!confirm('¿Eliminar este grupo?'+(k?' Sus '+k+' sección'+(k===1?'':'es')+' pasarán al menú principal.':''))) return;
+  _mnDraft.top=_mnDraft.top.filter(x=>x!=='g:'+g).concat(_mnDraft.grupos[g]||[]);
+  delete _mnDraft.grupos[g]; delete _mnDraft.nombres[g]; _mnDraft.custom=_mnDraft.custom.filter(c=>c.id!==g);
+  _mnRender();
+}
 function mnGuardar(){
-  state.menuOrden={top:_mnDraft.top.slice(),grupos:JSON.parse(JSON.stringify(_mnDraft.grupos))};
+  const gN={}; Object.keys(_mnDraft.nombres).forEach(g=>{ const c=_mnDraft.custom.some(x=>x.id===g); if(c||_mnDraft.nombres[g]!==(_menuDef.gEtq[g])) gN[g]=_mnDraft.nombres[g]; });
+  state.menuOrden={top:_mnDraft.top.slice(),grupos:JSON.parse(JSON.stringify(_mnDraft.grupos)),custom:_mnDraft.custom.map(c=>({id:c.id,nombre:_mnDraft.nombres[c.id]||c.nombre})),gNombres:gN};
   window._menuSig=null; aplicarOrdenMenu(); saveState(); _cerrarModalDin('menu-orden-overlay'); toast('Orden del menú guardado');
 }
 function mnRestablecer(){
-  if(!confirm('¿Volver al orden original del menú?')) return;
+  if(!confirm('¿Volver al orden original del menú? También se quitarán los grupos que creaste y los nombres que cambiaste.')) return;
   delete state.menuOrden; window._menuSig=null; aplicarOrdenMenu(); saveState(); _cerrarModalDin('menu-orden-overlay'); toast('Menú restablecido');
 }
 
@@ -30594,6 +30633,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.18.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "Orden del menú: botón «➕ Nuevo grupo» para crear categorías en el menú principal; ✏️ para renombrar cualquier grupo y 🗑 para borrar los que crees. Luego les pasas secciones con «Mover a…»."
+  ]
+ },
  {
   "v": "v2.17.0",
   "fecha": "13/11/26",
