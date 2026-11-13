@@ -769,6 +769,15 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
   .nav-center::-webkit-scrollbar{display:none;}
   .nav-tab{padding:4px 8px;font-size:10px;white-space:nowrap;flex-shrink:0;}
   .container{padding:12px;}
+  /* Evita que una fila de botones más ancha que la pantalla empuje todo
+     el body y deje una franja vacía al desplazarse a la derecha (ej.
+     Tarjetas de crédito: +Agregar tarjeta / +Nuevo consumo / 📦 Mis Cuotas). */
+  .month-nav{flex-wrap:wrap;row-gap:8px;}
+  /* Filas de pestañas internas (Auto, Hogar, selector de auto): en vez de
+     partirse en 2 líneas, se deslizan en horizontal como el menú principal. */
+  .auto-tabs,.hg-tabs,.auto-vsel-row{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+  .auto-tabs::-webkit-scrollbar,.hg-tabs::-webkit-scrollbar,.auto-vsel-row::-webkit-scrollbar{display:none;}
+  .auto-tab,.hg-tab{white-space:nowrap;flex-shrink:0;}
   /* Dashboard */
   .dash-kpi-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
   #relojes-mundiales{flex-wrap:wrap;justify-content:flex-start!important;gap:10px!important;}
@@ -4514,8 +4523,8 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.22.1';
-const APP_VERSION_DATE = '13/11/26 - 01:00'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION = 'v2.24.0';
+const APP_VERSION_DATE = '13/11/26 - 03:15'; // hora de Lima, Perú (UTC-5)
 const APP_VERSION_NOTE = 'Corrige botones que se partían en 2 líneas en celular (ej. «+ Nueva deuda»).';
 
 // ══════════════════════════════════════════════════════
@@ -4986,6 +4995,12 @@ const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄'
   meta_nueva:'🎯',meta_editada:'🎯',meta_eliminada:'🎯',
   inversion_editada:'📈',inversion_eliminada:'📈',
   deuda_mayor_nueva:'🏦',deuda_mayor_eliminada:'🏦',
+  auto_veh_nuevo:'🚗',auto_veh_editado:'🚗',auto_veh_eliminado:'🚗',
+  auto_prestamo_vinculado:'🏦',auto_prestamo_desvinculado:'🏦',
+  hogar_prestamo_vinculado:'🏡',hogar_prestamo_desvinculado:'🏡',
+  hogar_concepto_nuevo:'🏡',hogar_concepto_editado:'🏡',hogar_concepto_eliminado:'🏡',
+  combustible_recarga_nueva:'⛽',combustible_recarga_editada:'⛽',
+  auto_registro_movido:'🔀',menu_orden_editado:'🧭',
   servicio_nuevo:'🧾',servicio_editado:'🧾',servicio_eliminado:'🧾',
   evento_editado:'📅',evento_eliminado:'📅',
   afp_aporte:'🪙',afp_aporte_eliminado:'🪙',afp_saldo_nuevo:'🪙',afp_saldo_editado:'🪙',afp_saldo_eliminado:'🪙',
@@ -5504,6 +5519,69 @@ function eliminarActividad(logId){
       if(ref.mantSnapshot){
         if(!state.mantenimientos) state.mantenimientos=[];
         state.mantenimientos.push(ref.mantSnapshot);
+      }
+    } else if(entry.tipo==='auto_veh_nuevo'){
+      autoEnsure().vehiculos=autoVehs().filter(v=>v.id!==ref.vehId);
+    } else if(entry.tipo==='auto_veh_editado'){
+      if(ref.snapshotAntes){
+        const v=autoVehs().find(x=>x.id===ref.vehId);
+        if(v) Object.assign(v,ref.snapshotAntes);
+      }
+    } else if(entry.tipo==='auto_veh_eliminado'){
+      if(ref.vehSnapshot){
+        autoEnsure().vehiculos.push(ref.vehSnapshot);
+        (ref.afectados||[]).forEach(a=>{
+          const arr=a.arr==='prestamos'?autoEnsure().prestamos:(state[a.arr]||[]);
+          const it=arr.find(x=>x.id===a.id);
+          if(it) it.vid=ref.vehSnapshot.id;
+        });
+      }
+    } else if(entry.tipo==='auto_prestamo_vinculado'){
+      const A=autoEnsure(); A.prestamos=A.prestamos.filter(p=>p.id!==ref.prestamoId);
+    } else if(entry.tipo==='auto_prestamo_desvinculado'){
+      if(ref.prestamoSnapshot) autoEnsure().prestamos.push(ref.prestamoSnapshot);
+    } else if(entry.tipo==='hogar_prestamo_vinculado'){
+      const h=hgEnsure(); h.prestamos=h.prestamos.filter(p=>p.id!==ref.prestamoId);
+    } else if(entry.tipo==='hogar_prestamo_desvinculado'){
+      if(ref.prestamoSnapshot) hgEnsure().prestamos.push(ref.prestamoSnapshot);
+    } else if(entry.tipo==='hogar_concepto_nuevo'){
+      const h=hgEnsure(); h.conceptos=h.conceptos.filter(c=>c.id!==ref.conceptoId);
+    } else if(entry.tipo==='hogar_concepto_editado'){
+      if(ref.snapshotAntes){
+        const h=hgEnsure(), idx=h.conceptos.findIndex(c=>c.id===ref.conceptoId);
+        if(idx>=0) h.conceptos[idx]=ref.snapshotAntes;
+      }
+    } else if(entry.tipo==='hogar_concepto_eliminado'){
+      if(ref.conceptoSnapshot){
+        const h=hgEnsure();
+        h.conceptos.push(ref.conceptoSnapshot);
+        h.registros=(h.registros||[]).concat(ref.registrosSnapshot||[]);
+      }
+    } else if(entry.tipo==='menu_orden_editado'){
+      if(ref.snapshotAntes) state.menuOrden=ref.snapshotAntes; else delete state.menuOrden;
+      window._menuSig=null; try{ aplicarOrdenMenu(); }catch(e){}
+    } else if(entry.tipo==='auto_registro_movido'){
+      if(ref.masivo){
+        (ref.movs||[]).forEach(m=>{
+          const arr=m.k==='fuel'?[].concat(state.combustibleGlp||[],state.combustibleGas||[]):m.k==='km'?(state.kmManual||[]):m.k==='mant'?(state.mantenimientos||[]):m.k==='rep'?(state.repuestos||[]):(autoEnsure().prestamos||[]);
+          const it=arr.find(x=>x.id===m.id);
+          if(it) it.vid=m.vidAntes;
+        });
+      } else {
+        const arr=_autoMovLista(ref.kind,ref.fuelTipo);
+        const it=arr.find(x=>x.id===ref.regId);
+        if(it) it.vid=ref.vidAntes;
+      }
+    } else if(entry.tipo==='combustible_recarga_nueva'){
+      if(ref.fuelTipo){
+        const key=fuelStateKey(ref.fuelTipo);
+        state[key]=(state[key]||[]).filter(r=>r.id!==ref.filaId);
+      }
+    } else if(entry.tipo==='combustible_recarga_editada'){
+      if(ref.fuelTipo&&ref.snapshotAntes){
+        const key=fuelStateKey(ref.fuelTipo);
+        const idx=(state[key]||[]).findIndex(r=>r.id===ref.filaId);
+        if(idx>=0) state[key][idx]=ref.snapshotAntes;
       }
     } else if(entry.tipo==='mantenimiento_registrado'){
       const item=(state.mantenimientos||[]).find(x=>x.id===ref.mantId);
@@ -19401,10 +19479,12 @@ function hgHtmlPrestamo(){
 }
 function hgVincularPrestamo(){
   const id=(document.getElementById('hg-sel-dm')||{}).value; const d=(state.deudasMayores||[]).find(x=>x.id===id); if(!d) return;
-  hgEnsure().prestamos.push({id:'hp-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),dmId:id,nombre:''});
+  const nuevo={id:'hp-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),dmId:id,nombre:''};
+  hgEnsure().prestamos.push(nuevo);
   saveState(); renderHogar(); toast('Préstamo vinculado al Hogar');
+  logActividad('hogar_prestamo_vinculado', `Préstamo vinculado al Hogar: ${d.nombre}`, {prestamoId:nuevo.id});
 }
-function hgDesvincularPrestamo(pid){ const h=hgEnsure(); h.prestamos=h.prestamos.filter(p=>p.id!==pid); saveState(); renderHogar(); toast('Vínculo quitado (la deuda no se borra)'); }
+function hgDesvincularPrestamo(pid){ const h=hgEnsure(); const antes=h.prestamos.find(p=>p.id===pid); h.prestamos=h.prestamos.filter(p=>p.id!==pid); saveState(); renderHogar(); toast('Vínculo quitado (la deuda no se borra)'); if(antes) logActividad('hogar_prestamo_desvinculado', `Vínculo de préstamo del Hogar quitado`, {prestamoSnapshot:antes}); }
 function hgEditarPrestamo(pid){
   const p=hgEnsure().prestamos.find(x=>x.id===pid); if(!p) return;
   const n=prompt('Nombre del préstamo del hogar',p.nombre||''); if(n===null) return;
@@ -19608,16 +19688,21 @@ function hgGuardarConcepto(id){
     o.moneda=pf.currency||'PEN'; o.dia=pf.diaPago&&pf.diaPago!=='ultimo'?pf.diaPago:''; o.pagarCon='';
     if(!o.montoRef&&pf.montoFijo) o.montoRef=Number(pf.montoFijo)||0;
   }
-  if(id){ const c=h.conceptos.find(x=>x.id===id); if(c) Object.assign(c,o); }
-  else h.conceptos.push({id:'hg-'+Date.now(),creado:todayISO(),archivado:false,...o});
+  let antes=null, idFinal=id;
+  if(id){ const c=h.conceptos.find(x=>x.id===id); if(c){ antes=JSON.parse(JSON.stringify(c)); Object.assign(c,o); } }
+  else { const nuevo={id:'hg-'+Date.now(),creado:todayISO(),archivado:false,...o}; h.conceptos.push(nuevo); idFinal=nuevo.id; }
   saveState(); _cerrarModalDin('hg-concepto-ov'); renderHogar(); toast(id?'Concepto actualizado':'Concepto agregado');
+  if(id) logActividad('hogar_concepto_editado', `Concepto del Hogar editado: ${o.nombre}`, {conceptoId:idFinal, snapshotAntes:antes});
+  else logActividad('hogar_concepto_nuevo', `Concepto del Hogar nuevo: ${o.nombre}`, {conceptoId:idFinal});
 }
 function hgEliminarConcepto(id){
   const h=hgEnsure(), c=h.conceptos.find(x=>x.id===id); if(!c) return;
   if(!confirm('¿Eliminar «'+c.nombre+'» y su historial del hogar?\n\nLos gastos ya registrados en Movimientos y el Pago frecuente enlazado NO se borran.')) return;
+  const registrosBorrados=h.registros.filter(r=>r.cid===id);
   h.conceptos=h.conceptos.filter(x=>x.id!==id);
   h.registros=h.registros.filter(r=>r.cid!==id);
   saveState(); _cerrarModalDin('hg-concepto-ov'); HG.vista='lista'; renderHogar(); toast('Concepto eliminado');
+  logActividad('hogar_concepto_eliminado', `Concepto del Hogar eliminado: ${c.nombre}`, {conceptoSnapshot:c, registrosSnapshot:registrosBorrados});
 }
 function hgModalImportar(){
   const pfs=hgPFDisponibles();
@@ -20211,9 +20296,11 @@ function mnBorrarGrupo(g){
   _mnRender();
 }
 function mnGuardar(){
+  const antes=state.menuOrden?JSON.parse(JSON.stringify(state.menuOrden)):null;
   const gN={}; Object.keys(_mnDraft.nombres).forEach(g=>{ const c=_mnDraft.custom.some(x=>x.id===g); if(c||_mnDraft.nombres[g]!==(_menuDef.gEtq[g])) gN[g]=_mnDraft.nombres[g]; });
   state.menuOrden={top:_mnDraft.top.slice(),grupos:JSON.parse(JSON.stringify(_mnDraft.grupos)),custom:_mnDraft.custom.map(c=>({id:c.id,nombre:_mnDraft.nombres[c.id]||c.nombre})),gNombres:gN};
   window._menuSig=null; aplicarOrdenMenu(); saveState(); _cerrarModalDin('menu-orden-overlay'); toast('Orden del menú guardado');
+  if(JSON.stringify(antes)!==JSON.stringify(state.menuOrden)) logActividad('menu_orden_editado', 'Orden del menú modificado', {snapshotAntes:antes});
 }
 function mnRestablecer(){
   if(!confirm('¿Volver al orden original del menú? También se quitarán los grupos que creaste y los nombres que cambiaste.')) return;
@@ -20320,7 +20407,7 @@ function autoAplicarTab(){
 }
 function autoSelector(wrap){
   let vs=document.getElementById('auto-vsel');
-  if(!vs){ vs=document.createElement('div'); vs.id='auto-vsel'; wrap.parentNode.insertBefore(vs,wrap.nextSibling); }
+  if(!vs){ vs=document.createElement('div'); vs.id='auto-vsel'; vs.className='auto-vsel-row'; wrap.parentNode.insertBefore(vs,wrap.nextSibling); }
   const V=autoVehs();
   if(V.length<2){ vs.innerHTML=''; vs.style.display='none'; return; }
   const res=AUTO.tab==='resumen', act=autoVidAct(), todos=autoVistaTodos();
@@ -20566,12 +20653,16 @@ function autoModalVeh(id){
 function autoGuardarVeh(id){
   const V=autoVehs(); let v=id?V.find(x=>x.id===id):null;
   autoSellar();
+  const esNuevo=!v;
+  const antes=v?JSON.parse(JSON.stringify(v)):null;
   if(!v){ v={id:'av-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}; V.push(v); }
   const g=i=>(document.getElementById(i)||{}).value||'';
   v.nombre=g('av-nom').trim()||'Mi auto'; v.icono=g('av-ico')||'🚗'; v.placa=g('av-placa').trim().toUpperCase(); v.anio=g('av-anio').trim(); v.combustible=g('av-comb');
   v.soatVence=g('av-soat'); v.revVence=g('av-rev'); v.seguroVence=g('av-seg'); v.notas=g('av-notas').trim();
   const c=document.getElementById('av-pr'); if(c&&c.checked){ V.forEach(x=>x.principal=false); v.principal=true; }
   saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); try{ fuelAplicarEtiquetas(); renderFuelSection('glp'); renderFuelSection('gas'); }catch(e){} toast('Auto guardado');
+  if(esNuevo) logActividad('auto_veh_nuevo', `Auto nuevo: ${v.icono||'🚗'} ${v.nombre}`, {vehId:v.id});
+  else logActividad('auto_veh_editado', `Auto editado: ${v.icono||'🚗'} ${v.nombre}`, {vehId:v.id, snapshotAntes:antes});
 }
 // ── 🔀 Mover registros entre autos (uno por uno, o todo el historial desde «Editar auto») ──
 function autoMoverBtn(kind,id,ref){ const b=document.getElementById('mov-'+kind); if(!b) return; b.style.display=(autoVehs().length>=2&&id)?'inline-flex':'none'; b.dataset.id=id||''; b.dataset.t=ref||''; }
@@ -20588,11 +20679,13 @@ function autoMoverAbrir(kind,id,t){
 }
 function autoMoverReg(kind,id,t,dest){
   const r=_autoMovLista(kind,t).find(x=>x.id===id); if(!r) return;
+  const origen=autoDeVid(r);
   r.vid=dest; saveState(); _cerrarModalDin('auto-mov-ov');
   ['fre-overlay','km-editar-overlay','mant-config-overlay','rep-overlay'].forEach(i=>{ const e=document.getElementById(i); if(e) e.classList.remove('open'); });
   try{ freCtx=null; }catch(e){} try{ editingMantId=null; }catch(e){} try{ editingRepId=null; }catch(e){} try{ editandoKmManualId=null; }catch(e){}
   renderCombustible();
   const v=autoVehs().find(x=>x.id===dest); toast('Movido a '+(v?v.nombre:'otro auto'));
+  logActividad('auto_registro_movido', `Registro movido a ${v?v.nombre:'otro auto'}`, {kind,regId:id,fuelTipo:t,vidAntes:origen,vidDespues:dest});
 }
 function _autoMovConteos(fromId){
   const de=(arr)=>(arr||[]).filter(x=>autoDeVid(x)===fromId);
@@ -20620,13 +20713,21 @@ function autoMoverTodo(fromId){
   const nom={fuel:'recarga',km:'lectura de km',mant:'mantenimiento',rep:'repuesto',pres:'préstamo'};
   const det=sel.filter(x=>x.items.length).map(x=>x.items.length+' '+nom[x.k]+(x.items.length===1?'':(x.k==='km'?'s':'s'))).join(', ');
   if(!confirm('¿Mover '+det+' de «'+(a?a.nombre:'este auto')+'» a «'+(b?b.nombre:'otro auto')+'»?\n\nLos km y promedios de ambos autos se recalculan con lo que quede en cada uno.')) return;
-  sel.forEach(x=>x.items.forEach(r=>{ r.vid=dest; }));
+  const mov=[];
+  sel.forEach(x=>x.items.forEach(r=>{ mov.push({k:x.k,id:r.id,vidAntes:fromId}); r.vid=dest; }));
   saveState(); _cerrarModalDin('auto-veh-ov'); try{ autoRender(); }catch(e){} try{ renderCombustible(); }catch(e){}
   toast(total+' registro'+(total===1?'':'s')+' movido'+(total===1?'':'s')+' a '+(b?b.nombre:'otro auto'));
+  logActividad('auto_registro_movido', `${total} registro${total===1?'':'s'} movido${total===1?'':'s'} de ${a?a.nombre:'un auto'} a ${b?b.nombre:'otro auto'}`, {movs:mov,vidDespues:dest,masivo:true});
 }
 function autoBorrarVeh(id){
-  const A=autoEnsure(); A.vehiculos=autoVehs().filter(x=>x.id!==id); A.prestamos.forEach(p=>{ if(p.vid===id) p.vid=''; }); ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(r.vid===id) delete r.vid; })); if(AUTO.vid===id){ AUTO.vid=''; try{ localStorage.removeItem('auto_vid'); }catch(e){} }
+  const A=autoEnsure(); const vBorrado=autoVehs().find(x=>x.id===id);
+  const afectados=[];
+  A.prestamos.forEach(p=>{ if(p.vid===id){ afectados.push({arr:'prestamos',id:p.id}); p.vid=''; } });
+  ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(r.vid===id){ afectados.push({arr:k,id:r.id}); delete r.vid; } }));
+  A.vehiculos=autoVehs().filter(x=>x.id!==id);
+  if(AUTO.vid===id){ AUTO.vid=''; try{ localStorage.removeItem('auto_vid'); }catch(e){} }
   saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); toast('Auto quitado');
+  if(vBorrado) logActividad('auto_veh_eliminado', `Auto eliminado: ${vBorrado.icono||'🚗'} ${vBorrado.nombre}`, {vehSnapshot:vBorrado, afectados});
 }
 // ── Detalle de préstamo reutilizable (Auto y Hogar): saldo, avance, Pago frecuente y cronograma completo ──
 function dmUsadosSecciones(){
@@ -20703,13 +20804,17 @@ function autoRenderPrestamo(){
 function autoVincular(){
   const id=(document.getElementById('auto-sel-dm')||{}).value; if(!id) return;
   const d=(state.deudasMayores||[]).find(x=>x.id===id); if(!d) return;
-  autoEnsure().prestamos.push(autoStamp({id:'ap-'+Date.now(),dmId:id,vehiculo:'',valor:''}));
+  const nuevo=autoStamp({id:'ap-'+Date.now(),dmId:id,vehiculo:'',valor:''});
+  autoEnsure().prestamos.push(nuevo);
   saveState(); autoRender(); toast('Préstamo vinculado al Auto');
   if(!dmPFDe(d)) toast('Tip: enlázalo a un Pago frecuente desde «Abrir en Deudas»','info');
+  logActividad('auto_prestamo_vinculado', `Préstamo vinculado al Auto: ${d.nombre}`, {prestamoId:nuevo.id});
 }
 function autoDesvincular(pid){
-  const A=autoEnsure(); A.prestamos=A.prestamos.filter(p=>p.id!==pid);
+  const A=autoEnsure(); const antes=A.prestamos.find(p=>p.id===pid);
+  A.prestamos=A.prestamos.filter(p=>p.id!==pid);
   saveState(); _cerrarModalDin('auto-edit-ov'); autoRender(); toast('Vínculo quitado (la deuda no se borra)');
+  if(antes) logActividad('auto_prestamo_desvinculado', `Vínculo de préstamo del Auto quitado`, {prestamoSnapshot:antes});
 }
 function autoAbrirDeuda(dmId){ showPage('deudas'); try{ openDMDetail(dmId); }catch(e){} }
 function autoModalEditar(pid){
@@ -24228,6 +24333,7 @@ function guardarEditarRecarga(){
   const fI=document.getElementById('fre-finicial').value, kmIraw=document.getElementById('fre-kminicial').value.replace(/,/g,'').trim();
   let row=id?arr.find(r=>r.id===id):null;
   const nueva=!row;
+  const snapshotAntes=row?JSON.parse(JSON.stringify(row)):null;
   if(nueva){ row=autoStamp({id:'fuel-'+Date.now()}); arr.push(row); state[key].push(row); }
   const antesFFinal=row.fFinal, antesKmFinal=row.kmFinal;
   row.fFinal=fF; row.kmFinal=String(kmF); row.galones=String(cant); row.pxg=String(pxg);
@@ -24253,6 +24359,8 @@ function guardarEditarRecarga(){
   cerrarEditarRecarga();
   renderFuelSection(type);
   toast((nueva?'Recarga guardada':'Recarga actualizada')+(gnv&&deudaGnv()&&Math.abs(dif)>0.004?` · deuda de la instalación: ${dif>0?'−':'+'}S/ ${fuelFmt(Math.abs(dif),2)}`:''));
+  if(nueva) logActividad('combustible_recarga_nueva', `Recarga ${fuelEtq(type)} registrada`, {fuelTipo:type, filaId:nuevoId});
+  else logActividad('combustible_recarga_editada', `Recarga ${fuelEtq(type)} editada`, {fuelTipo:type, filaId:nuevoId, snapshotAntes});
   if(nueva && !row.gastoRegistrado){
     setTimeout(()=>{ if(confirm('¿Registrar ahora el gasto de esta recarga en una cuenta o tarjeta?')) openFuelGastoModal(type, nuevoId); }, 150);
   }
@@ -30733,6 +30841,21 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.24.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "En celular, las pestañas internas de Auto y Hogar (Resumen/Combustible/Mantenimiento/Préstamo, el selector de autos, Conceptos/Proyección/Préstamo) ya no se parten en 2 líneas: ahora se deslizan en horizontal con el dedo, igual que el menú principal.",
+   "Corrige que en Tarjetas de crédito (y cualquier fila de botones de encabezado similar) los botones pudieran salirse del ancho de la pantalla y dejar una franja vacía al desplazarse hacia la derecha; ahora esa fila se acomoda en 2 líneas si no cabe en una."
+  ]
+ },
+ {
+  "v": "v2.23.0",
+  "fecha": "13/11/26",
+  "cambios": [
+   "«Ver y deshacer últimas acciones» ahora también registra (y permite deshacer) lo nuevo de esta sesión: crear/editar/quitar un auto, vincular o quitar un préstamo del Auto u Hogar, crear/editar/eliminar un concepto del Hogar, mover registros entre autos (uno por uno o en bloque), crear/editar una recarga de combustible y los cambios al orden del menú. Antes esas acciones no quedaban en el registro de actividad ni se podían deshacer desde ahí."
+  ]
+ },
  {
   "v": "v2.22.1",
   "fecha": "13/11/26",
