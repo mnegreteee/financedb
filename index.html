@@ -4513,9 +4513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.16.0';
-const APP_VERSION_DATE = '12/11/26 - 23:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Resumen de Auto rediseñado: variaciones, porcentaje de participación, círculo de estado y vista «Todos».';
+const APP_VERSION = 'v2.16.2';
+const APP_VERSION_DATE = '12/11/26 - 23:50'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pestañas de Hogar y Auto igualan siempre al botón estándar (también en celular).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -19172,7 +19172,7 @@ const HG_FREC_ETQ={1:'Mensual',2:'Cada 2 meses',3:'Cada 3 meses',4:'Cada 4 meses
   .hg-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
   .hg-head h1{margin:0;font-size:22px;flex:1 1 auto}
   .hg-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
-  .hg-tab{background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:0 14px;min-height:40px;font-size:13px;cursor:pointer}
+  .hg-tab{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius-sm,8px);padding:6px 12px;min-height:0;font-family:var(--font);font-size:12px;cursor:pointer;transition:all .15s}
   .hg-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
   .hg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px}
   .hg-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
@@ -19369,7 +19369,7 @@ function renderHogar(){
 }
 function hgHtmlPrestamo(){
   const P=hgEnsure().prestamos, dms=state.deudasMayores||[], usados=dmUsadosSecciones(), libres=dms.filter(d=>!usados.has(d.id));
-  const sel=libres.length?`<select id="hg-sel-dm" style="min-height:40px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:14px">${libres.map(d=>`<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}</select> <button class="btn btn-primary" onclick="hgVincularPrestamo()">🔗 Vincular${(state.hogar&&state.hogar.prestamos&&state.hogar.prestamos.length)?' otro préstamo':''}</button>`:'';
+  const sel=libres.length?`<select id="hg-sel-dm" style="min-height:0;font-size:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:14px">${libres.map(d=>`<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}</select> <button class="btn btn-primary" onclick="hgVincularPrestamo()">🔗 Vincular${(state.hogar&&state.hogar.prestamos&&state.hogar.prestamos.length)?' otro préstamo':''}</button>`:'';
   if(!P.length) return `<div class="auto-box" style="text-align:center;padding:26px 14px"><div style="font-size:34px">🏦</div><div style="font-size:15px;font-weight:600;margin:6px 0">Préstamo del hogar</div>
     <div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:520px;margin:0 auto 14px">Vincula la deuda mayor de tu casa (hipotecario, construcción, etc.). Verás cuánto debes, el cronograma completo y cómo vas con el avance, conectado a su Pago frecuente. No se duplica nada.</div>
     ${libres.length?`<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center">${sel}</div>`:`<div style="font-size:12px;color:var(--amber);margin-bottom:10px">No tienes deudas mayores libres. Crea una en Créditos → Deudas y vuelve aquí.</div><button class="btn" onclick="showPage('deudas')">Ir a Deudas</button>`}</div>`;
@@ -20179,8 +20179,9 @@ const AUTO_BLOQUES={resumen:['auto-resumen'],comb:['fuel-tabs-bar','fuel-section
   st.textContent=`
   .auto-oculto{display:none!important}
   .auto-tabs{display:flex;gap:6px;margin:10px 0 16px;flex-wrap:wrap}
-  .auto-tab{background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:0 14px;min-height:40px;font-size:13px;cursor:pointer}
+  .auto-tab{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--radius-sm,8px);padding:6px 12px;min-height:0;font-family:var(--font);font-size:12px;cursor:pointer;transition:all .15s}
   .auto-tab.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  @media (pointer:coarse){.hg-tab,.auto-tab{min-height:44px}}
   .auto-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
   .auto-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
   .auto-kpi .l{font-size:11px;letter-spacing:.05em;color:var(--text3);text-transform:uppercase}
@@ -20328,6 +20329,7 @@ function autoAlertas(){
   .ar-part{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.ar-part>div{background:var(--bg3);border-radius:12px;padding:10px 12px;min-width:0}.ar-part b{display:block;font-size:16px;margin:2px 0;font-family:var(--mono)}.ar-part .p{font-size:12px;font-weight:700}
   .ar-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex:0 0 auto}
   .av-dot{display:inline-block;width:13px;height:13px;border-radius:50%;flex:0 0 auto;vertical-align:middle;cursor:help}.av-dot.n0{background:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.2)}.av-dot.n1{background:var(--amber);box-shadow:0 0 0 3px rgba(245,185,66,.22)}.av-dot.n2{background:var(--red);box-shadow:0 0 0 3px rgba(240,92,92,.25)}
+  .auto-tab .av-dot{width:9px;height:9px;margin-right:2px}.auto-tab .av-dot.n0{box-shadow:0 0 0 2px rgba(62,207,142,.2)}.auto-tab .av-dot.n1{box-shadow:0 0 0 2px rgba(245,185,66,.22)}.auto-tab .av-dot.n2{box-shadow:0 0 0 2px rgba(240,92,92,.25)}
   .ar-share{display:flex;height:12px;border-radius:9px;overflow:hidden;gap:2px;margin:12px 0 10px;background:var(--bg3)}.ar-share i{display:block}
   .ar-cars{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.ar-car{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:9px;cursor:pointer;min-width:0;transition:border-color .15s,transform .15s}.ar-car:hover{border-color:var(--accent);transform:translateY(-1px)}.ar-car.pr{border-color:rgba(245,185,66,.35)}
   .ar-car h3{font-size:16px;margin:0;display:flex;gap:7px;align-items:center}.ar-car .ar-ic{width:42px;height:42px;font-size:21px;border-radius:12px}.ar-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--text3)}.ar-row b{color:var(--text);font-size:14px;font-family:var(--mono)}
@@ -20573,7 +20575,7 @@ function autoRenderPrestamo(){
   const el=document.getElementById('auto-prestamo'); if(!el) return;
   const PT=autoEnsure().prestamos, P=autoVehs().length>1?PT.filter(p=>autoEs(p,autoVidAct())):PT, dms=state.deudasMayores||[];
   const usados=dmUsadosSecciones(), libres=dms.filter(d=>!usados.has(d.id));
-  const selVincular=libres.length?`<select id="auto-sel-dm" style="min-height:40px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:14px">${libres.map(d=>`<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}</select> <button class="btn btn-primary" onclick="autoVincular()">🔗 Vincular${P.length?' otro préstamo':''}</button>`:'';
+  const selVincular=libres.length?`<select id="auto-sel-dm" style="min-height:0;font-size:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:14px">${libres.map(d=>`<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}</select> <button class="btn btn-primary" onclick="autoVincular()">🔗 Vincular${P.length?' otro préstamo':''}</button>`:'';
   if(!P.length){
     el.innerHTML=`<div class="auto-box" style="text-align:center;padding:26px 14px"><div style="font-size:34px">🏦</div><div style="font-size:15px;font-weight:600;margin:6px 0">Seguimiento del préstamo vehicular</div>
       <div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:520px;margin:0 auto 14px">Vincula la deuda mayor de tu auto (por ejemplo Ripley). Aquí verás cuánto debes, cuántas cuotas faltan y la próxima fecha, conectado a su Pago frecuente y al gasto total del auto. No se duplica nada: sigues registrando los pagos como siempre.</div>
@@ -30569,6 +30571,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.16.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Botones y pestañas de Hogar y Auto con el mismo tamaño y estilo que los de las demás secciones."
+  ]
+ },
  {
   "v": "v2.16.0",
   "fecha": "12/11/26",
