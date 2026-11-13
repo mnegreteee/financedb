@@ -246,7 +246,10 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 .account-table tr:last-child td{border-bottom:none;}
 /* Tarjeta unificada Cuentas+Ahorros: ocupa el espacio de las 2 tarjetas anteriores */
 .cu-wide{grid-column:span 2;}
-.cuentas-uni{container-type:inline-size;}
+.cuentas-uni{container-type:inline-size;display:flex;flex-direction:column;}
+.cuentas-uni .cu-tabla{flex:1 1 auto;width:100%;}
+.cuentas-uni .cu-tabla tbody td{vertical-align:middle;}
+.cuentas-uni .cu-tabla thead tr{height:0;}
 .cu-tabla td.cu-n,.cu-tabla th.cu-n{text-align:right;font-family:var(--mono);vertical-align:top;padding-left:8px;}
 .cu-tabla td:first-child{vertical-align:middle;}
 .cu-tabla td.cu-prev{font-size:11px;color:var(--text2);}
@@ -4506,9 +4509,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.11.1';
-const APP_VERSION_DATE = '12/11/26 - 21:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Hogar: botón «Hoy» junto al selector de mes para volver al mes actual.';
+const APP_VERSION = 'v2.11.4';
+const APP_VERSION_DATE = '12/11/26 - 22:03'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Orden del menú: ahora también puedes sacar una subsección al menú principal, o meter una sección del menú principal dentro de un grupo.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20019,7 +20022,7 @@ function hgBorrarCompra(cid){
 // ══════════════════════════════════════════════════════
 //  ↕ ORDEN DEL MENÚ — el usuario reordena las secciones generales (Resumen,
 //  Finanzas, grupos desplegables…) y las subsecciones de cada grupo, y puede
-//  mover una subsección a otro grupo. Se guarda en state.menuOrden y se aplica
+//  mover una sección al menú principal o a otro grupo. Se guarda en state.menuOrden y se aplica
 //  moviendo los botones que YA existen (conservan su onclick). Lo que no esté
 //  en el orden guardado (secciones nuevas de futuras versiones) va al final de
 //  su grupo original.  Config → Apariencia → «Orden del menú».
@@ -20040,22 +20043,39 @@ function _menuLeerDefecto(){
 }
 function _menuEfectivo(){
   const d=_menuDef||(_menuDef=_menuLeerDefecto()); if(!d) return null;
-  const o=(state&&state.menuOrden)||{}, todos=new Set(Object.values(d.grupos).flat()), usados=new Set(), grupos={};
+  const o=(state&&state.menuOrden)||{}, grupos={}, top=[], usados=new Set();
+  const hojas=new Set([...d.top.filter(t=>t.indexOf('g:')!==0),...Object.values(d.grupos).flat()]);
   Object.keys(d.grupos).forEach(g=>{ grupos[g]=[]; });
-  Object.keys(d.grupos).forEach(g=>{ ((o.grupos||{})[g]||[]).forEach(id=>{ if(todos.has(id)&&!usados.has(id)){ grupos[g].push(id); usados.add(id); } }); });
+  // 1) lo guardado: primero el menú principal, luego cada grupo (una sección solo puede estar en un sitio)
+  (o.top||[]).forEach(t=>{
+    if(t.indexOf('g:')===0){ if(d.top.includes(t)&&!top.includes(t)) top.push(t); }
+    else if(hojas.has(t)&&!usados.has(t)){ top.push(t); usados.add(t); }
+  });
+  Object.keys(d.grupos).forEach(g=>{ ((o.grupos||{})[g]||[]).forEach(id=>{ if(hojas.has(id)&&!usados.has(id)){ grupos[g].push(id); usados.add(id); } }); });
+  // 2) lo que no está guardado (secciones nuevas) va a su sitio original, al final
+  d.top.forEach(t=>{ if(t.indexOf('g:')===0){ if(!top.includes(t)) top.push(t); } else if(!usados.has(t)){ top.push(t); usados.add(t); } });
   Object.keys(d.grupos).forEach(g=>d.grupos[g].forEach(id=>{ if(!usados.has(id)){ grupos[g].push(id); usados.add(id); } }));
-  const top=[]; (o.top||[]).forEach(t=>{ if(d.top.includes(t)&&!top.includes(t)) top.push(t); });
-  d.top.forEach(t=>{ if(!top.includes(t)) top.push(t); });
   return {top,grupos};
+}
+function _menuForma(b,comoTab){
+  if(!b) return;
+  const act=b.classList.contains('active');
+  b.classList.toggle('nav-tab',comoTab); b.classList.toggle('nav-dropdown-item',!comoTab);
+  if(act) b.classList.add('active');
 }
 function aplicarOrdenMenu(){
   const nc=document.querySelector('.nav-center'); if(!nc) return;
   const e=_menuEfectivo(); if(!e) return;
   const sig=JSON.stringify(e); if(sig===window._menuSig) return; window._menuSig=sig;
-  e.top.forEach(t=>{ const el=document.getElementById(t.startsWith('g:')?'navdrop-'+t.slice(2):t); if(el) nc.appendChild(el); });
+  e.top.forEach(t=>{
+    const el=document.getElementById(t.indexOf('g:')===0?'navdrop-'+t.slice(2):t);
+    if(!el) return;
+    if(t.indexOf('g:')!==0) _menuForma(el,true);
+    nc.appendChild(el);
+  });
   Object.keys(e.grupos).forEach(g=>{
     const m=document.getElementById('navmenu-'+g); if(!m) return;
-    e.grupos[g].forEach(id=>{ const b=document.getElementById(id); if(b) m.appendChild(b); });
+    e.grupos[g].forEach(id=>{ const b=document.getElementById(id); if(b){ _menuForma(b,false); m.appendChild(b); } });
     const dd=document.getElementById('navdrop-'+g); if(dd) dd.style.display=e.grupos[g].length?'':'none';
   });
 }
@@ -20066,24 +20086,23 @@ function abrirOrdenMenu(){
 function _mnRender(){
   const d=_menuDef, e=_mnDraft, esc=escapeHtml;
   const btn=(fn,txt,lab,dis)=>`<button class="btn" style="min-width:40px;min-height:36px;padding:0 8px" ${dis?'disabled':''} onclick="${fn}" aria-label="${lab}">${txt}</button>`;
+  const selEst='max-width:120px;min-height:36px;font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px';
+  const selMover=(id,actual)=>'<select aria-label="Mover a otro lugar del menú" style="'+selEst+'" onchange="mnMoverA(\''+id+'\',this.value)"><option value="">Mover a…</option>'+(actual!=='top'?'<option value="top">⬆ Menú principal</option>':'')+Object.keys(e.grupos).filter(x=>x!==actual).map(x=>'<option value="'+x+'">'+esc(d.gEtq[x])+'</option>').join('')+'</select>';
   const fila=(etq,arrUp,arrDn,extra)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-top:1px solid var(--border2,var(--border))"><span style="flex:1;min-width:0;font-size:13px">${etq}</span>${extra||''}${arrUp}${arrDn}</div>`;
   let h='<div class="modal-title"><span>↕ Orden del menú</span><button class="modal-close" onclick="_cerrarModalDin(\'menu-orden-overlay\')">✕</button></div>';
-  h+='<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">Usa ▲ ▼ para subir o bajar. En las subsecciones puedes elegir otro grupo con «Mover a». Los cambios se aplican al guardar.</div>';
+  h+='<div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:10px">Usa ▲ ▼ para subir o bajar. Con «Mover a…» pasas una sección al menú principal o a otro grupo. Los cambios se aplican al guardar.</div>';
   h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">Menú principal</div>';
   e.top.forEach((t,i)=>{
-    const g=t.startsWith('g:')?t.slice(2):null, n=g?e.grupos[g].length:0;
+    const g=t.indexOf('g:')===0?t.slice(2):null, n=g?e.grupos[g].length:0;
     const nom=g?esc(d.gEtq[g])+' <span style="color:var(--text3);font-size:11px">· grupo, '+n+' sección'+(n===1?'':'es')+'</span>':esc(d.etq[t]||t);
-    h+=fila(nom,btn(`mnMover('t',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('t',${i},1)`,'▼','Bajar',i===e.top.length-1));
+    h+=fila(nom,btn(`mnMover('t',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('t',${i},1)`,'▼','Bajar',i===e.top.length-1),g?'':selMover(t,'top'));
   });
   h+='</div>';
   Object.keys(e.grupos).forEach(g=>{
     const ids=e.grupos[g];
     h+='<div style="background:var(--bg3);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 12px;margin-bottom:10px"><div style="font-weight:600;font-size:13px;margin-bottom:4px">'+esc(d.gEtq[g])+'</div>';
     if(!ids.length) h+='<div style="font-size:12px;color:var(--text3)">Vacío (el grupo se oculta del menú).</div>';
-    ids.forEach((id,i)=>{
-      const sel='<select aria-label="Mover a otro grupo" style="max-width:110px;min-height:36px;font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px" onchange="mnMoverA(\''+id+'\',this.value)"><option value="">Mover a…</option>'+Object.keys(e.grupos).filter(x=>x!==g).map(x=>'<option value="'+x+'">'+esc(d.gEtq[x])+'</option>').join('')+'</select>';
-      h+=fila(esc(d.etq[id]||id),btn(`mnMover('${g}',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('${g}',${i},1)`,'▼','Bajar',i===ids.length-1),sel);
-    });
+    ids.forEach((id,i)=>{ h+=fila(esc(d.etq[id]||id),btn(`mnMover('${g}',${i},-1)`,'▲','Subir',i===0),btn(`mnMover('${g}',${i},1)`,'▼','Bajar',i===ids.length-1),selMover(id,g)); });
     h+='</div>';
   });
   h+='<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px"><button class="config-action-btn neutral" onclick="mnRestablecer()">Restablecer orden original</button><span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin(\'menu-orden-overlay\')">Cancelar</button><button class="btn btn-primary" onclick="mnGuardar()">Guardar</button></div>';
@@ -20096,10 +20115,13 @@ function mnMover(donde,i,dl){
   if(!arr||j<0||j>=arr.length) return;
   [arr[i],arr[j]]=[arr[j],arr[i]]; _mnRender();
 }
-function mnMoverA(id,g2){
-  if(!g2||!_mnDraft.grupos[g2]) return;
+function mnMoverA(id,dest){
+  if(!dest) return;
+  if(dest!=='top'&&!_mnDraft.grupos[dest]) return;
+  _mnDraft.top=_mnDraft.top.filter(x=>x!==id);
   Object.keys(_mnDraft.grupos).forEach(g=>{ _mnDraft.grupos[g]=_mnDraft.grupos[g].filter(x=>x!==id); });
-  _mnDraft.grupos[g2].push(id); _mnRender();
+  if(dest==='top') _mnDraft.top.push(id); else _mnDraft.grupos[dest].push(id);
+  _mnRender();
 }
 function mnGuardar(){
   state.menuOrden={top:_mnDraft.top.slice(),grupos:JSON.parse(JSON.stringify(_mnDraft.grupos))};
@@ -30060,6 +30082,27 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.11.4",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Orden del menú: «Mover a…» permite pasar una subsección al menú principal (queda como pestaña) o meter una sección del menú principal dentro de un grupo."
+  ]
+ },
+ {
+  "v": "v2.11.3",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Resumen: la tarjeta de Cuentas mantiene la altura de Tipo de cambio y reparte el espacio sobrante entre sus filas; con pocas cuentas ya no queda un hueco vacío al final."
+  ]
+ },
+ {
+  "v": "v2.11.2",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Resumen: primer ajuste de la altura de la tarjeta de Cuentas (reemplazado en la versión siguiente)."
+  ]
+ },
  {
   "v": "v2.11.1",
   "fecha": "12/11/26",
