@@ -4513,9 +4513,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.15.0';
-const APP_VERSION_DATE = '12/11/26 - 23:20'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Cada auto tiene su propio control: selector de auto en Combustible, Mantenimiento y Préstamo.';
+const APP_VERSION = 'v2.16.0';
+const APP_VERSION_DATE = '12/11/26 - 23:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Resumen de Auto rediseñado: variaciones, porcentaje de participación, círculo de estado y vista «Todos».';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -20217,7 +20217,7 @@ function autoRA(vid){ return autoFA('repuestos',vid); }
 function autoStamp(o){ const v=autoVidAct(); if(v) o.vid=v; return o; }
 function autoSellar(){ const pr=autoVidPrincipal(); if(!pr) return; const V=_autoV(); ['combustibleGlp','combustibleGas','kmManual','mantenimientos','repuestos'].forEach(k=>(state[k]||[]).forEach(r=>{ if(!r.vid||!V.some(v=>v.id===r.vid)) r.vid=pr; })); }
 function autoPref(item){ const V=_autoV(); if(V.length<2) return ''; const v=V.find(x=>x.id===autoDeVid(item)); return v?' ('+escapeHtml(v.nombre||'auto')+')':''; }
-function autoSelVeh(id){ AUTO.vid=id; try{ localStorage.setItem('auto_vid',id); }catch(e){} renderCombustible(); }
+function autoSelVeh(id){ AUTO.vid=id; AUTO.todos=false; try{ localStorage.setItem('auto_vid',id); }catch(e){} renderCombustible(); }
 function autoEnsure(){
   if(!state.auto||typeof state.auto!=='object'||Array.isArray(state.auto)) state.auto={};
   if(!Array.isArray(state.auto.prestamos)) state.auto.prestamos=[];
@@ -20265,10 +20265,10 @@ function autoSelector(wrap){
   let vs=document.getElementById('auto-vsel');
   if(!vs){ vs=document.createElement('div'); vs.id='auto-vsel'; wrap.parentNode.insertBefore(vs,wrap.nextSibling); }
   const V=autoVehs();
-  if(V.length<2||AUTO.tab==='resumen'){ vs.innerHTML=''; vs.style.display='none'; return; }
-  const act=autoVidAct();
+  if(V.length<2){ vs.innerHTML=''; vs.style.display='none'; return; }
+  const res=AUTO.tab==='resumen', act=autoVidAct(), todos=autoVistaTodos();
   vs.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px';
-  vs.innerHTML='<span style="font-size:12px;color:var(--text3)">Auto:</span>'+V.map(v=>`<button class="auto-tab ${v.id===act?'on':''}" onclick="autoSelVeh('${v.id}')">🚗 ${escapeHtml(v.nombre||'Auto')}</button>`).join('');
+  vs.innerHTML=(res?`<button class="auto-tab ${todos?'on':''}" onclick="autoSelTodos()">🚦 Todos</button>`:'<span style="font-size:12px;color:var(--text3)">Auto:</span>')+V.map(v=>`<button class="auto-tab ${(!res||!todos)&&v.id===act?'on':''}" onclick="autoAbrirVeh('${v.id}')">${autoDotHTML(v)} ${escapeHtml(v.icono||'🚗')} ${escapeHtml(v.nombre||'Auto')}${autoVidPrincipal()===v.id?' ⭐':''}</button>`).join('');
 }
 function autoRender(){
   const wrap=document.getElementById('auto-tabs'); if(!wrap) return;
@@ -20308,62 +20308,208 @@ function autoAlertas(){
   });
   return out.sort((a,b)=>a.d-b.d);
 }
-function autoFichaVeh(v){
-  const V=autoVehs(), pr=autoPrincipal(), esPr=pr&&pr.id===v.id, mk=mesActualKey();
-  let h=`<div class="auto-box"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><h3 style="margin:0;flex:1 1 auto">🚗 ${escapeHtml(v.nombre||'Mi auto')}${esPr&&V.length>1?' <span style="font-size:11px;font-weight:600;color:var(--accent)">· principal</span>':''}</h3><button class="btn" onclick="autoSelVeh('${v.id}');autoTab('comb')">⛽ Abrir</button><button class="btn" onclick="autoModalVeh('${v.id}')">✏️ Editar</button></div>
-  <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${[v.placa?'Placa '+escapeHtml(v.placa):'',v.anio?'Año '+escapeHtml(String(v.anio)):'',v.combustible?escapeHtml(v.combustible):''].filter(Boolean).join(' · ')||'Edita para agregar placa, año y combustible'}</div>`;
-  const k=getKmActualVehiculo(v.id), ult=['combustibleGlp','combustibleGas'].flatMap(key=>computeFuelRows(autoFA(key,v.id)).filter(r=>r.fFinal&&r.totalGlp!==null).map(r=>({f:r.fFinal,t:r.totalGlp,c:key==='combustibleGlp'?'GLP':'Gasolina'}))).sort((a,b)=>String(a.f).localeCompare(String(b.f))).pop();
-  h+=`<div class="auto-fila"><span style="flex:1">Kilometraje</span><b>${k?Math.round(k.km).toLocaleString('es-PE')+' km':'—'}</b></div>`;
-  if(k) h+=`<div class="auto-fila"><span style="flex:1">Última lectura</span><span style="color:var(--text3)">${dmFechaCorta(k.fecha)}</span></div>`;
-  if(ult) h+=`<div class="auto-fila"><span style="flex:1">Última recarga (${ult.c})</span><b>${M(fmtS(ult.t))} <span style="color:var(--text3);font-weight:400;font-size:12px">· ${dmFechaCorta(ult.f)}</span></b></div>`;
+// ══ Resumen de Auto — diseño «tarjeta héroe»: estado (círculo), variaciones y % de participación ══
+(function(){
+  if(document.getElementById('auto-res-style')) return;
+  const st=document.createElement('style'); st.id='auto-res-style';
+  st.textContent=`
+  .ar-hero{background:linear-gradient(160deg,var(--bg3),var(--bg2) 70%);border:1px solid var(--border);border-radius:20px;padding:22px;margin-bottom:14px}
+  .ar-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.ar-ic{width:54px;height:54px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#9b7bff);display:grid;place-items:center;font-size:28px;flex:0 0 auto}
+  .ar-name{font-size:21px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.ar-sub{color:var(--text3);font-size:13px;margin-top:2px}
+  .ar-km{font-size:44px;font-weight:700;letter-spacing:-.02em;margin:16px 0 2px;font-family:var(--mono)}.ar-km small{font-size:16px;color:var(--text3);font-weight:500;font-family:inherit}
+  .ar-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.ar-chip{font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:default}
+  .ar-chip.ok{color:var(--green);border-color:rgba(62,207,142,.4);background:rgba(62,207,142,.1)}.ar-chip.warn{color:var(--amber);border-color:rgba(245,185,66,.45);background:rgba(245,185,66,.12)}.ar-chip.red{color:var(--red);border-color:rgba(240,92,92,.45);background:rgba(240,92,92,.12)}.ar-chip.ac{color:var(--accent);border-color:rgba(91,141,238,.4);background:rgba(91,141,238,.12)}.ar-chip.btn{cursor:pointer}
+  .ar-why{margin-top:10px;font-size:12px;color:var(--text2);line-height:1.6}
+  .ar-grid{display:grid;grid-template-columns:1fr 2fr;gap:14px}.ar-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:18px;min-width:0}
+  .ar-tag{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text3)}.ar-big{font-size:26px;font-weight:700;margin:6px 0 2px;font-family:var(--mono)}
+  .ar-bar{height:8px;border-radius:9px;background:var(--bg3);overflow:hidden;margin:12px 0 6px}.ar-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#9b7bff)}
+  .ar-vars{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ar-var{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:700;border-radius:8px;padding:4px 9px;white-space:nowrap}.ar-var small{font-weight:400;color:var(--text3)}.ar-var.up{color:var(--amber);background:rgba(245,185,66,.12)}.ar-var.dn{color:var(--green);background:rgba(62,207,142,.12)}.ar-var.eq{color:var(--text2);background:var(--bg3)}
+  .ar-seg{display:flex;height:10px;border-radius:9px;overflow:hidden;margin:14px 0 12px;gap:2px;background:var(--bg3)}.ar-seg i{display:block}
+  .ar-part{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.ar-part>div{background:var(--bg3);border-radius:12px;padding:10px 12px;min-width:0}.ar-part b{display:block;font-size:16px;margin:2px 0;font-family:var(--mono)}.ar-part .p{font-size:12px;font-weight:700}
+  .ar-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex:0 0 auto}
+  .av-dot{display:inline-block;width:13px;height:13px;border-radius:50%;flex:0 0 auto;vertical-align:middle;cursor:help}.av-dot.n0{background:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.2)}.av-dot.n1{background:var(--amber);box-shadow:0 0 0 3px rgba(245,185,66,.22)}.av-dot.n2{background:var(--red);box-shadow:0 0 0 3px rgba(240,92,92,.25)}
+  .ar-share{display:flex;height:12px;border-radius:9px;overflow:hidden;gap:2px;margin:12px 0 10px;background:var(--bg3)}.ar-share i{display:block}
+  .ar-cars{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.ar-car{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:9px;cursor:pointer;min-width:0;transition:border-color .15s,transform .15s}.ar-car:hover{border-color:var(--accent);transform:translateY(-1px)}.ar-car.pr{border-color:rgba(245,185,66,.35)}
+  .ar-car h3{font-size:16px;margin:0;display:flex;gap:7px;align-items:center}.ar-car .ar-ic{width:42px;height:42px;font-size:21px;border-radius:12px}.ar-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--text3)}.ar-row b{color:var(--text);font-size:14px;font-family:var(--mono)}
+  .ar-mini{height:6px;background:var(--bg3);border-radius:6px;overflow:hidden}.ar-mini i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#9b7bff)}
+  @media (max-width:760px){.ar-grid,.ar-cars{grid-template-columns:1fr}.ar-part{gap:6px}.ar-part b{font-size:13px}.ar-km{font-size:38px}.ar-hero{padding:16px}}
+  `; document.head.appendChild(st);
+})();
+function autoVistaTodos(){ return autoVehs().length>=2 && AUTO.todos!==false; }
+function autoSelTodos(){ AUTO.todos=true; renderCombustible(); }
+function autoAbrirVeh(id){ AUTO.todos=false; autoSelVeh(id); }
+function autoEstadoVeh(v){
+  const m=[], cd=(d)=>d<0?'venció hace '+(-d)+' d':d===0?'vence hoy':'vence en '+d+' d';
+  const doc=(nom,f)=>{ const d=autoDiasA(f); if(d===null) return; if(d<=5) m.push({n:2,t:nom+': '+cd(d)}); else if(d<=30) m.push({n:1,t:nom+': '+cd(d)}); };
+  doc('SOAT',v.soatVence); doc('Revisión técnica',v.revVence); doc('Seguro',v.seguroVence);
+  autoMA(v.id).forEach(it=>{ try{ const py=getProyeccionMantenimientoItem(it); if(!py) return; const u=mantUrgencia(py);
+    if(py.vencido||u<=5) m.push({n:2,t:it.nombre+': '+(py.vencido?'ya toca':mantTextoProximo(it,py))}); else if(u<=30) m.push({n:1,t:it.nombre+': '+mantTextoProximo(it,py)}); }catch(e){} });
+  autoPrestamosDe(v).forEach(p=>{ const d=autoDM(p); if(!d) return;
+    const px=(d.cuotas||[]).filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))[0]; if(!px) return;
+    const dd=autoDiasA(px.fecha), cm=autoCuotaMes(d,mesActualKey()), pend=cm&&!cm.pagada;
+    if(dd<=5) m.push({n:2,t:'Cuota del préstamo: '+cd(dd)}); else if(dd<=15||pend) m.push({n:1,t:'Cuota del préstamo: '+cd(dd)}); });
+  const n=m.reduce((a,x)=>Math.max(a,x.n),0);
+  return {n,m:m.sort((a,b)=>b.n-a.n)};
+}
+function autoDotHTML(v){ const e=autoEstadoVeh(v), tit=e.n===0?'Todo en orden':e.m.map(x=>x.t).join('\n'); return `<span class="av-dot n${e.n}" role="img" title="${escapeHtml(tit)}" aria-label="${escapeHtml(e.n===0?'Todo en orden':e.n===1?'Hay algo por vencer':'Vencido o por vencer en 5 días o menos')}"></span>`; }
+function autoVarHTML(act,ref,etq,sinMonto){
+  if(!(ref>0.004)) return '';
+  const dif=act-ref, pct=dif/ref*100, a=Math.abs(pct);
+  const cls=a<0.05?'eq':(dif>0?'up':'dn'), ic=a<0.05?'＝':(dif>0?'▲':'▼'), sg=dif>0?'+':(dif<0?'−':'');
+  return `<span class="ar-var ${cls}">${ic} ${sg}${a.toFixed(1)}% <small>${etq}${sinMonto?'':' ('+sg+M(fmtS(Math.abs(dif)))+')'}</small></span>`;
+}
+function autoGastoCardHTML(vid,titulo){
+  const mk=mesActualKey(), g=autoGastoMes(mk,vid), ant=autoGastoMes(hgAdd(mk,-1),vid), pr=autoPromMeses(vid);
+  const tot=g.total, pc=x=>tot>0.004?(x/tot*100):0, pf=x=>tot>0.004?pc(x).toFixed(1)+'%':'—';
+  const vars=autoVarHTML(tot,ant.total,'vs '+hgMesNombre(hgAdd(mk,-1)).split(' ')[0].toLowerCase().slice(0,3))+autoVarHTML(tot,pr?pr.total:0,'vs prom. '+(pr?pr.n:3)+' mes'+(pr&&pr.n===1?'':'es'));
+  return `<div class="ar-card"><div class="ar-tag">${hgMesNombre(mk)} · ${titulo||'gasto del auto'}</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div class="ar-big">${M(fmtS(tot))}</div><div class="ar-vars">${vars||'<span class="ar-var eq"><small>Sin meses anteriores para comparar</small></span>'}</div></div>
+    <div class="ar-seg"><i style="width:${pc(g.comb)}%;background:var(--amber)"></i><i style="width:${pc(g.mant)}%;background:#9b7bff"></i><i style="width:${pc(g.cuotaPag)}%;background:var(--accent)"></i></div>
+    <div class="ar-part"><div><span class="lbl" style="font-size:12px;color:var(--text3)"><i class="ar-dot" style="background:var(--amber)"></i>Combustible</span><b>${M(fmtS(g.comb))}</b><span class="p" style="color:var(--amber)">${pf(g.comb)}</span></div>
+    <div><span style="font-size:12px;color:var(--text3)"><i class="ar-dot" style="background:#9b7bff"></i>Mantenimiento</span><b>${M(fmtS(g.mant))}</b><span class="p" style="color:#9b7bff">${pf(g.mant)}</span></div>
+    <div><span style="font-size:12px;color:var(--text3)"><i class="ar-dot" style="background:var(--accent)"></i>Cuota préstamo</span><b>${M(fmtS(g.cuotaPag))}</b><span class="p" style="color:var(--accent)">${pf(g.cuotaPag)}</span></div></div>
+    ${g.cuotaPend>0.004?`<div style="font-size:12px;color:var(--amber);margin-top:10px">⏳ Cuota pendiente este mes: ${M(fmtS(g.cuotaPend))} (aún no suma al gasto)</div>`:''}</div>`;
+}
+function autoChipsVeh(v){
+  const ch=[], cd=(d)=>d<0?'venció hace '+(-d)+' d':d===0?'hoy':d+' d';
+  [['🛡️ SOAT',v.soatVence],['🔍 Rev. técnica',v.revVence],['📄 Seguro',v.seguroVence]].forEach(([n,f])=>{
+    const d=autoDiasA(f); if(d===null) ch.push(`<span class="ar-chip btn" onclick="autoModalVeh('${v.id}')" title="Toca para agregar la fecha">${n} · sin fecha</span>`);
+    else ch.push(`<span class="ar-chip ${d<=5?'red':d<=30?'warn':'ok'}">${n} · ${cd(d)}</span>`); });
   let prox=null; autoMA(v.id).forEach(it=>{ try{ const py=getProyeccionMantenimientoItem(it); if(!py) return; const u=mantUrgencia(py); if(!prox||u<prox.u) prox={it,py,u}; }catch(e){} });
-  h+=`<div class="auto-fila"><span style="flex:1">Próximo mantenimiento</span>${prox?`<b style="color:${prox.u<=7?'var(--red)':prox.u<=30?'var(--amber)':'inherit'}">${prox.it.icono||'🔧'} ${escapeHtml(prox.it.nombre)} <span style="font-weight:400;font-size:12px;color:var(--text3)">· ${prox.py.vencido?'ya toca':mantTextoProximo(prox.it,prox.py)}</span></b>`:`<span style="color:var(--text3)">sin configurar</span>`}</div>`;
-  const gm=autoGastoMes(mk,v.id); if(gm.total>0) h+=`<div class="auto-fila"><span style="flex:1">Gasto en ${hgMesNombre(mk)}</span><b>${M(fmtS(gm.total))}</b></div>`;
-  h+=autoChipDoc('🛡️ SOAT',v.soatVence)+autoChipDoc('🔍 Revisión técnica',v.revVence)+autoChipDoc('📄 Seguro',v.seguroVence);
-  autoPrestamosDe(v).forEach(p=>{ const d=autoDM(p); if(!d) return; const r=getDMResumen(d), cur=d.currency||'PEN';
-    const px=(d.cuotas||[]).filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))[0];
-    h+=`<div class="auto-fila"><span style="flex:1">🏦 Préstamo · ${r.pagadas}/${r.total} cuotas</span><b>${px?M(dmFmt(px.monto,cur))+' <span style="font-weight:400;font-size:12px;color:var(--text3)">· '+dmFechaCorta(px.fecha)+'</span>':'✅ Pagado'}</b></div>
-    <div class="auto-fila"><span style="flex:1">Saldo pendiente</span><b style="color:var(--amber)">${M(dmFmt(r.saldoPendiente,cur))}</b></div>`; });
-  if(v.notas) h+=`<div style="font-size:12px;color:var(--text3);margin-top:8px;white-space:pre-wrap">${escapeHtml(v.notas)}</div>`;
-  return h+'</div>';
+  if(prox) ch.push(`<span class="ar-chip ${prox.u<=5?'red':prox.u<=30?'warn':'ac'}">${escapeHtml(prox.it.icono||'🔧')} ${escapeHtml(prox.it.nombre)} · ${prox.py.vencido?'ya toca':(prox.py.diasFaltan!==null&&prox.py.diasFaltan!==undefined?prox.py.diasFaltan+' d':'~'+Math.round(prox.py.kmFaltan).toLocaleString('es-PE')+' km')}</span>`);
+  return ch.join('');
+}
+function autoPrestamoCardHTML(v){
+  const P=autoPrestamosDe(v).map(p=>({p,d:autoDM(p)})).filter(x=>x.d);
+  if(!P.length) return `<div class="ar-card"><div class="ar-tag">Préstamo</div><div style="font-size:13px;color:var(--text3);margin:10px 0 12px;line-height:1.5">Sin préstamo vinculado a este auto.</div><button class="btn" onclick="autoTab('prestamo')">🔗 Vincular préstamo</button></div>`;
+  const {d}=P[0], r=getDMResumen(d), cur=d.currency||'PEN', F=x=>M(dmFmt(x,cur));
+  const px=(d.cuotas||[]).filter(c=>!c.pagado).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))[0], dd=px?autoDiasA(px.fecha):null;
+  const pct=r.total>0?r.pagadas/r.total*100:0;
+  return `<div class="ar-card"><div class="ar-tag">Préstamo${P.length>1?' · '+P.length+' vinculados':''}</div><div class="ar-big">${F(r.saldoPendiente)}</div><div style="font-size:12px;color:var(--text3)">saldo pendiente</div>
+    <div class="ar-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.6">${r.pagadas} de ${r.total} cuotas${px?' · próxima <b style="color:var(--text)">'+F(px.monto)+'</b> el '+dmFechaCorta(px.fecha)+(dd!==null?' ('+(dd<0?'venció hace '+(-dd)+' d':dd===0?'hoy':'en '+dd+' d')+')':''):' · ✅ completado'}</div>
+    ${P.length>1?`<div style="margin-top:8px"><a href="#" onclick="autoTab('prestamo');return false" style="font-size:12px;color:var(--accent)">+${P.length-1} préstamo${P.length>2?'s':''} más → ver detalle</a></div>`:`<div style="margin-top:8px"><a href="#" onclick="autoTab('prestamo');return false" style="font-size:12px;color:var(--accent)">Ver cronograma →</a></div>`}</div>`;
+}
+function autoHeroHTML(v){
+  const V=autoVehs(), esPr=autoVidPrincipal()===v.id, k=getKmActualVehiculo(v.id), mk=mesActualKey();
+  const ult=['combustibleGlp','combustibleGas'].flatMap(key=>computeFuelRows(autoFA(key,v.id)).filter(r=>r.fFinal&&r.totalGlp!==null).map(r=>({f:r.fFinal,t:r.totalGlp,c:key==='combustibleGlp'?'GLP':'Gasolina'}))).sort((a,b)=>String(a.f).localeCompare(String(b.f))).pop();
+  const e=autoEstadoVeh(v);
+  return `<div class="ar-hero"><div class="ar-top"><div class="ar-ic">${escapeHtml(v.icono||'🚗')}</div><div style="flex:1;min-width:150px"><div class="ar-name">${autoDotHTML(v)}<span>${escapeHtml(v.nombre||'Mi auto')}</span>${esPr?'<span class="av-pill">⭐ Principal</span>':''}</div>
+    <div class="ar-sub">${[v.placa?escapeHtml(v.placa):'',v.anio?escapeHtml(String(v.anio)):'',v.combustible?escapeHtml(v.combustible):''].filter(Boolean).join(' · ')||'Edita para agregar placa, año y combustible'}</div></div>
+    <button class="btn" onclick="autoModalVeh('${v.id}')">✏️ Editar</button><button class="btn" onclick="autoTab('comb')">⛽ Abrir</button></div>
+    <div class="ar-km">${k?Math.round(k.km).toLocaleString('es-PE'):'—'} <small>km</small></div>
+    <div style="font-size:12px;color:var(--text3)">${k?'Última lectura '+dmFechaCorta(k.fecha):'Sin lecturas de km todavía'}${ult?' · última recarga '+ult.c+' '+M(fmtS(ult.t))+' ('+dmFechaCorta(ult.f)+')':''}</div>
+    <div class="ar-chips">${autoChipsVeh(v)}</div>
+    ${e.n>0?`<div class="ar-why">${e.m.map(x=>(x.n===2?'🔴 ':'🟡 ')+escapeHtml(x.t)).join('<br>')}</div>`:''}</div>`;
+}
+function autoCarCard(v){
+  const mk=mesActualKey(), g=autoGastoMes(mk,v.id), ant=autoGastoMes(hgAdd(mk,-1),v.id), k=getKmActualVehiculo(v.id), esPr=autoVidPrincipal()===v.id;
+  const P=autoPrestamosDe(v).map(p=>({p,d:autoDM(p)})).filter(x=>x.d); let pb='';
+  if(P.length){ const r=getDMResumen(P[0].d), cur=P[0].d.currency||'PEN'; pb=`<div><div class="ar-mini"><i style="width:${(r.total>0?r.pagadas/r.total*100:0).toFixed(1)}%"></i></div><div style="font-size:12px;color:var(--text3);margin-top:5px">🏦 ${r.pagadas}/${r.total} · saldo ${M(dmFmt(r.saldoPendiente,cur))}</div></div>`; }
+  else pb='<div style="font-size:12px;color:var(--text3)">Sin préstamo vinculado</div>';
+  const e=autoEstadoVeh(v), top=e.m.slice(0,2).map(x=>`<span class="ar-chip ${x.n===2?'red':'warn'}">${escapeHtml(x.t)}</span>`).join('');
+  return `<div class="ar-car ${esPr?'pr':''}" onclick="autoAbrirVeh('${v.id}')" tabindex="0" role="button" onkeydown="if(event.key==='Enter')autoAbrirVeh('${v.id}')"><div style="display:flex;gap:12px;align-items:center"><div class="ar-ic">${escapeHtml(v.icono||'🚗')}</div><div style="flex:1;min-width:0"><h3>${autoDotHTML(v)}<span style="overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.nombre||'Auto')}</span></h3><div class="ar-sub">${[v.placa?escapeHtml(v.placa):'',v.anio?escapeHtml(String(v.anio)):''].filter(Boolean).join(' · ')||'&nbsp;'}</div></div>${esPr?'<span class="av-pill">⭐</span>':''}</div>
+    <div class="ar-row"><span>Kilometraje</span><b>${k?Math.round(k.km).toLocaleString('es-PE')+' km':'—'}</b></div><div class="ar-row"><span>Gasto ${hgMesNombre(mk).split(' ')[0].toLowerCase().slice(0,3)}.</span><b>${M(fmtS(g.total))}</b></div>
+    ${ant.total>0.004?`<div class="ar-row"><span>vs mes anterior</span>${autoVarHTML(g.total,ant.total,'',true)}</div>`:''}${pb}
+    <div class="ar-chips" style="margin:0">${top||'<span class="ar-chip ok">Todo en orden</span>'}</div></div>`;
+}
+function autoTodosHTML(){
+  const V=autoVehs(), mk=mesActualKey(), g=autoGastoMes(mk), ant=autoGastoMes(hgAdd(mk,-1)), pr=autoPromMeses();
+  const pc=V.map(v=>({v,t:autoGastoMes(mk,v.id).total})), sum=pc.reduce((a,x)=>a+x.t,0)||0, cols=['var(--accent)','#9b7bff','var(--amber)','var(--green)','var(--red)','#5fb7d4'];
+  const pf=x=>sum>0.004?(x/sum*100).toFixed(1)+'%':'—', tot=g.total, p0=x=>tot>0.004?Math.round(x/tot*100)+'%':'—';
+  const vars=autoVarHTML(tot,ant.total,'vs mes ant.')+autoVarHTML(tot,pr?pr.total:0,'vs prom. '+(pr?pr.n:3)+' mes'+(pr&&pr.n===1?'':'es'));
+  return `<div class="ar-card" style="padding:22px;margin-bottom:14px"><div class="ar-tag">${hgMesNombre(mk)} · gasto de todos tus autos</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div class="ar-big" style="font-size:32px">${M(fmtS(tot))}</div><div class="ar-vars">${vars||'<span class="ar-var eq"><small>Sin meses anteriores para comparar</small></span>'}</div></div>
+    <div style="font-size:12px;color:var(--text3);margin-top:10px">Participación por auto</div><div class="ar-share">${pc.map((x,i)=>`<i style="width:${sum>0.004?x.t/sum*100:0}%;background:${cols[i%cols.length]}"></i>`).join('')}</div>
+    <div style="display:flex;gap:6px 22px;flex-wrap:wrap;font-size:13px;color:var(--text2)">${pc.map((x,i)=>`<span><i class="ar-dot" style="background:${cols[i%cols.length]}"></i>${escapeHtml(x.v.icono||'🚗')} ${escapeHtml(x.v.nombre||'Auto')} <b style="color:var(--text);font-family:var(--mono)">${M(fmtS(x.t))}</b> · ${pf(x.t)}</span>`).join('')}</div>
+    <div class="ar-part" style="margin-top:16px"><div><span style="font-size:12px;color:var(--text3)"><i class="ar-dot" style="background:var(--amber)"></i>Combustible</span><b>${M(fmtS(g.comb))}</b><span class="p" style="color:var(--amber)">${p0(g.comb)}</span></div><div><span style="font-size:12px;color:var(--text3)"><i class="ar-dot" style="background:#9b7bff"></i>Mantenimiento</span><b>${M(fmtS(g.mant))}</b><span class="p" style="color:#9b7bff">${p0(g.mant)}</span></div><div><span style="font-size:12px;color:var(--text3)"><i class="ar-dot" style="background:var(--accent)"></i>Cuotas de préstamos</span><b>${M(fmtS(g.cuotaPag))}</b><span class="p" style="color:var(--accent)">${p0(g.cuotaPag)}</span></div></div></div>
+    <div style="display:flex;align-items:center;margin:4px 0 10px"><b style="flex:1;font-size:15px">Mis autos</b><button class="btn btn-primary" onclick="autoModalVeh()">+ Agregar auto</button></div><div class="ar-cars">${V.map(autoCarCard).join('')}</div>`;
 }
 function autoRenderResumen(){
   const el=document.getElementById('auto-resumen'); if(!el) return;
-  const mk=mesActualKey(), g=autoGastoMes(mk), pr=autoPromMeses(), P=autoEnsure().prestamos, V=autoVehs();
-  const fila=(t,v,s)=>`<div class="auto-fila"><span style="flex:1">${t}${s?`<span style="color:var(--text3);font-size:12px"> · ${s}</span>`:''}</span><b>${M(fmtS(v))}</b></div>`;
-  let h='';
-  const al=autoAlertas();
-  if(al.length) h+=`<div class="auto-box" style="border-color:var(--amber)"><h3>⚠️ Por atender</h3>${al.map(a=>`<div class="auto-fila"><span style="flex:1">${a.t}</span></div>`).join('')}</div>`;
-  h+=`<div style="display:flex;align-items:center;gap:8px;margin:4px 0 8px"><h3 style="margin:0;flex:1;font-size:15px">Mis autos</h3><button class="btn btn-primary" onclick="autoModalVeh()">+ Agregar auto</button></div>`;
-  if(!V.length) h+=`<div class="auto-box" style="text-align:center;padding:22px 14px"><div style="font-size:32px">🚗</div><div style="font-size:14px;font-weight:600;margin:6px 0">Aún no registraste tu auto</div><div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:480px;margin:0 auto">Agrega nombre, placa y fechas de SOAT, revisión técnica y seguro para ver aquí todo de un vistazo y recibir avisos antes de que venzan.</div></div>`;
-  else h+=V.map(autoFichaVeh).join('');
-  h+=`<div class="auto-kpis">
-    <div class="auto-kpi"><div class="l">Gasto del auto en ${hgMesNombre(mk)}</div><div class="v">${M(fmtS(g.total))}</div><div class="s">Combustible + mantenimiento + cuota pagada</div></div>
-    <div class="auto-kpi"><div class="l">Cuesta tenerlo al mes</div><div class="v">${pr?M(fmtS(pr.total)):'—'}</div><div class="s">${pr?'Promedio de los últimos '+pr.n+' mes'+(pr.n===1?'':'es')+' con gasto':'Aún no hay meses completos'}</div></div>
-    <div class="auto-kpi"><div class="l">Cuota por pagar este mes</div><div class="v" style="color:${g.cuotaPend>0?'var(--amber)':'inherit'}">${g.cuotaPend>0?M(fmtS(g.cuotaPend)):(P.length?'Al día':'—')}</div><div class="s">${P.length?'De tu préstamo vinculado':'Sin préstamo vinculado'}</div></div></div>
-  <div class="auto-box"><h3>Cómo se reparte el mes</h3>${fila('⛽ Combustible',g.comb)}${fila('🔧 Mantenimiento y repuestos',g.mant)}${fila('🏦 Cuota del préstamo',g.cuotaPag,g.cuotaPend>0?'faltan '+fmtS(g.cuotaPend):'')}
-    <div class="auto-fila" style="font-weight:700"><span style="flex:1">Total del mes</span><b>${M(fmtS(g.total))}</b></div></div>`;
-  if(pr) h+=`<div class="auto-box"><h3>Promedio mensual (últimos ${pr.n} mes${pr.n===1?'':'es'})</h3>${fila('⛽ Combustible',pr.comb)}${fila('🔧 Mantenimiento',pr.mant)}${fila('🏦 Cuota',pr.cuota)}<div class="auto-fila" style="font-weight:700"><span style="flex:1">Total</span><b>${M(fmtS(pr.total))}</b></div></div>`;
-  if(V.length>1) h+=`<div style="font-size:11px;color:var(--text3);margin:4px 0 10px">Los gastos de arriba suman todos tus autos. En Combustible, Mantenimiento y Préstamo elige el auto con los botones de arriba.</div>`;
+  const V=autoVehs(); let h='';
+  if(!V.length){
+    h=`<div class="ar-card" style="text-align:center;padding:26px 14px;margin-bottom:14px"><div style="font-size:34px">🚗</div><div style="font-size:15px;font-weight:600;margin:6px 0">Aún no registraste tu auto</div><div style="font-size:12px;color:var(--text3);line-height:1.6;max-width:480px;margin:0 auto 14px">Agrega nombre, placa y fechas de SOAT, revisión técnica y seguro para ver aquí todo de un vistazo, con un círculo de estado que te avisa cuando algo vence.</div><button class="btn btn-primary" onclick="autoModalVeh()">+ Agregar auto</button></div>`+autoGastoCardHTML('', 'gasto del auto');
+  } else if(autoVistaTodos()){
+    h=autoTodosHTML();
+  } else {
+    const v=V.find(x=>x.id===autoVidAct())||V[0];
+    h=autoHeroHTML(v)+`<div class="ar-grid">${autoPrestamoCardHTML(v)}${autoGastoCardHTML(V.length>1?v.id:'', 'gasto del auto')}</div>`+(V.length===1?`<div style="margin-top:12px"><button class="btn" onclick="autoModalVeh()">+ Agregar otro auto</button></div>`:'');
+  }
   el.innerHTML=h;
 }
+(function(){
+  if(document.getElementById('auto-veh-style')) return;
+  const st=document.createElement('style'); st.id='auto-veh-style';
+  st.textContent=`
+  .av-form{padding:2px 2px 0}
+  .av-head{display:flex;align-items:center;gap:12px;margin:-2px 0 6px}
+  .av-ico{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#7c5cff);display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto}
+  .av-head .t{font-size:17px;font-weight:700;flex:1;line-height:1.2}.av-head .t small{display:block;font-size:12px;font-weight:400;color:var(--text3);margin-top:2px}
+  .av-sec{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+  .av-sec:after{content:"";flex:1;height:1px;background:var(--border)}
+  .av-form label{display:block;font-size:12px;color:var(--text3);margin:0 0 4px}
+  .av-form input[type=text],.av-form input[type=number],.av-form input[type=date],.av-form textarea{width:100%;box-sizing:border-box;min-height:42px;padding:0 12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+  .av-form textarea{padding:10px 12px;min-height:44px;resize:none;line-height:1.4;display:block}
+  .av-form input:focus,.av-form textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,141,238,.18)}
+  .av-two{display:grid;grid-template-columns:1.4fr 1fr;gap:10px;margin-top:10px}
+  .av-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .av-chip{border:1px solid var(--border);background:var(--bg3);color:var(--text2);border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer;min-height:34px;transition:all .15s}
+  .av-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .av-doc{display:grid;grid-template-columns:auto 1fr 150px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+  .av-doc:last-of-type{border-bottom:0}
+  .av-doc .ic{width:34px;height:34px;border-radius:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:16px}
+  .av-doc .n{font-size:14px;font-weight:600}.av-doc .n small{display:block;font-size:11px;font-weight:400;color:var(--text3);margin-top:1px}
+  .av-doc input[type=date]{min-height:38px;font-size:13px;padding:0 8px}
+  .av-princ{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);background:var(--bg3);border-radius:12px;margin-top:16px;cursor:pointer}
+  .av-form label.av-princ{display:flex;align-items:center;margin:16px 0 0;font-size:14px;color:var(--text)}
+  .av-princ.fijo{cursor:default;border-color:rgba(91,141,238,.45);background:rgba(91,141,238,.08)}
+  .av-princ .tx{flex:1;font-size:14px;font-weight:600;line-height:1.3}.av-princ .tx small{display:block;font-size:12px;font-weight:400;color:var(--text3);margin-top:2px}
+  .av-sw{position:relative;width:44px;height:26px;flex:0 0 auto}
+  .av-sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:2;width:100%;height:100%;min-height:0}
+  .av-sw i{position:absolute;inset:0;background:var(--border);border-radius:999px;transition:background .18s}
+  .av-sw i:after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .18s}
+  .av-sw input:checked + i{background:var(--accent)}.av-sw input:checked + i:after{transform:translateX(18px)}
+  .av-sw input:focus-visible + i{box-shadow:0 0 0 3px rgba(91,141,238,.35)}
+  .av-pill{font-size:11px;font-weight:700;color:#f5b942;background:rgba(245,185,66,.14);border:1px solid rgba(245,185,66,.4);border-radius:999px;padding:2px 9px;line-height:1.5}
+  .av-emo{display:flex;gap:6px;flex-wrap:wrap}.av-emo button{width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);font-size:20px;cursor:pointer;padding:0;transition:all .15s}.av-emo button.on{border-color:var(--accent);background:rgba(91,141,238,.18);box-shadow:0 0 0 2px rgba(91,141,238,.25)}
+  .av-foot{display:flex;gap:8px;align-items:center;margin-top:18px}
+  .av-del{background:none;border:0;color:var(--red);font-size:13px;cursor:pointer;padding:8px 4px;min-height:40px}
+  @media (max-width:480px){.av-doc{grid-template-columns:auto 1fr 132px;gap:8px}.av-doc .n small{display:none}.av-doc input[type=date]{font-size:12px;padding:0 6px}.av-two{grid-template-columns:1fr 1fr}}
+  `; document.head.appendChild(st);
+})();
+function autoVehIco(b){ b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); document.getElementById('av-ico').value=b.textContent; const p=document.getElementById('av-ico-prev'); if(p) p.textContent=b.textContent; }
+function autoVehComb(b){ const w=b.parentNode; w.querySelectorAll('.av-chip').forEach(x=>x.classList.toggle('on',x===b&&!(b.dataset.v===document.getElementById('av-comb').value))); const ya=document.getElementById('av-comb').value===b.dataset.v; document.getElementById('av-comb').value=ya?'':b.dataset.v; if(ya) b.classList.remove('on'); }
 function autoModalVeh(id){
   const v=id?autoVehs().find(x=>x.id===id):null, V=autoVehs();
-  const f=(i,l,val,ph,tp)=>`<label for="${i}">${l}</label><input id="${i}" type="${tp||'text'}" value="${escapeHtml(String(val||''))}" placeholder="${ph||''}">`;
-  _abrirModalDin('auto-veh-ov',`<div class="hg-form">${hgModalHead(v?'Editar auto':'Agregar auto','auto-veh-ov')}
-    ${f('av-nom','Nombre',v&&v.nombre,'Toyota Yaris 2022')}${f('av-placa','Placa',v&&v.placa,'ABC-123')}${f('av-anio','Año',v&&v.anio,'2022','number')}
-    <label for="av-comb">Combustible</label><select id="av-comb">${['','GLP','Gasolina','GLP + Gasolina','Diésel','Híbrido','Eléctrico'].map(o=>`<option ${v&&v.combustible===o?'selected':''}>${o}</option>`).join('')}</select>
-    ${f('av-soat','Vence SOAT',v&&v.soatVence,'','date')}${f('av-rev','Vence revisión técnica',v&&v.revVence,'','date')}${f('av-seg','Vence seguro',v&&v.seguroVence,'','date')}
-    <label for="av-notas">Notas</label><textarea id="av-notas" rows="2" style="width:100%">${escapeHtml(v&&v.notas||'')}</textarea>
-    ${V.length>0&&(!v||!v.principal)?`<label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="av-pr" ${v&&v.principal?'checked':''}> Es mi auto principal (km, recargas y mantenimientos)</label>`:''}
-    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px">${v?`<button class="config-action-btn danger" onclick="if(confirm('¿Quitar este auto? Sus recargas, km, mantenimientos y repuestos pasarán al auto principal.'))autoBorrarVeh('${v.id}')">Quitar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('auto-veh-ov')">Cancelar</button><button class="btn btn-primary" onclick="autoGuardarVeh('${v?v.id:''}')">Guardar</button></div></div>`,480);
+  const esPr=!!(v&&autoPrincipal()&&autoPrincipal().id===v.id)||(!v&&V.length===0);
+  const f=(i,l,val,ph,tp)=>`<div><label for="${i}">${l}</label><input id="${i}" type="${tp||'text'}" value="${escapeHtml(String(val||''))}" placeholder="${ph||''}" ${tp==='text'||!tp?'autocomplete="off"':''}></div>`;
+  const doc=(ic,n,sub,i,val)=>`<div class="av-doc"><div class="ic">${ic}</div><div class="n">${n}<small>${sub}</small></div><input id="${i}" type="date" value="${escapeHtml(String(val||''))}" aria-label="${n}"></div>`;
+  const combs=['GLP','Gasolina','GLP + Gasolina','Diésel','Híbrido','Eléctrico'];
+  _abrirModalDin('auto-veh-ov',`<div class="av-form">
+    <div class="av-head"><div class="av-ico" id="av-ico-prev">${escapeHtml(v&&v.icono||'🚗')}</div><div class="t">${v?'Editar auto':'Agregar auto'}<small>${v?escapeHtml(v.nombre||''):'Registra tu vehículo para controlarlo por separado'}</small></div><button class="modal-close" onclick="_cerrarModalDin('auto-veh-ov')" aria-label="Cerrar">✕</button></div>
+    <div class="av-sec">Datos del auto</div>
+    ${f('av-nom','Nombre',v&&v.nombre,'Ej. Toyota Yaris','text')}
+    <label style="margin-top:12px">Ícono para reconocerlo</label><input type="hidden" id="av-ico" value="${escapeHtml(v&&v.icono||'🚗')}">
+    <div class="av-emo">${['🚗','🚙','🚕','🛻','🚐','🏎️','🏍️','🛵','🚲','⚡','⭐','❤️'].map(e=>`<button type="button" class="${(v&&v.icono||'🚗')===e?'on':''}" onclick="autoVehIco(this)" aria-label="Ícono ${e}">${e}</button>`).join('')}</div>
+    <div class="av-two">${f('av-placa','Placa',v&&v.placa,'ABC-123','text')}${f('av-anio','Año',v&&v.anio,'2026','number')}</div>
+    <label style="margin-top:12px">Combustible</label><input type="hidden" id="av-comb" value="${escapeHtml(v&&v.combustible||'')}">
+    <div class="av-chips">${combs.map(c=>`<button type="button" class="av-chip ${v&&v.combustible===c?'on':''}" data-v="${c}" onclick="autoVehComb(this)">${c}</button>`).join('')}</div>
+    <div class="av-sec">Documentos y vencimientos</div>
+    ${doc('🛡️','SOAT','Seguro obligatorio','av-soat',v&&v.soatVence)}${doc('🔍','Revisión técnica','Inspección vehicular','av-rev',v&&v.revVence)}${doc('📄','Seguro vehicular','Póliza particular','av-seg',v&&v.seguroVence)}
+    <div class="av-sec">Notas</div>
+    <textarea id="av-notas" rows="1" placeholder="Algo que quieras recordar (opcional)" oninput="this.style.height='auto';this.style.height=Math.min(120,this.scrollHeight)+'px'">${escapeHtml(v&&v.notas||'')}</textarea>
+    ${esPr?`<div class="av-princ fijo"><div style="font-size:20px">⭐</div><div class="tx">${V.length?'Es tu auto principal':'Será tu auto principal'}<small>Se usa por defecto para el bot y para datos antiguos sin auto asignado.</small></div></div>`
+    :`<label class="av-princ"><div style="font-size:20px">⭐</div><div class="tx">Hacer mi auto principal<small>Se usa por defecto para el bot y para datos antiguos sin auto asignado.</small></div><span class="av-sw"><input type="checkbox" id="av-pr"><i></i></span></label>`}
+    <div class="av-foot">${v?`<button class="av-del" onclick="if(confirm('¿Quitar este auto? Sus recargas, km, mantenimientos y repuestos pasarán al auto principal.'))autoBorrarVeh('${v.id}')">🗑 Quitar</button>`:''}<span style="flex:1"></span><button class="btn" onclick="_cerrarModalDin('auto-veh-ov')">Cancelar</button><button class="btn btn-primary" onclick="autoGuardarVeh('${v?v.id:''}')">Guardar</button></div></div>`,500);
+  const ta=document.getElementById('av-notas'); if(ta&&ta.value){ ta.style.height='auto'; ta.style.height=Math.min(120,ta.scrollHeight)+'px'; }
 }
 function autoGuardarVeh(id){
   const V=autoVehs(); let v=id?V.find(x=>x.id===id):null;
   autoSellar();
   if(!v){ v={id:'av-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}; V.push(v); }
   const g=i=>(document.getElementById(i)||{}).value||'';
-  v.nombre=g('av-nom').trim()||'Mi auto'; v.placa=g('av-placa').trim().toUpperCase(); v.anio=g('av-anio').trim(); v.combustible=g('av-comb');
+  v.nombre=g('av-nom').trim()||'Mi auto'; v.icono=g('av-ico')||'🚗'; v.placa=g('av-placa').trim().toUpperCase(); v.anio=g('av-anio').trim(); v.combustible=g('av-comb');
   v.soatVence=g('av-soat'); v.revVence=g('av-rev'); v.seguroVence=g('av-seg'); v.notas=g('av-notas').trim();
   const c=document.getElementById('av-pr'); if(c&&c.checked){ V.forEach(x=>x.principal=false); v.principal=true; }
   saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); toast('Auto guardado');
@@ -30423,6 +30569,29 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.16.0",
+  "fecha": "12/11/26",
+  "cambios": [
+   "🚗 Auto → Resumen rediseñado (tarjeta héroe): km grande, chips de vencimientos, préstamo con avance y gasto del mes con variación vs mes anterior y vs promedio de 3 meses, y porcentaje de participación de combustible, mantenimiento y cuota.",
+   "Círculo de estado por auto: verde todo bien · amarillo algo por vencer (30 d) o cuota pendiente · rojo vencido o a 5 días o menos.",
+   "Con 2+ autos: vista «Todos» con el gasto total, participación por auto y una tarjeta por auto."
+  ]
+ },
+ {
+  "v": "v2.15.2",
+  "fecha": "12/11/26",
+  "cambios": [
+   "🚗 Auto: cada auto puede tener su propio ícono (emoji) y el auto principal muestra la insignia ⭐ Principal en su ficha y en el selector."
+  ]
+ },
+ {
+  "v": "v2.15.1",
+  "fecha": "12/11/26",
+  "cambios": [
+   "Nuevo diseño del formulario de Agregar/Editar auto: secciones, combustible en botones, documentos con ícono, notas compactas e interruptor para «auto principal»."
+  ]
+ },
  {
   "v": "v2.15.0",
   "fecha": "12/11/26",
