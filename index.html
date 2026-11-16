@@ -4567,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.6';
-const APP_VERSION_DATE = '16/11/26 - 12:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: toggle "Deuda total" / "Este + próx. mes" en el Patrimonio Neto del dashboard, para ver cuánto resta solo la deuda de tarjeta que vence en el mes actual + el siguiente, en vez de toda la deuda pendiente.';
+const APP_VERSION = 'v2.35.7';
+const APP_VERSION_DATE = '16/11/26 - 12:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: al editar una cuota de una compra a cuotas, botón "📦 Aplicar esta ubicación a todas las cuotas" para no tener que agregarla una por una.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -17589,6 +17589,7 @@ function openAddMovTC(){
   onEsCuotaChange();
   refrescarDescPFTC(true);
   ubicPintarCampo('tcm');
+  tcmPintarBotonUbicCuotas(null);
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -17620,6 +17621,7 @@ function openAddMovTCFromList(){
   onConsumoTarjetaChange(); // fija la moneda según la primera tarjeta seleccionada
   refrescarDescPFTC(true);
   ubicPintarCampo('tcm');
+  tcmPintarBotonUbicCuotas(null);
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -17651,6 +17653,7 @@ function editTCMov(movId){
   onEsCuotaChange();
   refrescarDescPFTC(true);
   ubicPintarCampo('tcm');
+  tcmPintarBotonUbicCuotas(m.grupoCuotaId||null);
   document.getElementById('tc-mov-overlay').classList.add('open');
   detectarPaisEnSegundoPlano();
 }
@@ -17917,6 +17920,33 @@ function editarNombreGrupoCuotas(t, grupoCuotaId, nombreActual){
   saveState(); renderTCDetail();
   logActividad('tc_cuotas_renombradas', `Compra a cuotas renombrada: "${nombreActual}" → "${limpio}" (${cambiados} cuotas)`, {tarjetaId:t.id, grupoCuotaId, nombreAntes:nombreActual});
   toast(`${cambiados} cuotas renombradas`);
+}
+// Dibuja (o esconde) el botón "📦 Aplicar esta ubicación a todas las cuotas"
+// dentro del modal de consumo de tarjeta — solo aparece si el consumo que se
+// está editando ya pertenece a una compra a cuotas (grupoCuotaId).
+function tcmPintarBotonUbicCuotas(grupoCuotaId){
+  const el=document.getElementById('tcm-ubic-cuotas-btn'); if(!el) return;
+  if(!grupoCuotaId){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  el.innerHTML=`<button type="button" class="config-action-btn neutral" style="font-size:11px" onclick="aplicarUbicacionATodasLasCuotas('${grupoCuotaId}')">📦 Aplicar esta ubicación a todas las cuotas</button>`;
+}
+// Copia la ubicación que se acaba de poner/elegir en esta cuota (ubicTmp.tcm)
+// a TODAS las cuotas de la misma compra (mismo grupoCuotaId) — para no tener
+// que entrar cuota por cuota cuando todas fueron en el mismo lugar (ej. una
+// compra física en tienda pagada a 12 cuotas). Incluye cuotas ya pagadas.
+function aplicarUbicacionATodasLasCuotas(grupoCuotaId){
+  const u=ubicTmp.tcm;
+  if(!u){ alert('Primero agrega una ubicación a esta cuota (📍 Agregar ubicación) antes de aplicarla a las demás.'); return; }
+  const t=getTarjeta(currentTCId); if(!t) return;
+  const todas=[];
+  Object.values(t.movs||{}).forEach(movs=>movs.forEach(m=>{ if(m.grupoCuotaId===grupoCuotaId) todas.push(m); }));
+  if(!todas.length) return;
+  if(!confirm(`¿Aplicar esta ubicación a las ${todas.length} cuotas de esta compra? (incluye cuotas ya pagadas y futuras)`)) return;
+  todas.forEach(m=>{ m.ubicacion=u; });
+  saveState();
+  logActividad('tc_cuotas_ubicacion_aplicada', `Ubicación "${(u&&u.nombre)||'lugar'}" aplicada a ${todas.length} cuotas de una compra`, {tarjetaId:t.id, grupoCuotaId});
+  renderTCDetail();
+  toast(`📍 Ubicación aplicada a ${todas.length} cuotas`);
 }
 
 // ── CRUD TARJETAS ─────────────────────────────────────
@@ -31596,6 +31626,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.35.7",
+  "fecha": "16/11/26",
+  "cambios": [
+   "✨ Al editar una cuota de una compra a cuotas (ej. \"SONY — Cuota 1/12\"), si le pones/cambias una ubicación aparece el botón \"📦 Aplicar esta ubicación a todas las cuotas\": la copia a TODAS las cuotas de esa misma compra (pasadas, pagadas y futuras) sin tener que entrar una por una. Pide confirmación antes de aplicar y no afecta otros consumos ni otras tarjetas."
+  ]
+ },
+ {
   "v": "v2.35.6",
   "fecha": "16/11/26",
   "cambios": [
@@ -35360,6 +35397,7 @@ if(state.projGoals){
       </select>
     </div>
     <div class="field" id="tcm-ubic"></div>
+    <div class="field" id="tcm-ubic-cuotas-btn" style="display:none"></div>
     <div class="field" id="tc-m-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="tc-m-descpf"><option value="">No descontar</option></select>
     </div>
