@@ -607,6 +607,9 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 .tc-month-sel{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
 .tc-month-btn{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);transition:all .12s;}
 .tc-month-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dash-patrimonio-modo-toggle{display:inline-flex;background:var(--bg3);border:1px solid var(--border);border-radius:999px;padding:2px;gap:2px;}
+.dash-patrimonio-modo-btn{border:none;cursor:pointer;font-size:10px;font-weight:600;padding:4px 10px;border-radius:999px;background:transparent;color:var(--text3);}
+.dash-patrimonio-modo-btn.active{background:var(--accent);color:#fff;}
 
 /* Summary box */
 .tc-summary-box{background:var(--bg3);border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;}
@@ -1891,7 +1894,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div>
-        <div class="dash-patrimonio-label">Patrimonio Neto Total</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:2px">
+          <div class="dash-patrimonio-label">Patrimonio Neto Total</div>
+          <div class="dash-patrimonio-modo-toggle" id="dash-patrimonio-modo-toggle" title="Cómo se descuenta la deuda de tarjetas en este cálculo">
+            <button type="button" class="dash-patrimonio-modo-btn" data-modo="total" onclick="setPatrimonioModoDeuda('total')">Deuda total</button>
+            <button type="button" class="dash-patrimonio-modo-btn" data-modo="mes" onclick="setPatrimonioModoDeuda('mes')">Este + próx. mes</button>
+          </div>
+        </div>
         <div class="dash-patrimonio-val money" id="dash-patrimonio" style="color:var(--green)">S/ 0.00</div>
         <div class="dash-patrimonio-sub">
           <span class="dash-var-badge dash-var-nt" id="dash-var-badge">— vs mes anterior</span>
@@ -4558,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.5';
-const APP_VERSION_DATE = '16/11/26 - 11:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corrige: el badge 👤 de reposición en el detalle de la tarjeta dependía del mes que estabas mirando en el visor (no de la cuota real) — ahora usa siempre la fecha real de cada cuota, igual que en Mis Cuotas.';
+const APP_VERSION = 'v2.35.6';
+const APP_VERSION_DATE = '16/11/26 - 12:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: toggle "Deuda total" / "Este + próx. mes" en el Patrimonio Neto del dashboard, para ver cuánto resta solo la deuda de tarjeta que vence en el mes actual + el siguiente, en vez de toda la deuda pendiente.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -19394,6 +19403,7 @@ function renderDashboard(){
   const rate = state.tc?.venta || 3.45;
   let deudaTCTotal = 0, pagarEsteMes = 0, deudaAtrasada = 0;
   let deudaTCPen = 0, deudaTCUsd = 0, pagarPen = 0, pagarUsd = 0;
+  let deudaDosMeses = 0, deudaDosMesesPen = 0, deudaDosMesesUsd = 0;
   const siguienteMes = getSiguienteMesCalendario();
   const hoyDash = new Date();
   tarjetas.forEach(t => {
@@ -19419,6 +19429,20 @@ function renderDashboard(){
     ((t.movs&&t.movs[mk])||[]).filter(m=>!m.pagado).forEach(m=>{
       pagarEsteMes += toS(m);
       if((m.currency||t.currency)==='USD') pagarUsd += m.monto; else pagarPen += m.monto;
+    });
+    // Deuda "Este + próx. mes" (para el toggle del Patrimonio Neto): solo lo
+    // que cae en el mes calendario ACTUAL + el calendario SIGUIENTE (ej. si
+    // hoy es noviembre: noviembre + diciembre) — mismo criterio simple de
+    // mes calendario que ya usa "A pagar próximo mes" arriba, sin fijarse en
+    // el día de inicio/cierre de cada tarjeta, para que sea consistente
+    // entre todas. No incluye cuotas más lejanas (ej. una cuota 5/12 que
+    // recién se cobra en abril no entra aquí, aunque sí entre en "Deuda total").
+    const mkMesActual = tcMonthKey(hoyDash.getFullYear(), hoyDash.getMonth());
+    [mkMesActual, mk].forEach(mkPeriodo=>{
+      ((t.movs&&t.movs[mkPeriodo])||[]).filter(m=>!m.pagado).forEach(m=>{
+        deudaDosMeses += toS(m);
+        if((m.currency||t.currency)==='USD') deudaDosMesesUsd += m.monto; else deudaDosMesesPen += m.monto;
+      });
     });
   });
 
@@ -19448,9 +19472,18 @@ function renderDashboard(){
   const afpAporte = afpEnPatrimonio ? afpSaldoDash : 0;
 
   // ── Patrimonio neto ───────────────────────────────
-  const patrimonioCur  = dispCur  + ahorroTotalCur  + invAporte - deudaTCTotal + afpAporte;
+  // Toggle "Deuda total" (todas las cuotas pendientes, el comportamiento de
+  // siempre) vs "Este + próx. mes" (solo lo que cae en el mes calendario
+  // actual y el siguiente, ej. noviembre+diciembre) — ver cálculo de
+  // deudaDosMeses arriba. Por defecto "total", así a nadie le cambia el
+  // número sin elegirlo.
+  const modoDeudaPat = state.patrimonioModoDeuda==='mes' ? 'mes' : 'total';
+  const deudaParaPatrimonio    = modoDeudaPat==='mes' ? deudaDosMeses    : deudaTCTotal;
+  const deudaParaPatrimonioPen = modoDeudaPat==='mes' ? deudaDosMesesPen : deudaTCPen;
+  const deudaParaPatrimonioUsd = modoDeudaPat==='mes' ? deudaDosMesesUsd : deudaTCUsd;
+  const patrimonioCur  = dispCur  + ahorroTotalCur  + invAporte - deudaParaPatrimonio + afpAporte;
   // For prev: use same TC debt (we don't have historic TC data) so variation reflects disponible+ahorro changes only
-  const patrimonioPrev = dispPrev + ahorroTotalPrev + invAporte - deudaTCTotal + afpAporte;
+  const patrimonioPrev = dispPrev + ahorroTotalPrev + invAporte - deudaParaPatrimonio + afpAporte;
   const patrimonioVar  = patrimonioCur - patrimonioPrev;
   const patrimonioVarPct = patrimonioPrev!==0 ? (patrimonioVar/Math.abs(patrimonioPrev)*100) : 0;
 
@@ -19458,8 +19491,8 @@ function renderDashboard(){
   // en dólares, netos de su propia deuda de tarjeta. dispCur (BCP/BBVA/Efectivo)
   // siempre es en soles, por eso no aparece en el lado de dólares. AFP en Perú
   // siempre es en soles, así que si está activado se suma al lado PEN.
-  const patrimonioPEN = dispCur + aS + invAportePEN - deudaTCPen + afpAporte;
-  const patrimonioUSD = aD + invAporteUSDNativo - deudaTCUsd;
+  const patrimonioPEN = dispCur + aS + invAportePEN - deudaParaPatrimonioPen + afpAporte;
+  const patrimonioUSD = aD + invAporteUSDNativo - deudaParaPatrimonioUsd;
 
   // ── Render patrimonio ─────────────────────────────
   const pEl = document.getElementById('dash-patrimonio');
@@ -19474,7 +19507,10 @@ function renderDashboard(){
     pEl.style.color = patrimonioCur >= 0 ? 'var(--green)' : 'var(--red)';
   }
   const pFormulaEl = document.getElementById('dash-patrimonio-formula');
-  if(pFormulaEl) pFormulaEl.textContent = 'Disponible + Ahorros' + (invEnPatrimonio?' + Inversiones':'') + ' − Deuda tarjetas' + (afpEnPatrimonio?' + AFP':'');
+  if(pFormulaEl) pFormulaEl.textContent = 'Disponible + Ahorros' + (invEnPatrimonio?' + Inversiones':'') + (modoDeudaPat==='mes'?' − Deuda tarjetas (este + próx. mes)':' − Deuda tarjetas') + (afpEnPatrimonio?' + AFP':'');
+  document.querySelectorAll('.dash-patrimonio-modo-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.modo===modoDeudaPat);
+  });
   const pPenEl = document.getElementById('dash-patrimonio-pen');
   if(pPenEl){ pPenEl.textContent = M((patrimonioPEN<0?'-':'')+fmtS(patrimonioPEN)); pPenEl.style.color = patrimonioPEN>=0?'var(--text)':'var(--red)'; }
   const pUsdEl = document.getElementById('dash-patrimonio-usd');
@@ -28867,6 +28903,18 @@ function toggleInvEnPatrimonio(){
   renderInvPatrimonioToggleBtn();
   if(document.getElementById('page-dashboard')) renderDashboard();
 }
+// Toggle del Patrimonio Neto: "total" (todas las cuotas pendientes de
+// tarjetas, el comportamiento de siempre) vs "mes" (solo la deuda que cae en
+// el mes calendario actual + el siguiente, ej. noviembre+diciembre — no
+// cuenta cuotas más lejanas). Por defecto "total", para que a nadie le
+// cambie el número sin elegirlo. Se guarda en state para que la preferencia
+// se mantenga entre sesiones (y entre tu app y la de Nathy, cada una con la
+// suya, como el resto de preferencias locales).
+function setPatrimonioModoDeuda(modo){
+  state.patrimonioModoDeuda = modo==='mes' ? 'mes' : 'total';
+  saveState();
+  if(document.getElementById('page-dashboard')) renderDashboard();
+}
 function renderInvPatrimonioToggleBtn(){
   const btn=document.getElementById('inv-patrimonio-toggle-btn');
   if(!btn) return;
@@ -31547,6 +31595,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.35.6",
+  "fecha": "16/11/26",
+  "cambios": [
+   "✨ Patrimonio Neto Total (dashboard): ahora se puede elegir entre \"Deuda total\" (como funcionaba siempre — resta TODAS las cuotas de tarjeta pendientes, aunque venzan dentro de varios meses) y \"Este + próx. mes\" (resta solo la deuda de tarjeta que cae en el mes calendario actual + el siguiente, ej. noviembre + diciembre). La fórmula mostrada debajo del monto cambia según la opción elegida, y la elección se guarda.",
+   "🤖 El bot de Telegram (/resumen y las preguntas de patrimonio/deudas en el chat libre) ahora muestra AMBOS cálculos — \"deuda total\" y \"este + próx. mes\" — con el mismo criterio que el nuevo toggle de la web."
+  ]
+ },
  {
   "v": "v2.35.5",
   "fecha": "16/11/26",
