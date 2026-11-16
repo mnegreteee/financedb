@@ -4558,9 +4558,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.3';
-const APP_VERSION_DATE = '16/11/26 - 10:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Corrige: al borrar un Pago Frecuente vinculado a una reposición de cuotas, ahora se quita el vínculo también (antes dejaba el badge 👤 roto); además se auto-repara cualquier vínculo que ya hubiera quedado huérfano.';
+const APP_VERSION = 'v2.35.5';
+const APP_VERSION_DATE = '16/11/26 - 11:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corrige: el badge 👤 de reposición en el detalle de la tarjeta dependía del mes que estabas mirando en el visor (no de la cuota real) — ahora usa siempre la fecha real de cada cuota, igual que en Mis Cuotas.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6370,6 +6370,25 @@ function migrateState(){
   // descarta solo — así la compra a cuotas vuelve a mostrar "¿Alguien te
   // repone esto?" en vez de un badge 👤 roto que no apunta a nada.
   state.cuotasReposicion=state.cuotasReposicion.filter(r=>(state.pagosFrecuentes||[]).some(p=>p.id===r.pfId));
+  // Auto-reparación: vínculos creados ANTES de este fix guardaron `pf.mesInicio`
+  // con el mk de FACTURACIÓN de la cuota (ver getBillingMonthKey), que en
+  // tarjetas con ciclo inicio/cierre desfasado del mes calendario (ej. BBVA)
+  // no coincide con el mes calendario real en el que se registra "Este mes" —
+  // eso hacía que la reposición quedara en 0/N aunque el pago ya estuviera
+  // registrado. Se corrige a la fecha calendario real de esa misma cuota.
+  try{
+    state.cuotasReposicion.forEach(r=>{
+      const pf=(state.pagosFrecuentes||[]).find(p=>p.id===r.pfId);
+      if(!pf||!pf.mesInicio) return;
+      const g=obtenerGruposDeCuotas().find(x=>x.grupoCuotaId===r.grupoCuotaId);
+      if(!g) return;
+      const cuotaDeInicio=g.cuotas.find(c=>c.mk===pf.mesInicio)||g.proxima;
+      if(cuotaDeInicio&&cuotaDeInicio.fecha){
+        const corregido=cuotaDeInicio.fecha.slice(0,7);
+        if(corregido!==pf.mesInicio) pf.mesInicio=corregido;
+      }
+    });
+  }catch(e){ console.warn('Auto-reparación mesInicio reposición omitida:', e&&e.message); }
   if(!Array.isArray(state.repuestos))      state.repuestos=[];
   if(!Array.isArray(state.lugaresGuardados)) state.lugaresGuardados=[];
   if(!Array.isArray(state.correosIgnorados)) state.correosIgnorados=[];
@@ -16437,8 +16456,13 @@ function tcCuotaRepoBadgeHtml(m){
   if(!m.grupoCuotaId) return '';
   const repo=cuotasRepoDe(m.grupoCuotaId); if(!repo) return '';
   const pf=cuotasRepoPF(repo); if(!pf) return '';
-  const mk=m.mk||currentTCMonth;
-  const repuesta=!!(pf.pagosRegistrados && pf.pagosRegistrados[mk]);
+  // Usa SIEMPRE la fecha real de la cuota (m.fecha, que todo consumo de TC ya
+  // tiene) vía cuotaFueRepuesta — antes usaba m.mk (que en un consumo "crudo"
+  // de la vista de tarjeta nunca existe) con un fallback a currentTCMonth, es
+  // decir, al mes que el usuario está MIRANDO en el visor, no al mes real de
+  // esa cuota en particular. Eso hacía que el badge dependiera de qué mes
+  // tenías abierto en pantalla en vez de la cuota que realmente es.
+  const repuesta=cuotaFueRepuesta(m, pf);
   return ` <span title="${repuesta?'Ya te repuso esta cuota':'Aún no te repone esta cuota'} ${escapeHtml(repo.persona)}" style="font-size:11px;cursor:help">${repuesta?'👤✅':'👤⏳'}</span>`;
 }
 function tcMovTableRow(m, cardCur){
@@ -26252,7 +26276,23 @@ let _pfVincularCuotas=null;
 function cuotasRepoDe(grupoCuotaId){ return (state.cuotasReposicion||[]).find(r=>r.grupoCuotaId===grupoCuotaId); }
 function cuotasRepoDePF(pfId){ return (state.cuotasReposicion||[]).find(r=>r.pfId===pfId); }
 function cuotasRepoPF(repo){ return repo?(state.pagosFrecuentes||[]).find(p=>p.id===repo.pfId):null; }
-function cuotaFueRepuesta(m, pf){ return !!(pf && pf.pagosRegistrados && pf.pagosRegistrados[m.mk]); }
+// IMPORTANTE: el `mk` de una cuota (en qué mes de FACTURACIÓN cae, según el
+// ciclo inicio/cierre de la tarjeta — ver getBillingMonthKey) puede NO ser el
+// mismo mes calendario en el que el usuario registra "Este mes"/"Próximo mes"
+// en el Pago Frecuente (que siempre usa el mes calendario real). En tarjetas
+// cuyo ciclo no coincide con el mes calendario (ej. BBVA con inicio=26,
+// cierre=25) esto desalinea una comparación exacta de string contra m.mk.
+// La fecha real de cada cuota (c.fecha) SÍ avanza un mes calendario exacto
+// por cuota (ver sumarMesesConDia), en la misma base que usa el registro de
+// "Este mes"/"Próximo mes" — así que el emparejamiento correcto es por el mes
+// calendario de c.fecha, no por el mk de facturación. (No se reutiliza el
+// matching por margen de fechas de Deuda Mayor —dmMesPFDeCuota— porque con
+// cuotas mensuales consecutivas un margen de ±20 días puede hacer que dos
+// cuotas vecinas calcen con el mismo mes registrado.)
+function cuotaFueRepuesta(m, pf){
+  const mk=m&&m.fecha?m.fecha.slice(0,7):null;
+  return !!(mk && pf && pf.pagosRegistrados && pf.pagosRegistrados[mk]);
+}
 // Si este pago frecuente es una reposición de cuotas vinculada, devuelve el
 // nombre con " — Cuota X/Y" agregado (según a cuál cuota corresponde el mes
 // mk que se está registrando) — así el movimiento/consumo que se crea en
@@ -26264,7 +26304,7 @@ function pfNombreConCuota(pf, mk){
   try{
     const g=obtenerGruposDeCuotas().find(x=>x.grupoCuotaId===repo.grupoCuotaId);
     if(!g) return pf.nombre;
-    const cuota=g.cuotas.find(c=>c.mk===mk);
+    const cuota=g.cuotas.find(c=>c.fecha&&c.fecha.slice(0,7)===mk);
     if(!cuota) return pf.nombre;
     return pf.nombre+' — Cuota '+cuota.cuotaNumero+'/'+g.totalCuotas;
   }catch(e){ return pf.nombre; }
@@ -26285,7 +26325,10 @@ function cuotasCrearPFReposicion(grupoCuotaId){
   document.getElementById('pf-tipo-monto').value='fijo';
   document.getElementById('pf-monto').value=g.proxima?Number(g.proxima.monto)||'':'';
   document.getElementById('pf-currency').value=g.currency==='USD'?'USD':'PEN';
-  document.getElementById('pf-mes-inicio').value=g.proxima?g.proxima.mk:'';
+  // Mes de inicio = mes CALENDARIO real de la próxima cuota (su .fecha), NO
+  // su mk de facturación — así queda en la misma base que usan "Este
+  // mes"/"Próximo mes" al registrar, y que usa dmMesPFDeCuota para emparejar.
+  document.getElementById('pf-mes-inicio').value=g.proxima&&g.proxima.fecha?g.proxima.fecha.slice(0,7):'';
   document.getElementById('pf-duracion-meses').value=g.pendientesCount||'';
   if(g.proxima&&g.proxima.fecha){
     const dt=new Date(g.proxima.fecha+'T12:00:00');
@@ -31504,6 +31547,21 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.35.5",
+  "fecha": "16/11/26",
+  "cambios": [
+   "🐛 El badge 👤✅/👤⏳ de reposición de cuotas, en el DETALLE de la tarjeta (junto a cada cuota), usaba una lógica separada que comparaba contra el mes que estabas mirando en el visor de la tarjeta (currentTCMonth), no contra la fecha real de esa cuota — así que si entrabas al mes donde esa cuota se factura (que puede ser muy distinto al mes en que compraste, por el ciclo de la tarjeta), el badge podía salir mal aunque en \"Mis Cuotas\" ya mostrara bien el conteo. Ahora usa la misma fecha real de la cuota que el resto de la función."
+  ]
+ },
+ {
+  "v": "v2.35.4",
+  "fecha": "16/11/26",
+  "cambios": [
+   "🐛 Reposición de cuotas: en tarjetas cuyo ciclo de facturación (inicio/cierre) no coincide con el mes calendario (ej. BBVA), el mes \"interno\" de la cuota podía no coincidir con el mes en que registrabas \"Este mes\"/\"Próximo mes\" en el Pago Frecuente — eso hacía que apareciera 0/N reposiciones aunque el pago ya estuviera registrado y marcado como \"✅ Recibido este mes\". Ahora el emparejamiento usa siempre el mes calendario real de la cuota.",
+   "Auto-reparación: los vínculos que ya tenías creados (donde el \"mes de inicio\" se había guardado con ese mes desalineado) se corrigen solos al abrir la app, sin necesidad de volver a vincular ni de borrar nada."
+  ]
+ },
  {
   "v": "v2.35.3",
   "fecha": "16/11/26",
