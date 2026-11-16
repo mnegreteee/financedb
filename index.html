@@ -26242,6 +26242,7 @@ function cuotasCrearPFReposicion(grupoCuotaId){
   const persona=(prompt('¿Quién te repone esta compra a cuotas? (ej. Mamá)')||'').trim();
   if(!persona) return;
   _pfVincularCuotas={grupoCuotaId, persona};
+  cerrarMisCuotasActivas();
   openPagoFrecuenteModal();
   document.getElementById('pf-modal-title').textContent='Nuevo — repone '+persona;
   document.getElementById('pf-nombre').value='Repone '+persona+': '+g.nombreBase;
