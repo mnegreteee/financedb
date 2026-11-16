@@ -4558,9 +4558,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.0';
-const APP_VERSION_DATE = '16/11/26 - 10:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: vincula una compra a cuotas con un Ingreso Frecuente para trackear si alguien te la está reponiendo mes a mes (Mis Cuotas → 💰 ¿Alguien te repone esto?).';
+const APP_VERSION = 'v2.35.2';
+const APP_VERSION_DATE = '16/11/26 - 10:50'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'El movimiento/consumo que crea una reposición de cuotas ahora dice a qué cuota corresponde, ej. "Repone Mamá: Sony — Cuota 1/12".';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16007,6 +16007,12 @@ function renderTarjetas(){
   renderTCChartsExtra();
   try{ renderTCHeatmap(); }catch(err){ console.error('Error renderizando Mapa de Consumos con Tarjeta:', err); }
   renderConsumosFrecuentes();
+  // Si hay un detalle de tarjeta abierto (tc-detail-view), también se
+  // refresca — si no, cambios hechos desde afuera (ej. registrar el
+  // Ingreso Frecuente de una reposición de cuotas) no se reflejaban ahí
+  // hasta cerrar y volver a abrir el detalle (el badge 👤 se quedaba
+  // desactualizado).
+  if(currentTCId) try{ renderTCDetail(); }catch(err){ console.error('Error refrescando detalle de tarjeta:', err); }
 }
 
 // ── CONSUMOS FRECUENTES (registro de 1 toque) ─────────
@@ -22859,11 +22865,12 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
     ? String(targetY!==undefined?targetY:new Date().getFullYear())
     : (targetY!==undefined ? (targetY+'-'+String(targetM+1).padStart(2,'0')) : mesActualKey());
   const esIngreso=pf.tipo==='ingreso';
+  const descPF=pfNombreConCuota(pf, mk);
   let refActividad=null;
   if(monto>0.004){
     if(esIngreso || pf.metodoPago==='cuenta'){
       if(!state.movimientos) state.movimientos=[];
-      const mov={id:'pf-mov-'+Date.now(), type:esIngreso?'income':'expense', desc:pf.nombre, amount:monto, account:pf.destino, date:hoy, currency:pf.currency};
+      const mov={id:'pf-mov-'+Date.now(), type:esIngreso?'income':'expense', desc:descPF, amount:monto, account:pf.destino, date:hoy, currency:pf.currency};
       if(pf.categoria) mov.cat=pf.categoria;
       if(extra&&extra.hora) mov.hora=extra.hora;
       if(extra&&extra.ubicacion) mov.ubicacion=extra.ubicacion;
@@ -22875,7 +22882,7 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
       if(!t.movs) t.movs={};
       const newMk=getBillingMonthKey(hoy, t);
       if(!t.movs[newMk]) t.movs[newMk]=[];
-      const consumo={id:'pf-tcm-'+Date.now(), desc:pf.nombre, fecha:hoy, monto, pagado:false, currency:pf.currency, hora:(extra&&extra.hora)||horaLimaActual()};
+      const consumo={id:'pf-tcm-'+Date.now(), desc:descPF, fecha:hoy, monto, pagado:false, currency:pf.currency, hora:(extra&&extra.hora)||horaLimaActual()};
       if(pf.categoria) consumo.cat=pf.categoria;
       if(extra&&extra.ubicacion) consumo.ubicacion=extra.ubicacion;
       t.movs[newMk].push(consumo);
@@ -26233,8 +26240,25 @@ function dmCrearPF(){
 // ══════════════════════════════════════════════════════
 let _pfVincularCuotas=null;
 function cuotasRepoDe(grupoCuotaId){ return (state.cuotasReposicion||[]).find(r=>r.grupoCuotaId===grupoCuotaId); }
+function cuotasRepoDePF(pfId){ return (state.cuotasReposicion||[]).find(r=>r.pfId===pfId); }
 function cuotasRepoPF(repo){ return repo?(state.pagosFrecuentes||[]).find(p=>p.id===repo.pfId):null; }
 function cuotaFueRepuesta(m, pf){ return !!(pf && pf.pagosRegistrados && pf.pagosRegistrados[m.mk]); }
+// Si este pago frecuente es una reposición de cuotas vinculada, devuelve el
+// nombre con " — Cuota X/Y" agregado (según a cuál cuota corresponde el mes
+// mk que se está registrando) — así el movimiento/consumo que se crea en
+// Finanzas queda identificado con el número de cuota, no solo el nombre
+// genérico. Si no hay vínculo, o no se encuentra la cuota de ese mes
+// (ej. ya se canceló el resto), devuelve el nombre tal cual.
+function pfNombreConCuota(pf, mk){
+  const repo=cuotasRepoDePF(pf.id); if(!repo) return pf.nombre;
+  try{
+    const g=obtenerGruposDeCuotas().find(x=>x.grupoCuotaId===repo.grupoCuotaId);
+    if(!g) return pf.nombre;
+    const cuota=g.cuotas.find(c=>c.mk===mk);
+    if(!cuota) return pf.nombre;
+    return pf.nombre+' — Cuota '+cuota.cuotaNumero+'/'+g.totalCuotas;
+  }catch(e){ return pf.nombre; }
+}
 function cuotasCrearPFReposicion(grupoCuotaId){
   const grupos=obtenerGruposDeCuotas();
   const g=grupos.find(x=>x.grupoCuotaId===grupoCuotaId);
@@ -31470,6 +31494,21 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.35.2",
+  "fecha": "16/11/26",
+  "cambios": [
+   "El ingreso/gasto que se crea al registrar una reposición de cuotas vinculada ahora incluye el número de cuota en el nombre, ej. «Repone Mamá: Sony — Cuota 1/12» en vez de solo «Repone Mamá: Sony» — así se ve de un vistazo en Finanzas a cuál cuota corresponde cada registro."
+  ]
+ },
+ {
+  "v": "v2.35.1",
+  "fecha": "16/11/26",
+  "cambios": [
+   "🐛 El modal «Pago Frecuente» ya no se abre tapado detrás del modal «Mis Cuotas Activas» al tocar «¿Alguien te repone esto?».",
+   "🐛 El badge 👤✅/👤⏳ de una cuota (en el detalle de la tarjeta) ahora se actualiza solo al registrar el Ingreso Frecuente — antes había que cerrar y volver a abrir el detalle."
+  ]
+ },
  {
   "v": "v2.35.0",
   "fecha": "16/11/26",
