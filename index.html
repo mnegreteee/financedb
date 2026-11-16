@@ -4567,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.7';
-const APP_VERSION_DATE = '16/11/26 - 12:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: al editar una cuota de una compra a cuotas, botón "📦 Aplicar esta ubicación a todas las cuotas" para no tener que agregarla una por una.';
+const APP_VERSION = 'v2.35.8';
+const APP_VERSION_DATE = '16/11/26 - 12:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Pagos frecuentes "base con descuentos": si el descuento supera la base, el sobrante ya no se pierde — queda precargado como descuento del próximo mes.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -22938,8 +22938,13 @@ function confirmarPFRegistrar(){
   if(pf.tipoMonto==='base_descuentos'){
     const totalDescuentos=pfDescuentosActuales.reduce((s,d)=>s+d.monto,0);
     const montoFinal=Math.max(0, pf.montoFijo-totalDescuentos);
+    // Si los descuentos superan la base (ej. te depositaron S/200 por una
+    // cochera de S/120), el sobrante NO se pierde: se guarda como un
+    // "descuento" ya precargado para el próximo mes (misma lista que "+
+    // Descuento" durante el mes), así se resta solo de la base siguiente.
+    const excedente=Math.max(0, totalDescuentos-pf.montoFijo);
     if(montoFinal<=0 && pfDescuentosActuales.length===0){alert('Agrega al menos un descuento, o cambia el tipo de monto si vas a pagar el monto base completo.');return;}
-    ejecutarPagoFrecuente(pf, montoFinal, y, m, {montoBase:pf.montoFijo, deducciones:[...pfDescuentosActuales]}, fechaManual);
+    ejecutarPagoFrecuente(pf, montoFinal, y, m, {montoBase:pf.montoFijo, deducciones:[...pfDescuentosActuales], excedente}, fechaManual);
   } else {
     const monto=parseFloat(document.getElementById('pf-registrar-monto').value)||0;
     if(monto<=0){alert('Ingresa un monto válido.');return;}
@@ -22998,8 +23003,18 @@ function ejecutarPagoFrecuente(pf, monto, targetY, targetM, detalle, fechaManual
   if(!pf.pagosRegistrados) pf.pagosRegistrados={};
   pf.pagosRegistrados[mk]=detalle ? {monto, fecha:hoy, montoBase:detalle.montoBase, deducciones:detalle.deducciones} : {monto, fecha:hoy};
   // Ya se "cerró" el mes con estos descuentos — se limpia lo acumulado para
-  // que el próximo mes empiece de cero.
-  if(detalle) pf.descuentosPendientes=[];
+  // que el próximo mes empiece de cero. Si sobró descuento (superó la base),
+  // ese sobrante queda precargado como el primer descuento del próximo mes
+  // en vez de perderse — se verá como "Saldo a favor de <mes> (sobrante)".
+  if(detalle){
+    if(detalle.excedente>0.004){
+      const mesLabel=/^\d{4}-\d{2}$/.test(mk) ? (MONTHS[parseInt(mk.slice(5,7),10)-1]+' '+mk.slice(0,4)) : mk;
+      pf.descuentosPendientes=[{id:'desc-'+Date.now(), concepto:'Saldo a favor de '+mesLabel+' (sobrante)', monto:detalle.excedente, fecha:hoy, esSaldoFavor:true}];
+      setTimeout(()=>toast('💰 Quedó un sobrante de '+(pf.currency==='USD'?'$':'S/')+' '+numFmtSigned(detalle.excedente,2)+' — se descontará solo del próximo mes'),1800);
+    } else {
+      pf.descuentosPendientes=[];
+    }
+  }
   saveState();
   renderPagosFrecuentes();
   render();
@@ -31625,6 +31640,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.35.8",
+  "fecha": "16/11/26",
+  "cambios": [
+   "✨ Pagos frecuentes de tipo \"base con descuentos\" (ej. Cochera S/120 con descuentos): si al registrar el mes el total de descuentos supera la base (ej. te depositaron S/200 por una cochera de S/120), el monto a pagar ese mes sigue saliendo S/0.00 (nunca negativo) — pero ahora el SOBRANTE (S/80 en el ejemplo) ya no se pierde: queda precargado como el primer descuento del próximo mes (\"Saldo a favor de <mes> (sobrante)\"), restándose solo de la base siguiente. Se puede quitar ese descuento precargado como cualquier otro, si no corresponde."
+  ]
+ },
  {
   "v": "v2.35.7",
   "fecha": "16/11/26",
