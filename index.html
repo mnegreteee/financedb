@@ -4558,9 +4558,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.33.0';
-const APP_VERSION_DATE = '15/11/26 - 22:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nueva TEA por defecto en cada tarjeta: se sugiere sola al marcar una compra "con intereses" (Consumos y Aprobaciones), pero las compras a cuotas ya creadas se quedan con la tasa que tenían, aunque luego cambies la de la tarjeta. Botones "Editar" de Aprobaciones ahora dicen "Editar / Cuotas".';
+const APP_VERSION = 'v2.34.0';
+const APP_VERSION_DATE = '15/11/26 - 22:55'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'La TEA de la tarjeta ahora también se ve en el detalle de Tarjetas (junto a Pago/Inicio/Cierre), no solo al editarla.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16260,10 +16260,11 @@ function buildTCCard(t, idx, total){
         <div class="tc-mes-badge" style="background:${col}" title="Período de facturación actual de esta tarjeta">📅 ${badge.label}</div>
       </div>
     </div>
-    <div class="tc-info-grid">
+    <div class="tc-info-grid" style="${t.tea?'grid-template-columns:1fr 1fr 1fr 1fr':''}">
       <div class="tc-info-cell"><div class="tc-info-cell-label">Pago</div><div class="tc-info-cell-val">día ${t.pago||'—'}</div></div>
       <div class="tc-info-cell"><div class="tc-info-cell-label">Inicio</div><div class="tc-info-cell-val">día ${t.inicio||'—'}</div></div>
       <div class="tc-info-cell"><div class="tc-info-cell-label">Cierre</div><div class="tc-info-cell-val">día ${t.cierre||'—'}</div></div>
+      ${t.tea?`<div class="tc-info-cell" title="TEA por defecto para compras a cuotas con intereses"><div class="tc-info-cell-label">TEA</div><div class="tc-info-cell-val">${numFmtSigned(t.tea,2)}%</div></div>`:''}
     </div>
     <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:10px;margin-bottom:4px;flex-wrap:wrap;gap:4px">
       <span style="color:var(--text2)">Deuda total: <strong style="color:var(--red)">${M(fmtTCMixed(deudaTotalByCur.pen,deudaTotalByCur.usd))}</strong></span>
@@ -31382,6 +31383,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.34.0",
+  "fecha": "15/11/26",
+  "cambios": [
+   "Tarjetas → detalle de la tarjeta: si tiene TEA por defecto guardada, ahora se ve junto a Pago/Inicio/Cierre (antes solo se veía al editar la tarjeta)."
+  ]
+ },
  {
   "v": "v2.33.0",
   "fecha": "15/11/26",
