@@ -3078,7 +3078,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
     </div>
     <div class="field" id="pbm-cuenta-wrap"><label>Cuenta</label><select id="pbm-cuenta"></select></div>
-    <div class="field" id="pbm-tarjeta-wrap" style="display:none"><label>Tarjeta</label><select id="pbm-tarjeta"></select></div>
+    <div class="field" id="pbm-tarjeta-wrap" style="display:none"><label>Tarjeta</label><select id="pbm-tarjeta" onchange="onAprobarPendienteMetodoChange()"></select></div>
     <div class="field-row">
       <div class="field"><label>Monto</label><input id="pbm-monto" type="number" step="0.01" placeholder="0.00"></div>
       <div class="field"><label>Moneda</label>
@@ -3089,7 +3089,27 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div class="field"><label>Fecha</label><input id="pbm-fecha" type="date"></div>
       <div class="field"><label>Hora <small>(del correo)</small></label><input id="pbm-hora" type="time"></div>
     </div>
+    <div class="field" id="pbm-cuota-wrap" style="display:none">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="pbm-es-cuota" style="width:auto" onchange="onPbmEsCuotaChange()"> ¿Es una compra a cuotas?
+      </label>
+    </div>
+    <div id="pbm-cuotas-detalle-wrap" style="display:none">
+      <div class="field-row">
+        <div class="field"><label>Número de cuotas</label><input id="pbm-num-cuotas" type="number" min="2" step="1" placeholder="Ej. 12"></div>
+        <div class="field" style="justify-content:flex-end">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="pbm-con-interes" style="width:auto" onchange="onPbmConInteresChange()"> Con intereses
+          </label>
+        </div>
+      </div>
+      <div class="field" id="pbm-tea-wrap" style="display:none">
+        <label>TEA del banco (%) <span style="font-size:10px;color:var(--text3)">(Tasa Efectiva Anual)</span></label>
+        <input id="pbm-tea" type="number" step="0.01" placeholder="Ej. 45.90">
+      </div>
+    </div>
     <div class="field"><label>Categoría</label><select id="pbm-cat"></select></div>
+    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><textarea id="pbm-nota" placeholder="Agrega un comentario o detalle..."></textarea></div>
     <div class="field" id="pbm-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="pbm-descpf"><option value="">No descontar</option></select>
     </div>
@@ -4538,9 +4558,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.29.1';
-const APP_VERSION_DATE = '14/11/26 - 19:31'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Herramientas → «Mejor día para comprar con tarjeta»: las tarjetas ahora salen ordenadas de mayor a menor margen (días para pagar si compras hoy).';
+const APP_VERSION = 'v2.33.0';
+const APP_VERSION_DATE = '15/11/26 - 22:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nueva TEA por defecto en cada tarjeta: se sugiere sola al marcar una compra "con intereses" (Consumos y Aprobaciones), pero las compras a cuotas ya creadas se quedan con la tasa que tenían, aunque luego cambies la de la tarjeta. Botones "Editar" de Aprobaciones ahora dicen "Editar / Cuotas".';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5005,7 +5025,7 @@ function tiempoRelativo(ts){
   const d=new Date(ts);
   return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
 }
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',km_manual_editado:'✏️',km_manual_eliminado:'🗑️',cuenta_fusionada:'🏦',cuenta_tipo_cambiado:'🏦',cuenta_banco_cambiado:'🏦',banco_renombrado:'🏦',cuenta_renombrada:'🏦',cuenta_oculta_manual:'🙈',cuenta_forzada_visible:'👁️',pago_frecuente_oculto:'🙈',pago_frecuente_visible:'👁️',tc_consumo_reparado:'🛠️',tc_cuotas_renombradas:'✏️',hogar_prestamo_editado:'🏡',hogar_bolsa_nueva:'🛍️',hogar_bolsa_editada:'🛍️',hogar_bolsa_eliminada:'🛍️',hogar_compra_eliminada:'🛒',hogar_registro_editado:'🏡',hogar_registro_eliminado:'🏡',auto_prestamo_editado:'🚗',auto_repuesto_nuevo:'🔧',auto_repuesto_editado:'🔧',auto_repuesto_eliminado:'🔧',mantenimiento_registro_eliminado:'🧰',deuda_mayor_pf_vinculado:'🔗',deuda_mayor_cuota_fecha:'📅',deuda_mayor_monto_real:'💰',compra_marcada_comprado:'🛒',
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',km_manual_editado:'✏️',km_manual_eliminado:'🗑️',cuenta_fusionada:'🏦',cuenta_tipo_cambiado:'🏦',cuenta_banco_cambiado:'🏦',banco_renombrado:'🏦',cuenta_renombrada:'🏦',cuenta_oculta_manual:'🙈',cuenta_forzada_visible:'👁️',pago_frecuente_oculto:'🙈',pago_frecuente_visible:'👁️',tc_consumo_reparado:'🛠️',tc_cuotas_renombradas:'✏️',hogar_prestamo_editado:'🏡',hogar_bolsa_nueva:'🛍️',hogar_bolsa_editada:'🛍️',hogar_bolsa_eliminada:'🛍️',hogar_compra_eliminada:'🛒',hogar_registro_editado:'🏡',hogar_registro_eliminado:'🏡',auto_prestamo_editado:'🚗',auto_repuesto_nuevo:'🔧',auto_repuesto_editado:'🔧',auto_repuesto_eliminado:'🔧',mantenimiento_registro_eliminado:'🧰',deuda_mayor_pf_vinculado:'🔗',deuda_mayor_cuota_fecha:'📅',deuda_mayor_monto_real:'💰',compra_marcada_comprado:'🛒',tc_consumo_convertido_cuotas:'🧩',
   tarjeta_nueva:'💳',tarjeta_editada:'💳',tarjeta_eliminada:'💳',
   meta_nueva:'🎯',meta_editada:'🎯',meta_eliminada:'🎯',
   inversion_editada:'📈',inversion_eliminada:'📈',
@@ -5645,6 +5665,20 @@ function eliminarActividad(logId){
       if(tR3) Object.values(tR3.movs||{}).forEach(movs=>movs.forEach(m=>{
         if(m.grupoCuotaId===ref.grupoCuotaId) m.desc=`${ref.nombreAntes} — Cuota ${m.cuotaNumero}/${m.cuotaTotal}`;
       }));
+    } else if(entry.tipo==='tc_consumo_convertido_cuotas'){
+      // Deshacer "convertir en compra a cuotas": borra TODAS las cuotas del grupo
+      // (en cualquier mes) y repone el consumo original de una sola vez.
+      const tCC=(state.tarjetas||[]).find(x=>x.id===ref.tarjetaId);
+      if(tCC && tCC.movs){
+        Object.keys(tCC.movs).forEach(mk=>{
+          tCC.movs[mk]=tCC.movs[mk].filter(c=>c.grupoCuotaId!==ref.grupoCuotaId);
+          if(tCC.movs[mk].length===0) delete tCC.movs[mk];
+        });
+        if(ref.consumoAntes && ref.monthKeyAntes){
+          if(!tCC.movs[ref.monthKeyAntes]) tCC.movs[ref.monthKeyAntes]=[];
+          tCC.movs[ref.monthKeyAntes].push({...ref.consumoAntes});
+        }
+      }
     } else if(entry.tipo==='hogar_prestamo_editado'){
       const pHP=(hgEnsure().prestamos||[]).find(x=>x.id===ref.prestamoId);
       if(pHP) pHP.nombre=ref.nombreAntes;
@@ -16388,7 +16422,7 @@ function tcMovTableRow(m, cardCur){
   const mFmt=tcMovAmountFmt(m,cardCur);
   return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
+    <td>${escapeHtml(m.desc)}${m.note?` <span title="${escapeHtml(m.note)}" style="font-size:11px;cursor:help">📝</span>`:''}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
     <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}${ubicPinCatHtml('tc',m.id,m.ubicacion)}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked,this)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
@@ -16413,7 +16447,7 @@ function tcMovCardHtml(m, cardCur){
   return `<div class="tc-mov-card ${m.pagado?'paid-row':''}" id="tc-row-${m.id}" style="--catcolor:${catColor}">
     <input type="checkbox" class="tc-check tc-sel-cb" id="tc-cb-${m.id}" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">
     <div class="tc-mov-card-body" onclick="document.getElementById('tc-cb-${m.id}').click()">
-      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
+      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.note?` <span title="${escapeHtml(m.note)}" style="font-size:11px;cursor:help">📝</span>`:''}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
       <div class="tc-mov-card-meta">
         <span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span>
         <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>${ubicPinCatHtml('tc',m.id,m.ubicacion)}
@@ -17425,7 +17459,15 @@ function onEsCuotaChange(){
   actualizarPreviewCuota();
 }
 function onConInteresChange(){
-  document.getElementById('tc-m-tea-wrap').style.display=document.getElementById('tc-m-con-interes').checked?'block':'none';
+  const checked=document.getElementById('tc-m-con-interes').checked;
+  document.getElementById('tc-m-tea-wrap').style.display=checked?'block':'none';
+  if(checked){
+    const teaInput=document.getElementById('tc-m-tea');
+    if(!teaInput.value){
+      const t=getTarjeta(document.getElementById('tc-m-tarjeta').value);
+      if(t&&t.tea) teaInput.value=t.tea;
+    }
+  }
   actualizarPreviewCuota();
 }
 function actualizarPreviewCuota(){
@@ -17448,6 +17490,8 @@ function actualizarPreviewCuota(){
 function onConsumoTarjetaChange(){
   const t=getTarjeta(document.getElementById('tc-m-tarjeta').value);
   if(t) document.getElementById('tc-m-currency').value=t.currency||'PEN';
+  const teaInput=document.getElementById('tc-m-tea');
+  if(teaInput&&document.getElementById('tc-m-con-interes').checked&&!teaInput.value&&t&&t.tea) teaInput.value=t.tea;
   if(typeof refrescarDescPFTC==='function') refrescarDescPFTC();
 }
 function openAddMovTC(){
@@ -17460,6 +17504,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-desc').value='';
   document.getElementById('tc-m-monto').value='';
   document.getElementById('tc-m-pagado').value='no';
+  document.getElementById('tc-m-nota').value='';
   document.getElementById('tc-m-currency').value=(t&&t.currency)||'PEN';
   document.getElementById('tc-m-fecha').value=todayLocalISO();
   document.getElementById('tc-m-hora').value=horaLimaActual();
@@ -17467,6 +17512,7 @@ function openAddMovTC(){
   document.getElementById('tc-m-cat').value='';
   document.getElementById('tc-m-es-cuota').checked=false;
   document.getElementById('tc-m-es-cuota').closest('.field').style.display='block';
+  { const lbl=document.getElementById('tc-m-es-cuota-label'); if(lbl) lbl.textContent='¿Es una compra a cuotas?'; }
   document.getElementById('tc-m-num-cuotas').value='';
   document.getElementById('tc-m-con-interes').checked=false;
   document.getElementById('tc-m-tea').value='';
@@ -17489,12 +17535,14 @@ function openAddMovTCFromList(){
   document.getElementById('tc-m-desc').value='';
   document.getElementById('tc-m-monto').value='';
   document.getElementById('tc-m-pagado').value='no';
+  document.getElementById('tc-m-nota').value='';
   document.getElementById('tc-m-fecha').value=todayLocalISO();
   document.getElementById('tc-m-hora').value=horaLimaActual();
   updateCategorySelects();
   document.getElementById('tc-m-cat').value='';
   document.getElementById('tc-m-es-cuota').checked=false;
   document.getElementById('tc-m-es-cuota').closest('.field').style.display='block';
+  { const lbl=document.getElementById('tc-m-es-cuota-label'); if(lbl) lbl.textContent='¿Es una compra a cuotas?'; }
   document.getElementById('tc-m-num-cuotas').value='';
   document.getElementById('tc-m-con-interes').checked=false;
   document.getElementById('tc-m-tea').value='';
@@ -17520,11 +17568,16 @@ function editTCMov(movId){
   document.getElementById('tc-m-hora').value=m.hora||'';
   document.getElementById('tc-m-monto').value=m.monto;
   document.getElementById('tc-m-pagado').value=m.pagado?'si':'no';
+  document.getElementById('tc-m-nota').value=m.note||'';
   document.getElementById('tc-m-currency').value=m.currency||(t&&t.currency)||'PEN';
   updateCategorySelects(); // asegura que categorías nuevas aparezcan siempre
   document.getElementById('tc-m-cat').value=m.cat||'';
   document.getElementById('tc-m-es-cuota').checked=false;
-  document.getElementById('tc-m-es-cuota').closest('.field').style.display='none'; // no se puede "convertir a cuotas" algo que ya existe, solo al crear
+  document.getElementById('tc-m-es-cuota').closest('.field').style.display= m.grupoCuotaId?'none':'block'; // ya es parte de una compra a cuotas: no se puede "re-convertir"
+  { const lbl=document.getElementById('tc-m-es-cuota-label'); if(lbl) lbl.textContent='¿Convertir en compra a cuotas?'; }
+  document.getElementById('tc-m-num-cuotas').value='';
+  document.getElementById('tc-m-con-interes').checked=false;
+  document.getElementById('tc-m-tea').value='';
   onEsCuotaChange();
   refrescarDescPFTC(true);
   ubicPintarCampo('tcm');
@@ -17543,10 +17596,64 @@ function saveTCMov(){
   const pagado=document.getElementById('tc-m-pagado').value==='si';
   const currency=document.getElementById('tc-m-currency').value||'PEN';
   const cat=document.getElementById('tc-m-cat').value||'';
+  const nota=(document.getElementById('tc-m-nota').value||'').trim();
   if(!desc||!fecha||monto===0){alert('Completa todos los campos. El monto puede ser negativo para devoluciones.');return;}
   const tarjetaId=document.getElementById('tc-m-tarjeta').value;
   const t=getTarjeta(tarjetaId); if(!t) return;
   if(!t.movs) t.movs={};
+
+  // ── Convertir un consumo YA EXISTENTE (ej. uno agregado por el bot, que no
+  // pregunta por cuotas) en una compra a cuotas: borra el consumo original y
+  // genera un consumo por cada cuota, igual que al crear una nueva compra a
+  // cuotas. Solo disponible si el consumo editado no es ya parte de un grupo. ──
+  if(editingTCMovId && document.getElementById('tc-m-es-cuota').checked){
+    const numCuotasC=parseInt(document.getElementById('tc-m-num-cuotas').value)||0;
+    const conInteresC=document.getElementById('tc-m-con-interes').checked;
+    const teaC=conInteresC?(parseFloat(document.getElementById('tc-m-tea').value)||0):0;
+    if(numCuotasC<2){alert('El número de cuotas debe ser 2 o más.');return;}
+    if(conInteresC&&teaC<=0){alert('Ingresa la TEA del banco (debe ser mayor a 0).');return;}
+    let foundInMonthC=null, foundMovC=null;
+    Object.entries(t.movs).forEach(([mk,movs])=>{ const m=movs.find(x=>x.id===editingTCMovId); if(m){foundInMonthC=mk; foundMovC=m;} });
+    if(!foundMovC||!foundInMonthC) return;
+    const antesC={...foundMovC};
+    t.movs[foundInMonthC]=t.movs[foundInMonthC].filter(x=>x.id!==editingTCMovId);
+    if(t.movs[foundInMonthC].length===0) delete t.movs[foundInMonthC];
+    quitarDescuentosPorOrigenWeb([editingTCMovId]);
+    const grupoCuotaIdC='cgrp'+Date.now();
+    const cuotaCalculadaC=conInteresC?calcularCuotaFrances(monto,teaC,numCuotasC):monto/numCuotasC;
+    const cuotaRedondeadaC=Math.round(cuotaCalculadaC*100)/100;
+    let sumaAcumuladaC=0;
+    const mkPrimeraC=getBillingMonthKey(fecha,t);
+    for(let i=1;i<=numCuotasC;i++){
+      const fechaCuotaC=i===1?fecha:sumarMesesConDia(fecha,i-1);
+      let montoEstaC;
+      if(conInteresC){
+        montoEstaC=cuotaRedondeadaC;
+      } else if(i<numCuotasC){
+        montoEstaC=cuotaRedondeadaC;
+        sumaAcumuladaC+=montoEstaC;
+      } else {
+        montoEstaC=Math.round((monto-sumaAcumuladaC)*100)/100;
+      }
+      const mkC=tcMkAddMonths(mkPrimeraC,i-1);
+      if(!t.movs[mkC]) t.movs[mkC]=[];
+      const nuevoMovC={id:'tcm'+Date.now()+'c'+i,desc:`${desc} — Cuota ${i}/${numCuotasC}`,fecha:fechaCuotaC,monto:montoEstaC,pagado:false,cat,currency,grupoCuotaId:grupoCuotaIdC,cuotaNumero:i,cuotaTotal:numCuotasC,conIntereses:conInteresC};
+      if(nota) nuevoMovC.note=nota;
+      if(hora&&i===1) nuevoMovC.hora=hora;
+      if(conInteresC) nuevoMovC.tea=teaC;
+      const paisCacheC=getPaisCache();
+      if(paisCacheC){ nuevoMovC.pais=paisCacheC.pais; nuevoMovC.paisCode=paisCacheC.code; }
+      t.movs[mkC].push(nuevoMovC);
+    }
+    const symTCcc=currency==='USD'?'$':'S/';
+    logActividad('tc_consumo_convertido_cuotas', `${desc} convertido a ${numCuotasC} cuotas de ${symTCcc} ${numFmtSigned(cuotaRedondeadaC,2)} (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId, grupoCuotaId:grupoCuotaIdC, monthKeyAntes:foundInMonthC, consumoAntes:antesC});
+    if(tarjetaId===currentTCId){ currentTCMonth=mkPrimeraC; renderTCMonthSelector(t); }
+    saveState(); closeTCMovModal();
+    renderTarjetas();
+    if(document.getElementById('page-tarjetas').classList.contains('active')&&currentTCId) renderTCDetail();
+    toast(`Convertido a ${numCuotasC} cuotas`);
+    return;
+  }
 
   // ── Compra a cuotas: genera un consumo por cada cuota, en el mes de
   // facturación que le corresponda, en vez de un solo consumo. ──
@@ -17578,6 +17685,7 @@ function saveTCMov(){
       ultimoMk=mk;
       if(!t.movs[mk]) t.movs[mk]=[];
       const nuevoMov={id:'tcm'+Date.now()+'c'+i,desc:`${desc} — Cuota ${i}/${numCuotas}`,fecha:fechaCuota,monto:montoEsta,pagado:false,cat,currency,grupoCuotaId,cuotaNumero:i,cuotaTotal:numCuotas,conIntereses:conInteres};
+      if(nota) nuevoMov.note=nota;
       if(hora&&i===1) nuevoMov.hora=hora;
       if(conInteres) nuevoMov.tea=tea;
       const paisCache=getPaisCache();
@@ -17619,6 +17727,7 @@ function saveTCMov(){
       const newMk=getBillingMonthKey(fecha, t);
       // Update the mov data
       foundMov.desc=desc; foundMov.fecha=fecha; foundMov.monto=monto; foundMov.pagado=pagado; foundMov.cat=cat; foundMov.currency=currency;
+      if(nota) foundMov.note=nota; else delete foundMov.note;
       if(Number(antes.monto)!==monto || antes.fecha!==fecha) pfSincronizarDesdeOrigen(foundMov.id,antes.desc,antes.fecha,Number(antes.monto),fecha,monto);
       { const _ub=ubicLimpia(ubicTmp.tcm); if(_ub) foundMov.ubicacion=_ub; else delete foundMov.ubicacion; }
       actualizarDescuentoPorOrigenWeb(foundMov.id,monto);
@@ -17641,6 +17750,7 @@ function saveTCMov(){
     const newMk=getBillingMonthKey(fecha, t);
     if(!t.movs[newMk]) t.movs[newMk]=[];
     const nuevoMov={id:'tcm'+Date.now(),desc,fecha,monto,pagado,cat,currency};
+    if(nota) nuevoMov.note=nota;
     if(hora) nuevoMov.hora=hora;
     { const _ub=ubicLimpia(ubicTmp.tcm); if(_ub) nuevoMov.ubicacion=_ub; }
     const paisCache=getPaisCache();
@@ -17750,6 +17860,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-inicio').value=t.inicio||'';
     document.getElementById('tc-f-cierre').value=t.cierre||'';
     document.getElementById('tc-f-linea').value=t.linea||'';
+    document.getElementById('tc-f-tea').value=t.tea||'';
     document.getElementById('tc-f-currency').value=t.currency||'PEN';
     document.getElementById('tc-f-color').value=t.color||'#5b8def';
     document.getElementById('tc-f-nota').value=t.nota||'';
@@ -17762,7 +17873,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
-    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-nota'].forEach(id=>document.getElementById(id).value='');
+    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea','tc-f-nota'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
@@ -17795,6 +17906,7 @@ function saveTCCard(){
     inicio:parseInt(document.getElementById('tc-f-inicio').value)||1,
     cierre:parseInt(document.getElementById('tc-f-cierre').value)||25,
     linea:parseFloat(document.getElementById('tc-f-linea').value)||0,
+    tea:parseFloat(document.getElementById('tc-f-tea').value)||0,
     currency:document.getElementById('tc-f-currency').value||'PEN',
     color:document.getElementById('tc-f-color').value||'#5b8def',
     nota:(document.getElementById('tc-f-nota').value||'').trim(),
@@ -29265,7 +29377,7 @@ function renderAprobacionesBanco(){
         <div class="pb-actions">
           <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
           <button class="config-action-btn neutral" style="font-size:10px" onclick="ignorarCorreoPendiente('${p.id}')" title="No volver a mostrar correos como este">🚫 Ignorar</button>
-          <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar</button>
+          <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar / Cuotas</button>
         </div>
       </div>`;
     }
@@ -29293,7 +29405,7 @@ function renderAprobacionesBanco(){
       <div class="pb-actions">
         <button class="config-action-btn danger" style="font-size:10px" onclick="eliminarPendiente('${p.id}')">🗑 Eliminar</button>
         <button class="config-action-btn neutral" style="font-size:10px" onclick="ignorarCorreoPendiente('${p.id}')" title="No volver a mostrar correos como este">🚫 Ignorar</button>
-        <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar</button>
+        <button class="config-action-btn neutral" style="font-size:10px" onclick="abrirAprobarPendienteModal('${p.id}')">✏ Editar / Cuotas</button>
         <button class="btn btn-primary" style="font-size:11px;padding:6px 12px" onclick="aprobarRapido('${p.id}')" ${resuelto?'':'disabled title="Primero usa Editar para elegir cuenta/tarjeta"'}>✅ Aprobar</button>
       </div>
     </div>`;
@@ -29436,8 +29548,9 @@ function pfMarcarTrasAprobar(p, destino, tipoMov, monto, currency, fecha){
     return pf.nombre;
   }catch(err){ console.warn('pfMarcarTrasAprobar:',err); return ''; }
 }
-function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId}){
+function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId, nota, cuotas}){
   if(tipoMov==='ingreso' && destino.tipo==='tarjeta'){ alert('No se puede registrar un ingreso a una tarjeta de crédito — elige una cuenta.'); return false; }
+  if(destino.tipo!=='tarjeta') cuotas=null; // seguridad: cuotas solo tienen sentido en tarjeta
   // Ubicación: la que mandó el bot / el atajo del iPhone, o (si no hay) el último lugar de ese comercio.
   let ubPend=ubicLimpia(p&&p.ubicacion);
   if(!ubPend){ const sg=tipoMov==='ingreso'?null:ubicSugerida(desc); if(sg) ubPend={...sg,fuente:'sugerida'}; }
@@ -29446,10 +29559,39 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
       id:'pb-mov-'+Date.now(), type: tipoMov==='ingreso'?'income':'expense', desc, amount:monto,
       account:destino.id, date:fecha, currency, cat,
     };
+    if(nota) mv.note=nota;
     if(hora) mv.hora=hora; // hora real del correo; sin ella pushMovimiento usa la hora de la aprobación
     if(ubPend) mv.ubicacion=ubPend;
     pushMovimiento(mv);
     if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, mv.id, fecha, currency);
+  } else if(cuotas){
+    // Compra a cuotas marcada al editar un pendiente del banco — mismo
+    // cálculo y mismo tipo de actividad (con grupoCuotaId) que al crear una
+    // compra a cuotas desde cero, para que quede igual de deshacible.
+    const t=getTarjeta(destino.id);
+    if(!t){ alert('Esa tarjeta ya no existe — selecciona otra.'); return false; }
+    if(!t.movs) t.movs={};
+    const {numCuotas, conInteres, tea}=cuotas;
+    const grupoCuotaId='cgrp'+Date.now();
+    const cuotaCalculada=conInteres?calcularCuotaFrances(monto,tea,numCuotas):monto/numCuotas;
+    const cuotaRedondeada=Math.round(cuotaCalculada*100)/100;
+    let sumaAcumulada=0;
+    const mkPrimera=getBillingMonthKey(fecha,t);
+    for(let i=1;i<=numCuotas;i++){
+      const fechaCuota=i===1?fecha:sumarMesesConDia(fecha,i-1);
+      let montoEsta;
+      if(conInteres){ montoEsta=cuotaRedondeada; }
+      else if(i<numCuotas){ montoEsta=cuotaRedondeada; sumaAcumulada+=montoEsta; }
+      else { montoEsta=Math.round((monto-sumaAcumulada)*100)/100; }
+      const mk=tcMkAddMonths(mkPrimera,i-1);
+      if(!t.movs[mk]) t.movs[mk]=[];
+      const nuevoTc={id:'pb-tcm-'+Date.now()+'c'+i,desc:`${desc} — Cuota ${i}/${numCuotas}`,fecha:fechaCuota,monto:montoEsta,pagado:false,cat,currency,grupoCuotaId,cuotaNumero:i,cuotaTotal:numCuotas,conIntereses:conInteres};
+      if(nota) nuevoTc.note=nota;
+      if(i===1){ nuevoTc.hora=hora||horaLimaActual(); if(ubPend) nuevoTc.ubicacion=ubPend; }
+      if(conInteres) nuevoTc.tea=tea;
+      t.movs[mk].push(nuevoTc);
+    }
+    logActividad('tc_consumo', `Editado y aprobado desde correo del banco: ${desc} a ${numCuotas} cuotas (${t.banco}${t.cat?' '+t.cat:''})`, {tarjetaId:t.id, grupoCuotaId});
   } else {
     const t=getTarjeta(destino.id);
     if(!t){ alert('Esa tarjeta ya no existe — selecciona otra.'); return false; }
@@ -29457,6 +29599,7 @@ function _registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, f
     if(!t.movs) t.movs={};
     if(!t.movs[monthKey]) t.movs[monthKey]=[];
     const nuevoTc={ id:'pb-tcm-'+Date.now(), desc, fecha, monto, pagado:false, cat, currency, hora:hora||horaLimaActual() };
+    if(nota) nuevoTc.note=nota;
     if(ubPend) nuevoTc.ubicacion=ubPend;
     t.movs[monthKey].push(nuevoTc);
     if(descSelId&&tipoMov!=='ingreso') aplicarDescuentoPF(descSelId, desc, monto, nuevoTc.id, fecha, currency);
@@ -29543,6 +29686,12 @@ function abrirAprobarPendienteModal(id){
   document.getElementById('pbm-monto').value = p.monto||'';
   document.getElementById('pbm-currency').value = p.moneda||'PEN';
   document.getElementById('pbm-fecha').value = p.fecha||todayLocalISO();
+  document.getElementById('pbm-nota').value = '';
+  document.getElementById('pbm-es-cuota').checked = false;
+  document.getElementById('pbm-num-cuotas').value = '';
+  document.getElementById('pbm-con-interes').checked = false;
+  document.getElementById('pbm-tea').value = '';
+  onPbmEsCuotaChange();
   onAprobarPendienteMetodoChange();
   updateCategorySelects();
   _llenarSelectCatPendiente('pbm-cat', suggestCategoriaForDesc(p.descripcion));
@@ -29571,8 +29720,39 @@ function onAprobarPendienteMetodoChange(){
   if(esTarjeta){
     const t=getTarjeta(document.getElementById('pbm-tarjeta').value);
     if(t) document.getElementById('pbm-currency').value=t.currency||'PEN';
+    const teaInput=document.getElementById('pbm-tea');
+    if(teaInput&&document.getElementById('pbm-con-interes').checked&&!teaInput.value&&t&&t.tea) teaInput.value=t.tea;
+  }
+  // Cuotas: solo tiene sentido si el destino es una tarjeta — si se cambia a
+  // cuenta (o a ingreso), se oculta y se desmarca para no guardar basura.
+  document.getElementById('pbm-cuota-wrap').style.display=esTarjeta?'block':'none';
+  if(!esTarjeta){
+    document.getElementById('pbm-es-cuota').checked=false;
+    onPbmEsCuotaChange();
   }
   refrescarDescPFPend();
+}
+// ── Pendiente bancario (app) → ✏ Editar: ¿es compra a cuotas? ──
+function onPbmEsCuotaChange(){
+  const checked=document.getElementById('pbm-es-cuota').checked;
+  document.getElementById('pbm-cuotas-detalle-wrap').style.display=checked?'block':'none';
+  if(!checked){
+    document.getElementById('pbm-num-cuotas').value='';
+    document.getElementById('pbm-con-interes').checked=false;
+    document.getElementById('pbm-tea').value='';
+    document.getElementById('pbm-tea-wrap').style.display='none';
+  }
+}
+function onPbmConInteresChange(){
+  const checked=document.getElementById('pbm-con-interes').checked;
+  document.getElementById('pbm-tea-wrap').style.display=checked?'block':'none';
+  if(checked){
+    const teaInput=document.getElementById('pbm-tea');
+    if(!teaInput.value){
+      const t=getTarjeta(document.getElementById('pbm-tarjeta').value);
+      if(t&&t.tea) teaInput.value=t.tea;
+    }
+  }
 }
 // ➖/🤝 en el modal de editar pendiente: solo para gastos; depende de la moneda elegida.
 function refrescarDescPFPend(reset){
@@ -29590,6 +29770,7 @@ function confirmarAprobarPendiente(){
   const fecha=document.getElementById('pbm-fecha').value;
   const cat=_leerCatPendiente('pbm-cat');
   const hora=document.getElementById('pbm-hora').value||'';
+  const nota=(document.getElementById('pbm-nota').value||'').trim();
   if(!desc){ alert('Ingresa una descripción.'); return; }
   if(isNaN(monto)||monto<=0){ alert('Ingresa un monto válido.'); return; }
   if(!fecha){ alert('Ingresa una fecha.'); return; }
@@ -29604,8 +29785,17 @@ function confirmarAprobarPendiente(){
     if(!tarjetaId){ alert('Selecciona una tarjeta.'); return; }
     destino={tipo:'tarjeta', id:tarjetaId};
   }
+  let cuotas=null;
+  if(destino.tipo==='tarjeta' && document.getElementById('pbm-es-cuota').checked){
+    const numCuotas=parseInt(document.getElementById('pbm-num-cuotas').value)||0;
+    const conInteres=document.getElementById('pbm-con-interes').checked;
+    const tea=conInteres?(parseFloat(document.getElementById('pbm-tea').value)||0):0;
+    if(numCuotas<2){ alert('El número de cuotas debe ser 2 o más.'); return; }
+    if(conInteres&&tea<=0){ alert('Ingresa la TEA del banco (debe ser mayor a 0).'); return; }
+    cuotas={numCuotas, conInteres, tea};
+  }
   if(tipoMov!=='ingreso' && !validarDeudaNuevaWeb('pbm-deuda')) return;
-  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId:'pbm-descpf'})){
+  if(_registrarDesdePendiente(p, {desc, tipoMov, destino, monto, currency, fecha, cat, hora, descSelId:'pbm-descpf', nota, cuotas})){
     cerrarAprobarPendienteModal();
   }
 }
@@ -31192,6 +31382,41 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.33.0",
+  "fecha": "15/11/26",
+  "cambios": [
+   "💳 Nuevo campo «TEA por defecto» al crear/editar una tarjeta (Tarjetas → ✏ Editar tarjeta). Es opcional, y se usa como sugerencia: al marcar una compra «con intereses» (en Consumos de tarjeta o en 🔔 Aprobaciones → Editar / Cuotas), el campo TEA se prellena solo con la de la tarjeta, pero siempre se puede cambiar para esa compra puntual (ej. una promoción con otra tasa).",
+   "La TEA de una tarjeta se puede cambiar cuando el banco la ajuste — las compras a cuotas que YA quedaron creadas no se actualizan: conservan la TEA con la que se crearon (se guarda en cada cuota, no se vuelve a leer de la tarjeta). Solo las compras nuevas usan la TEA más reciente como sugerencia.",
+   "Los botones «✏ Editar» de 🔔 Aprobaciones ahora dicen «✏ Editar / Cuotas», para que quede claro que por ahí también se pueden marcar cuotas (el camino rápido sigue siendo «✅ Aprobar»)."
+  ]
+ },
+ {
+  "v": "v2.32.0",
+  "fecha": "15/11/26",
+  "cambios": [
+   "🔔 Aprobaciones → ✏ Editar movimiento: si el destino que eliges es una tarjeta, ahora puedes marcar «¿Es una compra a cuotas?» (número de cuotas y TEA si tiene intereses) — igual que al crear un consumo nuevo. Se puede deshacer desde Actividad Reciente, igual que las demás compras a cuotas.",
+   "🔔 Aprobaciones → ✏ Editar movimiento: nuevo campo Nota (opcional), igual que en Movimientos y Consumos de tarjeta. Si marcas la compra como a cuotas, la misma nota se aplica a todas.",
+   "✅ Aprobar rápido se dejó exactamente igual (solo categoría) — estas dos preguntas solo aparecen en «✏ Editar», para que el camino rápido siga siendo rápido. No aplica a Nathy (no tiene Aprobaciones Bancarias)."
+  ]
+ },
+ {
+  "v": "v2.31.0",
+  "fecha": "15/11/26",
+  "cambios": [
+   "Tarjetas → Agregar/Editar consumo: nuevo campo «Nota» (opcional), igual que en Movimientos. Se aplica a todas las cuotas cuando el consumo es una compra a cuotas. Se ve con un ícono 📝 (toca para leerla) en las 3 vistas de Consumos.",
+   "El bot ahora también pregunta por una nota al registrar un consumo con /consumo (y al crear una compra a cuotas).",
+   "El bot: el flujo «✏️ Editar» de un pendiente del banco (correo) ahora pregunta si es una compra a cuotas cuando el destino es una tarjeta (número de cuotas y TEA si tiene intereses) y pregunta por una nota — igual que /consumo. El «✅ Aprobar» rápido sigue igual de simple (solo categoría), sin estas preguntas."
+  ]
+ },
+ {
+  "v": "v2.30.0",
+  "fecha": "15/11/26",
+  "cambios": [
+   "Tarjetas → Editar consumo: si el consumo NO es ya parte de una compra a cuotas, ahora se puede marcar «¿Convertir en compra a cuotas?» e indicar el número de cuotas (y, si tiene intereses, la TEA del banco). Borra el consumo original y genera las cuotas en los meses de facturación que correspondan — útil para consumos que llegaron sin cuotas (ej. agregados por el bot). Se puede deshacer desde Actividad Reciente.",
+   "El bot ahora también pregunta, al registrar un consumo con /consumo, si es una compra a cuotas (número de cuotas y si tiene intereses/TEA) y crea todas las cuotas de una vez, igual que en la app."
+  ]
+ },
  {
   "v": "v2.29.0",
   "fecha": "13/11/26",
@@ -34625,6 +34850,10 @@ if(state.projGoals){
       <div class="field"><label>Cierre de ciclo</label><input id="tc-f-cierre" type="number" min="1" max="31" placeholder="25"></div>
       <div class="field"><label>Línea de crédito</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
     </div>
+    <div class="field"><label>TEA por defecto <span style="font-size:10px;color:var(--text3)">(opcional — la tasa que te dio el banco para compras a cuotas con intereses)</span></label>
+      <input id="tc-f-tea" type="number" step="0.01" placeholder="Ej. 45.90">
+      <div style="font-size:10.5px;color:var(--text3);margin-top:4px">Se sugiere sola al marcar una compra "con intereses" (en Consumos o en Aprobaciones), pero siempre se puede cambiar para esa compra puntual. Si luego cambias esta TEA, las compras a cuotas que ya quedaron creadas NO se actualizan — se quedan con la tasa con la que se crearon.</div>
+    </div>
     <div class="field-row">
       <div class="field"><label>Moneda</label>
         <select id="tc-f-currency">
@@ -34816,7 +35045,7 @@ if(state.projGoals){
     </div>
     <div class="field">
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="tc-m-es-cuota" style="width:auto" onchange="onEsCuotaChange()"> ¿Es una compra a cuotas?
+        <input type="checkbox" id="tc-m-es-cuota" style="width:auto" onchange="onEsCuotaChange()"> <span id="tc-m-es-cuota-label">¿Es una compra a cuotas?</span>
       </label>
     </div>
     <div id="tc-m-cuotas-wrap" style="display:none">
@@ -34835,6 +35064,7 @@ if(state.projGoals){
       <div class="field"><label>Fecha del primer cobro <span style="font-size:10px;color:var(--text3)">(las siguientes cuotas caen el mismo día, mes a mes)</span></label></div>
       <div id="tc-m-cuota-preview" style="font-size:11px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 10px;margin-top:4px;margin-bottom:8px"></div>
     </div>
+    <div class="field"><label>Nota <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><textarea id="tc-m-nota" placeholder="Agrega un comentario o detalle..."></textarea></div>
     <div class="field"><label>Categoría <span style="font-size:10px;color:var(--text3)">(opcional — para que reste del presupuesto)</span> <span id="tc-m-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
       <select id="tc-m-cat" onchange="document.getElementById('tc-m-cat-hint').textContent=''">
         <option value="">Sin categoría</option>
