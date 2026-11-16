@@ -4558,9 +4558,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.34.0';
-const APP_VERSION_DATE = '15/11/26 - 22:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'La TEA de la tarjeta ahora también se ve en el detalle de Tarjetas (junto a Pago/Inicio/Cierre), no solo al editarla.';
+const APP_VERSION = 'v2.35.0';
+const APP_VERSION_DATE = '16/11/26 - 10:30'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: vincula una compra a cuotas con un Ingreso Frecuente para trackear si alguien te la está reponiendo mes a mes (Mis Cuotas → 💰 ¿Alguien te repone esto?).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -5025,7 +5025,7 @@ function tiempoRelativo(ts){
   const d=new Date(ts);
   return d.toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'2-digit'});
 }
-const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',km_manual_editado:'✏️',km_manual_eliminado:'🗑️',cuenta_fusionada:'🏦',cuenta_tipo_cambiado:'🏦',cuenta_banco_cambiado:'🏦',banco_renombrado:'🏦',cuenta_renombrada:'🏦',cuenta_oculta_manual:'🙈',cuenta_forzada_visible:'👁️',pago_frecuente_oculto:'🙈',pago_frecuente_visible:'👁️',tc_consumo_reparado:'🛠️',tc_cuotas_renombradas:'✏️',hogar_prestamo_editado:'🏡',hogar_bolsa_nueva:'🛍️',hogar_bolsa_editada:'🛍️',hogar_bolsa_eliminada:'🛍️',hogar_compra_eliminada:'🛒',hogar_registro_editado:'🏡',hogar_registro_eliminado:'🏡',auto_prestamo_editado:'🚗',auto_repuesto_nuevo:'🔧',auto_repuesto_editado:'🔧',auto_repuesto_eliminado:'🔧',mantenimiento_registro_eliminado:'🧰',deuda_mayor_pf_vinculado:'🔗',deuda_mayor_cuota_fecha:'📅',deuda_mayor_monto_real:'💰',compra_marcada_comprado:'🛒',tc_consumo_convertido_cuotas:'🧩',
+const ACTIVIDAD_ICONOS={movimiento:'💵',tc_consumo:'💳',transferencia:'🔄',deuda:'🤝',deuda_compensacion:'⚖️',deuda_item:'🧾',tc_operacion:'💱',pago_frecuente:'💡',combustible_gasto:'⛽',categoria:'🏷️',pago_frecuente_nuevo:'💡',descuento_pendiente:'💸',evento:'📅',inversion:'📈',servicio:'🧾',servicio_pago:'✅',servicio_pago_info:'↩️',combustible_registro:'⛽',km_manual:'🚗',km_manual_editado:'✏️',km_manual_eliminado:'🗑️',cuenta_fusionada:'🏦',cuenta_tipo_cambiado:'🏦',cuenta_banco_cambiado:'🏦',banco_renombrado:'🏦',cuenta_renombrada:'🏦',cuenta_oculta_manual:'🙈',cuenta_forzada_visible:'👁️',pago_frecuente_oculto:'🙈',pago_frecuente_visible:'👁️',tc_consumo_reparado:'🛠️',tc_cuotas_renombradas:'✏️',hogar_prestamo_editado:'🏡',hogar_bolsa_nueva:'🛍️',hogar_bolsa_editada:'🛍️',hogar_bolsa_eliminada:'🛍️',hogar_compra_eliminada:'🛒',hogar_registro_editado:'🏡',hogar_registro_eliminado:'🏡',auto_prestamo_editado:'🚗',auto_repuesto_nuevo:'🔧',auto_repuesto_editado:'🔧',auto_repuesto_eliminado:'🔧',mantenimiento_registro_eliminado:'🧰',deuda_mayor_pf_vinculado:'🔗',deuda_mayor_cuota_fecha:'📅',deuda_mayor_monto_real:'💰',compra_marcada_comprado:'🛒',tc_consumo_convertido_cuotas:'🧩',cuotas_reposicion_vinculada:'🔗',cuotas_reposicion_desvinculada:'🔓',
   tarjeta_nueva:'💳',tarjeta_editada:'💳',tarjeta_eliminada:'💳',
   meta_nueva:'🎯',meta_editada:'🎯',meta_eliminada:'🎯',
   inversion_editada:'📈',inversion_eliminada:'📈',
@@ -6364,6 +6364,7 @@ function migrateState(){
   if(!Array.isArray(state.deudas))         state.deudas=[];
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
+  if(!Array.isArray(state.cuotasReposicion)) state.cuotasReposicion=[];
   if(!Array.isArray(state.repuestos))      state.repuestos=[];
   if(!Array.isArray(state.lugaresGuardados)) state.lugaresGuardados=[];
   if(!Array.isArray(state.correosIgnorados)) state.correosIgnorados=[];
@@ -16418,12 +16419,23 @@ function tcMovTableHead(){
     <th style="width:40px"></th>
   </tr>`;
 }
+// Badge 👤 en una cuota de una compra vinculada a reposición — independiente
+// del check "Pagado" (ese es pago al banco; este es si la persona ya te
+// repuso esa cuota puntual, vía su Ingreso Frecuente vinculado).
+function tcCuotaRepoBadgeHtml(m){
+  if(!m.grupoCuotaId) return '';
+  const repo=cuotasRepoDe(m.grupoCuotaId); if(!repo) return '';
+  const pf=cuotasRepoPF(repo); if(!pf) return '';
+  const mk=m.mk||currentTCMonth;
+  const repuesta=!!(pf.pagosRegistrados && pf.pagosRegistrados[mk]);
+  return ` <span title="${repuesta?'Ya te repuso esta cuota':'Aún no te repone esta cuota'} ${escapeHtml(repo.persona)}" style="font-size:11px;cursor:help">${repuesta?'👤✅':'👤⏳'}</span>`;
+}
 function tcMovTableRow(m, cardCur){
   const mCur=m.currency||cardCur;
   const mFmt=tcMovAmountFmt(m,cardCur);
   return `<tr class="${m.pagado?'paid-row':''}" id="tc-row-${m.id}">
     <td><input type="checkbox" class="tc-check tc-sel-cb" data-id="${m.id}" data-monto="${m.monto}" data-currency="${mCur}" onchange="onTCSelChange()"></td>
-    <td>${escapeHtml(m.desc)}${m.note?` <span title="${escapeHtml(m.note)}" style="font-size:11px;cursor:help">📝</span>`:''}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</td>
+    <td>${escapeHtml(m.desc)}${m.note?` <span title="${escapeHtml(m.note)}" style="font-size:11px;cursor:help">📝</span>`:''}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}${tcCuotaRepoBadgeHtml(m)}</td>
     <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${fmtFechaDDMMYYYY(m.fecha)}${m.hora?`<br><span style="color:var(--text3);font-size:10px">${m.hora}</span>`:''}</td>
     <td style="font-size:11px;color:${m.cat?'var(--text2)':'var(--text3)'}">${m.cat||'Sin categoría'}${ubicPinCatHtml('tc',m.id,m.ubicacion)}</td>
     <td><input type="checkbox" class="tc-paid-check" ${m.pagado?'checked':''} onchange="toggleTCPaid('${m.id}',this.checked,this)" title="Marcar como pagado">${m.metodoPago==='puntos'?'<span title="Pagado con puntos" style="font-size:11px;margin-left:3px">🎁</span>':''}</td>
@@ -16448,7 +16460,7 @@ function tcMovCardHtml(m, cardCur){
   return `<div class="tc-mov-card ${m.pagado?'paid-row':''}" id="tc-row-${m.id}" style="--catcolor:${catColor}">
     <input type="checkbox" class="tc-check tc-sel-cb" id="tc-cb-${m.id}" data-id="${m.id}" data-monto="${m.monto}" data-currency="${m.currency||cardCur}" onchange="onTCSelChange()">
     <div class="tc-mov-card-body" onclick="document.getElementById('tc-cb-${m.id}').click()">
-      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.note?` <span title="${escapeHtml(m.note)}" style="font-size:11px;cursor:help">📝</span>`:''}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}</div>
+      <div class="tc-mov-card-desc">${escapeHtml(m.desc)}${m.note?` <span title="${escapeHtml(m.note)}" style="font-size:11px;cursor:help">📝</span>`:''}${m.paisCode?` <span title="${escapeHtml(m.pais||'')}">${codigoPaisAEmoji(m.paisCode)}</span>`:''}${tcCuotaRepoBadgeHtml(m)}</div>
       <div class="tc-mov-card-meta">
         <span>${fmtFechaDDMMYYYY(m.fecha)}${m.hora?' · '+m.hora:''}</span>
         <span class="tc-mov-pill">${m.cat||'Sin categoría'}</span>${ubicPinCatHtml('tc',m.id,m.ubicacion)}
@@ -17309,6 +17321,16 @@ function renderMisCuotasActivas(){
   cont.innerHTML=grupos.map(g=>{
     const sym=g.currency==='USD'?'$':'S/';
     const montoCuota=g.proxima?Number(g.proxima.monto):0;
+    const repo=cuotasRepoDe(g.grupoCuotaId);
+    const pfRepo=repo?cuotasRepoPF(repo):null;
+    let repoHtml;
+    if(pfRepo){
+      const repuestas=(g.cuotas||[]).filter(c=>cuotaFueRepuesta(c,pfRepo)).length;
+      repoHtml=`<span style="font-size:11px;color:var(--text2)">👤 ${escapeHtml(repo.persona)} repone · ${repuestas}/${g.totalCuotas} cuota(s)</span>
+        <button class="config-action-btn neutral" style="font-size:10.5px;padding:4px 10px" onclick="cuotasQuitarRepo('${g.grupoCuotaId}')">Quitar vínculo</button>`;
+    } else {
+      repoHtml=`<button class="config-action-btn neutral" style="font-size:10.5px;padding:4px 10px" onclick="cuotasCrearPFReposicion('${g.grupoCuotaId}')">💰 ¿Alguien te repone esto?</button>`;
+    }
     return `<div style="background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
         <div>
@@ -17326,6 +17348,9 @@ function renderMisCuotasActivas(){
           <button class="config-action-btn neutral" style="font-size:10.5px;padding:4px 10px" onclick="cerrarMisCuotasActivas();openTCDetail('${g.tarjetaId}')">Ver detalle</button>
           <button class="config-action-btn neutral" style="font-size:10.5px;padding:4px 10px" onclick="cerrarMisCuotasActivas();abrirCancelacionAnticipada('${g.grupoCuotaId}')">Cancelar resto</button>
         </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap">
+        ${repoHtml}
       </div>
     </div>`;
   }).join('');
@@ -22176,6 +22201,7 @@ function togglePfDiaPagoUltimo(){
 }
 function closePagoFrecuenteModal(){
   _pfVincularDM=null;
+  _pfVincularCuotas=null;
   document.getElementById('pago-frecuente-modal-overlay').classList.remove('open');
 }
 function onPFTipoMontoChange(){
@@ -22292,6 +22318,13 @@ function savePagoFrecuente(){
     if(imgSegura(pfLogoTmp)) nuevoPF.logo=pfLogoTmp;
     state.pagosFrecuentes.push(nuevoPF);
     if(_pfVincularDM){ const dmv=(state.deudasMayores||[]).find(x=>x.id===_pfVincularDM); if(dmv){ dmv.pfId=nuevoPF.id; const mkAct=mesActualKey(); if(!nuevoPF.pagosRegistrados) nuevoPF.pagosRegistrados={}; (dmv.cuotas||[]).filter(c=>c.pagado).forEach(c=>{ if(dmMesPFDeCuota(nuevoPF,c)===mkAct && !nuevoPF.pagosRegistrados[mkAct]) nuevoPF.pagosRegistrados[mkAct]={monto:Number(c.monto)||0,fecha:c.fecha||todayISO(),viaDM:true}; }); } _pfVincularDM=null; }
+    if(_pfVincularCuotas){
+      if(!Array.isArray(state.cuotasReposicion)) state.cuotasReposicion=[];
+      state.cuotasReposicion=state.cuotasReposicion.filter(r=>r.grupoCuotaId!==_pfVincularCuotas.grupoCuotaId);
+      state.cuotasReposicion.push({id:'cr-'+Date.now(), grupoCuotaId:_pfVincularCuotas.grupoCuotaId, pfId:nuevoPF.id, persona:_pfVincularCuotas.persona});
+      logActividad('cuotas_reposicion_vinculada', `Compra a cuotas vinculada a reposición de ${_pfVincularCuotas.persona}: ${nombre}`, {grupoCuotaId:_pfVincularCuotas.grupoCuotaId, pfId:nuevoPF.id});
+      _pfVincularCuotas=null;
+    }
     logActividad('pago_frecuente_nuevo', `Pago frecuente nuevo: ${nombre}`, {pfId:nuevoPF.id});
   }
   saveState();
@@ -26183,6 +26216,59 @@ function dmCrearPF(){
   if(sig&&sig.fecha){ const dt=new Date(sig.fecha+'T12:00:00'); const ult=dt.getDate()===new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate();
     document.getElementById('pf-dia-pago-ultimo').checked=ult; document.getElementById('pf-dia-pago').value=ult?'':dt.getDate(); }
   try{ onPFTipoChange(); onPFFrecuenciaChange(); onPFTipoMontoChange(); poblarPFCuentas(); togglePfDiaPagoUltimo(); onPFMetodoChange(); }catch(e){}
+}
+
+// ══════════════════════════════════════════════════════
+//  🔗 COMPRA A CUOTAS ↔ INGRESO FRECUENTE (reposición)
+//  Cuando alguien más (ej. "Mamá") te repone mes a mes lo que pagas de una
+//  compra a cuotas, se vincula esa compra con un Ingreso Frecuente nuevo
+//  (mismo monto de la cuota, mismo mes de inicio, duración = cuotas
+//  pendientes al momento de vincular). El vínculo vive en
+//  state.cuotasReposicion (la compra a cuotas NO es un objeto persistente
+//  propio — se recalcula cada vez con obtenerGruposDeCuotas — así que el
+//  vínculo necesita su propio registro en vez de un campo tipo `pfId`).
+//  El estado "¿ya me repuso esta cuota?" NO es un campo nuevo por cuota:
+//  se deriva de si el Ingreso Frecuente vinculado tiene ese mes (mk) en
+//  pagosRegistrados — igual que la deuda mayor vinculada a un PF.
+// ══════════════════════════════════════════════════════
+let _pfVincularCuotas=null;
+function cuotasRepoDe(grupoCuotaId){ return (state.cuotasReposicion||[]).find(r=>r.grupoCuotaId===grupoCuotaId); }
+function cuotasRepoPF(repo){ return repo?(state.pagosFrecuentes||[]).find(p=>p.id===repo.pfId):null; }
+function cuotaFueRepuesta(m, pf){ return !!(pf && pf.pagosRegistrados && pf.pagosRegistrados[m.mk]); }
+function cuotasCrearPFReposicion(grupoCuotaId){
+  const grupos=obtenerGruposDeCuotas();
+  const g=grupos.find(x=>x.grupoCuotaId===grupoCuotaId);
+  if(!g){ toast('Esa compra a cuotas ya no está activa.'); return; }
+  const persona=(prompt('¿Quién te repone esta compra a cuotas? (ej. Mamá)')||'').trim();
+  if(!persona) return;
+  _pfVincularCuotas={grupoCuotaId, persona};
+  openPagoFrecuenteModal();
+  document.getElementById('pf-modal-title').textContent='Nuevo — repone '+persona;
+  document.getElementById('pf-nombre').value='Repone '+persona+': '+g.nombreBase;
+  document.getElementById('pf-tipo').value='ingreso';
+  document.getElementById('pf-frecuencia').value='mensual';
+  document.getElementById('pf-tipo-monto').value='fijo';
+  document.getElementById('pf-monto').value=g.proxima?Number(g.proxima.monto)||'':'';
+  document.getElementById('pf-currency').value=g.currency==='USD'?'USD':'PEN';
+  document.getElementById('pf-mes-inicio').value=g.proxima?g.proxima.mk:'';
+  document.getElementById('pf-duracion-meses').value=g.pendientesCount||'';
+  if(g.proxima&&g.proxima.fecha){
+    const dt=new Date(g.proxima.fecha+'T12:00:00');
+    const ult=dt.getDate()===new Date(dt.getFullYear(),dt.getMonth()+1,0).getDate();
+    document.getElementById('pf-dia-pago-ultimo').checked=ult;
+    document.getElementById('pf-dia-pago').value=ult?'':dt.getDate();
+  }
+  try{ onPFTipoChange(); onPFFrecuenciaChange(); onPFTipoMontoChange(); poblarPFCuentas(); togglePfDiaPagoUltimo(); onPFMetodoChange(); }catch(e){}
+}
+function cuotasQuitarRepo(grupoCuotaId){
+  const repo=cuotasRepoDe(grupoCuotaId); if(!repo) return;
+  const pf=cuotasRepoPF(repo);
+  if(!confirm('¿Quitar el vínculo de reposición'+(pf?' con «'+pf.nombre+'»':'')+'? El ingreso frecuente NO se borra, solo deja de estar vinculado a esta compra a cuotas.')) return;
+  state.cuotasReposicion=(state.cuotasReposicion||[]).filter(r=>r.grupoCuotaId!==grupoCuotaId);
+  saveState();
+  logActividad('cuotas_reposicion_desvinculada', 'Vínculo de reposición quitado'+(pf?' ('+pf.nombre+')':''), {grupoCuotaId, pfId:repo.pfId});
+  renderMisCuotasActivas();
+  try{ renderPagosFrecuentes(); }catch(e){}
 }
 function toggleDMCuotaPagado(numero, checked){
   const d = (state.deudasMayores||[]).find(x=>x.id===currentDMId);
@@ -31383,6 +31469,15 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.35.0",
+  "fecha": "16/11/26",
+  "cambios": [
+   "💰 Nuevo: en «Mis Cuotas» cada compra a cuotas tiene el botón «¿Alguien te repone esto?» — crea un Ingreso Frecuente vinculado (mismo monto de la cuota, mismo mes de inicio, y se detiene solo cuando se acaban las cuotas pendientes).",
+   "En el detalle de la tarjeta (vistas Tabla, Tarjetas y Agrupado), cada cuota de una compra vinculada muestra 👤✅ si ya te la repusieron ese mes o 👤⏳ si aún no — totalmente independiente del check «Pagado» (ese es el pago al banco; esto es si la persona te repuso a ti).",
+   "En «Mis Cuotas» se puede quitar el vínculo en cualquier momento («Quitar vínculo») sin borrar el Ingreso Frecuente — solo deja de estar conectado a esa compra."
+  ]
+ },
  {
   "v": "v2.34.0",
   "fecha": "15/11/26",
