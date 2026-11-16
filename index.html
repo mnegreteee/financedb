@@ -4558,9 +4558,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.2';
-const APP_VERSION_DATE = '16/11/26 - 10:50'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'El movimiento/consumo que crea una reposición de cuotas ahora dice a qué cuota corresponde, ej. "Repone Mamá: Sony — Cuota 1/12".';
+const APP_VERSION = 'v2.35.3';
+const APP_VERSION_DATE = '16/11/26 - 10:55'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Corrige: al borrar un Pago Frecuente vinculado a una reposición de cuotas, ahora se quita el vínculo también (antes dejaba el badge 👤 roto); además se auto-repara cualquier vínculo que ya hubiera quedado huérfano.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6365,6 +6365,11 @@ function migrateState(){
   if(!Array.isArray(state.tcTracker))      state.tcTracker=[];
   if(!Array.isArray(state.deudasMayores))  state.deudasMayores=[];
   if(!Array.isArray(state.cuotasReposicion)) state.cuotasReposicion=[];
+  // Auto-reparación: si un vínculo quedó apuntando a un pago frecuente que
+  // ya no existe (ej. se borró antes de que esa limpieza existiera), se
+  // descarta solo — así la compra a cuotas vuelve a mostrar "¿Alguien te
+  // repone esto?" en vez de un badge 👤 roto que no apunta a nada.
+  state.cuotasReposicion=state.cuotasReposicion.filter(r=>(state.pagosFrecuentes||[]).some(p=>p.id===r.pfId));
   if(!Array.isArray(state.repuestos))      state.repuestos=[];
   if(!Array.isArray(state.lugaresGuardados)) state.lugaresGuardados=[];
   if(!Array.isArray(state.correosIgnorados)) state.correosIgnorados=[];
@@ -22349,6 +22354,11 @@ function deletePagoFrecuente(){
   if(!confirm('¿Eliminar este pago frecuente? Los movimientos que ya registró se conservan en tu historial, solo se borra la configuración.')) return;
   const pfBorrado=(state.pagosFrecuentes||[]).find(p=>p.id===id);
   state.pagosFrecuentes=(state.pagosFrecuentes||[]).filter(p=>p.id!==id);
+  // Si este pago frecuente estaba vinculado a una reposición de cuotas, se
+  // quita el vínculo también — si no, quedaría apuntando a un pago
+  // frecuente que ya no existe (el badge 👤 de esa cuota desaparecería
+  // sin explicación, en vez de volver a mostrar "¿Alguien te repone esto?").
+  if(Array.isArray(state.cuotasReposicion)) state.cuotasReposicion=state.cuotasReposicion.filter(r=>r.pfId!==id);
   if(pfBorrado) logActividad('pago_frecuente_eliminado', `Pago frecuente eliminado: ${pfBorrado.nombre}`, {pfSnapshot:pfBorrado});
   saveState();
   closePagoFrecuenteModal();
@@ -31494,6 +31504,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.35.3",
+  "fecha": "16/11/26",
+  "cambios": [
+   "🐛 Al borrar un Pago Frecuente que estaba vinculado a una reposición de cuotas, ahora se quita el vínculo también — antes se quedaba «huérfano» (apuntando a un pago frecuente que ya no existe) y la cuota perdía el badge 👤 por completo, en vez de volver a mostrar el botón «¿Alguien te repone esto?».",
+   "Auto-reparación: si ya tenías un vínculo huérfano de antes de este arreglo, se limpia solo al abrir la app — no requiere ninguna acción."
+  ]
+ },
  {
   "v": "v2.35.2",
   "fecha": "16/11/26",
