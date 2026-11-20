@@ -2265,9 +2265,15 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <div class="projection-card" id="proj-soles-card" style="margin-bottom:0"></div>
     <div class="projection-card" id="proj-dolar-card" style="margin-bottom:0"></div>
   </div>
-  <div class="card" style="padding:18px;margin-top:14px">
-    <div class="section-header"><div class="section-title">Evolución proyectada</div></div>
-    <div class="chart-wrap" style="height:220px"><canvas id="proj-chart"></canvas></div>
+  <div class="mid-grid" style="margin-top:14px">
+    <div class="card" style="padding:18px">
+      <div class="section-header"><div class="section-title">Evolución proyectada — Soles</div></div>
+      <div class="chart-wrap" style="height:200px"><canvas id="proj-chart-soles"></canvas></div>
+    </div>
+    <div class="card" style="padding:18px">
+      <div class="section-header"><div class="section-title">Evolución proyectada — Dólares</div></div>
+      <div class="chart-wrap" style="height:200px"><canvas id="proj-chart-dolar"></canvas></div>
+    </div>
   </div>
 
   <div class="card" style="padding:18px;margin-top:14px">
@@ -2702,6 +2708,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div style="position:relative;height:220px">
         <canvas id="sueldo-chart"></canvas>
       </div>
+      <div id="sueldo-chart-2-wrap" style="position:relative;height:160px;margin-top:10px;display:none">
+        <canvas id="sueldo-chart-2"></canvas>
+      </div>
       <div id="sueldo-chart-legend" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--text3)"></div>
     </div>
 
@@ -2781,7 +2790,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="card" style="padding:16px 20px;margin-bottom:16px;margin-top:16px">
     <div class="section-title" style="font-size:13px;margin-bottom:10px">Evolución del fondo</div>
-    <div style="position:relative;height:220px" id="afp-chart-wrap"><canvas id="afp-chart"></canvas></div>
+    <div id="afp-chart-wrap">
+      <div style="position:relative;height:160px"><canvas id="afp-chart"></canvas></div>
+      <div style="position:relative;height:140px;margin-top:10px"><canvas id="afp-chart-2"></canvas></div>
+    </div>
     <div id="afp-chart-empty" class="dash-empty" style="display:none">Registra al menos 3 saldos para ver la evolución del fondo en un gráfico — con 1 o 2 puntos no alcanza para que se vea bien.</div>
     <div id="afp-chart-legend" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--text3)"></div>
   </div>
@@ -4569,9 +4581,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.42.0';
-const APP_VERSION_DATE = '20/11/26 - 15:26'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Auto: nuevo Costo real anual (combustible + mantenimiento + cuota + SOAT/seguro).';
+const APP_VERSION = 'v2.45.0';
+const APP_VERSION_DATE = '20/11/26 - 18:55'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Rediseño: Gasto por categoría (énfasis top), Comparativo Mensual (color por significado) y Año Completo (acento, no relleno sólido).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -4620,8 +4632,8 @@ let state={
   currentTab:'todos',editId:null
 };
 
-let mainChart=null,projChart=null,cierreWaterfallChart=null,cierreTendenciaChart=null;
-let sueldoChart=null,currentSueldoChartTab=0;
+let mainChart=null,projChart=null,projChartD=null,cierreWaterfallChart=null,cierreTendenciaChart=null;
+let sueldoChart=null,sueldoChart2=null,currentSueldoChartTab=0;
 let hiddenMode=false,ahorroMoneda='PEN';
 let demoMode=false, realStateBackup=null;
 let selectedAccounts=new Set();
@@ -11008,8 +11020,8 @@ function renderInvChart(){
       invertidoData.push(+ti.toFixed(2)); valorizadoData.push(+tv.toFixed(2));
     });
     datasets=[
-      {type:'line',label:'Invertido',data:invertidoData,borderColor:'#9899a6',borderWidth:2,pointRadius:3,tension:.2,fill:false,borderDash:[4,3]},
-      {type:'line',label:'Valorizado',data:valorizadoData,borderColor:'#2dd4bf',borderWidth:2,pointRadius:3,tension:.2,fill:{target:'origin',above:'#2dd4bf22'}}
+      {type:'line',label:'Invertido',data:invertidoData,borderColor:'#9899a6',borderWidth:2,pointRadius:4,tension:.2,fill:false,borderDash:[4,3]},
+      {type:'line',label:'Valorizado',data:valorizadoData,borderColor:'#2dd4bf',borderWidth:2,pointRadius:4,tension:.2,fill:{target:'origin',above:'#2dd4bf22'}}
     ];
     if(legendEl) legendEl.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;border-top:2px dashed #9899a6;display:inline-block"></span>Invertido</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#2dd4bf;display:inline-block"></span>Valorizado</span>`;
 
@@ -11027,7 +11039,7 @@ function renderInvChart(){
         });
         return huboDatos? +tv.toFixed(2) : null;
       });
-      return {type:'line',label:t.label,data,borderColor:t.color,backgroundColor:t.color+'22',borderWidth:2,pointRadius:3,tension:.2,fill:false,spanGaps:true};
+      return {type:'line',label:t.label,data,borderColor:t.color,backgroundColor:t.color+'22',borderWidth:2,pointRadius:4,tension:.2,fill:false,spanGaps:true};
     });
     if(legendEl) legendEl.innerHTML=tipos.map(t=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:${t.color};display:inline-block"></span>${t.label}</span>`).join('');
 
@@ -11044,7 +11056,7 @@ function renderInvChart(){
         }
         return null; // sin dato ese día — Chart.js salta el hueco (spanGaps)
       });
-      return {type:'line',label:simbolo,data,borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:3,tension:.2,fill:false,spanGaps:true};
+      return {type:'line',label:simbolo,data,borderColor:color,backgroundColor:color+'22',borderWidth:2,pointRadius:4,tension:.2,fill:false,spanGaps:true};
     });
     if(legendEl) legendEl.innerHTML=aMostrar.map(s=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:${invColorFor(s)};display:inline-block"></span>${s}</span>`).join('');
   }
@@ -12428,20 +12440,41 @@ function renderPresupuesto(){
     spendListEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">🏷️</div>Sin gastos categorizados este mes.</div>';
   } else {
     const granTotal=allCatsSorted.reduce((s,c)=>s+allTotals[c],0);
-    spendListEl.innerHTML=`<div class="card" style="padding:14px 18px">`+allCatsSorted.map(cat=>{
+    const maxMonto=allTotals[allCatsSorted[0]]||1;
+    // Top-N = las categorías necesarias para llegar (o pasar) el 50% del gasto total,
+    // con un mínimo de 1 y un máximo de 4 — así el énfasis se ajusta solo al mes,
+    // en vez de ser siempre "las primeras 3" aunque el gasto esté repartido parejo.
+    let acumPct=0, topN=0;
+    for(const c of allCatsSorted){
+      topN++;
+      acumPct+=allTotals[c]/granTotal;
+      if(acumPct>=0.5||topN>=4) break;
+    }
+    const topPct=Math.round(allCatsSorted.slice(0,topN).reduce((s,c)=>s+allTotals[c],0)/granTotal*100);
+    const topNombres=allCatsSorted.slice(0,topN).join(', ');
+    spendListEl.innerHTML=`<div class="card" style="padding:14px 18px">`
+      +(topN<allCatsSorted.length?`<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:10px;padding:10px 14px;margin-bottom:12px">
+          <div style="font-size:20px;font-weight:700">${topPct}%</div>
+          <div style="font-size:11px;color:var(--text2);line-height:1.4">del gasto del mes está en ${topN===1?'una sola categoría':topN+' categorías'}: ${topNombres}.</div>
+        </div>`:'')
+      +allCatsSorted.map((cat,i)=>{
       const amt=allTotals[cat];
-      const pctDelTotal=granTotal>0?(amt/granTotal*100):0;
+      const pctRow=(amt/maxMonto*100);
       const emoji=catIcono(cat);
       const tieneBudget=state.budgets&&state.budgets[cat];
+      const esTop=i<topN;
+      const nameColor=esTop?'var(--text)':'var(--text3)';
+      const nameWeight=esTop?600:500;
+      const barColor=esTop?'var(--accent)':'var(--bg4)';
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openCategoryDetailModal(${escapeHtml(JSON.stringify(cat))})">
-        <div style="font-size:16px">${emoji}</div>
+        <div style="font-size:16px;${esTop?'':'opacity:.55'}">${emoji}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:500">${cat}${tieneBudget?'':' <span style="font-size:9px;color:var(--text3);font-weight:400">(sin presupuesto)</span>'}</div>
+          <div style="font-size:13px;font-weight:${nameWeight};color:${nameColor}">${cat}${tieneBudget?'':' <span style="font-size:9px;color:var(--text3);font-weight:400">(sin presupuesto)</span>'}</div>
           <div style="height:4px;background:var(--bg4);border-radius:2px;margin-top:4px">
-            <div style="height:4px;border-radius:2px;width:${pctDelTotal}%;background:${allColors[cat]||'#666'}"></div>
+            <div style="height:4px;border-radius:2px;width:${pctRow}%;background:${barColor}"></div>
           </div>
         </div>
-        <div style="font-size:13px;font-weight:600;white-space:nowrap">${M(fmtS(amt))}</div>
+        <div style="font-size:13px;font-weight:${esTop?600:500};color:${nameColor};white-space:nowrap">${M(fmtS(amt))}</div>
       </div>`;
     }).join('')+`</div>`;
   }
@@ -13042,9 +13075,12 @@ function renderProyeccion(){
   projCard('proj-soles-card','Ahorro Soles',curS,goalS,avgS,mesToGoalS,'var(--purple)',fmtS);
   projCard('proj-dolar-card','Ahorro Dólares',curD,goalD,avgD,mesToGoalD,'var(--amber)',fmtD);
 
-  // Projection chart
+  // Projection charts — dos paneles de un solo eje (antes era un chart con doble eje
+  // S//$, que inventaba una correlación entre dos escalas que no tenía sentido comparar).
   if(projChart){projChart.destroy();projChart=null;}
-  const ctx=document.getElementById('proj-chart').getContext('2d');
+  if(projChartD){projChartD.destroy();projChartD=null;}
+  const ctxS=document.getElementById('proj-chart-soles').getContext('2d');
+  const ctxD=document.getElementById('proj-chart-dolar').getContext('2d');
   const labelsP=[],dataSP=[],dataDP=[];
   let ps=curS,pd=curD;
   labelsP.push('Hoy');dataSP.push(+ps.toFixed(2));dataDP.push(+pd.toFixed(2));
@@ -13054,18 +13090,29 @@ function renderProyeccion(){
     dataSP.push(+Math.min(ps,goalS*1.2).toFixed(2));
     dataDP.push(+Math.min(pd,goalD*1.2).toFixed(2));
   }
-  projChart=new Chart(ctx,{data:{labels:labelsP,datasets:[
-    {type:'line',label:'Ahorro S/',data:dataSP,borderColor:'#a78bfa',borderWidth:2,pointRadius:2,tension:.4,fill:false,yAxisID:'yS'},
-    {type:'line',label:'Ahorro $',data:dataDP,borderColor:'#f0a53c',borderWidth:2,pointRadius:2,tension:.4,fill:false,yAxisID:'yD'},
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{
-      backgroundColor:document.documentElement.getAttribute('data-theme')==='dark'?'#1e2028':'#ffffff',
-      borderColor:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)',
-      borderWidth:1,
-      callbacks:{label:ctx=>{const sym=ctx.dataset.yAxisID==='yD'?'$ ':'S/ ';return (ctx.dataset.label?ctx.dataset.label+': ':'')+sym+numFmtSigned(ctx.parsed.y,2);}}}},scales:{
-    x:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:document.documentElement.getAttribute('data-theme')==='dark'?'#e0e0e2':'#3a3b44',font:{size:10},maxTicksLimit:10}},
-    yS:{grid:{color:document.documentElement.getAttribute('data-theme')==='dark'?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'},ticks:{color:'#a78bfa',font:{size:10},callback:v=>'S/ '+(v/1000).toFixed(1)+'k'},position:'left',id:'yS'},
-    yD:{grid:{display:false},ticks:{color:'#f0a53c',font:{size:10},callback:v=>'$ '+numFmtSigned(v,0)},position:'right'}
-  }}});
+  const isDarkP=document.documentElement.getAttribute('data-theme')==='dark';
+  const projGrid=isDarkP?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)';
+  const projTick=isDarkP?'#e0e0e2':'#3a3b44';
+  const projTooltipBg=isDarkP?'#1e2028':'#ffffff';
+  const projTooltipBorder=isDarkP?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.12)';
+  // Canvas (fillStyle/strokeStyle) no resuelve custom properties CSS, así que se
+  // leen a hex real — mismo patrón que 'accent' en otras partes del archivo.
+  const colorPurple=getComputedStyle(document.documentElement).getPropertyValue('--purple').trim()||'#a78bfa';
+  const colorAmber=getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()||'#f0a53c';
+  const singleProjOpts=(fmt)=>({responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{
+      backgroundColor:projTooltipBg,borderColor:projTooltipBorder,borderWidth:1,
+      callbacks:{label:ctx=>fmt(ctx.parsed.y)}}},
+    scales:{
+      x:{grid:{color:projGrid},ticks:{color:projTick,font:{size:10},maxTicksLimit:10}},
+      y:{grid:{color:projGrid},ticks:{color:projTick,font:{size:10},callback:v=>fmt(v)}}
+    }});
+  projChart=new Chart(ctxS,{data:{labels:labelsP,datasets:[
+    {type:'line',label:'Ahorro S/',data:dataSP,borderColor:colorPurple,borderWidth:2,pointRadius:2,tension:.4,fill:false},
+  ]},options:singleProjOpts(v=>'S/ '+numFmtSigned(v,2))});
+  projChartD=new Chart(ctxD,{data:{labels:labelsP,datasets:[
+    {type:'line',label:'Ahorro $',data:dataDP,borderColor:colorAmber,borderWidth:2,pointRadius:2,tension:.4,fill:false},
+  ]},options:singleProjOpts(v=>'$ '+numFmtSigned(v,2))});
 }
 
 // ── COMPARATIVO ───────────────────────────────────────
@@ -13118,17 +13165,18 @@ function renderAnioCompleto(){
     grid.innerHTML=meses.map(x=>{
       const esMesActual=hoy.getFullYear()===anioVistaYear && hoy.getMonth()===x.m;
       if(!x.tieneDatos){
-        return `<div class="card" style="padding:14px;opacity:.4">
+        return `<div class="card" style="padding:14px;opacity:.5;border-style:dashed">
           <div style="font-size:12px;font-weight:600">${nombresMes[x.m]}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:6px">Sin datos</div>
         </div>`;
       }
       const esPositivo=x.balance>=0;
-      const intensidad=Math.min(1,Math.abs(x.balance)/maxAbsBalance);
-      const bg=esPositivo?`rgba(62,201,110,${(0.08+intensidad*0.25).toFixed(2)})`:`rgba(240,92,92,${(0.08+intensidad*0.25).toFixed(2)})`;
-      return `<div class="card" style="padding:14px;cursor:pointer;background:${bg};${esMesActual?'box-shadow:0 0 0 2px var(--accent) inset':''}" onclick="irAMesDesdeAnio(${anioVistaYear},${x.m})">
+      const intensidad=0.22+0.78*Math.min(1,Math.abs(x.balance)/maxAbsBalance);
+      const accentColor=esPositivo?`rgba(62,201,110,${intensidad.toFixed(2)})`:`rgba(240,92,92,${intensidad.toFixed(2)})`;
+      return `<div class="card" style="padding:14px 14px 14px 20px;cursor:pointer;${esMesActual?'box-shadow:0 0 0 2px var(--accent) inset':''}" onclick="irAMesDesdeAnio(${anioVistaYear},${x.m})">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${accentColor}"></div>
         <div style="font-size:12px;font-weight:600">${nombresMes[x.m]}</div>
-        <div style="font-size:15px;font-family:var(--mono);font-weight:700;color:${esPositivo?'var(--green)':'var(--red)'};margin-top:6px">${esPositivo?'+':'-'}S/ ${numFmtSigned(Math.abs(x.balance),2)}</div>
+        <div style="font-size:15px;font-family:var(--mono);font-weight:700;margin-top:6px">${esPositivo?'+':'-'}S/ ${numFmtSigned(Math.abs(x.balance),2)}</div>
         <div style="font-size:9px;color:var(--text3);margin-top:4px">↑S/${numFmtSigned(x.ing,0)} · ↓S/${numFmtSigned(x.gas,0)}</div>
       </div>`;
     }).join('');
@@ -13169,26 +13217,33 @@ function renderComparativo(){
   const labelA=MONTHS[mA]+' '+yA,labelB=MONTHS[mB]+' '+yB;
 
   const rows=[
-    {label:'Ingresos',a:cA.ingresos,b:cB.ingresos,fmt:fmtS,color:'var(--green)'},
-    {label:'Gastos',a:cA.gastos,b:cB.gastos,fmt:fmtS,color:'var(--red)'},
-    {label:'Resultado',a:cA.resultado,b:cB.resultado,fmt:fmtS,color:'var(--accent)'},
-    {label:'Ahorro Soles',a:sumaAhorroDe(reconstructSaldoAt(yA,mA),'PEN'),b:sumaAhorroDe(reconstructSaldoAt(yB,mB),'PEN'),fmt:fmtS,color:'var(--purple)'},
-    {label:'Disponible',a:getDisponible(yA,mA)||0,b:getDisponible(yB,mB)||0,fmt:fmtS,color:'var(--teal)'},
+    {label:'Ingresos',a:cA.ingresos,b:cB.ingresos,fmt:fmtS,kind:'ingreso'},
+    {label:'Gastos',a:cA.gastos,b:cB.gastos,fmt:fmtS,kind:'gasto'},
+    {label:'Resultado',a:cA.resultado,b:cB.resultado,fmt:fmtS,kind:'resultado'},
+    {label:'Ahorro Soles',a:sumaAhorroDe(reconstructSaldoAt(yA,mA),'PEN'),b:sumaAhorroDe(reconstructSaldoAt(yB,mB),'PEN'),fmt:fmtS,kind:'neutral'},
+    {label:'Disponible',a:getDisponible(yA,mA)||0,b:getDisponible(yB,mB)||0,fmt:fmtS,kind:'neutral'},
   ];
-  const maxVal=Math.max(...rows.map(r=>Math.max(Math.abs(r.a),Math.abs(r.b))))||1;
+  // Color por significado de la fila (no por mes) — el mismo verde siempre es "ingreso",
+  // el mismo rojo siempre es "gasto"; Resultado toma verde o rojo según su propio signo
+  // en cada mes, y Ahorro/Disponible usan el azul neutro (solo un monto, no un estado).
+  const colorFila=(r,v)=>r.kind==='ingreso'?'var(--green)':r.kind==='gasto'?'var(--red)':r.kind==='resultado'?(v>=0?'var(--green)':'var(--red)'):'var(--accent)';
 
-  content.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:12px;font-size:12px">
-    <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:var(--accent);display:inline-block"></span>${labelA}</span>
-    <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:var(--amber);display:inline-block;opacity:.7"></span>${labelB}</span>
+  content.innerHTML=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;color:var(--text2)">
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block"></span>Ingreso</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--red);display:inline-block"></span>Gasto</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:linear-gradient(90deg,var(--green) 50%,var(--red) 50%);display:inline-block"></span>Resultado (verde si es +, rojo si es −)</span>
+    <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block"></span>Ahorro / Disponible</span>
   </div>`+rows.map(r=>{
-    const pA=Math.abs(r.a)/maxVal*100,pB=Math.abs(r.b)/maxVal*100; const sg=v=>(v<-0.004?'-':'')+r.fmt(v);
+    const maxFila=Math.max(Math.abs(r.a),Math.abs(r.b))||1;
+    const pA=Math.abs(r.a)/maxFila*100,pB=Math.abs(r.b)/maxFila*100; const sg=v=>(v<-0.004?'-':'')+r.fmt(v);
+    const colorA=colorFila(r,r.a), colorB=colorFila(r,r.b);
     return`<div class="compare-row">
       <div class="compare-label">${r.label}</div>
       <div class="compare-bar-wrap">
-        <div style="flex:1"><div style="height:8px;background:${r.color};border-radius:3px;width:${pA}%;transition:width .4s"></div></div>
-        <div style="flex:1"><div style="height:8px;background:${r.color};border-radius:3px;width:${pB}%;opacity:.55;transition:width .4s"></div></div>
+        <div style="flex:1;display:flex;align-items:center;gap:6px"><span style="font-size:9px;color:var(--text3);width:34px;flex-shrink:0">${labelA}</span><div style="flex:1"><div style="height:8px;background:${colorA};border-radius:3px;width:${pA}%;opacity:.6;transition:width .4s"></div></div></div>
+        <div style="flex:1;display:flex;align-items:center;gap:6px"><span style="font-size:9px;color:var(--text3);width:34px;flex-shrink:0">${labelB}</span><div style="flex:1"><div style="height:8px;background:${colorB};border-radius:3px;width:${pB}%;transition:width .4s"></div></div></div>
       </div>
-      <div class="compare-val" style="color:${r.color}">${M(sg(r.a))}<br><span style="opacity:.6">${M(sg(r.b))}</span></div>
+      <div class="compare-val">${M(sg(r.a))}<br><span style="opacity:.6">${M(sg(r.b))}</span></div>
     </div>`;
   }).join('');
 }
@@ -18492,9 +18547,9 @@ function tcxRenderLineCategorias(){
   const allColors=getAllCategorias();
   const labels=meses.map(m=>MONTHS_SHORT[m.m]+' '+String(m.y).slice(2));
   const visibles=todasCats.filter(cat=>!tcxLineCatHidden.has(cat));
-  const datasetsVisibles=visibles.map(cat=>({type:'line',label:cat,data:totals[cat].map(v=>+v.toFixed(2)),borderColor:allColors[cat]||'#666',backgroundColor:(allColors[cat]||'#666')+'22',borderWidth:2,pointRadius:3,tension:.3,fill:false}));
+  const datasetsVisibles=visibles.map(cat=>({type:'line',label:cat,data:totals[cat].map(v=>+v.toFixed(2)),borderColor:allColors[cat]||'#666',backgroundColor:(allColors[cat]||'#666')+'22',borderWidth:2,pointRadius:4,tension:.3,fill:false}));
   if(!tcxLineCatHidden.has('__TOTAL__')){
-    datasetsVisibles.push({type:'line',label:'Σ Total (todas)',data:totalArr.map(v=>+v.toFixed(2)),borderColor:isDark?'#f0f0f2':'#1a1b1e',backgroundColor:'transparent',borderWidth:3,borderDash:[6,4],pointRadius:4,tension:.3,fill:false});
+    datasetsVisibles.push({type:'line',label:'Σ Total (todas)',data:totalArr.map(v=>+v.toFixed(2)),borderColor:isDark?'#f0f0f2':'#1a1b1e',backgroundColor:'transparent',borderWidth:2,borderDash:[6,4],pointRadius:4,tension:.3,fill:false});
   }
   if(datasetsVisibles.length){
     tcxLineCategorias=new Chart(canvasEl.getContext('2d'),{data:{labels,datasets:datasetsVisibles},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
@@ -18659,8 +18714,8 @@ function renderTCEvolutionChart(chartData, tarjetas){
     backgroundColor: (t.color||'#5b8def')+'22',
     tension: .35,
     fill: false,
-    pointRadius: 3,
-    pointHoverRadius: 5,
+    pointRadius: 4, // mínimo 4 (marcador ≥8px de diámetro)
+    pointHoverRadius: 6,
     pointBackgroundColor: t.color||'#5b8def',
     borderWidth: 2,
     hidden: tcEvolutionHidden.has(t.id),
@@ -18678,7 +18733,7 @@ function renderTCEvolutionChart(chartData, tarjetas){
     pointRadius: 4,
     pointHoverRadius: 6,
     pointBackgroundColor: isDark?'#f0f0f2':'#1a1b1e',
-    borderWidth: 3,
+    borderWidth: 2,
     borderDash: [6,4],
     hidden: tcEvolutionHidden.has('TOTAL'),
     _key: 'TOTAL',
@@ -20089,7 +20144,7 @@ const HG_FREC_ETQ={1:'Mensual',2:'Cada 2 meses',3:'Cada 3 meses',4:'Cada 4 meses
   .hg-bars i.cur{background:var(--accent)}
   .hg-chart{position:relative;display:flex;align-items:flex-end;gap:10px;height:200px;padding:0 6px;border-bottom:1px solid var(--border);margin-top:44px}
   .hg-col{position:relative;flex:1 1 0;min-width:0;height:200px;display:flex;align-items:flex-end;justify-content:center;outline:none}
-  .hg-bar{width:min(40px,80%);background:var(--bg4);border-radius:3px 3px 0 0}
+  .hg-bar{width:min(40px,80%);background:var(--bg4);border-radius:4px 4px 0 0}
   .hg-col:hover .hg-bar,.hg-col:focus .hg-bar,.hg-col.hl .hg-bar{background:var(--accent)}
   .hg-bar.cur{background:var(--amber)}
   .hg-tip{display:none;position:absolute;z-index:6;background:var(--bg);border:1px solid var(--border2,var(--border));border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.45);color:var(--text)}
@@ -25940,15 +25995,17 @@ function renderTCXChart(){
   const bestC=pts.filter(p=>p.compra!=null).reduce((m,x)=>(!m||x.compra>m.compra)?x:m,null);
   const bestV=pts.filter(p=>p.venta!=null).reduce((m,x)=>(!m||x.venta<m.venta)?x:m,null);
   const dl=(x,y)=>(x==null||y==null)?'':((x-y)>=0?'▲ +':'▼ ')+(x-y).toFixed(4)+' en el periodo';
+  // El texto nunca lleva el color de la serie — la identidad va en el punto de
+  // color junto a la etiqueta, no en el número (igual que el resto del rediseño).
   stats.innerHTML=
-    `<div class="tcx-stat"><small>Compra actual</small><b style="color:#2dd4bf">${f4(z.compra)}</b><i>${dl(z.compra,a.compra)}</i></div>`+
-    `<div class="tcx-stat"><small>Venta actual</small><b style="color:#a78bfa">${f4(z.venta)}</b><i>${dl(z.venta,a.venta)}</i></div>`+
+    `<div class="tcx-stat"><small><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2dd4bf;margin-right:4px"></span>Compra actual</small><b>${f4(z.compra)}</b><i>${dl(z.compra,a.compra)}</i></div>`+
+    `<div class="tcx-stat"><small><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#a78bfa;margin-right:4px"></span>Venta actual</small><b>${f4(z.venta)}</b><i>${dl(z.venta,a.venta)}</i></div>`+
     `<div class="tcx-stat"><small>Mejor compra del periodo</small><b>${f4(bestC&&bestC.compra)}</b><i>${bestC?escapeHtml(bestC.compraEmp)+' · '+fd(bestC.fecha):''}</i></div>`+
     `<div class="tcx-stat"><small>Mejor venta del periodo</small><b>${f4(bestV&&bestV.venta)}</b><i>${bestV?escapeHtml(bestV.ventaEmp)+' · '+fd(bestV.fecha):''}</i></div>`;
   const isDark=document.documentElement.getAttribute('data-theme')==='dark';
   const tick=isDark?'#a8a9b3':'#5c5d67', grid=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)';
   const TEAL='#2dd4bf', VIO='#a78bfa';
-  const ds=[]; const mk=(label,col,data,o={})=>ds.push(Object.assign({label,data,borderColor:col,backgroundColor:col,borderWidth:2,tension:.3,spanGaps:true,pointRadius:pts.length<=20?2.5:0,pointHoverRadius:4,pointBackgroundColor:col,fill:false},o));
+  const ds=[]; const mk=(label,col,data,o={})=>ds.push(Object.assign({label,data,borderColor:col,backgroundColor:col,borderWidth:2,tension:.3,spanGaps:true,pointRadius:pts.length<=20?4:0,pointHoverRadius:6,pointBackgroundColor:col,fill:false},o));
   let leyenda='';
   if(!modoCasa){
     mk('Venta',VIO,pts.map(p=>p.venta)); mk('Compra',TEAL,pts.map(p=>p.compra),{backgroundColor:'rgba(45,212,191,.10)',fill:true});
@@ -28093,10 +28150,14 @@ function renderDeudaEvolucion(){
   const lab=[],dTc=[],dDm=[],dYd=[],dTot=[];
   meses.forEach((mk,i)=>{ const f=filas[i]; lab.push(nomMes(mk)); dTc.push(f?f.tc:null); dDm.push(f?f.dm:null); dYd.push(f?f.yd:null); dTot.push(f?tot(f):null); });
   const tenue=(c,arr)=>ctx=>{ const f=filas[ctx.dataIndex]; return f&&f.est?c+'66':c; };
+  // Separador de 2px entre segmentos apilados: un borde del color real de la tarjeta
+  // (no un color distinto) — el efecto visual es el mismo que un "hueco", sin dibujar
+  // un contorno que agregue peso de dato que no es dato.
+  const surfaceBg=getComputedStyle(document.documentElement).getPropertyValue('--bg2').trim()||(isDark?'#1e2028':'#ffffff');
   deudaEvoChart=new Chart(cv.getContext('2d'),{type:'bar',data:{labels:lab,datasets:[
-    {label:'Tarjetas',data:dTc,backgroundColor:tenue('#5b8def'),stack:'d'},
-    {label:'Deudas Mayores',data:dDm,backgroundColor:tenue('#f0a53c'),stack:'d'},
-    {label:'Yo debo',data:dYd,backgroundColor:tenue('#e0556a'),stack:'d'}
+    {label:'Tarjetas',data:dTc,backgroundColor:tenue('#5b8def'),stack:'d',borderWidth:2,borderColor:surfaceBg},
+    {label:'Deudas Mayores',data:dDm,backgroundColor:tenue('#f0a53c'),stack:'d',borderWidth:2,borderColor:surfaceBg},
+    {label:'Yo debo',data:dYd,backgroundColor:tenue('#e0556a'),stack:'d',borderWidth:2,borderColor:surfaceBg}
   ]},options:{responsive:true,maintainAspectRatio:false,
     plugins:{legend:{labels:{color:tick,boxWidth:10,font:{size:11}}},tooltip:{callbacks:{footer:items=>{const t=dTot[items[0].dataIndex];return t==null?'':'Total: S/ '+t.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});},label:c=>c.dataset.label+': S/ '+(c.parsed.y||0).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}}},
     scales:{x:{stacked:true,ticks:{color:tick,font:{size:10}},grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{color:tick,font:{size:10},callback:v=>v>=1000?(v/1000).toFixed(v%1000?1:0)+'k':v},grid:{color:isDark?'#ffffff14':'#00000010'}}}}});
@@ -28950,6 +29011,9 @@ function renderSueldoChart(){
   const canvasEl=document.getElementById('sueldo-chart');
   if(!canvasEl) return;
   if(sueldoChart){ sueldoChart.destroy(); sueldoChart=null; }
+  if(sueldoChart2){ sueldoChart2.destroy(); sueldoChart2=null; }
+  const wrap2=document.getElementById('sueldo-chart-2-wrap');
+  if(wrap2) wrap2.style.display='none';
   const anioActual=sueldoAnioVista();
   const boletas=getBoletasAnioSueldo(anioActual);
   const legend=document.getElementById('sueldo-chart-legend');
@@ -28960,19 +29024,22 @@ function renderSueldoChart(){
   const labels=boletas.map(b=>MONTHS_SHORT[b.mes]);
   const ctx=canvasEl.getContext('2d');
   if(currentSueldoChartTab===0){
+    // Antes "Ingreso" (barras) y "5ta" (líneas) compartían el mismo canvas con doble
+    // eje — magnitudes muy distintas (ingreso ~ miles, retención ~ cientos), así que
+    // el eje derecho inventaba una correlación visual que no existe. Se separan en
+    // dos paneles de un solo eje cada uno.
+    if(wrap2) wrap2.style.display='block';
+    const ctx2=document.getElementById('sueldo-chart-2').getContext('2d');
     const ingresos=boletas.map(b=>+(b.basica+b.bono+b.otros+(b.utilidades||0)).toFixed(2));
     const retEst=boletas.map(b=>+b.retencion5taEstimada.toFixed(2));
     const retReal=boletas.map(b=>b.retencion5taReal!==null&&b.retencion5taReal!==undefined?+b.retencion5taReal.toFixed(2):null);
-    const baseOpts=chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k');
     sueldoChart=new Chart(ctx,{data:{labels,datasets:[
-      {type:'bar',label:'Ingreso',data:ingresos,backgroundColor:'rgba(91,141,239,.25)',borderColor:'#5b8def',borderWidth:1.5,borderRadius:3,yAxisID:'y'},
-      {type:'line',label:'5ta estimada',data:retEst,borderColor:'#f0a53c',borderWidth:2,pointRadius:3,tension:.3,yAxisID:'y1'},
-      {type:'line',label:'5ta real',data:retReal,borderColor:'#f05c5c',borderWidth:2,pointRadius:3,tension:.3,borderDash:[4,3],yAxisID:'y1'},
-    ]},options:{...baseOpts,scales:{
-      x:baseOpts.scales.x,
-      y:{position:'left',grid:baseOpts.scales.y.grid,ticks:baseOpts.scales.y.ticks},
-      y1:{position:'right',grid:{display:false},ticks:{...baseOpts.scales.y.ticks,callback:v=>'S/ '+numFmtSigned(v,0)}},
-    }}});
+      {type:'bar',label:'Ingreso',data:ingresos,backgroundColor:'rgba(91,141,239,.25)',borderColor:'#5b8def',borderWidth:1.5,borderRadius:3},
+    ]},options:chartOpts(v=>'S/ '+(v/1000).toFixed(1)+'k')});
+    sueldoChart2=new Chart(ctx2,{data:{labels,datasets:[
+      {type:'line',label:'5ta estimada',data:retEst,borderColor:'#f0a53c',borderWidth:2,pointRadius:4,tension:.3},
+      {type:'line',label:'5ta real',data:retReal,borderColor:'#f05c5c',borderWidth:2,pointRadius:4,tension:.3,borderDash:[4,3]},
+    ]},options:chartOpts(v=>'S/ '+numFmtSigned(v,0))});
     legend.innerHTML=`<span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:#5b8def;display:inline-block"></span>Ingreso</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f0a53c;display:inline-block"></span>5ta estimada</span><span style="display:flex;align-items:center;gap:4px"><span style="width:9px;height:2px;background:#f05c5c;display:inline-block"></span>5ta real</span>`;
   } else if(currentSueldoChartTab===1){
     const netos=boletas.map(b=>{
@@ -29287,7 +29354,7 @@ function eliminarAFPSaldo(id){
   renderAFP();
 }
 
-let afpChartInstance=null;
+let afpChartInstance=null,afpChartInstance2=null;
 // Toggle para sumar (o no) el saldo de AFP al Patrimonio Neto del Resumen.
 // Apagado por defecto — es un cambio a un número importante que ya existía,
 // así que nadie lo ve modificado sin decidirlo explícitamente.
@@ -29442,9 +29509,11 @@ function renderAFP(){
   // claro invitando a registrar más saldos, en vez de forzar un gráfico
   // que no aporta nada todavía.
   const ctx=document.getElementById('afp-chart');
+  const ctx2el=document.getElementById('afp-chart-2');
   const chartWrap=document.getElementById('afp-chart-wrap');
   const chartEmpty=document.getElementById('afp-chart-empty');
   if(afpChartInstance){ afpChartInstance.destroy(); afpChartInstance=null; }
+  if(afpChartInstance2){ afpChartInstance2.destroy(); afpChartInstance2=null; }
   if(serie.length<3){
     if(chartWrap) chartWrap.style.display='none';
     if(chartEmpty) chartEmpty.style.display='block';
@@ -29453,17 +29522,26 @@ function renderAFP(){
     if(chartWrap) chartWrap.style.display='block';
     if(chartEmpty) chartEmpty.style.display='none';
     const labels=serie.map(r=>{ const [y,m,d]=r.fecha.split('-'); return d+'/'+m+'/'+y.slice(2); });
+    // Antes "Saldo total" (acumulado, S/ decenas de miles) y "Rentabilidad" (variación
+    // del periodo, S/ cientos) compartían un canvas con doble eje — escalas tan distintas
+    // que el eje derecho no decía nada real. Se separan en dos paneles de un solo eje.
     afpChartInstance=new Chart(ctx,{
-      type:'bar',
+      type:'line',
       data:{ labels, datasets:[
-        {type:'line', label:'Saldo total', data:serie.map(r=>r.saldoTotal), borderColor:'#a78bfa', backgroundColor:'transparent', yAxisID:'y1', tension:.25, pointRadius:3},
-        {type:'bar', label:'Rentabilidad', data:serie.map(r=>r.rentabilidad), backgroundColor:serie.map(r=>(r.rentabilidad||0)>=0?'#22c55e':'#ef4444'), yAxisID:'y2', maxBarThickness:36, categoryPercentage:0.5, barPercentage:0.7},
+        {label:'Saldo total', data:serie.map(r=>r.saldoTotal), borderColor:'#a78bfa', backgroundColor:'transparent', tension:.25, pointRadius:4},
       ]},
       options:{ responsive:true, maintainAspectRatio:false,
-        scales:{
-          y1:{position:'left', ticks:{color:'#a78bfa', callback:v=>'S/ '+(v/1000).toFixed(1)+'k'}},
-          y2:{position:'right', grid:{drawOnChartArea:false}, ticks:{color:'#94a3b8', callback:v=>'S/ '+(v/1000).toFixed(1)+'k'}},
-        },
+        scales:{ y:{ ticks:{ callback:v=>'S/ '+(v/1000).toFixed(1)+'k' } } },
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': S/ '+numFmtSigned(ctx.parsed.y,2)}}}
+      }
+    });
+    afpChartInstance2=new Chart(ctx2el,{
+      type:'bar',
+      data:{ labels, datasets:[
+        {label:'Rentabilidad', data:serie.map(r=>r.rentabilidad), backgroundColor:serie.map(r=>(r.rentabilidad||0)>=0?'#22c55e':'#ef4444'), maxBarThickness:36, categoryPercentage:0.5, barPercentage:0.7},
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{ y:{ ticks:{ callback:v=>'S/ '+(v/1000).toFixed(1)+'k' } } },
         plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': S/ '+numFmtSigned(ctx.parsed.y,2)}}}
       }
     });
@@ -32005,6 +32083,27 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.45.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "🎨 Rediseño de 3 secciones del dashboard, a partir de un mockup con 2 opciones por sección: \"📊 Gasto por categoría este mes\" (Opción B): antes cada barra tenía un color distinto sin ninguna regla (el rojo se repetía en 2 categorías, el verde en 4) — ahora todas las categorías usan el mismo color, y solo se resaltan las que juntas explican la mitad (o más) del gasto del mes, con un recuadro arriba indicando el % exacto; el resto queda en gris, sin perder el ícono de cada una. \"⚖️ Comparativo Mensual\" (Opción B): la leyenda de arriba decía \"Mayo/Junio\" en azul/naranja, pero las barras reales usaban verde, rojo, morado y turquesa — ninguno de esos colores estaba en esa leyenda. Ahora el color significa el tipo de fila en toda la pantalla (verde = Ingreso, rojo = Gasto, Resultado según su propio signo, azul = Ahorro/Disponible), con una leyenda que sí coincide, y cada mes se identifica con su nombre de texto junto a su barra. \"🗓️ Año Completo\" (Opción A): las tarjetas de cada mes eran un bloque sólido de color de punta a punta — ahora el color vive en una franja de 4px a la izquierda (más saturada cuanto más lejos de cero está el balance ese mes), y el número de balance queda siempre en el color de texto normal, nunca en rojo/verde."
+  ]
+ },
+ {
+  "v": "v2.44.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "🎨 Rediseño de gráficos (Opción A) — checkpoint 2, completa la ronda: pulido del resto de los 10 grupos de gráficos (el checkpoint 1 ya había quitado el doble eje de Proyección/Sueldos/AFP). Marcadores de línea llevados al mínimo de 8px de diámetro en todos los gráficos de línea (Evolución de deuda por tarjeta, Gasto mensual por categoría, Evolución del portafolio, Evolución del tipo de cambio). \"Evolución de lo que debo\" (barras apiladas Tarjetas/Deudas Mayores/Yo debo) ahora tiene un separador visual entre cada segmento, para distinguirlos sin necesitar un borde de otro color. En \"Evolución del tipo de cambio\", los números de Compra/Venta actual ya no llevan el color de la serie en el texto — el color pasa a un punto junto a la etiqueta (el texto nunca debe llevar el color del dato, solo las marcas). Barras de Hogar → \"Monto pagado por mes\" con esquinas un poco más redondeadas (4px). Proyección de cierre (waterfall + tendencia) y Top 10 Comercios ya cumplían las reglas de diseño desde antes — no se tocaron."
+  ]
+ },
+ {
+  "v": "v2.43.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "🎨 Rediseño de gráficos (parte 1 de varias, checkpoint): se eliminó el doble eje en 3 gráficos que lo tenían — \"Evolución proyectada\" (Soles/$ ahora en 2 paneles separados), \"Sueldos → Evolución del año → Ingreso vs Retención\" (Ingreso y 5ta categoría en 2 paneles) y \"AFP → Evolución del fondo\" (Saldo total y Rentabilidad en 2 paneles). El doble eje mezclaba escalas muy distintas en un mismo gráfico y podía sugerir una relación entre las curvas que no existía realmente; separarlas en paneles de un solo eje hace que cada curva se lea con su propia escala real. Sigue el resto del rediseño de gráficos (waterfall, deuda por tarjeta, gasto por categoría, etc.) en próximas actualizaciones."
+  ]
+ },
  {
   "v": "v2.42.0",
   "fecha": "20/11/26",
