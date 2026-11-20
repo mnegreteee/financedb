@@ -4567,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.37.0';
-const APP_VERSION_DATE = '20/11/26 - 12:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas: tira de puntos de consumo mensual (exoneración de membresía) en cada tarjeta de la lista.';
+const APP_VERSION = 'v2.38.0';
+const APP_VERSION_DATE = '20/11/26 - 13:14'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'La fecha de cobro de membresía ya aparece sola en el Calendario (y el bot avisa cuando se acerca).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -18072,6 +18072,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-color-igual').checked=!t.colorTarjeta;
     document.getElementById('tc-f-ult4').value=t.ult4||'';
     document.getElementById('tc-f-desde').value=t.fechaDesde||'';
+    document.getElementById('tc-f-membresia-fecha').value=t.membresiaFechaCobro||'';
     document.getElementById('tc-f-membresia-monto').value=t.membresiaMonto||'';
     document.getElementById('tc-f-membresia-gratis').checked=!!t.membresiaGratis;
     tcImgTmp=imgSegura(t.imagen);
@@ -18079,7 +18080,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
-    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto','tc-f-desde'].forEach(id=>document.getElementById(id).value='');
+    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto','tc-f-desde','tc-f-membresia-fecha'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
@@ -18109,14 +18110,16 @@ function pintarTCMembresiaResumen(){
   const gratisEl=document.getElementById('tc-f-membresia-gratis');
   const montoInp=document.getElementById('tc-f-membresia-monto');
   const resEl=document.getElementById('tc-f-membresia-resumen');
+  const fechaInp=document.getElementById('tc-f-membresia-fecha');
   if(!gratisEl||!montoInp||!resEl) return;
   const gratis=gratisEl.checked;
   montoInp.disabled=gratis;
   montoInp.style.opacity=gratis?'0.5':'1';
   const monto=parseFloat(montoInp.value)||0;
   const sym=document.getElementById('tc-f-currency').value==='USD'?'$':'S/';
+  const fechaStr=fechaInp&&fechaInp.value?' el '+new Date(fechaInp.value+'T12:00:00').toLocaleDateString('es-PE',{day:'numeric',month:'long'})+' (cada año)':'';
   if(gratis) resEl.textContent=monto>0?('Actualmente exonerada — el monto de referencia ('+sym+' '+numFmtSigned(monto,2)+'/año) no se cobra mientras esté marcado.'):'Actualmente exonerada (no se cobra).';
-  else if(monto>0) resEl.textContent='Se cobrará '+sym+' '+numFmtSigned(monto,2)+' al año.';
+  else if(monto>0) resEl.textContent='Se cobrará '+sym+' '+numFmtSigned(monto,2)+' al año'+fechaStr+'.';
   else resEl.textContent='';
 }
 
@@ -18139,6 +18142,7 @@ function saveTCCard(){
     colorTarjeta:document.getElementById('tc-f-color-igual').checked ? '' : (document.getElementById('tc-f-color-plastico').value||''),
     ult4:(document.getElementById('tc-f-ult4').value||'').replace(/\D/g,'').slice(-4),
     fechaDesde:document.getElementById('tc-f-desde').value||'',
+    membresiaFechaCobro:document.getElementById('tc-f-membresia-fecha').value||'',
     membresiaMonto:parseFloat(document.getElementById('tc-f-membresia-monto').value)||0,
     membresiaGratis:document.getElementById('tc-f-membresia-gratis').checked
   };
@@ -27005,6 +27009,7 @@ const CAL_TIPOS = {
   deuda_mayor:   {icon:'🏛️', label:'Cuota deuda mayor',     color:'#f472b6'},
   mantenimiento: {icon:'🔧', label:'Mantenimiento del auto', color:'#fb923c'},
   vencimiento_auto: {icon:'🛡️', label:'Vencimiento del auto', color:'#ef4444'},
+  membresia_tc:  {icon:'🎫', label:'Cobro de membresía',    color:'#d97706'},
   pf_gasto:      {icon:'💸', label:'Pago frecuente',        color:'#f08a7e'},
   pf_ingreso:    {icon:'💵', label:'Ingreso frecuente',     color:'#34d399'},
   otro:          {icon:'📝', label:'Otro',                 color:'#6b7280'},
@@ -27096,6 +27101,15 @@ function getEventosAutomaticos(){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(String(fe||''))) return;
       autos.push({ id:'auto-doc-'+v.id+'-'+k, titulo:`${n}${_autoV().length>1?' — '+(v.nombre||'auto'):''} vence`, fecha:fe, tipo:'vencimiento_auto', auto:true, origenPage:'combustible' });
     });
+  }); }catch(e){}
+  // 🎫 Fecha de cobro de membresía de cada tarjeta (Tarjetas → Editar tarjeta)
+  // — se repite cada año en el mismo mes/día (recurrenteAnual:true), igual
+  // que un cumpleaños/feriado. No se muestra si está marcada "Actualmente es
+  // gratis (exonerada)" — no se espera ningún cobro mientras esté marcada.
+  try{ (state.tarjetas||[]).forEach(t=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(t.membresiaFechaCobro||''))) return;
+    if(t.membresiaGratis) return;
+    autos.push({ id:'auto-membresia-'+t.id, titulo:`🎫 Cobro de membresía — ${t.banco}${t.cat?' '+t.cat:''}`, fecha:t.membresiaFechaCobro, tipo:'membresia_tc', recurrenteAnual:true, auto:true, origenPage:'tarjetas' });
   }); }catch(e){}
   return autos;
 }
@@ -31773,6 +31787,21 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.38.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ La \"Fecha de cobro de membresía\" de cada tarjeta (agregada hace un momento en Editar tarjeta) ya aparece SOLA en el Calendario — no hay que crear un evento a mano. Se repite cada año en el mismo mes/día (como un cumpleaños), se ve tanto en la vista mensual completa como en el widget \"Fechas importantes\" del dashboard (con el ícono 🎫 y el cuenta regresivo), y un toque te lleva directo a Tarjetas. No aparece para una tarjeta marcada \"Actualmente es gratis (exonerada)\" — no se espera ningún cobro mientras esté así.",
+   "✨ Bot de Telegram (`bot_index.js`): el aviso diario de las 7am y `/recordatorios` ahora incluyen una sección \"🎫 Membresía de tarjetas\" cuando a alguna tarjeta le falten 30 días o menos para su fecha de cobro de membresía (🔴 si faltan ≤5 días, 🟡 si faltan más). Mismo criterio de exclusión que la app: no avisa de una tarjeta marcada como exonerada."
+  ]
+ },
+ {
+  "v": "v2.37.1",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Tarjetas → Editar tarjeta: nuevo campo opcional \"Fecha de cobro de membresía\", junto al de Membresía anual — el día en que el banco cobra la membresía (se repite cada año en esa misma fecha). Solo es referencia/recordatorio, no afecta ningún cálculo. Si está configurada, el resumen debajo del monto de Membresía ahora dice, por ejemplo, \"Se cobrará S/ 300.00 al año el 15 de diciembre (cada año)\"."
+  ]
+ },
+ {
   "v": "v2.37.0",
   "fecha": "20/11/26",
   "cambios": [
@@ -35347,6 +35376,12 @@ if(state.projGoals){
       <div class="field"><label>Tarjeta desde <span style="font-size:10px;color:var(--text3)">(opcional — mes y año)</span></label><input id="tc-f-desde" type="month"></div>
       <div class="field" style="display:flex;align-items:flex-end">
         <div style="font-size:11px;color:var(--text2);padding-bottom:8px">Desde cuándo tienes la tarjeta. Los 12 meses de consumo para la exoneración de membresía se cuentan desde este mes.</div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha de cobro de membresía <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-f-membresia-fecha" type="date" oninput="pintarTCMembresiaResumen()"></div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <div style="font-size:11px;color:var(--text2);padding-bottom:8px">El día en que el banco te cobra la membresía anual (si no está exonerada) — se repite cada año en esa misma fecha. Es solo referencia/recordatorio, no afecta ningún cálculo.</div>
       </div>
     </div>
     <div class="field-row">
