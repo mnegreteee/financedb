@@ -3609,6 +3609,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="month-nav" style="margin-bottom:6px">
     <h1>🚗 Auto</h1>
+    <button class="config-action-btn neutral" style="font-size:11px;padding:5px 12px" onclick="abrirCostoAnualAuto()" title="Combustible + mantenimiento + cuota + SOAT/seguro, sumado por año">📊 Costo real anual</button>
     <button class="config-action-btn neutral" style="font-size:11px;padding:5px 12px" onclick="exportarCombustibleExcel()" title="Descargar un Excel con todas las recargas de GLP y gasolina">⬇ Exportar Excel</button>
   </div>
 
@@ -3959,6 +3960,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;margin-left:12px" onclick="openTCConfigModal()">+ Agregar tarjeta</button>
       <button class="btn" style="font-size:11px;padding:5px 12px" onclick="openAddMovTCFromList()">+ Nuevo consumo</button>
       <button class="btn" style="font-size:11px;padding:5px 12px" onclick="abrirMisCuotasActivas()">📦 Mis Cuotas</button>
+      <button class="btn" style="font-size:11px;padding:5px 12px" onclick="abrirReporteAnualTC()">📊 Reporte anual</button>
     </div>
 
     <!-- Cards grid -->
@@ -4567,9 +4569,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.39.0';
-const APP_VERSION_DATE = '20/11/26 - 13:25'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas: nuevo "monto mínimo de consumo por mes de corte" para el seguimiento de membresía.';
+const APP_VERSION = 'v2.42.0';
+const APP_VERSION_DATE = '20/11/26 - 15:26'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Auto: nuevo Costo real anual (combustible + mantenimiento + cuota + SOAT/seguro).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -17489,6 +17491,96 @@ function abrirMisCuotasActivas(){
   document.getElementById('mis-cuotas-overlay').classList.add('open');
 }
 function cerrarMisCuotasActivas(){ document.getElementById('mis-cuotas-overlay').classList.remove('open'); }
+
+// ══════════════════════════════════════════════════════
+//  REPORTE ANUAL POR TARJETA — intereses de cuotas + costo de membresía
+// ══════════════════════════════════════════════════════
+// Recorre TODAS las compras a cuotas CON intereses de una tarjeta y
+// reconstruye, cuota por cuota, cuánto de cada pago fue interés y cuánto
+// capital (misma lógica del sistema francés que ya usa
+// reconstruirMontoOriginalCuotaFrances/calcularSaldoPendienteEstimado, solo
+// que acá se recorre el cronograma completo en vez de cortarlo a mitad).
+// Se agrupa por el AÑO de la fecha real de cada cuota (no el mes de
+// facturación) — así una cuota de diciembre que se factura/paga en enero
+// del año siguiente cuenta en el año en que realmente cae, igual criterio
+// que ya usa el resto de la app (tira de membresía, reposición de cuotas).
+function tcInteresesPorAnio(t){
+  const porAnio={};
+  const grupos={};
+  Object.values(t.movs||{}).forEach(arr=>(arr||[]).forEach(m=>{
+    if(!m.grupoCuotaId || !m.conIntereses) return;
+    (grupos[m.grupoCuotaId]=grupos[m.grupoCuotaId]||[]).push(m);
+  }));
+  Object.values(grupos).forEach(cuotas=>{
+    cuotas.sort((a,b)=>(a.cuotaNumero||0)-(b.cuotaNumero||0));
+    const primera=cuotas[0];
+    const tea=parseFloat(primera.tea)||0;
+    const numCuotas=primera.cuotaTotal||cuotas.length;
+    const cuotaFija=Number(primera.monto)||0;
+    if(tea<=0 || cuotaFija<=0) return;
+    const principal=reconstruirMontoOriginalCuotaFrances(cuotaFija,tea,numCuotas);
+    const tem=Math.pow(1+tea/100,1/12)-1;
+    let saldo=principal;
+    cuotas.forEach(c=>{
+      const interesC=tem>0?saldo*tem:0;
+      const capitalC=Number(c.monto)-interesC;
+      saldo=Math.max(0,saldo-capitalC);
+      const anio=parseInt(String(c.fecha).slice(0,4))||0;
+      if(!anio) return;
+      porAnio[anio]=(porAnio[anio]||0)+interesC;
+    });
+  });
+  return porAnio;
+}
+// Años a ofrecer en el selector: todos los que tengan al menos una cuota
+// con intereses en alguna tarjeta, más el año actual (por si una tarjeta
+// nueva con membresía todavía no tiene ninguna cuota que mostrar).
+function tcAniosDisponiblesReporte(){
+  const anios=new Set([new Date().getFullYear()]);
+  (state.tarjetas||[]).forEach(t=>{
+    Object.keys(tcInteresesPorAnio(t)).forEach(a=>anios.add(parseInt(a)));
+  });
+  return [...anios].sort((a,b)=>b-a);
+}
+function abrirReporteAnualTC(){
+  const sel=document.getElementById('tc-ra-anio');
+  const anios=tcAniosDisponiblesReporte();
+  const actual=sel.value||String(new Date().getFullYear());
+  sel.innerHTML=anios.map(a=>`<option value="${a}">${a}</option>`).join('');
+  sel.value=anios.includes(parseInt(actual))?actual:String(new Date().getFullYear());
+  renderReporteAnualTC();
+  document.getElementById('tc-reporte-anual-overlay').classList.add('open');
+}
+function cerrarReporteAnualTC(){ document.getElementById('tc-reporte-anual-overlay').classList.remove('open'); }
+function renderReporteAnualTC(){
+  const cont=document.getElementById('tc-ra-contenido');
+  const anio=parseInt(document.getElementById('tc-ra-anio').value)||new Date().getFullYear();
+  const filas=(state.tarjetas||[]).map(t=>{
+    const interes=tcInteresesPorAnio(t)[anio]||0;
+    const membresiaMonto=parseFloat(t.membresiaMonto)||0;
+    const membresiaGratis=!!t.membresiaGratis;
+    const membresiaCosto=membresiaGratis?0:membresiaMonto;
+    if(interes<0.005 && membresiaMonto<0.005) return null; // nada que reportar para esta tarjeta
+    return {t, interes, membresiaMonto, membresiaGratis, membresiaCosto, total:interes+membresiaCosto};
+  }).filter(Boolean).sort((a,b)=>b.total-a.total);
+  if(!filas.length){
+    cont.innerHTML='<div class="dash-empty">📊 Ninguna tarjeta tiene intereses de cuotas ni membresía configurada para '+anio+'.</div>';
+    return;
+  }
+  cont.innerHTML=filas.map(f=>{
+    const sym=f.t.currency==='USD'?'$':'S/';
+    const nombre=`${f.t.banco||''}${f.t.cat?' '+f.t.cat:''}`;
+    const membresiaTxt=f.membresiaGratis
+      ? (f.membresiaMonto>0.005 ? `Exonerada <span style="color:var(--text3)">(ahorraste ${sym} ${numFmtSigned(f.membresiaMonto,2)})</span>` : 'Exonerada')
+      : (f.membresiaMonto>0.005 ? `${sym} ${numFmtSigned(f.membresiaMonto,2)}` : '—');
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border2)">
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px">${escapeHtml(nombre)}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span style="color:var(--text3)">Intereses de cuotas pagados en ${anio}</span><b style="font-family:var(--mono);color:${f.interes>0.005?'var(--red)':'var(--text3)'}">${f.interes>0.005?sym+' '+numFmtSigned(f.interes,2):'—'}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span style="color:var(--text3)">Membresía</span><b style="font-family:var(--mono)">${membresiaTxt}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0 0;margin-top:2px;border-top:1px dashed var(--border2)"><span>Costo total de tenerla en ${anio}</span><b style="font-family:var(--mono)">${sym} ${numFmtSigned(f.total,2)}</b></div>
+    </div>`;
+  }).join('')+'<div style="font-size:10.5px;color:var(--text3);margin-top:10px">Los intereses se reconstruyen del sistema francés (cuota fija + TEA registrada en cada compra), agrupados por el año real de cada cuota. La membresía usa el monto configurado HOY en la tarjeta — si cambió de un año a otro, este reporte no distingue eso.</div>';
+}
 function renderMisCuotasActivas(){
   const cont=document.getElementById('mis-cuotas-contenido');
   const grupos=obtenerGruposDeCuotas();
@@ -19263,6 +19355,12 @@ const DASHBOARD_WIDGET_DEFS = {
       <div id="dash-alertas-presupuesto-body"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('presupuesto')">Ver Presupuesto →</button></div>
     </div>`},
+  'membresias-tc': {label:'🎫 Estado de Membresías', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-membresias-tc-card">
+      <div class="dash-section-title">🎫 Estado de Membresías</div>
+      <div id="dash-membresias-tc-body"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('tarjetas')">Ver Tarjetas →</button></div>
+    </div>`},
   'fechas': {label:'📅 Fechas Importantes', size:'large', shell:()=>`
     <div class="card" style="padding:18px" id="fecha-imp-card-wrap">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -19364,6 +19462,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
   {id:'alertas-presupuesto', visible:false},
+  {id:'membresias-tc', visible:false},
   {id:'wx-conectado', visible:true}, {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false}, {id:'hw-fondo', visible:false}, {id:'hw-mealcanza', visible:false}, {id:'hw-diacompra', visible:false}, {id:'hw-subs', visible:false}, {id:'hw-dups', visible:false}, {id:'hw-tags', visible:false}, {id:'hw-meta', visible:false}, {id:'hw-alertas', visible:false},
 ];
 function ensureDashboardWidgetsDefault(){
@@ -21378,6 +21477,8 @@ function autoModalVeh(id){
     <div class="av-chips">${combs.map(c=>`<button type="button" class="av-chip ${v&&v.combustible===c?'on':''}" data-v="${c}" onclick="autoVehComb(this)">${c}</button>`).join('')}</div>
     <div class="av-sec">Documentos y vencimientos</div>
     ${doc('🛡️','SOAT','Seguro obligatorio','av-soat',v&&v.soatVence)}${doc('🔍','Revisión técnica','Inspección vehicular','av-rev',v&&v.revVence)}${doc('📄','Seguro vehicular','Póliza particular','av-seg',v&&v.seguroVence)}
+    <div class="av-two" style="margin-top:12px">${f('av-soat-monto','SOAT (costo anual, S/)',v&&v.soatMontoAnual,'Ej. 120','number')}${f('av-seg-monto','Seguro vehicular (costo anual, S/)',v&&v.seguroMontoAnual,'Ej. 800','number')}</div>
+    <div style="font-size:10.5px;color:var(--text3);margin-top:4px">Opcional — solo para calcular el «Costo real anual» del auto (⬇ Exportar Excel / 📊 arriba en la pestaña Auto).</div>
     <div class="av-sec">Notas</div>
     <textarea id="av-notas" rows="1" placeholder="Algo que quieras recordar (opcional)" oninput="this.style.height='auto';this.style.height=Math.min(120,this.scrollHeight)+'px'">${escapeHtml(v&&v.notas||'')}</textarea>
     ${esPr?`<div class="av-princ fijo"><div style="font-size:20px">⭐</div><div class="tx">${V.length?'Es tu auto principal':'Será tu auto principal'}<small>Se usa por defecto para el bot y para datos antiguos sin auto asignado.</small></div></div>`
@@ -21395,10 +21496,57 @@ function autoGuardarVeh(id){
   const g=i=>(document.getElementById(i)||{}).value||'';
   v.nombre=g('av-nom').trim()||'Mi auto'; v.icono=g('av-ico')||'🚗'; v.placa=g('av-placa').trim().toUpperCase(); v.anio=g('av-anio').trim(); v.combustible=g('av-comb');
   v.soatVence=g('av-soat'); v.revVence=g('av-rev'); v.seguroVence=g('av-seg'); v.notas=g('av-notas').trim();
+  v.soatMontoAnual=parseFloat(g('av-soat-monto'))||0; v.seguroMontoAnual=parseFloat(g('av-seg-monto'))||0;
   const c=document.getElementById('av-pr'); if(c&&c.checked){ V.forEach(x=>x.principal=false); v.principal=true; }
   saveState(); _cerrarModalDin('auto-veh-ov'); autoRender(); try{ fuelAplicarEtiquetas(); renderFuelSection('glp'); renderFuelSection('gas'); }catch(e){} toast('Auto guardado');
   if(esNuevo) logActividad('auto_veh_nuevo', `Auto nuevo: ${v.icono||'🚗'} ${v.nombre}`, {vehId:v.id});
   else logActividad('auto_veh_editado', `Auto editado: ${v.icono||'🚗'} ${v.nombre}`, {vehId:v.id, snapshotAntes:antes});
+}
+// ── 📊 Costo real anual del auto (combustible + mantenimiento + cuota + SOAT/seguro) ──
+function autoCostoAnual(vid,anio){
+  let comb=0,mant=0,cuota=0;
+  for(let m=1;m<=12;m++){
+    const mk=anio+'-'+String(m).padStart(2,'0');
+    const g=autoGastoMes(mk,vid);
+    comb+=g.comb; mant+=g.mant; cuota+=g.cuotaPag;
+  }
+  const vehs=vid?autoVehs().filter(x=>x.id===vid):autoVehs();
+  let soat=0,seguro=0;
+  vehs.forEach(v=>{ soat+=parseFloat(v.soatMontoAnual)||0; seguro+=parseFloat(v.seguroMontoAnual)||0; });
+  return {comb,mant,cuota,soat,seguro,total:comb+mant+cuota+soat+seguro};
+}
+function abrirCostoAnualAuto(){
+  const V=autoVehs();
+  if(!V.length){ toast('Primero agrega tu auto'); return; }
+  const selA=document.getElementById('ca-anio');
+  const hoyA=new Date().getFullYear();
+  const anios=[]; for(let a=hoyA;a>=hoyA-5;a--) anios.push(a);
+  selA.innerHTML=anios.map(a=>`<option value="${a}">${a}</option>`).join('');
+  selA.value=String(hoyA);
+  const wrap=document.getElementById('ca-veh-wrap'), selV=document.getElementById('ca-veh');
+  if(V.length>=2){
+    wrap.style.display='';
+    selV.innerHTML='<option value="">Todos los autos</option>'+V.map(v=>`<option value="${v.id}">${escapeHtml(v.icono||'🚗')} ${escapeHtml(v.nombre||'')}</option>`).join('');
+    selV.value=autoVidAct()||'';
+  } else {
+    wrap.style.display='none';
+    selV.innerHTML=`<option value="${V[0].id}">${escapeHtml(V[0].nombre||'')}</option>`;
+    selV.value=V[0].id;
+  }
+  renderCostoAnualAuto();
+  document.getElementById('auto-costo-anual-overlay').classList.add('open');
+}
+function cerrarCostoAnualAuto(){ document.getElementById('auto-costo-anual-overlay').classList.remove('open'); }
+function renderCostoAnualAuto(){
+  const cont=document.getElementById('ca-contenido'); if(!cont) return;
+  const V=autoVehs();
+  if(!V.length){ cont.innerHTML='<div class="dash-empty">🚗 Primero agrega tu auto en la pestaña Resumen.</div>'; return; }
+  const anio=parseInt(document.getElementById('ca-anio').value)||new Date().getFullYear();
+  const vid=document.getElementById('ca-veh').value||'';
+  const r=autoCostoAnual(vid,anio);
+  const fila=(label,val,destacar)=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:${destacar?'6px':'3px'} 0${destacar?';border-top:1px dashed var(--border2);margin-top:4px':''}"><span style="color:${destacar?'var(--text1)':'var(--text3)'}">${label}</span><b style="font-family:var(--mono)${destacar?'':';color:var(--text2)'}">S/ ${numFmtSigned(val,2)}</b></div>`;
+  cont.innerHTML=fila('⛽ Combustible',r.comb)+fila('🔧 Mantenimiento',r.mant)+fila('💳 Cuota del préstamo (pagada)',r.cuota)+fila('🛡️ SOAT (anual)',r.soat)+fila('📄 Seguro vehicular (anual)',r.seguro)+fila('Costo total de tener el auto en '+anio,r.total,true)
+    +'<div style="font-size:10.5px;color:var(--text3);margin-top:10px">SOAT y seguro se cuentan como el monto anual configurado en los datos del auto (fijo, no varía por mes). Combustible, mantenimiento y cuota son lo realmente gastado/pagado en cada mes de '+anio+'.</div>';
 }
 // ── 🔀 Mover registros entre autos (uno por uno, o todo el historial desde «Editar auto») ──
 function autoMoverBtn(kind,id,ref){ const b=document.getElementById('mov-'+kind); if(!b) return; b.style.display=(autoVehs().length>=2&&id)?'inline-flex':'none'; b.dataset.id=id||''; b.dataset.t=ref||''; }
@@ -22328,6 +22476,38 @@ function renderNuevosWidgetsDashboard(){
           </div>
         </div>`;
       }).join('') + (alertas.length>5?`<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${alertas.length-5} más</div>`:'');
+    }
+  }
+
+  // ── Estado de Membresías (tarjetas) ──
+  const membEl=document.getElementById('dash-membresias-tc-body');
+  if(membEl){
+    const filas=(state.tarjetas||[]).filter(t=>/^\d{4}-\d{2}$/.test(String(t.fechaDesde||''))).map(t=>{
+      let c=null; try{ c=tcCicloMembresia(t); }catch(e){}
+      return c?{t,c}:null;
+    }).filter(Boolean);
+    if(!filas.length){
+      membEl.innerHTML='<div class="dash-empty">🎫 No hay tarjetas con seguimiento de membresía configurado.</div>';
+    } else {
+      const atrasadas=filas.filter(f=>!f.c.vaBien);
+      const okCount=filas.length-atrasadas.length;
+      let html=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">${okCount} al día de ${filas.length}${atrasadas.length?' · '+atrasadas.length+' necesita'+(atrasadas.length===1?'':'n')+' atención':''}</div>`;
+      const ordenadas=filas.slice().sort((a,b)=>(a.c.vaBien===b.c.vaBien)?0:(a.c.vaBien?1:-1));
+      html+=ordenadas.slice(0,5).map(({t,c})=>{
+        const ok=c.vaBien, color=ok?'var(--green)':'var(--amber)';
+        const nombre=`${t.banco||''}${t.cat?' '+t.cat:''}`;
+        const sym=t.currency==='USD'?'$':'S/';
+        const sub=c.usaMinimo?`mín. ${sym} ${numFmtSigned(c.minimo,2)}/mes`:'cualquier consumo al mes';
+        const estadoTxt=ok?('✅ '+c.pasados.length+'/12'):('⚠️ Falta '+c.meses[c.faltanteIdx].label);
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border2);cursor:pointer" onclick="showPage('tarjetas')">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+            <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(nombre)}</span>
+            <span style="font-weight:600;color:${color};white-space:nowrap;margin-left:8px">${estadoTxt}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text3)">${c.cicloLabel||''}${sub?' · '+sub:''}</div>
+        </div>`;
+      }).join('') + (filas.length>5?`<div style="text-align:center;font-size:11px;color:var(--text3);padding-top:8px">+ ${filas.length-5} más</div>`:'');
+      membEl.innerHTML=html;
     }
   }
 }
@@ -31826,6 +32006,27 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.42.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Auto → nuevo botón \"📊 Costo real anual\" (junto a \"⬇ Exportar Excel\"). Elige el año (y el auto, si tienes más de uno) y ve cuánto te costó tenerlo ese año en total: combustible + mantenimiento + cuota del préstamo (lo realmente gastado/pagado cada mes) más SOAT y seguro vehicular (montos anuales que ahora puedes configurar al editar el auto, en \"Documentos y vencimientos\"). Sin comparador de precios de grifo."
+  ]
+ },
+ {
+  "v": "v2.41.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Tarjetas → nuevo botón \"📊 Reporte anual\" (junto a \"+ Agregar tarjeta\"). Por cada tarjeta y el año que elijas: cuánto pagaste en INTERESES de compras a cuotas con intereses (reconstruido del sistema francés, cuota fija + TEA, cuota por cuota, agrupado por el año real en que cae cada una) y cuánto te costó (o te ahorraste, si está exonerada) la MEMBRESÍA — con un total combinado por tarjeta, para decidir si vale la pena mantenerla. Las tarjetas sin intereses ni membresía configurada no aparecen en el reporte."
+  ]
+ },
+ {
+  "v": "v2.40.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Nuevo widget opcional de Dashboard: \"🎫 Estado de Membresías\". Resume, para cada tarjeta con seguimiento de membresía activo (fecha \"Tarjeta desde\" configurada), si va al día (✅ N/12) o le falta algún mes (⚠️ Falta <mes>), mostrando también el mínimo de consumo mensual si esa tarjeta lo usa. Las tarjetas que necesitan atención se muestran primero. Un clic lleva directo a Tarjetas. Como todos los widgets nuevos, empieza OCULTO por defecto — para activarlo: ✏️ Editar → Mi Resumen."
+  ]
+ },
+ {
   "v": "v2.39.0",
   "fecha": "20/11/26",
   "cambios": [
@@ -35607,6 +35808,34 @@ if(state.projGoals){
     <div id="mis-cuotas-contenido" style="max-height:55vh;overflow-y:auto"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:12px">
       <button class="btn" onclick="cerrarMisCuotasActivas()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: REPORTE ANUAL POR TARJETA (intereses pagados + costo de membresía) -->
+<div class="modal-overlay" id="tc-reporte-anual-overlay" onclick="if(event.target===this)cerrarReporteAnualTC()">
+  <div class="modal" style="width:560px;max-width:95vw">
+    <div class="modal-title"><span>📊 Reporte anual de tarjetas</span><button class="modal-close" onclick="cerrarReporteAnualTC()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Por tarjeta, cuánto pagaste en intereses de cuotas y cuánto te costó (o te ahorraste) la membresía — para decidir si vale la pena mantenerla.</div>
+    <div class="field" style="margin-bottom:10px"><label>Año</label><select id="tc-ra-anio" onchange="renderReporteAnualTC()"></select></div>
+    <div id="tc-ra-contenido" style="max-height:55vh;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="cerrarReporteAnualTC()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="auto-costo-anual-overlay" onclick="if(event.target===this)cerrarCostoAnualAuto()">
+  <div class="modal" style="width:480px;max-width:95vw">
+    <div class="modal-title"><span>📊 Costo real anual del auto</span><button class="modal-close" onclick="cerrarCostoAnualAuto()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Combustible + mantenimiento + cuota del préstamo + SOAT/seguro, sumado por año — para ver cuánto te cuesta realmente tener el auto.</div>
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <div class="field" style="flex:1;margin-bottom:0"><label>Año</label><select id="ca-anio" onchange="renderCostoAnualAuto()"></select></div>
+      <div class="field" style="flex:1;margin-bottom:0" id="ca-veh-wrap"><label>Auto</label><select id="ca-veh" onchange="renderCostoAnualAuto()"></select></div>
+    </div>
+    <div id="ca-contenido"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="cerrarCostoAnualAuto()">Cerrar</button>
     </div>
   </div>
 </div>
