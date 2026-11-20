@@ -4567,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.35.8';
-const APP_VERSION_DATE = '16/11/26 - 12:30'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Pagos frecuentes "base con descuentos": si el descuento supera la base, el sobrante ya no se pierde — queda precargado como descuento del próximo mes.';
+const APP_VERSION = 'v2.36.0';
+const APP_VERSION_DATE = '20/11/26 - 12:14'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Tarjetas: TEA por defecto separada para soles y dólares, y nuevo campo de Membresía (monto + check de "actualmente gratis").';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -6398,6 +6398,13 @@ function migrateState(){
       }
     });
   }catch(e){ console.warn('Auto-reparación mesInicio reposición omitida:', e&&e.message); }
+  // TEA por moneda: antes había una sola TEA por defecto por tarjeta (t.tea),
+  // sin distinguir si la compra era en soles o en dólares. Se mantiene ese
+  // valor como punto de partida en AMBAS monedas (mismo comportamiento que
+  // tenía antes), editable después por separado desde Editar Tarjeta.
+  (state.tarjetas||[]).forEach(t=>{
+    if(t.tea && t.teaPEN===undefined && t.teaUSD===undefined){ t.teaPEN=t.tea; t.teaUSD=t.tea; }
+  });
   if(!Array.isArray(state.repuestos))      state.repuestos=[];
   if(!Array.isArray(state.lugaresGuardados)) state.lugaresGuardados=[];
   if(!Array.isArray(state.correosIgnorados)) state.correosIgnorados=[];
@@ -15986,6 +15993,18 @@ function tcMonthKey(y,m){ return y+'-'+String(m+1).padStart(2,'0'); }
 function tcMkAddMonths(mk,n){ const [y,m]=mk.split('-').map(Number); const d=new Date(y,m-1+n,1); return tcMonthKey(d.getFullYear(),d.getMonth()); }
 
 function getTarjeta(id){ return (state.tarjetas||[]).find(t=>t.id===id); }
+// TEA por defecto de una tarjeta, según la MONEDA del consumo puntual (una
+// tarjeta puede tener consumos tanto en soles como en dólares, y el banco
+// suele dar una tasa distinta para cada uno). Si la tarjeta todavía no tiene
+// `teaPEN`/`teaUSD` configurados (tarjetas de antes de este cambio, que no
+// llegaron a pasar por migrateState por algún motivo), cae al campo legado
+// `tea` — que antes era un único default sin distinguir moneda.
+function teaTC(t, currency){
+  if(!t) return 0;
+  const esUSD=currency==='USD';
+  const v=esUSD?t.teaUSD:t.teaPEN;
+  return (v!==undefined && v!==null && v!=='') ? v : (t.tea||0);
+}
 
 // ── Reordenar Tarjetas a mano — flechas ◀▶ o arrastrando (PC) ──
 function moverTarjeta(idx, dir){
@@ -16285,11 +16304,24 @@ function buildTCCard(t, idx, total){
   const lineaSym = t.currency==='USD' ? '$' : 'S/';
   const lineaStr = lineaSym+' '+linea.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 
+  // TEA: una celda por moneda que tenga tasa configurada (puede ser 0, 1 o 2).
+  const teaCellsHtml = [
+    t.teaPEN?`<div class="tc-info-cell" title="TEA por defecto para compras en soles a cuotas con intereses"><div class="tc-info-cell-label">TEA S/</div><div class="tc-info-cell-val">${numFmtSigned(t.teaPEN,2)}%</div></div>`:'',
+    t.teaUSD?`<div class="tc-info-cell" title="TEA por defecto para compras en dólares a cuotas con intereses"><div class="tc-info-cell-label">TEA $</div><div class="tc-info-cell-val">${numFmtSigned(t.teaUSD,2)}%</div></div>`:'',
+  ].join('');
+  const teaCellsCount = (t.teaPEN?1:0)+(t.teaUSD?1:0);
+  const membresiaTitle = t.membresiaGratis
+    ? 'Membresía exonerada (gratis)'+(t.membresiaMonto?' — referencia: '+lineaSym+' '+numFmtSigned(t.membresiaMonto,2)+'/año':'')
+    : (t.membresiaMonto?'Membresía anual: '+lineaSym+' '+numFmtSigned(t.membresiaMonto,2):'');
+  const membresiaBadge = (t.membresiaMonto||t.membresiaGratis)
+    ? ` <span title="${escapeHtml(membresiaTitle)}" style="font-size:11px;cursor:help">${t.membresiaGratis?'🎟️':'🎫'}</span>`
+    : '';
+
   return `<div class="tc-card-item" id="tc-card-${t.id}" draggable="true" data-tid="${t.id}" ondragstart="tcDragStart(event)" ondragover="tcDragOver(event)" ondrop="tcDrop(event)" ondragend="tcDragEnd(event)" onclick="openTCDetail('${t.id}')" style="--tc-color:${col}">
     <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${col};border-radius:var(--radius) var(--radius) 0 0"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px">
       <div style="display:flex;gap:10px;align-items:center;min-width:0">${tcPlasticoHTML(t,96)}<div style="min-width:0">
-        <div class="tc-bank-label">${escapeHtml(t.banco)||'—'}${t.nota&&t.nota.trim()?` <span title="${escapeHtml(t.nota.trim())}" style="font-size:11px;cursor:help">📌</span>`:''}</div>
+        <div class="tc-bank-label">${escapeHtml(t.banco)||'—'}${t.nota&&t.nota.trim()?` <span title="${escapeHtml(t.nota.trim())}" style="font-size:11px;cursor:help">📌</span>`:''}${membresiaBadge}</div>
         <div class="tc-cat-label" style="margin-bottom:0">${escapeHtml(t.cat||'—')}</div>
       </div></div>
       <div style="display:flex;align-items:center;gap:6px">
@@ -16300,11 +16332,11 @@ function buildTCCard(t, idx, total){
         <div class="tc-mes-badge" style="background:${col}" title="Período de facturación actual de esta tarjeta">📅 ${badge.label}</div>
       </div>
     </div>
-    <div class="tc-info-grid" style="${t.tea?'grid-template-columns:1fr 1fr 1fr 1fr':''}">
+    <div class="tc-info-grid" style="grid-template-columns:repeat(${3+teaCellsCount},1fr)">
       <div class="tc-info-cell"><div class="tc-info-cell-label">Pago</div><div class="tc-info-cell-val">día ${t.pago||'—'}</div></div>
       <div class="tc-info-cell"><div class="tc-info-cell-label">Inicio</div><div class="tc-info-cell-val">día ${t.inicio||'—'}</div></div>
       <div class="tc-info-cell"><div class="tc-info-cell-label">Cierre</div><div class="tc-info-cell-val">día ${t.cierre||'—'}</div></div>
-      ${t.tea?`<div class="tc-info-cell" title="TEA por defecto para compras a cuotas con intereses"><div class="tc-info-cell-label">TEA</div><div class="tc-info-cell-val">${numFmtSigned(t.tea,2)}%</div></div>`:''}
+      ${teaCellsHtml}
     </div>
     <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:10px;margin-bottom:4px;flex-wrap:wrap;gap:4px">
       <span style="color:var(--text2)">Deuda total: <strong style="color:var(--red)">${M(fmtTCMixed(deudaTotalByCur.pen,deudaTotalByCur.usd))}</strong></span>
@@ -17535,7 +17567,9 @@ function onConInteresChange(){
     const teaInput=document.getElementById('tc-m-tea');
     if(!teaInput.value){
       const t=getTarjeta(document.getElementById('tc-m-tarjeta').value);
-      if(t&&t.tea) teaInput.value=t.tea;
+      const cur=document.getElementById('tc-m-currency').value;
+      const tea=teaTC(t,cur);
+      if(tea) teaInput.value=tea;
     }
   }
   actualizarPreviewCuota();
@@ -17561,7 +17595,10 @@ function onConsumoTarjetaChange(){
   const t=getTarjeta(document.getElementById('tc-m-tarjeta').value);
   if(t) document.getElementById('tc-m-currency').value=t.currency||'PEN';
   const teaInput=document.getElementById('tc-m-tea');
-  if(teaInput&&document.getElementById('tc-m-con-interes').checked&&!teaInput.value&&t&&t.tea) teaInput.value=t.tea;
+  if(teaInput&&document.getElementById('tc-m-con-interes').checked&&!teaInput.value&&t){
+    const tea=teaTC(t,document.getElementById('tc-m-currency').value);
+    if(tea) teaInput.value=tea;
+  }
   if(typeof refrescarDescPFTC==='function') refrescarDescPFTC();
 }
 function openAddMovTC(){
@@ -17960,7 +17997,8 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-inicio').value=t.inicio||'';
     document.getElementById('tc-f-cierre').value=t.cierre||'';
     document.getElementById('tc-f-linea').value=t.linea||'';
-    document.getElementById('tc-f-tea').value=t.tea||'';
+    document.getElementById('tc-f-tea-pen').value=t.teaPEN||'';
+    document.getElementById('tc-f-tea-usd').value=t.teaUSD||'';
     document.getElementById('tc-f-currency').value=t.currency||'PEN';
     document.getElementById('tc-f-color').value=t.color||'#5b8def';
     document.getElementById('tc-f-nota').value=t.nota||'';
@@ -17968,18 +18006,22 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-color-plastico').value=t.colorTarjeta||t.color||'#5b8def';
     document.getElementById('tc-f-color-igual').checked=!t.colorTarjeta;
     document.getElementById('tc-f-ult4').value=t.ult4||'';
+    document.getElementById('tc-f-membresia-monto').value=t.membresiaMonto||'';
+    document.getElementById('tc-f-membresia-gratis').checked=!!t.membresiaGratis;
     tcImgTmp=imgSegura(t.imagen);
     document.getElementById('tc-delete-btn').style.display='inline-flex';
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
-    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea','tc-f-nota'].forEach(id=>document.getElementById(id).value='');
+    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
     document.getElementById('tc-f-color-plastico').value='#5b8def'; document.getElementById('tc-f-color-igual').checked=true;
+    document.getElementById('tc-f-membresia-gratis').checked=false;
     document.getElementById('tc-delete-btn').style.display='none';
   }
+  pintarTCMembresiaResumen();
   tcImgPintar();
   document.getElementById('tc-config-overlay').classList.add('open');
 }
@@ -17995,6 +18037,22 @@ function selectTCColor(col){
     o.classList.toggle('selected',o.style.background===col);
   });
 }
+// Marcar "actualmente es gratis" apaga (sin borrar) el campo de monto — se
+// conserva como referencia de lo que costaría si dejara de estar exonerada.
+function pintarTCMembresiaResumen(){
+  const gratisEl=document.getElementById('tc-f-membresia-gratis');
+  const montoInp=document.getElementById('tc-f-membresia-monto');
+  const resEl=document.getElementById('tc-f-membresia-resumen');
+  if(!gratisEl||!montoInp||!resEl) return;
+  const gratis=gratisEl.checked;
+  montoInp.disabled=gratis;
+  montoInp.style.opacity=gratis?'0.5':'1';
+  const monto=parseFloat(montoInp.value)||0;
+  const sym=document.getElementById('tc-f-currency').value==='USD'?'$':'S/';
+  if(gratis) resEl.textContent=monto>0?('Actualmente exonerada — el monto de referencia ('+sym+' '+numFmtSigned(monto,2)+'/año) no se cobra mientras esté marcado.'):'Actualmente exonerada (no se cobra).';
+  else if(monto>0) resEl.textContent='Se cobrará '+sym+' '+numFmtSigned(monto,2)+' al año.';
+  else resEl.textContent='';
+}
 
 function saveTCCard(){
   const banco=(document.getElementById('tc-f-banco').value||'').trim();
@@ -18006,13 +18064,16 @@ function saveTCCard(){
     inicio:parseInt(document.getElementById('tc-f-inicio').value)||1,
     cierre:parseInt(document.getElementById('tc-f-cierre').value)||25,
     linea:parseFloat(document.getElementById('tc-f-linea').value)||0,
-    tea:parseFloat(document.getElementById('tc-f-tea').value)||0,
+    teaPEN:parseFloat(document.getElementById('tc-f-tea-pen').value)||0,
+    teaUSD:parseFloat(document.getElementById('tc-f-tea-usd').value)||0,
     currency:document.getElementById('tc-f-currency').value||'PEN',
     color:document.getElementById('tc-f-color').value||'#5b8def',
     nota:(document.getElementById('tc-f-nota').value||'').trim(),
     marca:document.getElementById('tc-f-marca').value||'',
     colorTarjeta:document.getElementById('tc-f-color-igual').checked ? '' : (document.getElementById('tc-f-color-plastico').value||''),
-    ult4:(document.getElementById('tc-f-ult4').value||'').replace(/\D/g,'').slice(-4)
+    ult4:(document.getElementById('tc-f-ult4').value||'').replace(/\D/g,'').slice(-4),
+    membresiaMonto:parseFloat(document.getElementById('tc-f-membresia-monto').value)||0,
+    membresiaGratis:document.getElementById('tc-f-membresia-gratis').checked
   };
   if(imgSegura(tcImgTmp)) data.imagen=tcImgTmp; else data.imagen='';
   if(!state.tarjetas) state.tarjetas=[];
@@ -29979,7 +30040,10 @@ function onAprobarPendienteMetodoChange(){
     const t=getTarjeta(document.getElementById('pbm-tarjeta').value);
     if(t) document.getElementById('pbm-currency').value=t.currency||'PEN';
     const teaInput=document.getElementById('pbm-tea');
-    if(teaInput&&document.getElementById('pbm-con-interes').checked&&!teaInput.value&&t&&t.tea) teaInput.value=t.tea;
+    if(teaInput&&document.getElementById('pbm-con-interes').checked&&!teaInput.value&&t){
+      const tea=teaTC(t,document.getElementById('pbm-currency').value);
+      if(tea) teaInput.value=tea;
+    }
   }
   // Cuotas: solo tiene sentido si el destino es una tarjeta — si se cambia a
   // cuenta (o a ingreso), se oculta y se desmarca para no guardar basura.
@@ -30008,7 +30072,8 @@ function onPbmConInteresChange(){
     const teaInput=document.getElementById('pbm-tea');
     if(!teaInput.value){
       const t=getTarjeta(document.getElementById('pbm-tarjeta').value);
-      if(t&&t.tea) teaInput.value=t.tea;
+      const tea=teaTC(t,document.getElementById('pbm-currency').value);
+      if(tea) teaInput.value=tea;
     }
   }
 }
@@ -31640,6 +31705,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.36.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Tarjetas → Editar tarjeta: el campo \"TEA por defecto\" ahora es DOS campos — \"TEA en Soles\" y \"TEA en Dólares\" — porque el banco suele dar una tasa distinta según la moneda. Al marcar una compra \"con intereses\" (en Consumos o en Aprobaciones), la TEA que se sugiere sola depende de la moneda elegida para esa compra puntual. Las tarjetas que ya tenían una TEA única quedan con ese mismo valor en ambas monedas (se puede separar después). La lista de Tarjetas ahora muestra \"TEA S/\" y \"TEA $\" por separado cuando están configuradas.",
+   "✨ Tarjetas → Editar tarjeta: nuevo campo \"Membresía anual\" (monto) + casilla \"Actualmente es gratis (exonerada)\". Al marcar la casilla, el monto se conserva como referencia (por si deja de estar exonerada) pero queda marcado como gratis — aparece un 🎟️/🎫 junto al nombre del banco en la lista de Tarjetas, con el detalle al pasar el cursor."
+  ]
+ },
  {
   "v": "v2.35.8",
   "fecha": "16/11/26",
@@ -35184,13 +35257,21 @@ if(state.projGoals){
       <div class="field"><label>Cierre de ciclo</label><input id="tc-f-cierre" type="number" min="1" max="31" placeholder="25"></div>
       <div class="field"><label>Línea de crédito</label><input id="tc-f-linea" type="number" step="0.01" placeholder="5000.00"></div>
     </div>
-    <div class="field"><label>TEA por defecto <span style="font-size:10px;color:var(--text3)">(opcional — la tasa que te dio el banco para compras a cuotas con intereses)</span></label>
-      <input id="tc-f-tea" type="number" step="0.01" placeholder="Ej. 45.90">
-      <div style="font-size:10.5px;color:var(--text3);margin-top:4px">Se sugiere sola al marcar una compra "con intereses" (en Consumos o en Aprobaciones), pero siempre se puede cambiar para esa compra puntual. Si luego cambias esta TEA, las compras a cuotas que ya quedaron creadas NO se actualizan — se quedan con la tasa con la que se crearon.</div>
+    <div class="field-row">
+      <div class="field"><label>TEA en Soles (S/) <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-f-tea-pen" type="number" step="0.01" placeholder="Ej. 45.90"></div>
+      <div class="field"><label>TEA en Dólares ($) <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-f-tea-usd" type="number" step="0.01" placeholder="Ej. 28.00"></div>
     </div>
+    <div class="field"><div style="font-size:10.5px;color:var(--text3)">La tasa que te dio el banco para compras a cuotas con intereses — puede ser distinta en soles y en dólares. Se sugiere sola (según la moneda de esa compra) al marcar "con intereses" en Consumos o en Aprobaciones, pero siempre se puede cambiar para esa compra puntual. Si luego cambias esta TEA, las compras a cuotas que ya quedaron creadas NO se actualizan — se quedan con la tasa con la que se crearon.</div></div>
+    <div class="field-row">
+      <div class="field"><label>Membresía anual <span style="font-size:10px;color:var(--text3)">(opcional — monto)</span></label><input id="tc-f-membresia-monto" type="number" step="0.01" placeholder="Ej. 350.00" oninput="pintarTCMembresiaResumen()"></div>
+      <div class="field" style="display:flex;align-items:flex-end;padding-bottom:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin:0;text-transform:none;letter-spacing:0;font-weight:400;cursor:pointer"><input id="tc-f-membresia-gratis" type="checkbox" style="width:auto;margin:0" onchange="pintarTCMembresiaResumen()"> Actualmente es gratis (exonerada)</label>
+      </div>
+    </div>
+    <div class="field"><div id="tc-f-membresia-resumen" style="font-size:10.5px;color:var(--text3)"></div></div>
     <div class="field-row">
       <div class="field"><label>Moneda</label>
-        <select id="tc-f-currency">
+        <select id="tc-f-currency" onchange="pintarTCMembresiaResumen()">
           <option value="PEN">Soles (S/)</option>
           <option value="USD">Dólares ($)</option>
         </select>
