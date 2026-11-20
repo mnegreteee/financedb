@@ -4567,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.36.0';
-const APP_VERSION_DATE = '20/11/26 - 12:14'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Tarjetas: TEA por defecto separada para soles y dólares, y nuevo campo de Membresía (monto + check de "actualmente gratis").';
+const APP_VERSION = 'v2.37.0';
+const APP_VERSION_DATE = '20/11/26 - 12:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Tarjetas: tira de puntos de consumo mensual (exoneración de membresía) en cada tarjeta de la lista.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16274,6 +16274,70 @@ function fmtTCMixed(pen,usd){
   return parts.join(' + ');
 }
 
+// Seguimiento de consumo mensual (exoneración de membresía) — Opción A del
+// mockup: tira de puntos compactа dentro de la misma tarjeta de la lista.
+// Solo se activa si la tarjeta tiene "Tarjeta desde" (fechaDesde) configurado
+// — esa fecha es el ancla del ciclo de 12 meses. El ciclo actual es el bloque
+// de 12 meses (desde fechaDesde, repitiéndose cada 12 meses) que contiene el
+// mes de hoy. "Hubo consumo" se calcula por el mes CALENDARIO real de cada
+// consumo (m.fecha), no por su mes de facturación — mismo criterio que ya se
+// usa para la reposición de cuotas (cuotaFueRepuesta, v2.35.4/v2.35.5), para
+// que un consumo de ayer cuente ya aunque se facture varios meses después.
+function tcCicloMembresia(t){
+  if(!t || !t.fechaDesde || !/^\d{4}-\d{2}$/.test(t.fechaDesde)) return null;
+  const nombresMes=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+  const [anY,anMraw]=t.fechaDesde.split('-');
+  const anchorY=parseInt(anY), anchorM=parseInt(anMraw)-1;
+  const hoy=new Date();
+  const hoyY=hoy.getFullYear(), hoyM=hoy.getMonth();
+  const anchorTotal=anchorY*12+anchorM;
+  const hoyTotal=hoyY*12+hoyM;
+  let monthsSince=hoyTotal-anchorTotal;
+  if(monthsSince<0) monthsSince=0; // fecha "desde" futura — no debería pasar, pero por seguridad no rompe
+  const cicloIdx=Math.floor(monthsSince/12);
+  const cicloStartTotal=anchorTotal+cicloIdx*12;
+
+  const mesesConConsumo=new Set();
+  getAllTCMovs(t.id).forEach(m=>{
+    if(m && m.fecha && (parseFloat(m.monto)||0)>0){
+      mesesConConsumo.add(m.fecha.slice(0,7));
+    }
+  });
+
+  const meses=[];
+  for(let i=0;i<12;i++){
+    const totalIdx=cicloStartTotal+i;
+    const y=Math.floor(totalIdx/12), mIdx=((totalIdx%12)+12)%12;
+    const mk=y+'-'+String(mIdx+1).padStart(2,'0');
+    const estado = totalIdx>hoyTotal ? null : mesesConConsumo.has(mk);
+    meses.push({mk, label:nombresMes[mIdx], anio:y, estado});
+  }
+  const pasados=meses.filter(m=>m.estado!==null);
+  const faltanteIdx=meses.findIndex(m=>m.estado===false);
+  const vaBien=faltanteIdx===-1;
+  const cicloLabel=meses[0].label+' '+String(meses[0].anio).slice(-2)+' – '+meses[11].label+' '+String(meses[11].anio).slice(-2);
+  return {meses, pasados, faltanteIdx, vaBien, cicloLabel};
+}
+function tcMembresiaCicloHtml(t){
+  const c=tcCicloMembresia(t);
+  if(!c) return '';
+  const estadoTexto=c.vaBien ? ('✅ '+c.pasados.length+'/12') : ('⚠️ Falta '+c.meses[c.faltanteIdx].label);
+  const estadoStyle=c.vaBien ? 'background:var(--green-bg);color:var(--green)' : 'background:var(--red-bg);color:var(--red)';
+  const dotsHtml=c.meses.map(m=>{
+    let color='var(--bg4)', title=m.label+' — mes que aún no llega';
+    if(m.estado===true){ color='var(--green)'; title=m.label+' — ✅ sí hubo consumo'; }
+    else if(m.estado===false){ color='var(--red)'; title=m.label+' — ❌ sin consumo'; }
+    return `<span title="${escapeHtml(title)}" style="width:11px;height:11px;border-radius:50%;background:${color};flex:none;display:inline-block"></span>`;
+  }).join('');
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-top:8px" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+      <span style="font-size:10.5px;font-weight:700;color:var(--text)">🎫 Membresía <span style="color:var(--text3);font-weight:400">· ciclo ${escapeHtml(c.cicloLabel)}</span></span>
+      <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;${estadoStyle}">${estadoTexto}</span>
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">${dotsHtml}</div>
+  </div>`;
+}
+
 function buildTCCard(t, idx, total){
   // El badge (esquina superior) muestra el período de facturación ACTIVO de
   // ESTA tarjeta según su propio ciclo (inicio/cierre) — puede diferir entre
@@ -16344,6 +16408,7 @@ function buildTCCard(t, idx, total){
     </div>
     <div class="tc-line-bar"><div class="tc-line-bar-fill" style="width:${usadoPct}%;background:${barColor}"></div></div>
     <div style="font-size:10px;color:var(--text3);margin-top:3px">Línea: ${M(lineaStr)} — ${usadoPct.toFixed(0)}% usado</div>
+    ${tcMembresiaCicloHtml(t)}
   </div>`;
 }
 
@@ -18006,6 +18071,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-color-plastico').value=t.colorTarjeta||t.color||'#5b8def';
     document.getElementById('tc-f-color-igual').checked=!t.colorTarjeta;
     document.getElementById('tc-f-ult4').value=t.ult4||'';
+    document.getElementById('tc-f-desde').value=t.fechaDesde||'';
     document.getElementById('tc-f-membresia-monto').value=t.membresiaMonto||'';
     document.getElementById('tc-f-membresia-gratis').checked=!!t.membresiaGratis;
     tcImgTmp=imgSegura(t.imagen);
@@ -18013,7 +18079,7 @@ function openTCConfigModal(tid){
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
-    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto'].forEach(id=>document.getElementById(id).value='');
+    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto','tc-f-desde'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
@@ -18072,6 +18138,7 @@ function saveTCCard(){
     marca:document.getElementById('tc-f-marca').value||'',
     colorTarjeta:document.getElementById('tc-f-color-igual').checked ? '' : (document.getElementById('tc-f-color-plastico').value||''),
     ult4:(document.getElementById('tc-f-ult4').value||'').replace(/\D/g,'').slice(-4),
+    fechaDesde:document.getElementById('tc-f-desde').value||'',
     membresiaMonto:parseFloat(document.getElementById('tc-f-membresia-monto').value)||0,
     membresiaGratis:document.getElementById('tc-f-membresia-gratis').checked
   };
@@ -31706,6 +31773,20 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.37.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Tarjetas: la Opción A del mockup de exoneración de membresía ya está implementada con datos reales. Cada tarjeta con \"Tarjeta desde\" configurado muestra en su tarjeta de la lista una tira de 12 puntos (uno por mes del ciclo actual, 12 meses desde esa fecha, repitiéndose cada año): 🟢 si hubo al menos un consumo ese mes calendario, 🔴 si no hubo, gris si el mes aún no llega. Un indicador arriba muestra \"✅ N/12\" si vas bien o \"⚠️ Falta <mes>\" apenas se detecta un mes sin consumo. Tarjetas sin \"Tarjeta desde\" configurado no muestran nada nuevo."
+  ]
+ },
+ {
+  "v": "v2.36.1",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Tarjetas → Editar tarjeta: nuevo campo \"Tarjeta desde\" (mes y año) para indicar desde cuándo tienes la tarjeta. Queda guardado como fecha ancla para el futuro seguimiento de consumo mensual (exoneración de membresía) — por ahora solo se guarda, no cambia nada más en la app."
+  ]
+ },
+ {
   "v": "v2.36.0",
   "fecha": "20/11/26",
   "cambios": [
@@ -35262,6 +35343,12 @@ if(state.projGoals){
       <div class="field"><label>TEA en Dólares ($) <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-f-tea-usd" type="number" step="0.01" placeholder="Ej. 28.00"></div>
     </div>
     <div class="field"><div style="font-size:10.5px;color:var(--text3)">La tasa que te dio el banco para compras a cuotas con intereses — puede ser distinta en soles y en dólares. Se sugiere sola (según la moneda de esa compra) al marcar "con intereses" en Consumos o en Aprobaciones, pero siempre se puede cambiar para esa compra puntual. Si luego cambias esta TEA, las compras a cuotas que ya quedaron creadas NO se actualizan — se quedan con la tasa con la que se crearon.</div></div>
+    <div class="field-row">
+      <div class="field"><label>Tarjeta desde <span style="font-size:10px;color:var(--text3)">(opcional — mes y año)</span></label><input id="tc-f-desde" type="month"></div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <div style="font-size:11px;color:var(--text2);padding-bottom:8px">Desde cuándo tienes la tarjeta. Los 12 meses de consumo para la exoneración de membresía se cuentan desde este mes.</div>
+      </div>
+    </div>
     <div class="field-row">
       <div class="field"><label>Membresía anual <span style="font-size:10px;color:var(--text3)">(opcional — monto)</span></label><input id="tc-f-membresia-monto" type="number" step="0.01" placeholder="Ej. 350.00" oninput="pintarTCMembresiaResumen()"></div>
       <div class="field" style="display:flex;align-items:flex-end;padding-bottom:10px">
