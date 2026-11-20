@@ -4567,9 +4567,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.38.0';
-const APP_VERSION_DATE = '20/11/26 - 13:14'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'La fecha de cobro de membresía ya aparece sola en el Calendario (y el bot avisa cuando se acerca).';
+const APP_VERSION = 'v2.39.0';
+const APP_VERSION_DATE = '20/11/26 - 13:25'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Tarjetas: nuevo "monto mínimo de consumo por mes de corte" para el seguimiento de membresía.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16297,41 +16297,78 @@ function tcCicloMembresia(t){
   const cicloIdx=Math.floor(monthsSince/12);
   const cicloStartTotal=anchorTotal+cicloIdx*12;
 
-  const mesesConConsumo=new Set();
-  getAllTCMovs(t.id).forEach(m=>{
-    if(m && m.fecha && (parseFloat(m.monto)||0)>0){
-      mesesConConsumo.add(m.fecha.slice(0,7));
-    }
-  });
+  // Dos criterios posibles, según la tarjeta:
+  //  - Sin "monto mínimo" configurado (la mayoría): basta con que haya
+  //    habido ALGÚN consumo en el mes — se mira por el mes CALENDARIO real
+  //    de la compra (m.fecha), igual que antes.
+  //  - Con "monto mínimo" configurado (algunos bancos piden un mínimo/
+  //    promedio de compras en el mes de CORTE/facturación, no cualquier
+  //    consumo): se suma el total facturado en cada mes de corte (el mismo
+  //    bucket t.movs[mk] que ya usa la app para todo lo demás) y se compara
+  //    contra ese mínimo. Solo se suman los consumos en la MISMA moneda de
+  //    la tarjeta (consistente con sumTCByCurrency).
+  const minimo=parseFloat(t.membresiaMinMensual)||0;
+  const usaMinimo=minimo>0;
+  let mesesConConsumo=null, totalPorMk=null;
+  if(usaMinimo){
+    totalPorMk={};
+    Object.entries(t.movs||{}).forEach(([mk,arr])=>{
+      (arr||[]).forEach(m=>{
+        const monto=parseFloat(m.monto)||0;
+        if(monto<=0) return;
+        const cur=m.currency||t.currency||'PEN';
+        if(cur!==(t.currency||'PEN')) return;
+        totalPorMk[mk]=(totalPorMk[mk]||0)+monto;
+      });
+    });
+  } else {
+    mesesConConsumo=new Set();
+    getAllTCMovs(t.id).forEach(m=>{
+      if(m && m.fecha && (parseFloat(m.monto)||0)>0){
+        mesesConConsumo.add(m.fecha.slice(0,7));
+      }
+    });
+  }
 
   const meses=[];
   for(let i=0;i<12;i++){
     const totalIdx=cicloStartTotal+i;
     const y=Math.floor(totalIdx/12), mIdx=((totalIdx%12)+12)%12;
     const mk=y+'-'+String(mIdx+1).padStart(2,'0');
-    const estado = totalIdx>hoyTotal ? null : mesesConConsumo.has(mk);
-    meses.push({mk, label:nombresMes[mIdx], anio:y, estado});
+    let estado=null, montoMes=null;
+    if(totalIdx<=hoyTotal){
+      if(usaMinimo){ montoMes=totalPorMk[mk]||0; estado=montoMes>=minimo; }
+      else estado=mesesConConsumo.has(mk);
+    }
+    meses.push({mk, label:nombresMes[mIdx], anio:y, estado, montoMes});
   }
   const pasados=meses.filter(m=>m.estado!==null);
   const faltanteIdx=meses.findIndex(m=>m.estado===false);
   const vaBien=faltanteIdx===-1;
   const cicloLabel=meses[0].label+' '+String(meses[0].anio).slice(-2)+' – '+meses[11].label+' '+String(meses[11].anio).slice(-2);
-  return {meses, pasados, faltanteIdx, vaBien, cicloLabel};
+  return {meses, pasados, faltanteIdx, vaBien, cicloLabel, usaMinimo, minimo};
 }
 function tcMembresiaCicloHtml(t){
   const c=tcCicloMembresia(t);
   if(!c) return '';
+  const sym=t.currency==='USD'?'$':'S/';
   const estadoTexto=c.vaBien ? ('✅ '+c.pasados.length+'/12') : ('⚠️ Falta '+c.meses[c.faltanteIdx].label);
   const estadoStyle=c.vaBien ? 'background:var(--green-bg);color:var(--green)' : 'background:var(--red-bg);color:var(--red)';
+  const minLabel=c.usaMinimo ? (' · mín. '+sym+' '+numFmtSigned(c.minimo,2)+'/mes') : '';
   const dotsHtml=c.meses.map(m=>{
     let color='var(--bg4)', title=m.label+' — mes que aún no llega';
-    if(m.estado===true){ color='var(--green)'; title=m.label+' — ✅ sí hubo consumo'; }
-    else if(m.estado===false){ color='var(--red)'; title=m.label+' — ❌ sin consumo'; }
+    if(m.estado===true){
+      color='var(--green)';
+      title=c.usaMinimo ? (m.label+' — ✅ cumpliste el mínimo ('+sym+' '+numFmtSigned(m.montoMes,2)+' de '+sym+' '+numFmtSigned(c.minimo,2)+')') : (m.label+' — ✅ sí hubo consumo');
+    } else if(m.estado===false){
+      color='var(--red)';
+      title=c.usaMinimo ? (m.label+' — ❌ no llegaste al mínimo ('+sym+' '+numFmtSigned(m.montoMes,2)+' de '+sym+' '+numFmtSigned(c.minimo,2)+')') : (m.label+' — ❌ sin consumo');
+    }
     return `<span title="${escapeHtml(title)}" style="width:11px;height:11px;border-radius:50%;background:${color};flex:none;display:inline-block"></span>`;
   }).join('');
   return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-top:8px" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px;flex-wrap:wrap">
-      <span style="font-size:10.5px;font-weight:700;color:var(--text)">🎫 Membresía <span style="color:var(--text3);font-weight:400">· ciclo ${escapeHtml(c.cicloLabel)}</span></span>
+      <span style="font-size:10.5px;font-weight:700;color:var(--text)">🎫 Membresía <span style="color:var(--text3);font-weight:400">· ciclo ${escapeHtml(c.cicloLabel)}${escapeHtml(minLabel)}</span></span>
       <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;${estadoStyle}">${estadoTexto}</span>
     </div>
     <div style="display:flex;gap:4px;flex-wrap:wrap">${dotsHtml}</div>
@@ -18075,12 +18112,13 @@ function openTCConfigModal(tid){
     document.getElementById('tc-f-membresia-fecha').value=t.membresiaFechaCobro||'';
     document.getElementById('tc-f-membresia-monto').value=t.membresiaMonto||'';
     document.getElementById('tc-f-membresia-gratis').checked=!!t.membresiaGratis;
+    document.getElementById('tc-f-membresia-min-mensual').value=t.membresiaMinMensual||'';
     tcImgTmp=imgSegura(t.imagen);
     document.getElementById('tc-delete-btn').style.display='inline-flex';
     document.getElementById('tc-delete-btn').dataset.id=tid;
   } else {
     document.getElementById('tc-config-title').textContent='Nueva Tarjeta';
-    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto','tc-f-desde','tc-f-membresia-fecha'].forEach(id=>document.getElementById(id).value='');
+    ['tc-f-banco','tc-f-cat','tc-f-pago','tc-f-inicio','tc-f-cierre','tc-f-linea','tc-f-tea-pen','tc-f-tea-usd','tc-f-nota','tc-f-membresia-monto','tc-f-desde','tc-f-membresia-fecha','tc-f-membresia-min-mensual'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('tc-f-currency').value='PEN';
     document.getElementById('tc-f-color').value='#5b8def';
     document.getElementById('tc-f-marca').value=''; document.getElementById('tc-f-ult4').value=''; tcImgTmp='';
@@ -18144,7 +18182,8 @@ function saveTCCard(){
     fechaDesde:document.getElementById('tc-f-desde').value||'',
     membresiaFechaCobro:document.getElementById('tc-f-membresia-fecha').value||'',
     membresiaMonto:parseFloat(document.getElementById('tc-f-membresia-monto').value)||0,
-    membresiaGratis:document.getElementById('tc-f-membresia-gratis').checked
+    membresiaGratis:document.getElementById('tc-f-membresia-gratis').checked,
+    membresiaMinMensual:parseFloat(document.getElementById('tc-f-membresia-min-mensual').value)||0
   };
   if(imgSegura(tcImgTmp)) data.imagen=tcImgTmp; else data.imagen='';
   if(!state.tarjetas) state.tarjetas=[];
@@ -31787,6 +31826,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.39.0",
+  "fecha": "20/11/26",
+  "cambios": [
+   "✨ Tarjetas → Editar tarjeta: nuevo campo opcional \"Monto mínimo de consumo por mes de corte\", debajo de Membresía. Algunos bancos no exoneran la membresía con cualquier consumo (como Interbank/BCP con S/1) — piden un mínimo/promedio de compras dentro de cada mes de CORTE (facturación) de la tarjeta. Si se configura un monto, el seguimiento 🎫 que ya se veía en la tarjeta de la lista (desde la versión anterior) cambia de criterio: en vez de \"¿hubo algún consumo ese mes calendario?\", ahora revisa \"¿el total FACTURADO ese mes de corte llegó al mínimo?\" — usando el mismo agrupamiento por mes de facturación que ya usa el resto de la app para las cuotas. El encabezado de la tira ahora muestra el mínimo configurado (ej. \"· mín. S/ 50.00/mes\") y el detalle de cada punto (al pasar el cursor) muestra cuánto se gastó ese mes vs. el mínimo. Tarjetas sin este campo configurado siguen funcionando exactamente igual que antes (cualquier consumo del mes cuenta)."
+  ]
+ },
+ {
   "v": "v2.38.0",
   "fecha": "20/11/26",
   "cambios": [
@@ -35391,6 +35437,12 @@ if(state.projGoals){
       </div>
     </div>
     <div class="field"><div id="tc-f-membresia-resumen" style="font-size:10.5px;color:var(--text3)"></div></div>
+    <div class="field-row">
+      <div class="field"><label>Monto mínimo de consumo por mes de corte <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="tc-f-membresia-min-mensual" type="number" step="0.01" placeholder="Ej. 50.00"></div>
+      <div class="field" style="display:flex;align-items:flex-end">
+        <div style="font-size:11px;color:var(--text2);padding-bottom:8px">Algunas tarjetas no exoneran la membresía con cualquier consumo — piden un mínimo (o promedio) de compras dentro de cada mes de CORTE/facturación. Si pones un monto aquí, el seguimiento de abajo usará ESE criterio (total facturado ese mes ≥ este monto) en vez de "cualquier consumo del mes". Déjalo vacío si tu tarjeta solo pide al menos 1 sol de consumo.</div>
+      </div>
+    </div>
     <div class="field-row">
       <div class="field"><label>Moneda</label>
         <select id="tc-f-currency" onchange="pintarTCMembresiaResumen()">
