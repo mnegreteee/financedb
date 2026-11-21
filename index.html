@@ -4581,9 +4581,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.45.0';
-const APP_VERSION_DATE = '20/11/26 - 18:55'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Rediseño: Gasto por categoría (énfasis top), Comparativo Mensual (color por significado) y Año Completo (acento, no relleno sólido).';
+const APP_VERSION = 'v2.46.0';
+const APP_VERSION_DATE = '21/11/26 - 16:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Cambio masivo de categoría: al editar un pago/ingreso frecuente, si cambias su categoría ahora se ofrece actualizarla también en todos los movimientos y consumos de tarjeta ya registrados de ese pago (no solo los futuros).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -16005,6 +16005,31 @@ function aplicarCategoriaRetroactiva(texto, categoria, matchTipo){
   toast(`${coincidencias.length} movimiento(s) actualizado(s) con la nueva categoría`);
 }
 
+// Variante para Pagos/Ingresos Frecuentes: a diferencia de aplicarCategoriaRetroactiva
+// (que solo mira state.movimientos), un pago frecuente puede pagarse con tarjeta,
+// y esos registros ya ejecutados viven como "consumos" dentro de t.movs[mk], no en
+// state.movimientos. Por eso aquí se juntan AMBOS universos (cuenta + tarjeta) y se
+// pregunta una sola vez, para que "cambiar la categoría" de un pago frecuente pueda
+// recategorizar también todo lo que ya se había registrado de él.
+function aplicarCategoriaRetroactivaPF(nombre, categoria){
+  if(!categoria || !nombre) return;
+  const movsCoinciden=(state.movimientos||[]).filter(m=>m.desc===nombre && m.cat!==categoria);
+  const consumosCoinciden=[];
+  (state.tarjetas||[]).forEach(t=>{
+    Object.keys(t.movs||{}).forEach(mk=>{
+      (t.movs[mk]||[]).forEach(c=>{ if(c.desc===nombre && c.cat!==categoria) consumosCoinciden.push(c); });
+    });
+  });
+  const total=movsCoinciden.length+consumosCoinciden.length;
+  if(!total) return;
+  const ok=confirm(`Encontré ${total} registro(s) anterior(es) de "${nombre}" ya guardados con otra categoría. ¿Actualizarlos también a "${categoria}"?`);
+  if(!ok) return;
+  movsCoinciden.forEach(m=>{ m.cat=categoria; });
+  consumosCoinciden.forEach(c=>{ c.cat=categoria; });
+  saveState();
+  toast(`${total} registro(s) actualizado(s) con la nueva categoría`);
+}
+
 
 // ══════════════════════════════════════════════════════
 //  MÓDULO TARJETAS DE CRÉDITO
@@ -22840,8 +22865,9 @@ function savePagoFrecuente(){
   toast(editingPFId?'Pago frecuente actualizado':'Pago frecuente guardado');
   // Se ofrece DESPUÉS de cerrar el modal — si el usuario dice que no, no se
   // pierde nada de lo ya guardado, la categoría del pago frecuente en sí ya
-  // quedó bien igual.
-  if(categoria) aplicarCategoriaRetroactiva(nombre, categoria, 'exacto');
+  // quedó bien igual. Cubre tanto los movimientos de cuenta como los consumos
+  // de tarjeta que ya se habían registrado con la categoría anterior.
+  if(categoria) aplicarCategoriaRetroactivaPF(nombre, categoria);
 }
 
 function deletePagoFrecuente(){
@@ -32083,6 +32109,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.46.0",
+  "fecha": "21/11/26",
+  "cambios": [
+   "🏷️ Cambio masivo de categoría en Pagos/Ingresos Frecuentes: antes, si editabas la categoría de un pago o ingreso frecuente, eso solo aplicaba a lo que registraras de ahí en adelante — todo lo ya registrado en meses anteriores se quedaba con la categoría vieja para siempre. Ahora, al guardar el cambio, la app busca todos los movimientos y consumos de tarjeta que ya se habían registrado de ese pago frecuente con la categoría anterior, te dice cuántos encontró y te pregunta si quieres actualizarlos también a la nueva categoría (puedes decir que no y se queda igual que antes)."
+  ]
+ },
  {
   "v": "v2.45.0",
   "fecha": "20/11/26",
