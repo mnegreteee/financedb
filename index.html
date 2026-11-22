@@ -1433,6 +1433,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 @media(max-width:700px){.gs-mxd{width:100%!important;max-height:92vh}.gs-mxd-d{width:70px}}
 .gs-mx-h0{color:var(--text3)!important}
 .gs-mx-foot th,.gs-mx-foot td{border-top:1px solid var(--text3);border-bottom:0;font-weight:700;color:var(--text)}
+.gs-mx-vmini{font-size:9.5px;font-weight:700;font-family:var(--mono);margin-left:3px;white-space:nowrap}
+.gs-mx-vmini.v-up{color:var(--red)}
+.gs-mx-vmini.v-dn{color:var(--green)}
+.gs-mx-vmini.v-nt{color:var(--text3);font-weight:600}
 </style>
 </head>
 <body>
@@ -4584,9 +4588,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.48.0';
-const APP_VERSION_DATE = '22/11/26 - 13:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Botón "📅 Hoy" en Servicios y "📅 Año actual" en Año Completo, mismo criterio que Finanzas/Presupuesto/Gastos/Calendario/Sueldos.';
+const APP_VERSION = 'v2.50.0';
+const APP_VERSION_DATE = '22/11/26 - 16:58'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Gastos: la variación % vs mes anterior ahora se ve junto a CADA monto de la tabla "Por categoría y mes" (toda categoría y mes, no solo el Total).';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -7284,11 +7288,34 @@ function gsMxDatos(){
   return {meses,filas,tot,total:sum(tot)};
 }
 function gsMxEtq(yy,mm,multi){ return GS_MES[mm].charAt(0).toUpperCase()+GS_MES[mm].slice(1)+(multi?' '+String(yy).slice(2):''); }
-function gsMxCelda(o){
+// Totales (p=soles, u=dólares) del mes calendario inmediatamente anterior a (yy,mm), aunque no esté visible en la tabla
+function gsMxMesAnteriorTot(yy,mm){
+  let py=yy, pm=mm-1; if(pm<0){ pm=11; py--; }
+  let p=0,u=0; gsItems(py,pm).forEach(i=>{ if(i.cur==='USD') u+=i.amount; else p+=i.amount; });
+  return {p,u};
+}
+// Variación % de un valor vs el mes anterior, con casos límite: sin dato en ningún lado (—), nuevo (sin dato previo) y caída a cero (-100%)
+function gsMxDelta(cur,prev){
+  if(prev<=0.004 && cur<=0.004) return {txt:'—',cls:'v-nt'};
+  if(prev<=0.004) return {txt:'Nuevo',cls:'v-nt'};
+  const pct=(cur-prev)/prev*100;
+  if(Math.abs(pct)<0.05) return {txt:'=0%',cls:'v-nt'};
+  const txt=(pct>=0?'▲':'▼')+Math.abs(pct).toFixed(Math.abs(pct)>300?0:1)+'%';
+  return {txt, cls: pct>=0?'v-up':'v-dn'};
+}
+// Totales (p=soles, u=dólares) de UNA categoría en el mes calendario inmediatamente anterior a (yy,mm), aunque no esté visible en la tabla
+function gsMxCategoriaMesAnteriorTot(cat,yy,mm){
+  let py=yy, pm=mm-1; if(pm<0){ pm=11; py--; }
+  let p=0,u=0; gsItems(py,pm).forEach(i=>{ if((i.cat||'Sin categoría')!==cat) return; if(i.cur==='USD') u+=i.amount; else p+=i.amount; });
+  return {p,u};
+}
+// prev=null → sin comparación (ej. columna Total del periodo, que no es un mes). prev={p,u} → agrega el % junto al monto de cada moneda
+function gsMxCelda(o,prev){
   const fp=Math.round(o.p).toLocaleString('en-US'), fu=Math.round(o.u).toLocaleString('en-US');
   const hp=o.p>0.004, hu=o.u>0.004;
   if(!hp&&!hu) return '—';
-  return (hp?'S/ '+fp:'')+(hu?`<span class="gs-mx-u">$ ${fu}</span>`:'');
+  const vmini=(cur,pv)=>{ if(!prev) return ''; const d=gsMxDelta(cur,pv); return ` <span class="gs-mx-vmini ${d.cls}">${d.txt}</span>`; };
+  return (hp?'S/ '+fp+vmini(o.p,prev?prev.p:0):'')+(hu?`<span class="gs-mx-u">$ ${fu}${vmini(o.u,prev?prev.u:0)}</span>`:'');
 }
 function gsRenderMatriz(){
   const el=document.getElementById('gs-matriz'); if(!el) return;
@@ -7301,10 +7328,10 @@ function gsRenderMatriz(){
   window._gsMxD=D;
   const clk=(o,fi,j)=>o.e>0.004?` class="gs-mx-k" tabindex="0" role="button" onclick="gsMxDet(${fi},${j})" onkeydown="if(event.key==='Enter'){gsMxDet(${fi},${j})}"`:'';
   const body=D.filas.map((r,fi)=>{ const mx=Math.max(...r.v.map(o=>o.e));
-    return `<tr><th class="gs-mx-c"><span class="gs-mx-dot" style="background:${gsCatColor(r.c)}"></span>${escapeHtml(r.c)}</th>${r.v.map((o,j)=>{ const q=mx>0?o.e/mx:0; const k=o.e<=0.004?0:q<.35?1:q<.6?2:q<.85?3:4; return `<td class="gs-mx-h${k}${o.e>0.004?' gs-mx-k':''}"${o.e>0.004?` tabindex="0" role="button" onclick="gsMxDet(${fi},${j})" onkeydown="if(event.key==='Enter'){gsMxDet(${fi},${j})}"`:''}>${M(gsMxCelda(o))}</td>`; }).join('')}<td class="gs-mx-t gs-mx-k" tabindex="0" role="button" onclick="gsMxDet(${fi},-1)" onkeydown="if(event.key==='Enter'){gsMxDet(${fi},-1)}">${M(gsMxCelda(r.t))}</td></tr>`; }).join('');
-  const foot=`<tr class="gs-mx-foot"><th class="gs-mx-c">Total</th>${D.tot.map((o,j)=>`<td${clk(o,-1,j)}>${M(gsMxCelda(o))}</td>`).join('')}<td class="gs-mx-t gs-mx-k" tabindex="0" role="button" onclick="gsMxDet(-1,-1)" onkeydown="if(event.key==='Enter'){gsMxDet(-1,-1)}">${M(gsMxCelda(D.total))}</td></tr>`;
+    return `<tr><th class="gs-mx-c"><span class="gs-mx-dot" style="background:${gsCatColor(r.c)}"></span>${escapeHtml(r.c)}</th>${r.v.map((o,j)=>{ const q=mx>0?o.e/mx:0; const k=o.e<=0.004?0:q<.35?1:q<.6?2:q<.85?3:4; const [yy,mm]=D.meses[j]; const prev=j>0?r.v[j-1]:gsMxCategoriaMesAnteriorTot(r.c,yy,mm); return `<td class="gs-mx-h${k}${o.e>0.004?' gs-mx-k':''}"${o.e>0.004?` tabindex="0" role="button" onclick="gsMxDet(${fi},${j})" onkeydown="if(event.key==='Enter'){gsMxDet(${fi},${j})}"`:''}>${M(gsMxCelda(o,prev))}</td>`; }).join('')}<td class="gs-mx-t gs-mx-k" tabindex="0" role="button" onclick="gsMxDet(${fi},-1)" onkeydown="if(event.key==='Enter'){gsMxDet(${fi},-1)}">${M(gsMxCelda(r.t))}</td></tr>`; }).join('');
+  const foot=`<tr class="gs-mx-foot"><th class="gs-mx-c">Total</th>${D.tot.map((o,j)=>{ const [yy,mm]=D.meses[j]; const prev=j>0?D.tot[j-1]:gsMxMesAnteriorTot(yy,mm); return `<td${clk(o,-1,j)}>${M(gsMxCelda(o,prev))}</td>`; }).join('')}<td class="gs-mx-t gs-mx-k" tabindex="0" role="button" onclick="gsMxDet(-1,-1)" onkeydown="if(event.key==='Enter'){gsMxDet(-1,-1)}">${M(gsMxCelda(D.total))}</td></tr>`;
   const n=D.meses.length||1, prom=gsMix(D.total.p/n,D.total.u/n);
-  el.innerHTML=cab+`<div class="gs-mx-wrap"><table class="gs-mx"><thead><tr><th class="gs-mx-c">Categoría</th>${hdr}<th class="gs-mx-t">Total</th></tr></thead><tbody>${body}${foot}</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">Cuentas y tarjetas juntas. Soles arriba y dólares debajo, sin convertir; el color de la celda usa el equivalente en soles al tipo de cambio actual. No incluye pagos de tarjeta ni transferencias entre tus cuentas. Promedio mensual del periodo: <b style="color:var(--text2)">${M(prom)}</b>. Toca un monto para ver sus movimientos o un mes para abrirlo.</div>`;
+  el.innerHTML=cab+`<div class="gs-mx-wrap"><table class="gs-mx"><thead><tr><th class="gs-mx-c">Categoría</th>${hdr}<th class="gs-mx-t">Total</th></tr></thead><tbody>${body}${foot}</tbody></table></div><div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">Cuentas y tarjetas juntas. Soles arriba y dólares debajo, sin convertir; el color de la celda usa el equivalente en soles al tipo de cambio actual. No incluye pagos de tarjeta ni transferencias entre tus cuentas. Promedio mensual del periodo: <b style="color:var(--text2)">${M(prom)}</b>. Toca un monto para ver sus movimientos o un mes para abrirlo.<br>% junto al monto = variación vs el mes anterior: 🔴 gastaste más · 🟢 gastaste menos · gris "Nuevo" = esa moneda no tuvo gasto el mes anterior.</div>`;
 }
 
 // Detalle de los movimientos que forman un monto de la tabla «Por categoría y mes»
@@ -32116,6 +32143,21 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.50.0",
+  "fecha": "22/11/26",
+  "cambios": [
+   "📊 Variación % junto a CADA monto de \"Por categoría y mes\": apenas entregada la versión anterior (fila de variación solo para el Total), Miguel pidió verla también en cada recuadro individual — categoría por categoría, mes por mes — justo al costado del monto, aprovechando el espacio de la propia celda. Se reemplazó la fila dedicada por esto: ahora CADA celda con gasto (de cualquier categoría, de cualquier mes, y también la fila Total) muestra su monto seguido del % de variación vs el mes anterior, por separado para soles y para dólares. Mismo color: 🔴 gastaste más, 🟢 gastaste menos, gris \"Nuevo\" si esa moneda no tuvo gasto el mes anterior, gris \"=0%\" si el monto fue exactamente igual (no cuenta como \"subida\"). La columna Total del periodo (la de la derecha, que suma todos los meses) no muestra variación por no ser un mes puntual.",
+   "La comparación de cada categoría usa el mes calendario real inmediatamente anterior PARA ESA CATEGORÍA (nueva `gsMxCategoriaMesAnteriorTot`), no el mes anterior general — así una categoría que no tuvo gasto en algún mes intermedio no arrastra un número incorrecto."
+  ]
+ },
+ {
+  "v": "v2.49.0",
+  "fecha": "22/11/26",
+  "cambios": [
+   "📊 Variación % vs mes anterior en \"Por categoría y mes\" (primera versión, reemplazada por v2.50.0 minutos después): Miguel pidió ver cuánto varió el gasto mes a mes, en soles y en dólares por separado. Se agregó una fila nueva debajo del Total con esa variación, mes por mes, para el total general del periodo."
+  ]
+ },
  {
   "v": "v2.48.0",
   "fecha": "22/11/26",
