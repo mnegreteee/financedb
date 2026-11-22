@@ -2148,6 +2148,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <h1 id="budget-month-title">Junio 2026</h1>
     <button class="month-btn" onclick="changeMonth(1)">›</button>
     <div class="month-label" id="budget-month-label">Jun-26</div>
+    <button class="btn" style="font-size:11px;padding:4px 10px;color:var(--accent);border-color:var(--accent)" onclick="goToday()">📅 Hoy</button>
     <button class="btn btn-primary" style="font-size:11px;padding:5px 12px" onclick="openBudgetModal()">+ Nueva Categoría</button>
   </div>
   <div class="card" style="padding:16px;margin-bottom:18px" id="ins-presupuesto"></div>
@@ -2331,6 +2332,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <button class="btn" style="font-size:13px;padding:4px 10px" onclick="cambiarAnioVista(-1)">‹</button>
       <div id="anio-vista-label" style="font-size:15px;font-weight:600;min-width:50px;text-align:center">2026</div>
       <button class="btn" style="font-size:13px;padding:4px 10px" onclick="cambiarAnioVista(1)">›</button>
+      <button class="btn" style="font-size:11px;padding:4px 10px;color:var(--accent);border-color:var(--accent)" onclick="anioVistaHoy()">📅 Año actual</button>
     </div>
   </div>
   <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Los 12 meses del año de un vistazo — más rojo = peor balance, más verde = mejor. Clic en un mes para ir directo a Finanzas.</div>
@@ -2351,6 +2353,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     <h1 id="srv-month-title">Junio 2026</h1>
     <button class="month-btn" onclick="changeMonth(1)">›</button>
     <div class="month-label" id="srv-month-label">Jun-26</div>
+    <button class="btn" style="font-size:11px;padding:4px 10px;color:var(--accent);border-color:var(--accent)" onclick="goToday()">📅 Hoy</button>
     <button class="srv-add-btn" onclick="openNewServiceModal()">+ Nuevo Servicio</button>
   </div>
   <div class="srv-grid" id="srv-grid"></div>
@@ -4581,9 +4584,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.46.0';
-const APP_VERSION_DATE = '21/11/26 - 16:48'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Cambio masivo de categoría: al editar un pago/ingreso frecuente, si cambias su categoría ahora se ofrece actualizarla también en todos los movimientos y consumos de tarjeta ya registrados de ese pago (no solo los futuros).';
+const APP_VERSION = 'v2.48.0';
+const APP_VERSION_DATE = '22/11/26 - 13:48'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Botón "📅 Hoy" en Servicios y "📅 Año actual" en Año Completo, mismo criterio que Finanzas/Presupuesto/Gastos/Calendario/Sueldos.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -13134,6 +13137,10 @@ let anioVistaYear=null; // año que se ve en esta página, independiente del mes
 function cambiarAnioVista(delta){
   if(anioVistaYear===null) anioVistaYear=state.currentYear;
   anioVistaYear+=delta;
+  renderAnioCompleto();
+}
+function anioVistaHoy(){
+  anioVistaYear=new Date().getFullYear();
   renderAnioCompleto();
 }
 function irAMesDesdeAnio(y,m){
@@ -32109,6 +32116,20 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.48.0",
+  "fecha": "22/11/26",
+  "cambios": [
+   "📅 Botón \"Hoy\" en 2 secciones más: Miguel preguntó dónde más faltaba el botón \"Hoy\" que se acababa de agregar en Presupuesto. Se revisaron todas las secciones que navegan por mes o año: 🧾 Servicios tenía la misma barra de navegación por mes que Finanzas/Presupuesto pero sin el botón — ahora lo tiene. 🗓️ Año Completo navega por AÑO (no por mes) y no tenía forma rápida de volver al año actual si te alejabas varios años — ahora tiene \"📅 Año actual\". El resto de secciones no lo necesitaba: Comparativo Mensual y Mapa de gastos usan selectores de mes (eliges directo), Tarjetas (detalle) usa chips de mes clicables, y Proyección/Inversiones/Auto/Deudas no navegan por mes."
+  ]
+ },
+ {
+  "v": "v2.47.0",
+  "fecha": "22/11/26",
+  "cambios": [
+   "📅 Botón \"Hoy\" en Presupuesto: Análisis → Presupuesto (la pantalla de \"Gasto por categoría este mes\" y los Presupuestos por categoría) ahora tiene el mismo botón \"📅 Hoy\" que ya existía en Finanzas, junto a las flechas de mes — un toque y vuelve directo al mes actual sin tener que ir avanzando/retrocediendo mes por mes."
+  ]
+ },
  {
   "v": "v2.46.0",
   "fecha": "21/11/26",
