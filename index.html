@@ -1437,6 +1437,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 .gs-mx-vmini.v-up{color:var(--red)}
 .gs-mx-vmini.v-dn{color:var(--green)}
 .gs-mx-vmini.v-nt{color:var(--text3);font-weight:600}
+.var-chip{display:inline-block;font-size:9.5px;font-weight:700;font-family:var(--mono);padding:1px 6px;border-radius:999px;white-space:nowrap;margin-left:5px;vertical-align:middle}
+.var-chip.vc-up{background:var(--red-bg);color:var(--red)}
+.var-chip.vc-dn{background:var(--green-bg);color:var(--green)}
+.var-chip.vc-nt{background:var(--bg4);color:var(--text3)}
 </style>
 </head>
 <body>
@@ -4076,6 +4080,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       <div style="margin-top:22px">
         <div class="inv-donut-title" style="text-align:left">Top 10 Comercios</div>
         <div style="position:relative;height:300px;margin-top:8px"><canvas id="tcx-bar-top10"></canvas><div id="tcx-bar-top10-empty" style="display:none;color:var(--text3);font-size:11px;text-align:center;padding-top:30px">Sin consumos que coincidan con el filtro actual.</div></div>
+        <div id="tcx-bar-top10-badges" style="margin-top:4px"></div>
       </div>
     </div>
 
@@ -4588,9 +4593,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.50.0';
-const APP_VERSION_DATE = '22/11/26 - 16:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Gastos: la variación % vs mes anterior ahora se ve junto a CADA monto de la tabla "Por categoría y mes" (toda categoría y mes, no solo el Total).';
+const APP_VERSION = 'v2.51.0';
+const APP_VERSION_DATE = '22/11/26 - 19:58'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Variación % vs periodo anterior agregada en 4 secciones más: Comparativo Mensual, Año Completo, Presupuesto (gasto por categoría) y Tarjetas → Top 10 Comercios.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -12444,6 +12449,16 @@ function catIcono(c){
   const m=String(c||'').match(/^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\uFE0F\u200D]|\p{Emoji_Modifier})+/u);
   return m?m[0]:'🏷️';
 }
+// Total gastado en una categoría durante el mes calendario anterior a (y,m), combinando
+// cuentas + tarjetas de crédito igual que el total del mes actual en renderPresupuesto().
+function gsPresuCatMesAnteriorTotal(cat,y,m){
+  let py=y, pm=m-1; if(pm<0){ pm=11; py--; }
+  const movs=getMovs(py,pm).filter(mv=>mv.type==='expense'&&!esTransferenciaInterna(mv)&&!esCambioMoneda(mv)&&mv.cat===cat);
+  const tcMovs=getCategorizedTCMovsForMonth(py,pm).filter(mv=>mv.cat===cat);
+  let tot=movs.reduce((s,mv)=>s+(mv.currency==='USD'?mv.amount*state.tc.venta:mv.amount),0);
+  tot+=tcMovs.reduce((s,mv)=>s+(mv.currency==='USD'?mv.monto*state.tc.venta:mv.monto),0);
+  return tot;
+}
 function renderPresupuesto(){
   const grid=document.getElementById('budget-grid');
   const empty=document.getElementById('budget-empty');
@@ -12496,6 +12511,7 @@ function renderPresupuesto(){
       const nameColor=esTop?'var(--text)':'var(--text3)';
       const nameWeight=esTop?600:500;
       const barColor=esTop?'var(--accent)':'var(--bg4)';
+      const prevAmt=gsPresuCatMesAnteriorTotal(cat,y,m);
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="openCategoryDetailModal(${escapeHtml(JSON.stringify(cat))})">
         <div style="font-size:16px;${esTop?'':'opacity:.55'}">${emoji}</div>
         <div style="flex:1;min-width:0">
@@ -12504,9 +12520,11 @@ function renderPresupuesto(){
             <div style="height:4px;border-radius:2px;width:${pctRow}%;background:${barColor}"></div>
           </div>
         </div>
-        <div style="font-size:13px;font-weight:${esTop?600:500};color:${nameColor};white-space:nowrap">${M(fmtS(amt))}</div>
+        <div style="font-size:13px;font-weight:${esTop?600:500};color:${nameColor};white-space:nowrap">${M(fmtS(amt))}${gsVarChip(amt,prevAmt,true)}</div>
       </div>`;
-    }).join('')+`</div>`;
+    }).join('')
+      +`<div style="font-size:10px;color:var(--text3);margin-top:10px">El % junto al monto compara esta categoría vs. el mismo mes calendario anterior: 🔴 gastaste más · 🟢 gastaste menos · gris = sin cambio o categoría nueva.</div>`
+      +`</div>`;
   }
 
   // ── Tarjetas de presupuesto (solo categorías con límite asignado) ──
@@ -13174,6 +13192,25 @@ function irAMesDesdeAnio(y,m){
   state.currentYear=y; state.currentMonth=m;
   showPage('finanzas');
 }
+// Balance real del mes calendario anterior a (year,m), independiente de lo que se vea en pantalla (puede caer en el año previo).
+function gsAnioMesAnteriorBalance(year,m,rate){
+  let py=year, pm=m-1; if(pm<0){ pm=11; py--; }
+  const movs=getMovs(py,pm);
+  let ing=0,gas=0;
+  movs.forEach(mv=>{ if(esTransferenciaInterna(mv)) return; const monto=mv.currency==='USD'?mv.amount*rate:mv.amount; if(mv.type==='income') ing+=monto; else if(mv.type==='expense') gas+=monto; });
+  return {balance:ing-gas, tieneDatos:movs.length>0};
+}
+// Badge "vs mes anterior" para una tarjeta de Año Completo. Si el mes anterior fue negativo o el balance cruza de signo,
+// un % saldría engañoso (dividir entre un número negativo distorsiona el sentido), así que mostramos el delta en soles.
+function gsAnioBadge(balance,prevBalance){
+  const crucaSigno=(balance>=0)!==(prevBalance>=0);
+  if(prevBalance<-0.004||crucaSigno){
+    const diff=balance-prevBalance, mejor=diff>=-0.004;
+    const txt=(mejor?'+':'-')+'S/'+numFmtSigned(Math.abs(diff),0)+(mejor?' mejor':' peor');
+    return `<span class="var-chip ${mejor?'vc-dn':'vc-up'}" title="El mes anterior fue negativo o hay cambio de signo — mostramos el delta en soles en vez de un % que sería engañoso">${txt}</span>`;
+  }
+  return gsVarChip(balance,prevBalance,false).trim(); // false: para el balance, subir es bueno
+}
 function renderAnioCompleto(){
   if(anioVistaYear===null) anioVistaYear=state.currentYear;
   const lbl=document.getElementById('anio-vista-label'); if(lbl) lbl.textContent=anioVistaYear;
@@ -13207,11 +13244,14 @@ function renderAnioCompleto(){
       const esPositivo=x.balance>=0;
       const intensidad=0.22+0.78*Math.min(1,Math.abs(x.balance)/maxAbsBalance);
       const accentColor=esPositivo?`rgba(62,201,110,${intensidad.toFixed(2)})`:`rgba(240,92,92,${intensidad.toFixed(2)})`;
+      const prevM=gsAnioMesAnteriorBalance(anioVistaYear,x.m,rate);
+      const badge=prevM.tieneDatos?gsAnioBadge(x.balance,prevM.balance):'';
       return `<div class="card" style="padding:14px 14px 14px 20px;cursor:pointer;${esMesActual?'box-shadow:0 0 0 2px var(--accent) inset':''}" onclick="irAMesDesdeAnio(${anioVistaYear},${x.m})">
         <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${accentColor}"></div>
-        <div style="font-size:12px;font-weight:600">${nombresMes[x.m]}</div>
+        <div style="font-size:12px;font-weight:600">${nombresMes[x.m]}${esMesActual?' <span style="color:var(--accent);font-weight:600">· mes actual</span>':''}</div>
         <div style="font-size:15px;font-family:var(--mono);font-weight:700;margin-top:6px">${esPositivo?'+':'-'}S/ ${numFmtSigned(Math.abs(x.balance),2)}</div>
         <div style="font-size:9px;color:var(--text3);margin-top:4px">↑S/${numFmtSigned(x.ing,0)} · ↓S/${numFmtSigned(x.gas,0)}</div>
+        ${badge?`<div style="margin-top:6px">${badge}</div>`:''}
       </div>`;
     }).join('');
   }
@@ -13226,6 +13266,22 @@ function renderAnioCompleto(){
   }
 }
 
+// Variación genérica cur vs prev: {txt, dir} donde dir=1 (subió), -1 (bajó), 0 (sin cambio/nuevo/neutral).
+// El color (bueno/malo) lo decide quien llama, según qué significa "subir" en esa fila.
+function gsVarGenerica(cur,prev){
+  const nz=v=>Math.abs(v)<=0.004;
+  if(nz(prev)&&nz(cur)) return {txt:'—',dir:0};
+  if(nz(prev)) return {txt:'Nuevo',dir:0};
+  const diff=cur-prev;
+  if(nz(diff)) return {txt:'=0%',dir:0};
+  const pct=Math.abs(diff)/Math.abs(prev)*100;
+  return {txt:(diff>=0?'▲':'▼')+pct.toFixed(pct>300?0:1)+'%', dir: diff>=0?1:-1};
+}
+function gsVarChip(cur,prev,subirEsMalo){
+  const v=gsVarGenerica(cur,prev);
+  const cls=v.dir===0?'vc-nt':( (v.dir===1)===!!subirEsMalo ? 'vc-up' : 'vc-dn' );
+  return ` <span class="var-chip ${cls}">${v.txt}</span>`;
+}
 function renderComparativo(){
   const selA=document.getElementById('cmp-a');
   const selB=document.getElementById('cmp-b');
@@ -13261,6 +13317,8 @@ function renderComparativo(){
   // el mismo rojo siempre es "gasto"; Resultado toma verde o rojo según su propio signo
   // en cada mes, y Ahorro/Disponible usan el azul neutro (solo un monto, no un estado).
   const colorFila=(r,v)=>r.kind==='ingreso'?'var(--green)':r.kind==='gasto'?'var(--red)':r.kind==='resultado'?(v>=0?'var(--green)':'var(--red)'):'var(--accent)';
+  // Para la variación: en Gastos, subir es malo (rojo); en todo lo demás (Ingresos, Resultado, Ahorro, Disponible), subir es bueno (verde).
+  const subirEsMalo=r=>r.kind==='gasto';
 
   content.innerHTML=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;color:var(--text2)">
     <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block"></span>Ingreso</span>
@@ -13277,9 +13335,9 @@ function renderComparativo(){
         <div style="flex:1;display:flex;align-items:center;gap:6px"><span style="font-size:9px;color:var(--text3);width:34px;flex-shrink:0">${labelA}</span><div style="flex:1"><div style="height:8px;background:${colorA};border-radius:3px;width:${pA}%;opacity:.6;transition:width .4s"></div></div></div>
         <div style="flex:1;display:flex;align-items:center;gap:6px"><span style="font-size:9px;color:var(--text3);width:34px;flex-shrink:0">${labelB}</span><div style="flex:1"><div style="height:8px;background:${colorB};border-radius:3px;width:${pB}%;transition:width .4s"></div></div></div>
       </div>
-      <div class="compare-val">${M(sg(r.a))}<br><span style="opacity:.6">${M(sg(r.b))}</span></div>
+      <div class="compare-val">${M(sg(r.a))}<br><span style="opacity:.6">${M(sg(r.b))}${gsVarChip(r.b,r.a,subirEsMalo(r))}</span></div>
     </div>`;
-  }).join('');
+  }).join('')+`<div style="font-size:10.5px;color:var(--text3);margin-top:12px;line-height:1.6">El % junto al valor de ${labelB} compara contra ${labelA}: en Gastos, subir es rojo (malo); en el resto, subir es verde (bueno).</div>`;
 }
 
 // ── EXPORT ────────────────────────────────────────────
@@ -18638,15 +18696,37 @@ function tcxToggleCatPill(cat){
   tcxRenderLineCategorias();
 }
 // 6. Top 10 comercios (por descripción exacta del consumo) — respeta ambos filtros
+// Mes calendario anterior a una clave "YYYY-MM" (mismo formato usado en t.movs).
+function tcxMesAnteriorKey(mk){
+  const [y,mo]=mk.split('-').map(Number);
+  let py=y, pm=mo-1; if(pm<1){ pm=12; py--; }
+  return py+'-'+String(pm).padStart(2,'0');
+}
+// Igual que tcxMovsFiltrados pero para una clave de mes explícita (no la del select), para poder
+// consultar el periodo anterior sin tocar el filtro que el usuario tiene elegido en pantalla.
+function tcxMovsParaMes(mk,filtroT){
+  const tarjetas=state.tarjetas||[];
+  const rate=tcxRate();
+  const out=[];
+  tarjetas.forEach(t=>{
+    if(filtroT!=='__all__' && t.id!==filtroT) return;
+    (t.movs?.[mk]||[]).forEach(m=>{
+      const cur=m.currency||t.currency||'PEN';
+      out.push({tarjeta:t, mov:m, montoPen: cur==='USD'?m.monto*rate:m.monto});
+    });
+  });
+  return out;
+}
 function tcxRenderBarTop10(movsFiltrados){
   const canvasEl=document.getElementById('tcx-bar-top10');
+  const badgesEl=document.getElementById('tcx-bar-top10-badges');
   if(tcxBarTop10){tcxBarTop10.destroy();tcxBarTop10=null;}
   if(!canvasEl) return;
   const items=movsFiltrados;
   const byDesc={};
   items.forEach(x=>{ const key=(x.mov.desc||'Sin descripción').trim(); byDesc[key]=(byDesc[key]||0)+x.montoPen; });
   const top=Object.entries(byDesc).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  if(!top.length){ canvasEl.style.display='none'; const e=document.getElementById('tcx-bar-top10-empty'); if(e) e.style.display='block'; return; }
+  if(!top.length){ canvasEl.style.display='none'; const e=document.getElementById('tcx-bar-top10-empty'); if(e) e.style.display='block'; if(badgesEl) badgesEl.innerHTML=''; return; }
   { const e=document.getElementById('tcx-bar-top10-empty'); if(e) e.style.display='none'; }
   canvasEl.style.display='block';
   const labels=top.map(([d])=>d.length>28?d.slice(0,26)+'…':d);
@@ -18656,6 +18736,33 @@ function tcxRenderBarTop10(movsFiltrados){
     data:{labels,datasets:[{data,backgroundColor:'#5b8def',borderRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>'S/ '+numFmtSigned(ctx.parsed.x,2)}}},scales:{x:{ticks:{color:'#9899a6',callback:v=>'S/ '+(v/1000).toFixed(1)+'k'}},y:{ticks:{color:'#9899a6'}}}}
   });
+
+  // Comercio nuevo o con salto fuerte de gasto vs. el mismo periodo (tarjeta/mes) anterior.
+  // Solo tiene sentido comparar cuando hay UN mes específico elegido en el filtro (no "todos los meses").
+  if(badgesEl){
+    const filtroT=document.getElementById('tcx-filtro-tarjeta')?.value||'__all__';
+    const filtroM=document.getElementById('tcx-filtro-mes')?.value||'__all__';
+    if(filtroM==='__all__'){ badgesEl.innerHTML=''; }
+    else{
+      const prevItems=tcxMovsParaMes(tcxMesAnteriorKey(filtroM),filtroT);
+      const prevByDesc={};
+      prevItems.forEach(x=>{ const key=(x.mov.desc||'Sin descripción').trim(); prevByDesc[key]=(prevByDesc[key]||0)+x.montoPen; });
+      const filas=top.map(([d,v])=>{
+        const prevV=prevByDesc[d]||0;
+        let chip='';
+        if(prevV<=0.004 && v>0.004) chip=`<span class="var-chip vc-nt">🆕 Nuevo</span>`;
+        else if(prevV>0.004){
+          const diff=v-prevV, pct=Math.abs(diff)/prevV*100;
+          if(diff>0.004 && pct>=20) chip=`<span class="var-chip vc-up">▲${pct.toFixed(0)}%</span>`;
+        }
+        if(!chip) return '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:3px 2px;font-size:11px;color:var(--text2)"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.length>34?d.slice(0,32)+'…':d)}</span>${chip}</div>`;
+      }).filter(Boolean);
+      badgesEl.innerHTML = filas.length
+        ? filas.join('')+`<div style="font-size:10px;color:var(--text3);margin-top:6px">🆕 Nuevo = no aparecía en ${tcMesesLong()[parseInt(tcxMesAnteriorKey(filtroM).split('-')[1])-1]} · 🔺% = subió fuerte vs. ese mes.</div>`
+        : '';
+    }
+  }
 }
 function renderTCChartsExtra(){
   tcxPopulateFiltros();
@@ -32143,6 +32250,14 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.51.0",
+  "fecha": "22/11/26",
+  "cambios": [
+   "📊 Variación % vs periodo anterior en 4 secciones más (pedido de Miguel tras mockup previo: \"dime en que otras tablas podría agregar más info\"): ⚖️ Comparativo Mensual — cada fila (Ingresos, Gastos, Resultado, Ahorro Soles, Disponible) muestra el % entre Mes B y Mes A junto al valor; en Gastos subir es rojo (malo), en el resto subir es verde (bueno). 🗓️ Año Completo — cada tarjeta de mes suma un indicador vs. el mes calendario anterior, además de la franja de color por magnitud que ya tenía; cuando el mes anterior fue negativo o el balance cruza de signo, un % saldría engañoso, así que se muestra el delta en soles (ej. \"+S/2,360 mejor\") en vez de un porcentaje. 📊 Presupuesto — la lista \"Gasto por categoría este mes\" ahora tiene el mismo % inline que ya tiene Gastos, categoría por categoría vs. el mismo mes calendario anterior. 💳 Tarjetas → Gráficos → Top 10 Comercios — cada comercio del ranking ahora puede llevar una etiqueta: gris \"🆕 Nuevo\" si no aparecía en el mismo periodo (tarjeta/mes) anterior, o roja \"▲NN%\" si su gasto subió 20% o más vs. ese periodo; solo se calcula cuando hay un mes específico elegido en el filtro (no con \"Todos los meses\", donde no hay un periodo anterior único que comparar).",
+   "Mismas reglas ya probadas en la tabla de Gastos: gris \"=0%\" si el monto fue exactamente igual (no cuenta como subida), gris \"Nuevo\"/\"—\" cuando no había gasto antes."
+  ]
+ },
  {
   "v": "v2.50.0",
   "fecha": "22/11/26",
