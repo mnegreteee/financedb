@@ -1635,6 +1635,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           </div>
         </div>
 
+        <!-- SECCIÓN: Google Calendar -->
+        <div class="config-section">
+          <div class="config-section-title">Google Calendar</div>
+          <div class="config-row">
+            <div class="config-row-label">Sincronización con tu calendario principal<small id="cfg-gcal-estado">Consultando…</small></div>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label"><small>Solo se sincronizan los eventos manuales del Calendario (no las cuotas, deudas, vencimientos ni sueldo, que se calculan solos). Los feriados nunca se sincronizan.</small></div>
+            <button class="config-action-btn neutral" id="cfg-gcal-btn-conectar" onclick="gcalConectar()">🔗 Conectar Google Calendar</button>
+            <button class="config-action-btn danger" id="cfg-gcal-btn-desconectar" style="display:none" onclick="gcalDesconectar()">🔌 Desconectar</button>
+          </div>
+        </div>
+
         <!-- SECCIÓN: Exportar / Importar -->
         <div class="config-section">
           <div class="config-section-title">Datos — Exportar / Importar</div>
@@ -30762,6 +30775,65 @@ function guardarCorreosImportantes(){
 // tienen tgMessageId (avisos nuevos). Siempre resuelve — si falla o tarda
 // más de 6 s, igual se sigue con el borrado normal: nunca bloquea la app.
 const AVISO_PENDIENTE_URL = 'https://dbfinance-bot.miguelo996600860.workers.dev/aviso';
+// ── Google Calendar (ver sección "📅 GOOGLE CALENDAR" en index.js) ──
+// Sincroniza, en los dos sentidos, los eventos MANUALES del Calendario con tu calendario
+// principal de Google (las cuotas/deudas/vencimientos/sueldo calculados al vuelo quedan para
+// una siguiente etapa). Config → Datos → "Google Calendar" muestra el estado y el botón de conectar.
+const GCAL_BASE_URL = 'https://dbfinance-bot.miguelo996600860.workers.dev/google';
+async function gcalLlamar_(ruta, opciones){
+  const user=firebase.auth().currentUser; if(!user) throw new Error('No hay sesión');
+  const idToken=await user.getIdToken();
+  const r=await fetch(GCAL_BASE_URL+ruta, Object.assign({headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken}}, opciones));
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok || data.success===false) throw new Error((data&&data.error)||('HTTP '+r.status));
+  return data;
+}
+async function gcalConectar(){
+  const btn=document.getElementById('cfg-gcal-btn-conectar');
+  try{
+    if(btn){ btn.disabled=true; btn.textContent='Conectando…'; }
+    const data=await gcalLlamar_('/auth',{method:'POST'});
+    if(data.url) window.open(data.url,'_blank');
+    toast('Completa el permiso en la pestaña que se abrió, y vuelve aquí — se actualiza solo en unos segundos.','info');
+    setTimeout(gcalActualizarEstadoUI, 8000);
+  }catch(e){
+    console.warn('gcalConectar:', e);
+    toast('No se pudo iniciar la conexión con Google: '+e.message,'error');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🔗 Conectar Google Calendar'; }
+  }
+}
+async function gcalDesconectar(){
+  if(!confirm('¿Desconectar Google Calendar? Los eventos que ya se sincronizaron quedarán en tu Google Calendar (no se borran), pero dejarán de actualizarse.')) return;
+  try{
+    await gcalLlamar_('/desconectar',{method:'POST'});
+    toast('Google Calendar desconectado.','info');
+    gcalActualizarEstadoUI();
+  }catch(e){
+    console.warn('gcalDesconectar:', e);
+    toast('No se pudo desconectar: '+e.message,'error');
+  }
+}
+async function gcalActualizarEstadoUI(){
+  const el=document.getElementById('cfg-gcal-estado'); if(!el) return;
+  try{
+    const data=await gcalLlamar_('/estado',{method:'POST'});
+    const btnConectar=document.getElementById('cfg-gcal-btn-conectar');
+    const btnDesconectar=document.getElementById('cfg-gcal-btn-desconectar');
+    if(data.conectado){
+      el.textContent='🟢 Conectado'+(data.email?(' — '+data.email):'');
+      if(btnConectar) btnConectar.style.display='none';
+      if(btnDesconectar) btnDesconectar.style.display='';
+    }else{
+      el.textContent='⚪ No conectado — tus eventos del Calendario no se sincronizan con Google';
+      if(btnConectar) btnConectar.style.display='';
+      if(btnDesconectar) btnDesconectar.style.display='none';
+    }
+  }catch(e){ el.textContent='No se pudo consultar el estado ('+e.message+')'; }
+}
+function gcalAvisarEventoBorrado(googleEventId){
+  gcalLlamar_('/evento-borrado',{method:'POST',body:JSON.stringify({googleEventId})}).catch(e=>console.warn('gcalAvisarEventoBorrado:', e));
+}
 async function avisarBotPendientes(ids, accion){
   try{
     const set=new Set(ids||[]);
@@ -32206,6 +32278,10 @@ function deleteCalEvent(){
   const evBorrado=(state.calendarEvents||[]).find(e=>e.id===editingCalEventId);
   state.calendarEvents = (state.calendarEvents||[]).filter(e=>e.id!==editingCalEventId);
   if(evBorrado) logActividad('evento_eliminado', `Evento eliminado: ${evBorrado.titulo}`, {eventoSnapshot:evBorrado});
+  // Si este evento ya estaba en tu Google Calendar, se avisa al bot para que lo borre allá también
+  // de inmediato (si falla, no importa: la próxima sincronización de 15 min igual ya no lo vuelve a subir,
+  // solo quedaría viviendo en Google hasta que lo borres tú mismo ahí).
+  if(evBorrado && evBorrado.googleEventId) gcalAvisarEventoBorrado(evBorrado.googleEventId);
   saveState();
   closeCalEventModal();
   renderCalendario();
@@ -33364,7 +33440,7 @@ const CFG_GRUPOS=[
   {id:'apariencia',i:'🎨',t:'Apariencia',secs:['Apariencia']},
   {id:'avisos',i:'🔔',t:'Avisos y reportes',secs:[]},
   {id:'finanzas',i:'💳',t:'Finanzas',secs:['Tipo de Cambio','Tarjetas de Crédito','Cuentas','Categorías']},
-  {id:'datos',i:'💾',t:'Datos',secs:['Datos — Exportar / Importar']},
+  {id:'datos',i:'💾',t:'Datos',secs:['Google Calendar','Datos — Exportar / Importar']},
   {id:'seguridad',i:'🔒',t:'Seguridad y accesos',secs:['Usuarios','Seguridad']},
   {id:'actividad',i:'🕓',t:'Actividad y versión',secs:['Actividad Reciente','Versión y novedades']},
   {id:'peligro',i:'⚠️',t:'Zona de peligro',secs:['Data — Eliminar'],danger:true}
@@ -33420,6 +33496,7 @@ function actualizarUsoFirebase(){
 function cfgResumenes(){
   try{ actualizarEstadoRespaldo(); }catch(e){}
   try{ actualizarUsoFirebase(); }catch(e){ console.warn('Cálculo omitido por error:', e&&e.message); }
+  try{ gcalActualizarEstadoUI(); }catch(e){}
   const set=(id,t)=>{ const e=document.getElementById('cfg-s-'+id); if(e) e.textContent=t; };
   try{
     const oscuro=(document.documentElement.getAttribute('data-theme')||'dark')==='dark';
