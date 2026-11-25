@@ -1646,6 +1646,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" id="cfg-gcal-btn-conectar" onclick="gcalConectar()">🔗 Conectar Google Calendar</button>
             <button class="config-action-btn danger" id="cfg-gcal-btn-desconectar" style="display:none" onclick="gcalDesconectar()">🔌 Desconectar</button>
           </div>
+          <div class="config-row" id="cfg-sheets-row" style="display:none">
+            <div class="config-row-label">Espejo completo en Google Sheets (respaldo)<small id="cfg-sheets-estado">—</small></div>
+          </div>
+          <div class="config-row" id="cfg-sheets-row2" style="display:none">
+            <div class="config-row-label"><small>Se actualiza solo una vez al día (11:59pm). "Actualizar ahora" lo fuerza al toque — puede tardar unos segundos.</small></div>
+            <button class="config-action-btn neutral" id="cfg-sheets-btn-abrir" style="display:none" onclick="gcalSheetsAbrir()">📊 Abrir mi Sheets</button>
+            <button class="config-action-btn neutral" id="cfg-sheets-btn-exportar" onclick="gcalSheetsExportarAhora()">🔄 Actualizar ahora</button>
+          </div>
         </div>
 
         <!-- SECCIÓN: Exportar / Importar -->
@@ -30897,8 +30905,13 @@ async function gcalDesconectar(){
     toast('No se pudo desconectar: '+e.message,'error');
   }
 }
+let _gcalSheetsUrl=null; // guardado tras /estado o /sheets-exportar, para que "Abrir mi Sheets" no tenga que volver a consultar
 async function gcalActualizarEstadoUI(){
   const el=document.getElementById('cfg-gcal-estado'); if(!el) return;
+  const filaSheets1=document.getElementById('cfg-sheets-row');
+  const filaSheets2=document.getElementById('cfg-sheets-row2');
+  const elSheets=document.getElementById('cfg-sheets-estado');
+  const btnAbrirSheets=document.getElementById('cfg-sheets-btn-abrir');
   try{
     const data=await gcalLlamar_('/estado',{method:'POST'});
     const btnConectar=document.getElementById('cfg-gcal-btn-conectar');
@@ -30907,12 +30920,46 @@ async function gcalActualizarEstadoUI(){
       el.textContent='🟢 Conectado'+(data.email?(' — '+data.email):'');
       if(btnConectar) btnConectar.style.display='none';
       if(btnDesconectar) btnDesconectar.style.display='';
+      if(filaSheets1) filaSheets1.style.display='';
+      if(filaSheets2) filaSheets2.style.display='';
+      _gcalSheetsUrl=data.sheetsUrl||null;
+      if(btnAbrirSheets) btnAbrirSheets.style.display=_gcalSheetsUrl?'':'none';
+      if(elSheets){
+        if(data.sheetsUltimaActualizacion){
+          const f=new Date(data.sheetsUltimaActualizacion).toLocaleString('es-PE',{timeZone:'America/Lima',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+          elSheets.textContent='🟢 Última actualización: '+f;
+        }else{
+          elSheets.textContent='⚪ Todavía no se ha generado (corre sola a las 11:59pm, o dale a "Actualizar ahora")';
+        }
+      }
     }else{
       el.textContent='⚪ No conectado — tus eventos del Calendario no se sincronizan con Google';
       if(btnConectar) btnConectar.style.display='';
       if(btnDesconectar) btnDesconectar.style.display='none';
+      if(filaSheets1) filaSheets1.style.display='none';
+      if(filaSheets2) filaSheets2.style.display='none';
+      _gcalSheetsUrl=null;
     }
   }catch(e){ el.textContent='No se pudo consultar el estado ('+e.message+')'; }
+}
+function gcalSheetsAbrir(){
+  if(_gcalSheetsUrl) window.open(_gcalSheetsUrl,'_blank');
+  else toast('Todavía no hay una hoja generada — dale a "Actualizar ahora" primero.','info');
+}
+async function gcalSheetsExportarAhora(){
+  const btn=document.getElementById('cfg-sheets-btn-exportar');
+  try{
+    if(btn){ btn.disabled=true; btn.textContent='Actualizando…'; }
+    const data=await gcalLlamar_('/sheets-exportar',{method:'POST'});
+    _gcalSheetsUrl=data.url||_gcalSheetsUrl;
+    toast('Tu Google Sheets ya está actualizado.','success');
+    gcalActualizarEstadoUI();
+  }catch(e){
+    console.warn('gcalSheetsExportarAhora:', e);
+    toast('No se pudo actualizar: '+e.message,'error');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='🔄 Actualizar ahora'; }
+  }
 }
 function gcalAvisarEventoBorrado(googleEventId){
   gcalLlamar_('/evento-borrado',{method:'POST',body:JSON.stringify({googleEventId})}).catch(e=>console.warn('gcalAvisarEventoBorrado:', e));
