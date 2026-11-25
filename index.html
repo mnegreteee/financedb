@@ -17548,6 +17548,31 @@ function buscarGlobal(query, filtroMes, filtroAnio){
     })),
   });
 
+  // Deudas mayores (cuotas de auto, departamento, etc.) y Pagos/Ingresos Frecuentes no tienen una
+  // única fecha propia (son varias cuotas o se repiten cada mes), así que — igual que Servicios y
+  // Consumos Frecuentes más abajo — el filtro de fecha no les aplica: siempre se buscan por nombre.
+  const dmMatch=(state.deudasMayores||[]).filter(d=>normalizarBusqueda(d.nombre).includes(q));
+  if(dmMatch.length) resultados.push({
+    categoria:'🏛️ Deudas Mayores',
+    totalEncontrados:dmMatch.length,
+    items:dmMatch.slice(0,30).map(d=>({
+      titulo:d.nombre, subtitulo:d.tipo==='fijo'?'Cuota fija':'Amortizado',
+      monto:null, currency:null,
+      accion:()=>{ showPage('deudas'); try{ openDMDetail(d.id); }catch(e){} },
+    })),
+  });
+
+  const pfMatch=(state.pagosFrecuentes||[]).filter(pf=>normalizarBusqueda(pf.nombre).includes(q));
+  if(pfMatch.length) resultados.push({
+    categoria:'🔁 Pagos e Ingresos Frecuentes',
+    totalEncontrados:pfMatch.length,
+    items:pfMatch.slice(0,30).map(pf=>({
+      titulo:pf.nombre, subtitulo:pf.tipo==='ingreso'?'Ingreso frecuente':'Pago frecuente',
+      monto:pf.tipoMonto==='fijo'?pf.montoFijo:null, currency:pf.currency||'PEN',
+      accion:()=>{ showPage('deudas'); try{ openPagoFrecuenteModal(pf.id); }catch(e){} },
+    })),
+  });
+
   const serviciosMatch=Object.entries(state.servicios||{}).filter(([,s])=>normalizarBusqueda(s.name).includes(q));
   if(serviciosMatch.length) resultados.push({
     categoria:'🔗 Servicios Compartidos',
@@ -17567,6 +17592,64 @@ function buscarGlobal(query, filtroMes, filtroAnio){
       titulo:c.nombre, subtitulo:'Acceso rápido de tarjeta',
       monto:c.monto, currency:c.currency||'PEN',
       accion:()=>showPage('tarjetas'),
+    })),
+  });
+
+  // Hogar: conceptos (luz, agua, internet…) y bolsas de presupuesto (super, farmacia…).
+  const hgConcMatch=((state.hogar&&state.hogar.conceptos)||[]).filter(c=>normalizarBusqueda(c.nombre).includes(q));
+  if(hgConcMatch.length) resultados.push({
+    categoria:'🏡 Hogar — Conceptos',
+    totalEncontrados:hgConcMatch.length,
+    items:hgConcMatch.slice(0,30).map(c=>({
+      titulo:c.nombre, subtitulo:c.pfId?'Enlazado a un Pago Frecuente':'Concepto del hogar',
+      monto:null, currency:null,
+      accion:()=>{ showPage('hogar'); try{ hgAbrir(c.id); }catch(e){} },
+    })),
+  });
+  const hgBolsaMatch=((state.hogar&&state.hogar.bolsas)||[]).filter(b=>!b.archivado && normalizarBusqueda(b.nombre).includes(q));
+  if(hgBolsaMatch.length) resultados.push({
+    categoria:'🛒 Hogar — Bolsas (presupuestos)',
+    totalEncontrados:hgBolsaMatch.length,
+    items:hgBolsaMatch.slice(0,30).map(b=>({
+      titulo:b.nombre, subtitulo:'Presupuesto mensual',
+      monto:b.presupuestoMes!=null?Number(b.presupuestoMes):null, currency:b.moneda||'PEN',
+      accion:()=>{ showPage('hogar'); try{ hgAbrirBolsa(b.id); }catch(e){} },
+    })),
+  });
+
+  // Auto: vehículos (por nombre o placa) y tipos de mantenimiento.
+  const autoVehMatch=((state.auto&&state.auto.vehiculos)||[]).filter(v=>normalizarBusqueda(v.nombre).includes(q)||normalizarBusqueda(v.placa).includes(q));
+  if(autoVehMatch.length) resultados.push({
+    categoria:'🚗 Auto — Vehículos',
+    totalEncontrados:autoVehMatch.length,
+    items:autoVehMatch.slice(0,30).map(v=>({
+      titulo:(v.icono||'🚗')+' '+v.nombre, subtitulo:v.placa||'Sin placa',
+      monto:null, currency:null,
+      accion:()=>{ showPage('combustible'); try{ autoSelVeh(v.id); }catch(e){} },
+    })),
+  });
+  const mantMatch=(state.mantenimientos||[]).filter(m=>normalizarBusqueda(m.nombre).includes(q));
+  if(mantMatch.length) resultados.push({
+    categoria:'🔧 Auto — Mantenimientos',
+    totalEncontrados:mantMatch.length,
+    items:mantMatch.slice(0,30).map(m=>({
+      titulo:m.nombre, subtitulo:'Tipo de mantenimiento',
+      monto:null, currency:null,
+      accion:()=>{ showPage('combustible'); try{ if(m.vid) autoSelVeh(m.vid); autoTab('mant'); }catch(e){} },
+    })),
+  });
+
+  // Inversiones: por símbolo (AAPL, MSFT…), buscando en compras y ventas registradas.
+  const invSimbolos=new Set();
+  [...((state.inversiones&&state.inversiones.compras)||[]), ...((state.inversiones&&state.inversiones.ventas)||[])]
+    .forEach(x=>{ if(x.simbolo && normalizarBusqueda(x.simbolo).includes(q)) invSimbolos.add(x.simbolo); });
+  if(invSimbolos.size) resultados.push({
+    categoria:'📈 Inversiones',
+    totalEncontrados:invSimbolos.size,
+    items:[...invSimbolos].slice(0,30).map(simbolo=>({
+      titulo:simbolo, subtitulo:'Ver en Inversiones',
+      monto:null, currency:null,
+      accion:()=>{ showPage('inversiones'); },
     })),
   });
 
