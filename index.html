@@ -4614,9 +4614,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.51.0';
-const APP_VERSION_DATE = '22/11/26 - 19:58'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Variación % vs periodo anterior agregada en 4 secciones más: Comparativo Mensual, Año Completo, Presupuesto (gasto por categoría) y Tarjetas → Top 10 Comercios.';
+const APP_VERSION = 'v2.54.0';
+const APP_VERSION_DATE = '24/11/26 - 22:01'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Botón "🔄 Actualizar ahora" + link directo a tu Google Sheets en Configuración → Datos, y el Buscador Global (🔍) ahora también encuentra Deudas Mayores, Pagos Frecuentes, Hogar, Auto e Inversiones.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -32456,6 +32456,21 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.54.0",
+  "fecha": "24/11/26",
+  "cambios": [
+   "📊 Botón \"🔄 Actualizar ahora\" + link \"📊 Abrir mi Sheets\" en Configuración → Datos: Miguel preguntó si se podía forzar una actualización del espejo de Google Sheets (en vez de esperar a las 11:59pm) y ver el link a la hoja desde ahí mismo. Debajo del estado de \"Google Calendar\" aparecen ahora el estado del espejo (última actualización, o aviso de que todavía no se ha generado), el botón \"🔄 Actualizar ahora\" (dispara la exportación completa al toque) y \"📊 Abrir mi Sheets\" (abre la hoja directo, en cuanto exista al menos una exportación).",
+   "Cambio de backend (bot_index.js/bot_worker.js): nueva ruta POST /google/sheets-exportar que ejecuta la misma exportación que ya corre sola cada noche, y /google/estado ahora también informa el link y la fecha de la última exportación."
+  ]
+ },
+ {
+  "v": "v2.53.0",
+  "fecha": "24/11/26",
+  "cambios": [
+   "🔍 Buscador Global — 7 categorías nuevas: Miguel pidió un buscador que encuentre algo \"en todo (movimientos, consumos de tarjeta, deudas, servicios...)\". Ya existía (el ícono 🔍 del encabezado, con 5 categorías) — se le agregaron las que faltaban: 🏛️ Deudas Mayores, 🔁 Pagos e Ingresos Frecuentes, 🏡 Hogar (Conceptos y Bolsas/presupuestos), 🚗 Auto (Vehículos por nombre o placa, y Mantenimientos) y 📈 Inversiones (por símbolo). Ahora buscar algo como \"Netflix\" también te muestra resultados de estas secciones, cada uno con su propia navegación directa al detalle exacto."
+  ]
+ },
  {
   "v": "v2.51.0",
   "fecha": "22/11/26",
