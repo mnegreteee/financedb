@@ -4614,9 +4614,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.54.0';
-const APP_VERSION_DATE = '24/11/26 - 22:01'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Botón "🔄 Actualizar ahora" + link directo a tu Google Sheets en Configuración → Datos, y el Buscador Global (🔍) ahora también encuentra Deudas Mayores, Pagos Frecuentes, Hogar, Auto e Inversiones.';
+const APP_VERSION = 'v2.54.1';
+const APP_VERSION_DATE = '24/11/26 - 22:40'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Fix: "Actualizar ahora" (Google Sheets) generaba todas las pestañas pero sin datos — ahora se avisa si algo falla, en vez de quedar en silencio.';
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -30928,6 +30928,7 @@ async function gcalActualizarEstadoUI(){
         if(data.sheetsUltimaActualizacion){
           const f=new Date(data.sheetsUltimaActualizacion).toLocaleString('es-PE',{timeZone:'America/Lima',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
           elSheets.textContent='🟢 Última actualización: '+f;
+          if(data.sheetsError) elSheets.textContent+=' — ⚠️ algunas pestañas no se pudieron escribir ('+data.sheetsError+')';
         }else{
           elSheets.textContent='⚪ Todavía no se ha generado (corre sola a las 11:59pm, o dale a "Actualizar ahora")';
         }
@@ -30952,7 +30953,11 @@ async function gcalSheetsExportarAhora(){
     if(btn){ btn.disabled=true; btn.textContent='Actualizando…'; }
     const data=await gcalLlamar_('/sheets-exportar',{method:'POST'});
     _gcalSheetsUrl=data.url||_gcalSheetsUrl;
-    toast('Tu Google Sheets ya está actualizado.','success');
+    if(data.dataError){
+      toast('Se generaron las pestañas, pero algunos datos no se pudieron escribir: '+data.dataError,'error');
+    }else{
+      toast('Tu Google Sheets ya está actualizado.','success');
+    }
     gcalActualizarEstadoUI();
   }catch(e){
     console.warn('gcalSheetsExportarAhora:', e);
@@ -32456,6 +32461,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.54.1",
+  "fecha": "24/11/26",
+  "cambios": [
+   "🐛 Fix: \"🔄 Actualizar ahora\" (Google Sheets) salía todas las pestañas creadas pero SIN ningún dato. Causa: el bot escribía todo en un solo request gigante a la API de Sheets y, si ese request fallaba por cualquier motivo, el error solo quedaba en un registro interno que nadie veía — la app igual decía \"actualizado\". Ahora la escritura se parte en varios envíos más chicos (así un problema puntual no tumba TODA la hoja) y, si algo falla, el botón y el estado de \"Google Calendar\" lo avisan con el motivo real en vez de quedarse callados."
+  ]
+ },
  {
   "v": "v2.54.0",
   "fecha": "24/11/26",
