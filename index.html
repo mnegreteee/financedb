@@ -4614,9 +4614,84 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.54.1';
-const APP_VERSION_DATE = '24/11/26 - 22:40'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Fix: "Actualizar ahora" (Google Sheets) generaba todas las pestañas pero sin datos — ahora se avisa si algo falla, en vez de quedar en silencio.';
+const APP_VERSION = 'v2.55.0';
+const APP_VERSION_DATE = '25/11/26 - 15:20'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = 'Nuevo: versión "beta" (mnegreteee.github.io/financedb/beta/) que lee tus datos reales pero nunca escribe en tu cuenta real — para probar cambios antes de que lleguen a producción.';
+
+// ══════════════════════════════════════════════════════
+//  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
+//  build ni archivo separado: este MISMO index.html se sube tal cual a
+//  /beta/ y a la raíz. En beta: se leen los datos reales de Firestore (en
+//  vivo, igual que en producción), pero CUALQUIER escritura — agregar,
+//  editar o borrar algo, el backup local, lo que sea — queda bloqueada y
+//  nunca llega a tu cuenta real. Ver _betaGuardRef() más abajo (se aplica a
+//  `db` justo después de crear la conexión a Firestore, en initFirebase()).
+// ══════════════════════════════════════════════════════
+const IS_BETA = /\/beta\//.test(location.pathname);
+if(IS_BETA){
+  // Todas las claves de localStorage de esta app empiezan con "miguel_mf_"
+  // (ver loadState/saveState). Beta y producción viven en el MISMO dominio
+  // (mnegreteee.github.io), así que por defecto compartirían el mismo
+  // localStorage del navegador — esto las separa por completo para que
+  // nada de lo que pase en beta contamine el caché que lee la app real.
+  (function(){
+    const PREFIJO='miguel_mf_', TAG='__BETA__';
+    const _get=Storage.prototype.getItem, _set=Storage.prototype.setItem, _rm=Storage.prototype.removeItem;
+    const k_=(k)=> (typeof k==='string' && k.indexOf(PREFIJO)===0) ? (TAG+k) : k;
+    Storage.prototype.getItem = function(k){ return _get.call(this, k_(k)); };
+    Storage.prototype.setItem = function(k,v){ return _set.call(this, k_(k), v); };
+    Storage.prototype.removeItem = function(k){ return _rm.call(this, k_(k)); };
+  })();
+  document.title = '🧪BETA · ' + document.title;
+  (function(){
+    const b=document.createElement('div');
+    b.textContent='🧪 VERSIÓN DE PRUEBA — se ven tus datos reales, pero nada de lo que cambies acá se guarda en tu cuenta real';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#ff5722;color:#fff;font:bold 11px/1.4 Arial,sans-serif;padding:5px 8px;text-align:center;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)';
+    const add=()=>{ if(document.body) document.body.appendChild(b); };
+    if(document.body) add(); else document.addEventListener('DOMContentLoaded', add);
+  })();
+}
+
+// Envuelve una referencia de Firestore (CollectionReference/DocumentReference/
+// Query, o el objeto `db` mismo) para que las LECTURAS (get/onSnapshot/where/
+// orderBy/limit/collection/doc/...) sigan funcionando normal, pero cualquier
+// ESCRITURA (set/update/delete/add, o el commit de un batch) quede
+// bloqueada: se resuelve como si hubiera tenido éxito, pero nunca llega de
+// verdad a Firestore. Solo se usa cuando IS_BETA es true.
+function _betaGuardRef(ref){
+  if(!ref || (typeof ref!=='object' && typeof ref!=='function')) return ref;
+  const ESCRITURA=new Set(['set','update','delete','add']);
+  return new Proxy(ref, {
+    get(target, prop){
+      const orig = Reflect.get(target, prop, target);
+      if(typeof orig !== 'function') return orig;
+      if(prop==='batch'){
+        return function(){
+          const fake={
+            set(){ console.warn('[BETA] batch.set bloqueado'); return fake; },
+            update(){ console.warn('[BETA] batch.update bloqueado'); return fake; },
+            delete(){ console.warn('[BETA] batch.delete bloqueado'); return fake; },
+            commit(){ console.warn('[BETA] batch.commit bloqueado (no se escribió nada de verdad)'); return Promise.resolve(); }
+          };
+          return fake;
+        };
+      }
+      if(ESCRITURA.has(prop)){
+        return function(...args){
+          console.warn('[BETA] escritura a Firestore bloqueada:', prop, target && target.path);
+          return Promise.resolve();
+        };
+      }
+      return function(...args){
+        const r = orig.apply(target, args);
+        if(r && typeof r==='object' && (typeof r.get==='function' || typeof r.onSnapshot==='function' || typeof r.collection==='function' || typeof r.doc==='function')){
+          return _betaGuardRef(r);
+        }
+        return r;
+      };
+    }
+  });
+}
 
 // ══════════════════════════════════════════════════════
 //  CONSTANTS & STATE
@@ -32462,6 +32537,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.55.0",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 Nueva versión \"beta\" para probar cambios antes de que lleguen a tu app real: mnegreteee.github.io/financedb/beta/. Se ven los datos reales (misma cuenta, en vivo), pero CUALQUIER cambio que se haga ahí — agregar, editar o borrar algo — queda bloqueado antes de llegar a Firestore, así que nunca se refleja en la app de siempre. Se reconoce por la franja roja \"VERSIÓN DE PRUEBA\" arriba y el prefijo en el título de la pestaña."
+  ]
+ },
+ {
   "v": "v2.54.1",
   "fecha": "24/11/26",
   "cambios": [
@@ -33744,6 +33826,9 @@ function initFirebase(){
     db = firebase.firestore();
     // Red de seguridad: si algún objeto llega con un campo undefined, Firestore lo omite en vez de rechazar la escritura completa.
     try{ db.settings({ignoreUndefinedProperties:true}); }catch(e){ console.warn('No se pudo aplicar ignoreUndefinedProperties:', e); }
+    // En beta: a partir de acá, cualquier escritura (directa o via DOC_REF,
+    // que se crea a partir de `db`) queda bloqueada — ver _betaGuardRef().
+    if(IS_BETA) db = _betaGuardRef(db);
     DOC_REF = db.collection('users').doc('mnegreteee');
   } catch(e){ console.warn('Firebase init error:',e); }
 
