@@ -1561,10 +1561,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" onclick="editOwnerName()">✏ Editar</button>
           </div>
           <div class="config-row">
-            <div class="config-row-label">Avatar<small>Un emoji que te represente — se ve en el login y en el saludo del dashboard</small></div>
+            <div class="config-row-label">Avatar<small>Un emoji que te represente — se ve en el login y en el saludo del dashboard (se ignora si subes una foto de perfil)</small></div>
             <div style="display:flex;align-items:center;gap:6px">
               <input type="text" id="cfg-owner-avatar" maxlength="4" placeholder="😀" style="width:52px;height:34px;text-align:center;font-size:18px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)" onchange="setOwnerAvatar(this.value)">
               <button class="config-action-btn neutral" onclick="setOwnerAvatar('')">↺ Restablecer</button>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">Foto de perfil<small>Una foto tuya (o tu Memoji/Bitmoji exportado como imagen) — reemplaza el emoji/inicial en el login y el saludo del dashboard</small></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div id="cfg-owner-photo-preview" style="width:34px;height:34px;border-radius:50%;overflow:hidden;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text3);flex-shrink:0">—</div>
+              <input type="file" id="cfg-owner-photo-input" accept="image/*" style="display:none" onchange="setOwnerAvatarImg(this.files[0]); this.value='';">
+              <button class="config-action-btn neutral" onclick="document.getElementById('cfg-owner-photo-input').click()">📷 Subir foto</button>
+              <button class="config-action-btn neutral" id="cfg-owner-photo-remove" style="display:none" onclick="removeOwnerAvatarImg()">🗑️ Quitar</button>
             </div>
           </div>
           <div class="config-row">
@@ -4651,9 +4660,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.56.0';
-const APP_VERSION_DATE = '25/11/26 - 15:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 Solo en beta (mnegreteee.github.io/financedb/beta/): 11 mejoras de diseño/personalización — categorías con emoji editable, temas prearmados, avatar, fondo de login personalizado, tamaño de widgets, accesos rápidos, alerta de línea de crédito, aviso de widgets ocultos, microanimaciones, reportes PDF con diseño y colores de categoría accesibles. Avísame cuáles quieres pasar a tu app real.';
+const APP_VERSION = 'v2.56.1';
+const APP_VERSION_DATE = '25/11/26 - 21:01'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 Solo en beta: ahora puedes subir una FOTO de perfil real (tu Memoji/Bitmoji exportado como imagen, o cualquier foto) en Configuración → Apariencia — reemplaza el emoji/inicial en el login y el saludo del Dashboard.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -4765,6 +4774,7 @@ let state={
   customCategorias:{},   // {nombre: colorHex} — categorías extra creadas por el usuario
   ownerName:'',     // nombre del dueño configurable — vacío = usa currentUser
   ownerAvatar:'',   // emoji de avatar configurable — vacío = usa la inicial del nombre
+  ownerAvatarImg:'', // foto de perfil (dataURL JPEG, ya redimensionada/recortada) — si está presente, reemplaza al emoji/inicial
   categoriasFijasRenombradas:{}, // {nombreFijoOriginal: nombreNuevo} — categorías fijas (CAT_COLORS) a las que el usuario les cambió nombre/emoji; pasan a vivir en customCategorias
   accesosRapidos:[], // [{icono,label,accion}] — hasta 4 accesos configurables, fijados arriba del dashboard
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
@@ -20308,8 +20318,12 @@ function renderDashboard(){
   const greet = hour<12?'Buenos días':hour<18?'Buenas tardes':'Buenas noches';
   const name  = (state.ownerName||'').trim() || (currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
   const avatar = (state.ownerAvatar||'').trim();
+  const avatarImg = (state.ownerAvatarImg||'').trim();
   const el=document.getElementById('dash-greeting');
-  if(el) el.textContent = (avatar?avatar+' ':'')+greet+' '+name+' 👋';
+  if(el){
+    if(avatarImg) el.innerHTML = `<img src="${avatarImg}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-5px;margin-right:6px">`+escapeHtml(greet+' '+name+' 👋');
+    else el.textContent = (avatar?avatar+' ':'')+greet+' '+name+' 👋';
+  }
   renderRachaRegistro();
   renderAccesosRapidos();
   mostrarAvisoWidgetsOcultos();
@@ -26239,20 +26253,30 @@ function deleteFuelRow(type, id){
 function updateLoginBranding(){
   const name = (state.ownerName||'').trim();
   const avatar = (state.ownerAvatar||'').trim();
+  const avatarImg = (state.ownerAvatarImg||'').trim();
   const letter = name ? name.charAt(0).toUpperCase() : 'M';
   const logoEl = document.getElementById('login-logo-letter');
   const titleEl = document.getElementById('login-title');
-  if(logoEl) logoEl.textContent = avatar || letter;
+  if(logoEl){
+    // La foto de perfil (si existe) siempre gana sobre el emoji/inicial.
+    if(avatarImg) logoEl.innerHTML = `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
+    else logoEl.textContent = avatar || letter;
+  }
   if(titleEl) titleEl.textContent = name ? name+"'s Dashboard" : 'Finance Dashboard';
   // Update config display
   const cfgEl = document.getElementById('cfg-owner-name-display');
   if(cfgEl) cfgEl.textContent = name || 'Sin configurar';
   const avEl = document.getElementById('cfg-owner-avatar');
   if(avEl && document.activeElement!==avEl) avEl.value = avatar;
+  const prevEl = document.getElementById('cfg-owner-photo-preview');
+  if(prevEl) prevEl.innerHTML = avatarImg ? `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover">` : '—';
+  const rmBtn = document.getElementById('cfg-owner-photo-remove');
+  if(rmBtn) rmBtn.style.display = avatarImg ? '' : 'none';
 }
 
 // Avatar (emoji) configurable — se muestra en vez de la inicial en el
 // círculo del login y junto al saludo del dashboard. Vacío = usa la inicial.
+// (Si hay una foto de perfil configurada, esta queda ignorada — ver abajo.)
 function setOwnerAvatar(valor){
   const v=(valor||'').trim().slice(0,4);
   state.ownerAvatar=v;
@@ -26262,6 +26286,50 @@ function setOwnerAvatar(valor){
     renderDashboard();
   }
   toast(v?'Avatar actualizado':'Avatar restablecido (se usa tu inicial)');
+}
+
+// Foto de perfil real (ej. una captura de tu Memoji/Bitmoji, o cualquier
+// foto). Tiene prioridad sobre el avatar de emoji y la inicial. Se procesa
+// 100% en el navegador: se recorta a un cuadrado centrado ("cover", sin
+// deformar) y se reduce a 200×200 en JPEG antes de guardarla — nunca se
+// guarda el archivo original — para no inflar el documento de Firestore
+// con fotos de varios MB (el estado completo se sincroniza seguido).
+function setOwnerAvatarImg(file){
+  if(!file) return;
+  if(!/^image\//.test(file.type)){ alert('Elige un archivo de imagen (JPG, PNG, HEIC, etc.).'); return; }
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const size = 200; // tamaño final, cuadrado
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side)/2, sy = (img.height - side)/2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        if(dataUrl.length > 350000){ alert('La foto quedó muy pesada incluso comprimida. Prueba con otra imagen (ideal: una foto cuadrada o casi cuadrada).'); return; }
+        state.ownerAvatarImg = dataUrl;
+        saveState();
+        updateLoginBranding();
+        if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+        toast('Foto de perfil actualizada');
+      }catch(err){ alert('No se pudo procesar esa imagen: '+err.message); }
+    };
+    img.onerror = ()=>alert('No se pudo leer esa imagen. Prueba con otro archivo.');
+    img.src = e.target.result;
+  };
+  reader.onerror = ()=>alert('No se pudo leer el archivo.');
+  reader.readAsDataURL(file);
+}
+function removeOwnerAvatarImg(){
+  state.ownerAvatarImg = '';
+  saveState();
+  updateLoginBranding();
+  if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+  toast('Foto de perfil quitada — se usa tu avatar/inicial de nuevo');
 }
 
 function editOwnerName(){
@@ -32793,13 +32861,17 @@ function seedDemo(){
       const parsed = JSON.parse(cached);
       const name = (parsed.ownerName||'').trim();
       const avatar = (parsed.ownerAvatar||'').trim();
-      if(name){
-        const letter = name.charAt(0).toUpperCase();
+      const avatarImg = (parsed.ownerAvatarImg||'').trim();
+      if(name || avatarImg){
+        const letter = name ? name.charAt(0).toUpperCase() : 'M';
         document.addEventListener('DOMContentLoaded', function(){
           const logoEl = document.getElementById('login-logo-letter');
           const titleEl = document.getElementById('login-title');
-          if(logoEl) logoEl.textContent = avatar || letter;
-          if(titleEl) titleEl.textContent = name+"'s Dashboard";
+          if(logoEl){
+            if(avatarImg) logoEl.innerHTML = `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
+            else logoEl.textContent = avatar || letter;
+          }
+          if(titleEl && name) titleEl.textContent = name+"'s Dashboard";
         });
       }
     }
@@ -32810,6 +32882,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.56.1",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA: nueva \"Foto de perfil\" en Configuración → Apariencia, justo debajo del Avatar (emoji). Permite subir una foto real (tu Memoji/Bitmoji exportado como imagen, o cualquier foto) — se recorta a un cuadrado y se reduce de tamaño en el propio navegador antes de guardarla (nunca se sube el archivo original). Si está configurada, reemplaza al emoji/inicial en el círculo del login y en el saludo del Dashboard. Botón \"🗑️ Quitar\" para volver al emoji/inicial."
+  ]
+ },
  {
   "v": "v2.56.0",
   "fecha": "25/11/26",
