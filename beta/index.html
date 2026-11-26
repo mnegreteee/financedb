@@ -4738,9 +4738,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.58.1';
-const APP_VERSION_DATE = '25/11/26 - 22:41'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 SOLO EN BETA — 12 mejoras nuevas de diseño/personalización/utilidad para probar: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado (recuerda tu elección + atajo Ctrl/Cmd+Shift+H + estilo difuminado), mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped". 🛠️ Además incluye el arreglo del indicador de scroll en el menú superior (también ya está en tu app real v2.57.1).';
+const APP_VERSION = 'v2.58.2';
+const APP_VERSION_DATE = '26/11/26 - 05:56'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 SOLO EN BETA — 12 mejoras nuevas de diseño/personalización/utilidad para probar: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado (recuerda tu elección + atajo Ctrl/Cmd+Shift+H + estilo difuminado), mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped". 🛠️ Además incluye el arreglo del indicador de scroll en el menú superior y ahora también el de la franja roja que tapaba el botón Config (ambos ya están en tu app real).';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -4772,7 +4772,30 @@ if(IS_BETA){
     b.id='beta-banner';
     b.textContent='🧪 VERSIÓN DE PRUEBA — se ven tus datos reales, pero nada de lo que cambies acá se guarda en tu cuenta real';
     b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#ff5722;color:#fff;font:bold 11px/1.4 Arial,sans-serif;padding:5px 8px;text-align:center;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.3)';
-    const add=()=>{ if(document.body) document.body.appendChild(b); };
+    // 26/11/26 — Miguel reportó que la franja tapaba el botón "Config" (y no
+    // dejaba presionarlo) porque antes NADA reservaba espacio para ella: el
+    // <nav> (sticky, top:0) queda justo debajo del body, en el mismo punto
+    // donde se dibuja la franja (fixed, top:0) encima de todo — y en celular
+    // la primera fila del nav es justo Config/+Agregar (.nav-right{order:1}).
+    // pointer-events:none deja pasar el toque, pero visualmente el botón
+    // queda tapado/difícil de acertar. Se mide el alto REAL de la franja
+    // (cambia según el ancho de pantalla, porque el texto se puede partir en
+    // 1, 2 o 3 líneas) y se empuja el body + el punto donde se "pega" el nav
+    // exactamente esa cantidad, para que nunca se solapen.
+    const ajustarEspacioBanner=()=>{
+      const h=Math.ceil(b.getBoundingClientRect().height);
+      document.body.style.paddingTop=h+'px';
+      const nv=document.querySelector('nav');
+      if(nv) nv.style.top=h+'px';
+    };
+    const add=()=>{
+      if(!document.body) return;
+      document.body.appendChild(b);
+      ajustarEspacioBanner();
+      window.addEventListener('resize', ajustarEspacioBanner);
+      window.addEventListener('orientationchange', ajustarEspacioBanner);
+      if(document.fonts && document.fonts.ready) document.fonts.ready.then(ajustarEspacioBanner).catch(()=>{});
+    };
     if(document.body) add(); else document.addEventListener('DOMContentLoaded', add);
   })();
 }
@@ -33419,6 +33442,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.58.2",
+  "fecha": "26/11/26",
+  "cambios": [
+   "🛠️ Arreglo: la franja roja \"VERSIÓN DE PRUEBA\" tapaba el botón ⚙ Config (y otros botones de esa fila) en celular y no dejaba presionarlos. Ahora se reserva automáticamente el espacio exacto que ocupa la franja (que cambia de alto según el ancho de pantalla) para que el menú de arriba nunca quede debajo de ella. Este arreglo también ya está en la app real."
+  ]
+ },
  {
   "v": "v2.58.1",
   "fecha": "25/11/26",
