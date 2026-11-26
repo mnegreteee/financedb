@@ -1577,6 +1577,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
               <button class="config-action-btn neutral" id="cfg-owner-photo-remove" style="display:none" onclick="removeOwnerAvatarImg()">🗑️ Quitar</button>
             </div>
           </div>
+          <div class="config-row" id="cfg-owner-photo-opacity-row" style="display:none">
+            <div class="config-row-label">Transparencia del fondo<small>Qué tanto se ve tu foto detrás de los relojes, en el Dashboard</small></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" id="cfg-owner-photo-opacity" min="0" max="70" step="1" value="22" style="width:110px" oninput="setOwnerAvatarImgOpacity(this.value)">
+              <span id="cfg-owner-photo-opacity-val" style="font-size:11px;color:var(--text2);min-width:32px;text-align:right">22%</span>
+            </div>
+          </div>
           <div class="config-row">
             <div class="config-row-label">Tema<small>Oscuro / Claro</small></div>
             <button class="config-action-btn neutral" onclick="toggleTheme()">🌙 / ☀️ Cambiar tema</button>
@@ -4664,9 +4671,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.56.2';
-const APP_VERSION_DATE = '25/11/26 - 21:11'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 Solo en beta: tu foto de perfil ahora también se ve, atenuada, de fondo detrás de los relojes mundiales en la tarjeta de arriba del Dashboard.';
+const APP_VERSION = 'v2.56.3';
+const APP_VERSION_DATE = '25/11/26 - 21:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 Solo en beta: agregado un control deslizante de transparencia para la foto de fondo del Dashboard (Configuración → Apariencia).';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -4779,6 +4786,7 @@ let state={
   ownerName:'',     // nombre del dueño configurable — vacío = usa currentUser
   ownerAvatar:'',   // emoji de avatar configurable — vacío = usa la inicial del nombre
   ownerAvatarImg:'', // foto de perfil (dataURL JPEG, ya redimensionada/recortada) — si está presente, reemplaza al emoji/inicial
+  ownerAvatarImgOpacity:22, // % (0-70) de qué tan visible se ve la foto de fondo detrás de los relojes del Dashboard
   categoriasFijasRenombradas:{}, // {nombreFijoOriginal: nombreNuevo} — categorías fijas (CAT_COLORS) a las que el usuario les cambió nombre/emoji; pasan a vivir en customCategorias
   accesosRapidos:[], // [{icono,label,accion}] — hasta 4 accesos configurables, fijados arriba del dashboard
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
@@ -26279,11 +26287,42 @@ function updateLoginBranding(){
   // Foto de fondo, atenuada, detrás de los relojes mundiales en la tarjeta
   // de arriba del Dashboard (pedido de Miguel el 25/11/26) — mismo campo
   // que el avatar del login, solo se muestra/oculta según si hay foto.
+  // La transparencia es controlable (pedido el 25/11/26): state.ownerAvatarImgOpacity, 0-70%.
   const heroImgEl = document.getElementById('dash-hero-avatar-bg');
+  const opacityRow = document.getElementById('cfg-owner-photo-opacity-row');
   if(heroImgEl){
-    if(avatarImg){ heroImgEl.src = avatarImg; heroImgEl.style.display = 'block'; }
-    else { heroImgEl.style.display = 'none'; heroImgEl.removeAttribute('src'); }
+    if(avatarImg){
+      heroImgEl.src = avatarImg;
+      heroImgEl.style.display = 'block';
+      const op = (typeof state.ownerAvatarImgOpacity==='number') ? state.ownerAvatarImgOpacity : 22;
+      heroImgEl.style.opacity = (op/100);
+      const opValEl = document.getElementById('cfg-owner-photo-opacity-val');
+      if(opValEl) opValEl.textContent = op+'%';
+      const opRangeEl = document.getElementById('cfg-owner-photo-opacity');
+      if(opRangeEl && document.activeElement!==opRangeEl) opRangeEl.value = op;
+      if(opacityRow) opacityRow.style.display = 'flex';
+    } else {
+      heroImgEl.style.display = 'none';
+      heroImgEl.removeAttribute('src');
+      if(opacityRow) opacityRow.style.display = 'none';
+    }
   }
+}
+
+// Qué tan visible se ve la foto de perfil de fondo detrás de los relojes
+// del Dashboard (0 = casi invisible, 70 = bien marcada). El slider se
+// mueve en vivo (oninput) para que Miguel vea el efecto al instante, sin
+// esperar a soltar el control.
+function setOwnerAvatarImgOpacity(value){
+  let v = parseInt(value,10);
+  if(isNaN(v)) v = 22;
+  v = Math.max(0, Math.min(70, v));
+  state.ownerAvatarImgOpacity = v;
+  saveState();
+  const heroImgEl = document.getElementById('dash-hero-avatar-bg');
+  if(heroImgEl) heroImgEl.style.opacity = (v/100);
+  const opValEl = document.getElementById('cfg-owner-photo-opacity-val');
+  if(opValEl) opValEl.textContent = v+'%';
 }
 
 // Avatar (emoji) configurable — se muestra en vez de la inicial en el
@@ -32894,6 +32933,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.56.3",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA: nuevo control deslizante \"Transparencia del fondo\" en Configuración → Apariencia (aparece debajo de Foto de perfil, solo si subiste una) — mueve el slider y el fondo detrás de los relojes del Dashboard cambia al instante, de casi invisible a bien marcado."
+  ]
+ },
  {
   "v": "v2.56.2",
   "fecha": "25/11/26",
