@@ -909,6 +909,36 @@ body.compact-mode .btn,body.compact-mode .config-action-btn{padding:4px 9px!impo
 body.privacy-blur-active [style*="var(--mono)"]{filter:blur(5px);transition:filter .15s;}
 body.privacy-blur-active [style*="var(--mono)"]:hover{filter:none;}
 
+/* Modo Simple (26/11/26) — vista reducida a lo fundamental (saldo,
+   movimientos recientes, categorías) para que un adulto mayor la entienda
+   sin toda la complejidad de la app. Oculta las pestañas y casi todos los
+   botones de arriba, dejando solo el propio botón para salir. */
+#modo-simple-btn.active{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;}
+body.modo-simple-activo .nav-center{display:none!important;}
+body.modo-simple-activo .nav-right>*:not(#modo-simple-btn){display:none!important;}
+body.modo-simple-activo .fab-add{display:none!important;}
+body.modo-simple-activo #chatia-btn,body.modo-simple-activo #chatia-panel{display:none!important;}
+.ms-mov-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.ms-mov-row:last-child{border-bottom:none;}
+.ms-mov-icon{font-size:20px;flex-shrink:0;width:30px;text-align:center;}
+.ms-mov-info{flex:1;min-width:0;}
+.ms-mov-desc{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ms-mov-sub{font-size:11px;color:var(--text3);}
+.ms-mov-amt{font-family:var(--mono);font-size:13px;font-weight:700;flex-shrink:0;}
+.ms-cat-row{display:flex;align-items:center;gap:8px;padding:6px 0;}
+.ms-cat-label{font-size:12px;width:110px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ms-cat-bar-wrap{flex:1;height:8px;background:var(--bg3);border-radius:5px;overflow:hidden;}
+.ms-cat-bar{height:100%;border-radius:5px;}
+.ms-cat-total{font-family:var(--mono);font-size:12px;font-weight:600;width:72px;text-align:right;flex-shrink:0;}
+/* Formulario de registro simplificado (reutiliza el modal real de "Nuevo
+   movimiento" y su misma lógica de guardado — solo se ocultan campos
+   avanzados/opcionales mientras dura el registro desde Modo Simple). */
+#modal-overlay.modo-simple-form #f-tipo-field,
+#modal-overlay.modo-simple-form #f-time-field,
+#modal-overlay.modo-simple-form #f-note-field,
+#modal-overlay.modo-simple-form #mov-ubic,
+#modal-overlay.modo-simple-form #f-descpf-wrap,
+#modal-overlay.modo-simple-form #f-deuda-wrap{display:none!important;}
 
 /* ══ DEUDAS / PRÉSTAMOS ══ */
 .deuda-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:24px;}
@@ -1905,6 +1935,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
       </div>
     </div>
+    <button class="btn" id="modo-simple-btn" onclick="toggleModoSimple()" title="Modo Simple — una vista resumida y fácil de entender, con botones grandes para ver tu saldo y registrar un gasto o ingreso" style="font-size:12px">🧓 Simple</button>
     <button class="btn btn-primary" onclick="toggleFabMenu(event)">+ Agregar</button>
   </div>
 </nav>
@@ -2109,6 +2140,51 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
   </div>
 
+</div>
+</div>
+
+<!-- ══ PAGE: MODO SIMPLE ══
+     26/11/26 — Miguel pidió una vista mucho más simple, para que un adulto
+     mayor pueda entender lo básico: cuánto dinero tiene, sus movimientos
+     recientes y en qué categorías gasta, más poder registrar un gasto o
+     ingreso él mismo. No es una versión "con letras grandes" de toda la
+     app (Miguel lo pidió así explícitamente): es una página aparte, corta,
+     sin el menú de pestañas ni las demás funciones, con solo lo
+     fundamental. Se activa/desactiva con el botón #modo-simple-btn
+     (siempre visible en la barra de arriba) — ver toggleModoSimple(). -->
+<div class="page" id="page-modosimple">
+<div class="container">
+  <div style="max-width:480px;margin:0 auto">
+
+    <div class="card" style="text-align:center">
+      <div id="ms-saludo" style="font-size:16px;font-weight:600;margin-bottom:10px">Hola 👋</div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Lo que tienes en tus cuentas</div>
+      <div class="money" id="ms-saldo-pen" style="font-family:var(--mono);font-size:38px;font-weight:600;color:var(--green);line-height:1.1">S/ 0.00</div>
+      <div id="ms-saldo-usd-wrap" style="display:none;margin-top:4px">
+        <span class="money" id="ms-saldo-usd" style="font-family:var(--mono);font-size:16px;color:var(--text2)">$ 0.00</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin:14px 0">
+      <button class="btn" style="flex:1;padding:16px 8px;font-size:14px;font-weight:600;background:var(--red);color:#fff;border-color:var(--red)" onclick="abrirModoSimpleNuevo('expense')">⬇️<br>Registrar<br>un gasto</button>
+      <button class="btn" style="flex:1;padding:16px 8px;font-size:14px;font-weight:600;background:var(--green);color:#fff;border-color:var(--green)" onclick="abrirModoSimpleNuevo('income')">⬆️<br>Registrar<br>un ingreso</button>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:10px">📋 Tus últimos movimientos</div>
+      <div id="ms-mov-list"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:10px">🏷️ En qué gastaste este mes</div>
+      <div id="ms-cat-list"></div>
+    </div>
+
+    <div style="text-align:center;margin:20px 0 10px">
+      <button class="btn" style="padding:10px 18px;font-size:13px" onclick="toggleModoSimple()">↩️ Salir del modo simple</button>
+    </div>
+
+  </div>
 </div>
 </div>
 
@@ -4334,7 +4410,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)confirmAndClose(this,'closeModal')">
   <div class="modal">
     <div class="modal-title"><span id="modal-title-text">Nuevo movimiento</span><button class="modal-close" onclick="closeModal()">✕</button></div>
-    <div class="field"><label>Tipo</label>
+    <div class="field" id="f-tipo-field"><label>Tipo</label>
       <div class="radio-group">
         <div class="radio-btn selected-income" id="rb-income" onclick="setType('income')">⬆ Ingreso</div>
         <div class="radio-btn" id="rb-expense" onclick="setType('expense')">⬇ Gasto</div>
@@ -4358,7 +4434,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
     </div>
     <div class="field-row">
       <div class="field"><label>Fecha</label><input id="f-date" type="date"></div>
-      <div class="field"><label>Hora <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="f-time" type="time"></div>
+      <div class="field" id="f-time-field"><label>Hora <span style="font-size:10px;color:var(--text3)">(opcional)</span></label><input id="f-time" type="time"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Categoría <span id="f-cat-hint" style="font-size:10px;color:var(--accent)"></span></label>
@@ -4381,7 +4457,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         </select>
       </div>
     </div>
-    <div class="field"><label>Nota (opcional)</label><textarea id="f-note" placeholder="Agrega un comentario o detalle..."></textarea></div>
+    <div class="field" id="f-note-field"><label>Nota (opcional)</label><textarea id="f-note" placeholder="Agrega un comentario o detalle..."></textarea></div>
     <div class="field" id="mov-ubic"></div>
     <div class="field" id="f-descpf-wrap" style="display:none"><label>➖ ¿Descontar este gasto de un pago frecuente? <span style="font-size:10px;color:var(--text3)">(solo pagos "base con descuentos" en la misma moneda)</span></label>
       <select id="f-descpf"><option value="">No descontar</option></select>
@@ -4738,9 +4814,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.59.0';
-const APP_VERSION_DATE = '26/11/26 - 06:01'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '✅ Todas las mejoras que estaban en beta ya están en tu app real: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado, mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped".';
+const APP_VERSION = 'v2.60.0';
+const APP_VERSION_DATE = '26/11/26 - 07:55'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 SOLO EN BETA — nuevo "Modo Simple": un botón 🧓 Simple, siempre visible arriba, abre una pantalla aparte y resumida (sin menús ni funciones avanzadas) con solo lo fundamental — cuánto tienes, tus últimos movimientos, en qué gastaste este mes — y botones grandes para registrar un gasto o ingreso. Pensado para que un adulto mayor entienda lo básico de la app sin toda su complejidad.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -8279,6 +8355,7 @@ function showPage(name){
   if(name==='minijuegos')  initMinijuegos();
   if(name==='herr')        renderHerramientas();
   if(name==='hogar')       { HG.vista='lista'; renderHogar(); }
+  if(name==='modosimple')  renderModoSimple();
 }
 
 // ── HELPERS ───────────────────────────────────────────
@@ -9435,6 +9512,7 @@ function render(){
   if(active('inversiones')) renderInversiones();
   if(active('calendario'))  renderCalendario();
   if(active('hogar'))       { try{ renderHogar(); }catch(e){ console.warn('Hogar omitido por error:', e&&e.message); } }
+  if(active('modosimple'))  { try{ renderModoSimple(); }catch(e){ console.warn('Modo Simple omitido por error:', e&&e.message); } }
 }
 function updateTitles(){
   const label=MONTHS[state.currentMonth]+' '+state.currentYear;
@@ -12227,6 +12305,7 @@ function closeTCModal(){document.getElementById('tc-modal-overlay').classList.re
 function openModal(){
   state.editId=null;
   ubicTmp.mov=null; ubicPintarCampo('mov');
+  document.getElementById('modal-overlay').classList.remove('modo-simple-form'); // por si quedó de un registro anterior desde Modo Simple
   document.getElementById('modal-title-text').textContent='Nuevo movimiento';
   ['f-desc','f-note'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-amount').value='';
@@ -23624,6 +23703,121 @@ function loadCompact(){
   }
 }
 
+// ── MODO SIMPLE (26/11/26) ────────────────────────────
+// Vista resumida, de una sola pantalla, con solo lo fundamental (saldo,
+// movimientos recientes, categorías del mes) + botones grandes para
+// registrar un gasto o ingreso — pensada para que un adulto mayor la
+// entienda sin toda la complejidad de la app. Es local al dispositivo
+// (localStorage, como el modo compacto), no se sincroniza entre usuarios.
+let _modoSimplePrevPage=null;
+function toggleModoSimple(){
+  const activo=document.body.classList.toggle('modo-simple-activo');
+  localStorage.setItem('miguel_mf_modo_simple', activo?'1':'0');
+  const btn=document.getElementById('modo-simple-btn');
+  if(btn) btn.classList.toggle('active', activo);
+  if(activo){
+    const pagActiva=document.querySelector('.page.active');
+    _modoSimplePrevPage=(pagActiva&&pagActiva.id!=='page-modosimple')?pagActiva.id.replace('page-',''):(_modoSimplePrevPage||'dashboard');
+    showPage('modosimple');
+  } else {
+    showPage(_modoSimplePrevPage||'dashboard');
+  }
+}
+function loadModoSimple(){
+  if(localStorage.getItem('miguel_mf_modo_simple')==='1'){
+    document.body.classList.add('modo-simple-activo');
+    const btn=document.getElementById('modo-simple-btn');
+    if(btn) btn.classList.add('active');
+    showPage('modosimple');
+  }
+}
+function renderModoSimple(){
+  // Saldo: lo que hay HOY en las cuentas operativas (antes de descontar
+  // deuda de tarjeta) — el número más directo de "cuánto tienes", usando el
+  // mismo motor ya probado de gsDisponible() (evita recalcular saldos a mano).
+  let disp; try{ disp=gsDisponible(); }catch(e){ disp={enCuentas:{pen:0,usd:0}}; }
+  const pen=disp.enCuentas.pen||0, usd=disp.enCuentas.usd||0;
+  const elPen=document.getElementById('ms-saldo-pen');
+  if(elPen){ elPen.textContent=M(fmtSS(pen)); elPen.style.color=pen>=0?'var(--green)':'var(--red)'; }
+  const wrapUsd=document.getElementById('ms-saldo-usd-wrap'), elUsd=document.getElementById('ms-saldo-usd');
+  if(wrapUsd) wrapUsd.style.display=Math.abs(usd)>=0.01?'block':'none';
+  if(elUsd) elUsd.textContent=M(fmtDS(usd));
+
+  // Saludo (mismo criterio que el Dashboard: saludo personalizado si lo
+  // configuró, si no el automático según la hora + su nombre)
+  const hour=new Date().getHours();
+  const saludoAuto=hour<12?'Buenos días':hour<18?'Buenas tardes':'Buenas noches';
+  const saludoPersonal=(state.ownerSaludo||'').trim();
+  const nombre=(state.ownerName||'').trim()||(currentUser?currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()):'');
+  const elSaludo=document.getElementById('ms-saludo');
+  if(elSaludo) elSaludo.textContent=(saludoPersonal?saludoPersonal:saludoAuto+(nombre?', '+nombre:''))+' 👋';
+
+  // Últimos movimientos (de cualquier mes, los más recientes primero — no
+  // solo del mes en curso, para que siempre se vea algo reciente real)
+  const todos=(state.movimientos||[]).filter(m=>(m.type==='income'||m.type==='expense')&&!esTransferenciaInterna(m));
+  todos.sort((a,b)=>(b.date+(b.hora||'00:00')).localeCompare(a.date+(a.hora||'00:00')));
+  const recientes=todos.slice(0,15);
+  const listEl=document.getElementById('ms-mov-list');
+  if(listEl){
+    if(!recientes.length){
+      listEl.innerHTML='<div class="empty"><div class="empty-icon">📭</div>Todavía no hay movimientos registrados.</div>';
+    } else {
+      listEl.innerHTML=recientes.map(m=>{
+        const esIngreso=m.type==='income';
+        const sign=esIngreso?'+':'-';
+        const amtStr=sign+' '+(m.currency==='USD'?fmtD(m.amount):fmtS(m.amount));
+        const dateStr=new Date(m.date+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'});
+        const emoji=m.cat?m.cat.split(' ')[0]:(esIngreso?'⬆':'⬇');
+        const catNombre=m.cat?m.cat.replace(/^\S+\s*/,''):(esIngreso?'Ingreso':'Gasto');
+        return `<div class="ms-mov-row">
+          <div class="ms-mov-icon">${emoji}</div>
+          <div class="ms-mov-info">
+            <div class="ms-mov-desc">${escapeHtml(m.desc||catNombre)}</div>
+            <div class="ms-mov-sub">${escapeHtml(catNombre)} · ${dateStr}</div>
+          </div>
+          <div class="ms-mov-amt" style="color:${esIngreso?'var(--green)':'var(--red)'}">${M(amtStr)}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Gastos por categoría este mes — SOLO en soles (nunca se convierte una
+  // moneda a otra para mostrarla, por regla del proyecto: si hay gastos en
+  // dólares categorizados, no entran en esta lista resumida).
+  const movsMes=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense'&&m.cat&&!esTransferenciaInterna(m)&&(m.currency||'PEN')==='PEN');
+  const porCat={};
+  movsMes.forEach(mv=>{ porCat[mv.cat]=(porCat[mv.cat]||0)+mv.amount; });
+  const catOrdenadas=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const catEl=document.getElementById('ms-cat-list');
+  if(catEl){
+    if(!catOrdenadas.length){
+      catEl.innerHTML='<div class="empty" style="padding:10px 0"><div class="empty-icon">🏷️</div>Sin gastos categorizados este mes.</div>';
+    } else {
+      const allColors=getAllCategorias();
+      const max=catOrdenadas[0][1]||1;
+      catEl.innerHTML=catOrdenadas.map(([cat,total])=>{
+        const color=allColors[cat]||'#999';
+        const pct=Math.max(4,Math.round(total/max*100));
+        return `<div class="ms-cat-row">
+          <div class="ms-cat-label">${escapeHtml(cat)}</div>
+          <div class="ms-cat-bar-wrap"><div class="ms-cat-bar" style="width:${pct}%;background:${color}"></div></div>
+          <div class="ms-cat-total">${M(fmtS(total))}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+// Abre el modal real de "Nuevo movimiento" (misma lógica de guardado de
+// siempre, ver saveMovimiento()) pero con los campos avanzados/opcionales
+// ocultos por CSS (.modo-simple-form) — así no se duplica ni un poco la
+// lógica de guardar, solo se simplifica lo que se ve.
+function abrirModoSimpleNuevo(tipo){
+  openModal();
+  setType(tipo);
+  document.getElementById('modal-title-text').textContent=tipo==='expense'?'Registrar un gasto':'Registrar un ingreso';
+  document.getElementById('modal-overlay').classList.add('modo-simple-form');
+}
+
 // ── AVISO DE "HAY MÁS PESTAÑAS" EN EL MENÚ MÓVIL (25/11/26) ──────────
 // El menú (Resumen/Finanzas/.../Patrimonio/Otros/Aprobaciones) siempre fue
 // deslizable en celular (overflow-x:auto), pero la barra de scroll está
@@ -33443,6 +33637,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.60.0",
+  "fecha": "26/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA — nuevo \"Modo Simple\": un botón 🧓 Simple, siempre visible en la barra de arriba, abre una pantalla aparte pensada para que un adulto mayor entienda lo básico de la app, sin menús ni funciones avanzadas. Muestra solo lo fundamental: cuánto tiene en sus cuentas, sus últimos movimientos, y en qué categorías gastó este mes — más dos botones grandes (⬇️ Registrar un gasto / ⬆️ Registrar un ingreso) con un formulario simplificado (solo descripción, monto, moneda, cuenta, fecha y categoría) que guarda igual que el formulario normal. Se sale con el mismo botón o con \"↩️ Salir del modo simple\", y vuelve exactamente a donde estabas."
+  ]
+ },
+ {
   "v": "v2.59.0",
   "fecha": "26/11/26",
   "cambios": [
@@ -34782,7 +34983,7 @@ cfgAgrupar();
 (function(){ const _tc=toggleConfig; toggleConfig=function(e){ const r=_tc.apply(this,arguments); cfgResumenes(); return r; }; })();
 
 // ── INIT ─────────────────────────────────────────────
-loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();loadHiddenMode();renderRelojesMundiales();initNavScrollHint();
+loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();loadHiddenMode();loadModoSimple();renderRelojesMundiales();initNavScrollHint();
 // "Última actividad" del historial de sesiones — cada 5 min mientras la
 // pestaña esté abierta, y también justo antes de que se oculte/cierre (el
 // mejor esfuerzo posible, ya que no existe un evento 100% confiable de
