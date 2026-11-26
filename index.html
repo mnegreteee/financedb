@@ -103,6 +103,14 @@ nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;d
 /* ── LOGIN ── */
 #login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s;}
 #login-screen.hidden{opacity:0;pointer-events:none;}
+/* El fondo personalizado (patrón + color de acento, ver aplicarFondoPersonalizado) ya se
+   pinta en toda la app vía body::before — pero #login-screen tiene su propio fondo sólido
+   encima (y mayor z-index), así que sin esto el patrón nunca se veía detrás del login. */
+#login-screen::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background-image:var(--bg-pattern-image,none);
+  background-size:var(--bg-pattern-size,auto);
+  opacity:var(--bg-pattern-opacity,0);
+}
 #face-lock{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:10000;text-align:center;padding:24px;}
 #face-lock .fl-ico{font-size:54px;line-height:1;}
 #face-lock .fl-ver,#login-screen .fl-ver{font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5;}
@@ -500,8 +508,10 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
 /* ── MODALS ── */
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:300;align-items:center;justify-content:center;}
 #ubic-overlay{z-index:2000;} /* el selector de ubicación se abre desde otros modales (Editar consumo, etc.) y debe quedar encima */
-.modal-overlay.open{display:flex;}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+.modal-overlay.open{display:flex;animation:modalOverlayIn .15s ease;}
+@keyframes modalOverlayIn{from{opacity:0}to{opacity:1}}
+@keyframes modalPopIn{from{opacity:0;transform:scale(.97) translateY(6px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;animation:modalPopIn .18s cubic-bezier(.2,.8,.3,1);}
 .modal-sm{width:340px;}
 .modal-lg{width:560px;}
 .modal-title{font-size:15px;font-weight:600;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;}
@@ -801,6 +811,7 @@ select.ct-otras{background-color:var(--bg4);color:var(--text3);}
   .dash-split,.dash-split-auto{grid-template-columns:1fr;gap:10px;}
   .dash-shortcut-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
   .dash-hero{padding:18px 16px;}
+  #dash-hero-avatar-bg{display:none!important;} /* en móvil la tarjeta se apila (Patrimonio arriba de los relojes) — el fondo taparía el texto */
   .dash-patrimonio-val{font-size:26px;}
   .dash-patrimonio-sub{flex-wrap:wrap;gap:4px;}
   .dash-kpi{padding:12px 14px;}
@@ -1551,12 +1562,47 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" onclick="editOwnerName()">✏ Editar</button>
           </div>
           <div class="config-row">
+            <div class="config-row-label">Avatar<small>Un emoji que te represente — se ve en el login y en el saludo del dashboard (se ignora si subes una foto de perfil)</small></div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="text" id="cfg-owner-avatar" maxlength="4" placeholder="😀" style="width:52px;height:34px;text-align:center;font-size:18px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)" onchange="setOwnerAvatar(this.value)">
+              <button class="config-action-btn neutral" onclick="setOwnerAvatar('')">↺ Restablecer</button>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">Foto de perfil<small>Una foto tuya (o tu Memoji/Bitmoji exportado como imagen) — reemplaza el emoji/inicial en el login y el saludo del dashboard</small></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div id="cfg-owner-photo-preview" style="width:34px;height:34px;border-radius:50%;overflow:hidden;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text3);flex-shrink:0">—</div>
+              <input type="file" id="cfg-owner-photo-input" accept="image/*" style="display:none" onchange="setOwnerAvatarImg(this.files[0]); this.value='';">
+              <button class="config-action-btn neutral" onclick="document.getElementById('cfg-owner-photo-input').click()">📷 Subir foto</button>
+              <button class="config-action-btn neutral" id="cfg-owner-photo-remove" style="display:none" onclick="removeOwnerAvatarImg()">🗑️ Quitar</button>
+            </div>
+          </div>
+          <div class="config-row" id="cfg-owner-photo-opacity-row" style="display:none">
+            <div class="config-row-label">Transparencia del fondo<small>Qué tanto se ve tu foto detrás de los relojes, en el Dashboard</small></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" id="cfg-owner-photo-opacity" min="0" max="70" step="1" value="22" style="width:110px" oninput="setOwnerAvatarImgOpacity(this.value)">
+              <span id="cfg-owner-photo-opacity-val" style="font-size:11px;color:var(--text2);min-width:32px;text-align:right">22%</span>
+            </div>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Tema<small>Oscuro / Claro</small></div>
             <button class="config-action-btn neutral" onclick="toggleTheme()">🌙 / ☀️ Cambiar tema</button>
+          </div>
+          <div class="config-row" style="flex-direction:column;align-items:stretch;gap:8px">
+            <div class="config-row-label">Temas predefinidos<small>Aplica tema + color de acento + fondo juntos, en un clic</small></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="config-action-btn neutral" onclick="aplicarTemaPredefinido('minimalista')">⚪ Minimalista</button>
+              <button class="config-action-btn neutral" onclick="aplicarTemaPredefinido('oscuropro')">🌑 Oscuro Pro</button>
+              <button class="config-action-btn neutral" onclick="aplicarTemaPredefinido('colorido')">🌈 Colorido</button>
+            </div>
           </div>
           <div class="config-row">
             <div class="config-row-label">Orden del menú<small>Reordena las secciones y subsecciones, o muévelas de un grupo a otro</small></div>
             <button class="config-action-btn neutral" onclick="abrirOrdenMenu()">↕ Ordenar</button>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">Accesos rápidos<small>Hasta 4 botones arriba del dashboard para ir directo a lo que más usas</small></div>
+            <button class="config-action-btn neutral" onclick="abrirAccesosRapidosModal()">⚡ Configurar</button>
           </div>
           <div class="config-row">
             <div class="config-row-label">Color de acento<small>Botones, enlaces y resaltados — elige el que quieras</small></div>
@@ -1917,9 +1963,19 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 <div class="container">
 
   <div class="dash-hero">
+    <img id="dash-hero-avatar-bg" src="" alt="" style="display:none;position:absolute;top:0;right:0;height:100%;width:auto;max-width:48%;object-fit:cover;opacity:.22;z-index:0;pointer-events:none;-webkit-mask-image:linear-gradient(to left, black 35%, transparent 100%);mask-image:linear-gradient(to left, black 35%, transparent 100%);">
+    <div style="position:relative;z-index:1">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <div class="dash-greeting" id="dash-greeting">Bienvenido 👋</div>
       <span id="dash-racha-badge" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap"></span>
+    </div>
+    <div id="dash-accesos-rapidos" style="display:none;gap:6px;flex-wrap:wrap;margin:8px 0"></div>
+    <div id="dash-widgets-tip" style="display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin:8px 0;font-size:12px">
+      <span>💡 Tienes widgets ocultos sin activar (más resúmenes y alertas para tu dashboard).</span>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn" style="font-size:11px;padding:4px 10px" onclick="document.getElementById('dash-widgets-tip').style.display='none';localStorage.setItem('miguel_seen_widgets_tip','1');abrirEditorWidgets()">Ver opciones</button>
+        <button class="btn btn-icon" style="width:26px;height:26px;font-size:11px" onclick="document.getElementById('dash-widgets-tip').style.display='none';localStorage.setItem('miguel_seen_widgets_tip','1')">✕</button>
+      </div>
     </div>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
       <div>
@@ -1947,6 +2003,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
         <div style="font-family:var(--mono);font-size:12px;color:var(--text2)" id="dash-last-upd">—</div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px" id="dash-month-label">—</div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -4614,9 +4671,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.55.0';
-const APP_VERSION_DATE = '25/11/26 - 15:20'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = 'Nuevo: versión "beta" (mnegreteee.github.io/financedb/beta/) que lee tus datos reales pero nunca escribe en tu cuenta real — para probar cambios antes de que lleguen a producción.';
+const APP_VERSION = 'v2.57.0';
+const APP_VERSION_DATE = '25/11/26 - 21:19'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Todas las mejoras que estaban en beta ya están en tu app real: categorías con emoji editable, temas prearmados, avatar/foto de perfil (con fondo y transparencia configurable en el Dashboard), fondo de login personalizado, tamaño de widgets, accesos rápidos, alerta de línea de crédito, aviso de widgets ocultos, micro-animaciones, reportes PDF con diseño y paleta de categorías accesible.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -4698,7 +4755,16 @@ function _betaGuardRef(ref){
 // ══════════════════════════════════════════════════════
 const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MONTHS_SHORT=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
-const CAT_COLORS={'🍔 Comida':'#f05c5c','🚗 Transporte':'#f0a53c','🏠 Vivienda':'#5b8def','💊 Salud':'#3ec96e','🎮 Entretenimiento':'#a78bfa','📱 Servicios':'#2dd4bf','👗 Ropa':'#f472b6','📚 Educación':'#60a5fa','💪 Deporte':'#34d399','✈️ Viajes':'#fbbf24','🎁 Regalos':'#e879f9','📦 Otros':'#9ca3af','💼 Trabajo':'#6ee7b7','🏦 Finanzas':'#93c5fd'};
+// Paleta recalculada con el método/validador de accesibilidad de datos (OKLab
+// Delta E bajo simulación de daltonismo + piso de contraste normal-vision):
+// las primeras 8 son la paleta categórica de referencia del método, validada
+// en cadena adyacente (orden fijo, nunca ciclada). Las 6 restantes (Deporte en
+// adelante) son una extensión razonable — Comida...Educación pasan TODOS los
+// checks; de Deporte en adelante, un par queda en banda WARN (6-8 ΔE, legal
+// solo con etiqueta visible — que esta app ya muestra siempre junto al color)
+// y "Otros" se dejó gris a propósito (categoría "misceláneo", no una más).
+// Los NOMBRES/keys no se tocaron — son claves de datos usadas en movimientos/tarjetas/budgets.
+const CAT_COLORS={'🍔 Comida':'#2a78d6','🚗 Transporte':'#eb6834','🏠 Vivienda':'#1baf7a','💊 Salud':'#eda100','🎮 Entretenimiento':'#e87ba4','📱 Servicios':'#008300','👗 Ropa':'#6250d6','📚 Educación':'#e34948','💪 Deporte':'#4f46e5','✈️ Viajes':'#15803d','🎁 Regalos':'#9d174d','📦 Otros':'#9ca3af','💼 Trabajo':'#0369a1','🏦 Finanzas':'#b45309'};
 
 let state={
   currentYear:2026,currentMonth:5,
@@ -4718,6 +4784,11 @@ let state={
   metasAhorro:[],        // metas de ahorro nombradas (vacaciones, auto, etc.) — ver Proyección
   customCategorias:{},   // {nombre: colorHex} — categorías extra creadas por el usuario
   ownerName:'',     // nombre del dueño configurable — vacío = usa currentUser
+  ownerAvatar:'',   // emoji de avatar configurable — vacío = usa la inicial del nombre
+  ownerAvatarImg:'', // foto de perfil (dataURL JPEG, ya redimensionada/recortada) — si está presente, reemplaza al emoji/inicial
+  ownerAvatarImgOpacity:22, // % (0-70) de qué tan visible se ve la foto de fondo detrás de los relojes del Dashboard
+  categoriasFijasRenombradas:{}, // {nombreFijoOriginal: nombreNuevo} — categorías fijas (CAT_COLORS) a las que el usuario les cambió nombre/emoji; pasan a vivir en customCategorias
+  accesosRapidos:[], // [{icono,label,accion}] — hasta 4 accesos configurables, fijados arriba del dashboard
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
   deudas:[],        // [{id,nombre,monto,currency,fecha,nota,status,fechaPago,cuentaPago}]
   combustibleGlp:[],      // recargas GLP
@@ -4885,6 +4956,17 @@ function setSyncStatus(status){
     return;
   }
   dot.className='sync-dot';
+  // En beta ninguna escritura llega de verdad a Firestore (ver _betaGuardRef) —
+  // esto lo deja claro en el MISMO indicador que ya mira todo el mundo, en
+  // vez de depender solo de la franja superior.
+  if(typeof IS_BETA!=='undefined' && IS_BETA){
+    if(status==='saving'){dot.classList.add('sync-saving');lbl.textContent='🧪 simulando guardado...';}
+    else if(status==='ok'){dot.classList.add('sync-saving');lbl.textContent='🧪 simulado (no se guardó de verdad)';}
+    else if(status==='error'){dot.classList.add('sync-err');lbl.textContent='error de red';}
+    else if(status==='loading'){dot.classList.add('sync-saving');lbl.textContent='cargando...';}
+    if(retryBtn) retryBtn.style.display='none';
+    return;
+  }
   if(status==='saving'){dot.classList.add('sync-saving');lbl.textContent='guardando...';}
   else if(status==='ok'){dot.classList.add('sync-ok');lbl.textContent='sincronizado';}
   else if(status==='error'){dot.classList.add('sync-err');lbl.textContent='error de red';}
@@ -6957,6 +7039,108 @@ function loadFondoPersonalizado(){
   if(range) range.value=opacidad;
   const label=document.getElementById('cfg-fondo-opacidad-label');
   if(label) label.textContent=opacidad+'%';
+}
+
+// ── TEMAS PREDEFINIDOS ───────────────────────────────────
+// Combinan, en un solo clic, tema claro/oscuro + color de acento + fondo —
+// en vez de que la persona tenga que ir ajustando cada cosa por separado.
+const TEMAS_PREDEFINIDOS={
+  minimalista:{ nombre:'Minimalista', theme:'light', accent:'#334155', patron:'ninguno', opacidad:8 },
+  oscuropro:  { nombre:'Oscuro Pro',  theme:'dark',  accent:'#5b8def', patron:'diagonales', opacidad:5 },
+  colorido:   { nombre:'Colorido',    theme:'dark',  accent:'#a78bfa', patron:'puntos', opacidad:10 },
+};
+function aplicarTemaPredefinido(key){
+  const t=TEMAS_PREDEFINIDOS[key];
+  if(!t) return;
+  document.documentElement.setAttribute('data-theme', t.theme);
+  localStorage.setItem('miguel_mf_theme', t.theme);
+  setAccentColor(t.accent);
+  const accentPicker=document.getElementById('cfg-accent-picker');
+  if(accentPicker) accentPicker.value=t.accent;
+  localStorage.setItem('miguel_mf_fondo_patron', t.patron);
+  localStorage.setItem('miguel_mf_fondo_opacidad', t.opacidad);
+  aplicarFondoPersonalizado(t.patron, t.opacidad);
+  const selPatron=document.getElementById('cfg-fondo-patron'); if(selPatron) selPatron.value=t.patron;
+  const range=document.getElementById('cfg-fondo-opacidad'); if(range) range.value=t.opacidad;
+  const label=document.getElementById('cfg-fondo-opacidad-label'); if(label) label.textContent=t.opacidad+'%';
+  if(mainChart) renderChart();
+  if(projChart) renderProyeccion();
+  toast('Tema aplicado: '+t.nombre);
+}
+
+// ── ACCESOS RÁPIDOS DEL DASHBOARD ────────────────────────
+// Hasta 4 botones configurables arriba del dashboard, para ir directo a una
+// página o acción sin pasar por el menú. Catálogo fijo (solo navegación o
+// acciones ya existentes, nada que escriba datos) por simplicidad y seguridad.
+const ACCESOS_RAPIDOS_CATALOGO=[
+  {id:'finanzas',     icono:'💵', label:'Finanzas',     pagina:'finanzas'},
+  {id:'tarjetas',     icono:'💳', label:'Tarjetas',     pagina:'tarjetas'},
+  {id:'presupuesto',  icono:'📊', label:'Presupuesto',  pagina:'presupuesto'},
+  {id:'deudas',       icono:'🤝', label:'Deudas',       pagina:'deudas'},
+  {id:'hogar',        icono:'🏡', label:'Hogar',        pagina:'hogar'},
+  {id:'inversiones',  icono:'📈', label:'Inversiones',  pagina:'inversiones'},
+  {id:'calendario',   icono:'📅', label:'Calendario',   pagina:'calendario'},
+  {id:'reportes',     icono:'📄', label:'Reportes',     accion:'openReportesModal'},
+  {id:'buscar',       icono:'🔍', label:'Buscar',       accion:'abrirBusquedaGlobal'},
+];
+function renderAccesosRapidos(){
+  const cont=document.getElementById('dash-accesos-rapidos');
+  if(!cont) return;
+  const elegidos=(state.accesosRapidos||[]).map(id=>ACCESOS_RAPIDOS_CATALOGO.find(a=>a.id===id)).filter(Boolean);
+  if(!elegidos.length){ cont.style.display='none'; cont.innerHTML=''; return; }
+  cont.style.display='flex';
+  cont.innerHTML=elegidos.map(a=>
+    `<button class="btn" style="font-size:12px;padding:6px 12px" onclick="${a.pagina?`showPage('${a.pagina}')`:a.accion+'()'}">${a.icono} ${a.label}</button>`
+  ).join('')+`<button class="btn btn-icon" onclick="abrirAccesosRapidosModal()" title="Configurar accesos rápidos" style="opacity:.6">⚙️</button>`;
+}
+let editorAccesosTemp=null;
+function abrirAccesosRapidosModal(){
+  editorAccesosTemp=[...(state.accesosRapidos||[])];
+  renderAccesosRapidosEditor();
+  document.getElementById('accesos-rapidos-overlay').classList.add('open');
+}
+function closeAccesosRapidosModal(){
+  document.getElementById('accesos-rapidos-overlay').classList.remove('open');
+  editorAccesosTemp=null;
+}
+function renderAccesosRapidosEditor(){
+  const el=document.getElementById('accesos-rapidos-list');
+  el.innerHTML=ACCESOS_RAPIDOS_CATALOGO.map(a=>{
+    const marcado=editorAccesosTemp.includes(a.id);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:13px;cursor:pointer;border-radius:6px" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${marcado?'checked':''} onchange="toggleAccesoRapidoTemp('${a.id}',this.checked)" style="width:auto;margin:0">
+      ${a.icono} ${a.label}
+    </label>`;
+  }).join('');
+}
+function toggleAccesoRapidoTemp(id, checked){
+  if(checked){
+    if(editorAccesosTemp.length>=4){ alert('Máximo 4 accesos rápidos — desmarca uno primero.'); renderAccesosRapidosEditor(); return; }
+    editorAccesosTemp.push(id);
+  } else {
+    editorAccesosTemp=editorAccesosTemp.filter(x=>x!==id);
+  }
+  renderAccesosRapidosEditor();
+}
+function guardarAccesosRapidos(){
+  state.accesosRapidos=editorAccesosTemp||[];
+  saveState();
+  renderAccesosRapidos();
+  closeAccesosRapidosModal();
+  toast('Accesos rápidos actualizados');
+}
+
+// ── AVISO DE WIDGETS OCULTOS ─────────────────────────────
+// Se muestra una sola vez (hasta que se descarta o se abre el editor) si la
+// persona tiene widgets opcionales sin activar — muchos no se enteran de que
+// existen porque arrancan ocultos por defecto.
+function mostrarAvisoWidgetsOcultos(){
+  const tip=document.getElementById('dash-widgets-tip');
+  if(!tip) return;
+  if(localStorage.getItem('miguel_seen_widgets_tip')==='1'){ tip.style.display='none'; return; }
+  ensureDashboardWidgetsDefault();
+  const ocultos=(state.dashboardWidgets||[]).filter(w=>!w.visible).length;
+  tip.style.display = ocultos>=3 ? 'flex' : 'none';
 }
 
 // ── HIDE CIFRAS ───────────────────────────────────────
@@ -13740,6 +13924,47 @@ function renderChartToImage(config, width, height){
   return dataUrl;
 }
 
+// ── Estilo visual de los PDF de reportes: banda de color con el acento que
+// el usuario eligió en Apariencia, y pie de página con numeración — esto
+// NO toca nada de los datos/cálculos de los reportes, solo la presentación.
+function pdfReportHeader(doc, pw, titulo, subtitulo){
+  const accent = localStorage.getItem('miguel_mf_accent') || '#5b8def';
+  const {r,g,b} = hexToRgb(accent);
+  doc.setFillColor(r,g,b);
+  doc.rect(0,0,pw,26,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(18); doc.setFont(undefined,'bold');
+  doc.text(titulo, 14, 15);
+  doc.setFontSize(11); doc.setFont(undefined,'normal');
+  doc.text(subtitulo, 14, 22);
+  doc.setTextColor(0);
+  return 36; // yy inicial tras el encabezado
+}
+function pdfReportSectionTitle(doc, pw, yy, txt){
+  const accent = localStorage.getItem('miguel_mf_accent') || '#5b8def';
+  const {r,g,b} = hexToRgb(shadeColor(accent, 85)); // tinte casi blanco del acento
+  doc.setFillColor(r,g,b); doc.rect(14,yy-5,pw-28,8,'F');
+  doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.setTextColor(40);
+  doc.text(txt,16,yy);
+  doc.setFont(undefined,'normal'); doc.setFontSize(10); doc.setTextColor(0);
+  return yy+9;
+}
+function pdfReportFooter(doc){
+  const total = doc.internal.getNumberOfPages();
+  const accent = localStorage.getItem('miguel_mf_accent') || '#5b8def';
+  const {r,g,b} = hexToRgb(accent);
+  for(let i=1;i<=total;i++){
+    doc.setPage(i);
+    const pw = doc.internal.pageSize.getWidth();
+    doc.setDrawColor(r,g,b); doc.setLineWidth(0.4);
+    doc.line(14,283,pw-14,283);
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text('Generado el '+new Date().toLocaleDateString('es-PE'), 14, 289);
+    doc.text('Página '+i+' de '+total, pw-14, 289, {align:'right'});
+    doc.setTextColor(0);
+  }
+}
+
 // Resume, para el mes del reporte, cuánto se gastó en cada tarjeta según SU
 // PROPIO corte de facturación (t.movs ya está organizado por ciclo), y
 // cuánto se pagó realmente ese mes calendario (buscando los movimientos
@@ -13768,14 +13993,10 @@ function generarReporteMensualPDF(y,m){
   const pw=doc.internal.pageSize.getWidth();
   let yy=20;
   const checkPage=(need)=>{ if(yy+need>280){ doc.addPage(); yy=20; } };
-  const sectionTitle=(txt)=>{ checkPage(15); doc.setFontSize(11); doc.setFont(undefined,'bold'); doc.text(txt,14,yy); yy+=2; doc.setLineWidth(0.2); doc.line(14,yy,pw-14,yy); yy+=7; doc.setFont(undefined,'normal'); doc.setFontSize(10); };
+  const sectionTitle=(txt)=>{ checkPage(15); yy=pdfReportSectionTitle(doc,pw,yy,txt); };
   const row=(label,val,bold)=>{ checkPage(8); if(bold) doc.setFont(undefined,'bold'); doc.text(label,14,yy); doc.text(val,pw-14,yy,{align:'right'}); yy+=6; if(bold) doc.setFont(undefined,'normal'); };
 
-  doc.setFontSize(18); doc.setFont(undefined,'bold');
-  doc.text('Reporte Financiero', 14, yy); yy+=8;
-  doc.setFontSize(12); doc.setFont(undefined,'normal'); doc.setTextColor(100);
-  doc.text(MONTHS[m]+' '+y, 14, yy); yy+=12;
-  doc.setTextColor(0);
+  yy = pdfReportHeader(doc, pw, 'Reporte Financiero', MONTHS[m]+' '+y);
 
   // ── Resumen del mes ──────────────────────────────
   const calc=calcMonth(y,m);
@@ -13927,8 +14148,7 @@ function generarReporteMensualPDF(y,m){
     yy+=8;
   }
 
-  doc.setFontSize(8); doc.setTextColor(150);
-  doc.text('Generado el '+new Date().toLocaleDateString('es-PE'), 14, 290);
+  pdfReportFooter(doc);
   doc.save('reporte_'+MONTHS[m].toLowerCase()+'_'+y+'.pdf');
 }
 
@@ -13937,18 +14157,14 @@ function generarResumenAnualPDF(y){
   const pw=doc.internal.pageSize.getWidth();
   let yy=20;
 
-  doc.setFontSize(20); doc.setFont(undefined,'bold');
-  doc.text('Resumen Anual', 14, yy); yy+=9;
-  doc.setFontSize(13); doc.setFont(undefined,'normal'); doc.setTextColor(100);
-  doc.text(String(y), 14, yy); yy+=12;
-  doc.setTextColor(0);
+  yy = pdfReportHeader(doc, pw, 'Resumen Anual', String(y));
+  const sectionTitle=(txt)=>{ if(yy+15>280){doc.addPage();yy=20;} yy=pdfReportSectionTitle(doc,pw,yy,txt); };
 
   let totalIng=0, totalGas=0;
   const porMes=[];
   for(let m=0;m<12;m++){ const c=calcMonth(y,m); totalIng+=c.ingresos; totalGas+=c.gastos; porMes.push(c); }
 
-  doc.setFontSize(11); doc.text('Total del año', 14, yy); yy+=2;
-  doc.setLineWidth(0.2); doc.line(14,yy,pw-14,yy); yy+=7;
+  sectionTitle('Total del año');
   doc.setFontSize(10);
   doc.text('Total ingresado', 14, yy); doc.text('S/ '+numFmtSigned(totalIng,2), pw-14, yy, {align:'right'}); yy+=6;
   doc.text('Total gastado', 14, yy); doc.text('S/ '+numFmtSigned(totalGas,2), pw-14, yy, {align:'right'}); yy+=6;
@@ -13960,9 +14176,7 @@ function generarResumenAnualPDF(y){
   for(let m=0;m<12;m++){ totalGasPrev+=calcMonth(y-1,m).gastos; }
   if(totalGasPrev>0){
     const varGas=(totalGas-totalGasPrev)/totalGasPrev*100;
-    doc.setFontSize(11); doc.text('Comparado con '+(y-1), 14, yy); yy+=2;
-    doc.line(14,yy,pw-14,yy); yy+=7;
-    doc.setFontSize(10);
+    sectionTitle('Comparado con '+(y-1));
     doc.text('Gastaste '+(varGas>=0?'un '+varGas.toFixed(0)+'% más':'un '+Math.abs(varGas).toFixed(0)+'% menos')+' que en '+(y-1)+'.', 14, yy); yy+=10;
   }
 
@@ -13973,9 +14187,7 @@ function generarResumenAnualPDF(y){
   }
   const catEntries=Object.entries(catTotalesAnio).sort((a,b)=>b[1]-a[1]);
   if(catEntries.length){
-    doc.setFontSize(11); doc.text('Gasto por categoría (todo el año)', 14, yy); yy+=2;
-    doc.line(14,yy,pw-14,yy); yy+=7;
-    doc.setFontSize(10);
+    sectionTitle('Gasto por categoría (todo el año)');
     catEntries.forEach(([cat,total])=>{
       if(yy>270){ doc.addPage(); yy=20; }
       doc.text(stripEmojiPrefix(cat), 14, yy); doc.text('S/ '+numFmtSigned(total,2), pw-14, yy, {align:'right'}); yy+=6;
@@ -13983,9 +14195,7 @@ function generarResumenAnualPDF(y){
     yy+=4;
   }
 
-  if(yy>250){ doc.addPage(); yy=20; }
-  doc.setFontSize(11); doc.text('Detalle mes a mes', 14, yy); yy+=2;
-  doc.line(14,yy,pw-14,yy); yy+=7;
+  sectionTitle('Detalle mes a mes');
   doc.setFontSize(9); doc.setTextColor(120);
   doc.text('Mes', 14, yy); doc.text('Ingresos', 90, yy); doc.text('Gastos', 130, yy); doc.text('Resultado', pw-14, yy, {align:'right'});
   doc.setTextColor(0);
@@ -13999,8 +14209,7 @@ function generarResumenAnualPDF(y){
     yy+=6;
   });
 
-  doc.setFontSize(8); doc.setTextColor(150);
-  doc.text('Generado el '+new Date().toLocaleDateString('es-PE'), 14, 290);
+  pdfReportFooter(doc);
   doc.save('resumen_anual_'+y+'.pdf');
 }
 
@@ -15947,6 +16156,7 @@ function saveNewCuenta(){
 
 // ── GESTIONAR CATEGORÍAS ──────────────────────────────
 let editingCategoriaName=null;
+let editingCategoriaEraFija=false; // true si se está editando una de las 14 categorías fijas (CAT_COLORS), no una personalizada
 
 function openCategoriasModal(){
   cancelEditCategoria(); // asegura que el formulario arranque en modo "nueva categoría"
@@ -15960,18 +16170,26 @@ function closeCategoriasModal(){
 function renderCategoriasList(){
   const el=document.getElementById('categorias-list');
   const custom=state.customCategorias||{};
+  const renombradas=state.categoriasFijasRenombradas||{};
   let h='';
-  // Fijas (14) — no se pueden eliminar ni editar, solo se muestran de referencia
+  // Fijas (14) — el nombre (con su emoji) y el color se pueden editar; al
+  // hacerlo pasan a vivir en customCategorias y la original deja de listarse
+  // acá (ver saveNewCategoria). No se pueden eliminar del todo, solo renombrar.
   Object.entries(CAT_COLORS).forEach(([name,color])=>{
+    if(renombradas[name]) return; // ya fue renombrada/re-emojizada — ahora vive como personalizada
+    const nameEsc=name.replace(/'/g,"\\'");
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px">
         <span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0"></span>
         <span style="font-size:13px;font-weight:500">${escapeHtml(name)}</span>
         <span style="font-size:9px;color:var(--text3);background:var(--bg3);padding:1px 6px;border-radius:8px">fija</span>
       </div>
+      <div style="display:flex;gap:5px">
+        <button class="config-action-btn neutral" onclick="openEditCategoria('${nameEsc}', true)" style="font-size:10px;padding:3px 8px" title="Cambiar su emoji, nombre o color">✏️</button>
+      </div>
     </div>`;
   });
-  // Personalizadas — se pueden editar y eliminar
+  // Personalizadas (incluye las fijas ya renombradas) — se pueden editar y eliminar
   Object.entries(custom).forEach(([name,color])=>{
     const nameEsc=name.replace(/'/g,"\\'");
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -15988,11 +16206,13 @@ function renderCategoriasList(){
   el.innerHTML=h;
 }
 
-// Abre el formulario en modo "editar" para una categoría personalizada
-function openEditCategoria(name){
+// Abre el formulario en modo "editar" para una categoría (personalizada, o
+// fija cuando esFija=true — ver nota en renderCategoriasList).
+function openEditCategoria(name, esFija){
   editingCategoriaName=name;
+  editingCategoriaEraFija=!!esFija;
   document.getElementById('ncat-name').value=name;
-  document.getElementById('ncat-color').value=(state.customCategorias||{})[name]||'#a78bfa';
+  document.getElementById('ncat-color').value = esFija ? (CAT_COLORS[name]||'#a78bfa') : ((state.customCategorias||{})[name]||'#a78bfa');
   document.getElementById('ncat-form-title').textContent='✏️ Editando: '+name;
   document.getElementById('ncat-save-btn').textContent='💾 Guardar cambios';
   document.getElementById('ncat-cancel-btn').style.display='inline-flex';
@@ -16000,6 +16220,7 @@ function openEditCategoria(name){
 }
 function cancelEditCategoria(){
   editingCategoriaName=null;
+  editingCategoriaEraFija=false;
   document.getElementById('ncat-name').value='';
   document.getElementById('ncat-color').value='#a78bfa';
   document.getElementById('ncat-form-title').textContent='Nueva categoría';
@@ -16034,12 +16255,20 @@ function saveNewCategoria(){
   if(editingCategoriaName){
     // ── Modo edición ──
     const oldName=editingCategoriaName;
-    const oldColor=(state.customCategorias||{})[oldName];
+    const eraFija=editingCategoriaEraFija;
+    const oldColor = eraFija ? CAT_COLORS[oldName] : (state.customCategorias||{})[oldName];
     if(name!==oldName && getAllCategorias()[name]){alert('Ya existe una categoría con ese nombre.');return;}
     if(!state.customCategorias) state.customCategorias={};
     delete state.customCategorias[oldName];
     state.customCategorias[name]=color;
     if(name!==oldName) renameCategoriaEverywhere(oldName,name);
+    if(eraFija){
+      // Era una de las 14 fijas: queda registrada como "reemplazada" para
+      // que renderCategoriasList/getAllCategorias dejen de mostrar la
+      // original y usen esta versión personalizada en su lugar.
+      if(!state.categoriasFijasRenombradas) state.categoriasFijasRenombradas={};
+      state.categoriasFijasRenombradas[oldName]=name;
+    }
     // Si solo cambió el color (mismo nombre), "Eliminar" puede restaurarlo
     // solo. Si además se renombró en TODA la app, deshacerlo automático es
     // más riesgoso que útil — se deja como registro informativo.
@@ -16093,7 +16322,11 @@ function updateAccountSelects(){
 // Devuelve TODAS las categorías disponibles: las 14 fijas + las que el
 // usuario haya creado desde "Gestionar Categorías".
 function getAllCategorias(){
-  return {...CAT_COLORS, ...(state.customCategorias||{})};
+  const renombradas=state.categoriasFijasRenombradas||{};
+  const fijasVigentes = renombradas && Object.keys(renombradas).length
+    ? Object.fromEntries(Object.entries(CAT_COLORS).filter(([k])=>!renombradas[k]))
+    : CAT_COLORS;
+  return {...fijasVigentes, ...(state.customCategorias||{})};
 }
 
 // Repuebla los 3 desplegables de categoría (movimientos, consumo de tarjeta,
@@ -19755,6 +19988,12 @@ const DASHBOARD_WIDGET_DEFS = {
       <div id="dash-alertas-presupuesto-body"><div class="dash-empty">Cargando...</div></div>
       <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('presupuesto')">Ver Presupuesto →</button></div>
     </div>`},
+  'alerta-linea-credito': {label:'💳⚠️ Línea de crédito alta', size:'medium', shell:()=>`
+    <div class="card" style="padding:18px" id="dash-linea-credito-card">
+      <div class="dash-section-title">💳⚠️ Línea de crédito alta</div>
+      <div id="dash-linea-credito-body"><div class="dash-empty">Cargando...</div></div>
+      <div style="margin-top:10px"><button class="btn" style="width:100%;font-size:11px" onclick="showPage('tarjetas')">Ver Tarjetas →</button></div>
+    </div>`},
   'membresias-tc': {label:'🎫 Estado de Membresías', size:'medium', shell:()=>`
     <div class="card" style="padding:18px" id="dash-membresias-tc-card">
       <div class="dash-section-title">🎫 Estado de Membresías</div>
@@ -19862,6 +20101,7 @@ const DASHBOARD_WIDGETS_DEFAULT = [
   {id:'kpi-afp', visible:false}, {id:'cuotas-resumen', visible:false},
   {id:'balance-neto-persona', visible:false}, {id:'todo-pendiente', visible:false},
   {id:'alertas-presupuesto', visible:false},
+  {id:'alerta-linea-credito', visible:false},
   {id:'membresias-tc', visible:false},
   {id:'wx-conectado', visible:true}, {id:'wx-gastos-mes', visible:false}, {id:'wx-gasto-categoria', visible:false}, {id:'wx-gastos-por-mes', visible:false}, {id:'wx-proximos-pagos', visible:false}, {id:'wx-compras-camino', visible:false}, {id:'wx-aprobaciones', visible:false}, {id:'wx-dolares', visible:false}, {id:'wx-ahorros', visible:false}, {id:'wx-racha', visible:false}, {id:'wx-deuda-evolucion', visible:false}, {id:'wx-vencimientos', visible:false}, {id:'hw-fondo', visible:false}, {id:'hw-mealcanza', visible:false}, {id:'hw-diacompra', visible:false}, {id:'hw-subs', visible:false}, {id:'hw-dups', visible:false}, {id:'hw-tags', visible:false}, {id:'hw-meta', visible:false}, {id:'hw-alertas', visible:false},
 ];
@@ -19951,7 +20191,10 @@ function renderDashboardWidgets(){
   });
   cont.innerHTML=filasFinal.map(items=>{
     const html=items.map(({w,def})=>
-      `<div class="dash-widget-wrap" data-wid="${w.id}" style="flex:1 1 0">${def.shell()}</div>`
+      // "ancho" (1 = normal, 2 = grande) es un peso de flex-grow relativo a
+      // sus compañeros de fila — un widget "grande" ocupa el doble de ancho
+      // que uno normal en la misma fila, sin tocar el reparto por filas.
+      `<div class="dash-widget-wrap" data-wid="${w.id}" style="flex:${w.ancho||1} 1 0">${def.shell()}</div>`
     ).join('');
     return `<div class="dash-widgets-row">${html}</div>`;
   }).join('');
@@ -20010,6 +20253,7 @@ function renderEditorWidgetsList(){
         <input type="number" min="1" step="1" value="${fila}" oninput="ewSetRow('${w.id}',this.value)" style="width:44px;text-align:center;padding:2px 4px;border-radius:4px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)" title="Numero de fila: los widgets con el mismo numero comparten fila en partes iguales">
         <span style="font-size:9px;color:var(--text3);white-space:nowrap">fila · ${anchoHint}</span>
       </div>
+      <button class="ew-arrow-btn" onclick="ewToggleAncho('${w.id}')" style="font-size:10px;padding:3px 7px;white-space:nowrap" title="Alterna entre tamaño normal y grande (el doble de ancho dentro de su fila)">${(w.ancho||1)>=2?'🔳 Grande':'⬜ Normal'}</button>
       <div style="display:flex;flex-direction:column;gap:2px">
         <button class="ew-arrow-btn" onclick="ewMover(${idx},-1)" ${idx===0?'disabled':''}>▲</button>
         <button class="ew-arrow-btn" onclick="ewMover(${idx},1)" ${idx===editorWidgetsTemp.length-1?'disabled':''}>▼</button>
@@ -20020,6 +20264,12 @@ function renderEditorWidgetsList(){
 function ewToggle(id, checked){
   const w=editorWidgetsTemp.find(x=>x.id===id);
   if(w) w.visible=checked;
+  renderEditorWidgetsList();
+}
+function ewToggleAncho(id){
+  const w=editorWidgetsTemp.find(x=>x.id===id);
+  if(!w) return;
+  w.ancho = (w.ancho||1)>=2 ? 1 : 2;
   renderEditorWidgetsList();
 }
 function ewSetRow(id, val){
@@ -20079,9 +20329,16 @@ function renderDashboard(){
   const hour = now.getHours();
   const greet = hour<12?'Buenos días':hour<18?'Buenas tardes':'Buenas noches';
   const name  = (state.ownerName||'').trim() || (currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
+  const avatar = (state.ownerAvatar||'').trim();
+  const avatarImg = (state.ownerAvatarImg||'').trim();
   const el=document.getElementById('dash-greeting');
-  if(el) el.textContent = greet+' '+name+' 👋';
+  if(el){
+    if(avatarImg) el.innerHTML = `<img src="${avatarImg}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-5px;margin-right:6px">`+escapeHtml(greet+' '+name+' 👋');
+    else el.textContent = (avatar?avatar+' ':'')+greet+' '+name+' 👋';
+  }
   renderRachaRegistro();
+  renderAccesosRapidos();
+  mostrarAvisoWidgetsOcultos();
 
   // ── Disponible actual ──────────────────────────────
   const saldoCur  = reconstructSaldoAt(curY, curM);
@@ -20317,6 +20574,32 @@ function renderDashboard(){
         </div>`;
       }).join('');
     }
+  }
+
+  // ── Alerta de línea de crédito alta ─────────────────
+  const lcEl = document.getElementById('dash-linea-credito-body');
+  if(lcEl){
+    try{
+      const dp=gsDisponible();
+      const enAlerta=(dp.tarjetas||[]).filter(x=>x.linea>0 && x.usadoPct>=70).sort((a,b)=>b.usadoPct-a.usadoPct);
+      if(!enAlerta.length){
+        lcEl.innerHTML='<div class="dash-empty"><div class="dash-empty-icon">✅</div>Ninguna tarjeta pasa el 70% de su línea.</div>';
+      } else {
+        lcEl.innerHTML=enAlerta.map(x=>{
+          const nombre=((x.t.banco||'')+' '+(x.t.cat||'')).trim();
+          const tono=x.usadoPct>=90?'var(--red)':'var(--amber)';
+          const libreFmt=x.cur==='USD'?('$ '+x.libre.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})):('S/ '+x.libre.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+          return `<div onclick="showPage('tarjetas');setTimeout(()=>openTCDetail('${x.t.id}'),50)" style="cursor:pointer;padding:6px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:13px;font-weight:600">${escapeHtml(nombre)}</span>
+              <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${tono}">${x.usadoPct.toFixed(0)}%</span>
+            </div>
+            <div style="height:3px;background:var(--bg4);border-radius:2px;margin-top:4px"><div style="height:3px;border-radius:2px;width:${x.usadoPct}%;background:${tono}"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Te quedan ${libreFmt} de línea libre</div>
+          </div>`;
+        }).join('');
+      }
+    }catch(e){ lcEl.innerHTML='<div class="dash-empty">No se pudo calcular.</div>'; console.warn('Cálculo omitido por error:', e&&e.message); }
   }
 
   // ── Estado tarjetas ────────────────────────────────
@@ -25981,14 +26264,123 @@ function deleteFuelRow(type, id){
 // ── NOMBRE DEL DUEÑO / BRANDING ───────────────────────
 function updateLoginBranding(){
   const name = (state.ownerName||'').trim();
+  const avatar = (state.ownerAvatar||'').trim();
+  const avatarImg = (state.ownerAvatarImg||'').trim();
   const letter = name ? name.charAt(0).toUpperCase() : 'M';
   const logoEl = document.getElementById('login-logo-letter');
   const titleEl = document.getElementById('login-title');
-  if(logoEl) logoEl.textContent = letter;
+  if(logoEl){
+    // La foto de perfil (si existe) siempre gana sobre el emoji/inicial.
+    if(avatarImg) logoEl.innerHTML = `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
+    else logoEl.textContent = avatar || letter;
+  }
   if(titleEl) titleEl.textContent = name ? name+"'s Dashboard" : 'Finance Dashboard';
   // Update config display
   const cfgEl = document.getElementById('cfg-owner-name-display');
   if(cfgEl) cfgEl.textContent = name || 'Sin configurar';
+  const avEl = document.getElementById('cfg-owner-avatar');
+  if(avEl && document.activeElement!==avEl) avEl.value = avatar;
+  const prevEl = document.getElementById('cfg-owner-photo-preview');
+  if(prevEl) prevEl.innerHTML = avatarImg ? `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover">` : '—';
+  const rmBtn = document.getElementById('cfg-owner-photo-remove');
+  if(rmBtn) rmBtn.style.display = avatarImg ? '' : 'none';
+  // Foto de fondo, atenuada, detrás de los relojes mundiales en la tarjeta
+  // de arriba del Dashboard (pedido de Miguel el 25/11/26) — mismo campo
+  // que el avatar del login, solo se muestra/oculta según si hay foto.
+  // La transparencia es controlable (pedido el 25/11/26): state.ownerAvatarImgOpacity, 0-70%.
+  const heroImgEl = document.getElementById('dash-hero-avatar-bg');
+  const opacityRow = document.getElementById('cfg-owner-photo-opacity-row');
+  if(heroImgEl){
+    if(avatarImg){
+      heroImgEl.src = avatarImg;
+      heroImgEl.style.display = 'block';
+      const op = (typeof state.ownerAvatarImgOpacity==='number') ? state.ownerAvatarImgOpacity : 22;
+      heroImgEl.style.opacity = (op/100);
+      const opValEl = document.getElementById('cfg-owner-photo-opacity-val');
+      if(opValEl) opValEl.textContent = op+'%';
+      const opRangeEl = document.getElementById('cfg-owner-photo-opacity');
+      if(opRangeEl && document.activeElement!==opRangeEl) opRangeEl.value = op;
+      if(opacityRow) opacityRow.style.display = 'flex';
+    } else {
+      heroImgEl.style.display = 'none';
+      heroImgEl.removeAttribute('src');
+      if(opacityRow) opacityRow.style.display = 'none';
+    }
+  }
+}
+
+// Qué tan visible se ve la foto de perfil de fondo detrás de los relojes
+// del Dashboard (0 = casi invisible, 70 = bien marcada). El slider se
+// mueve en vivo (oninput) para que Miguel vea el efecto al instante, sin
+// esperar a soltar el control.
+function setOwnerAvatarImgOpacity(value){
+  let v = parseInt(value,10);
+  if(isNaN(v)) v = 22;
+  v = Math.max(0, Math.min(70, v));
+  state.ownerAvatarImgOpacity = v;
+  saveState();
+  const heroImgEl = document.getElementById('dash-hero-avatar-bg');
+  if(heroImgEl) heroImgEl.style.opacity = (v/100);
+  const opValEl = document.getElementById('cfg-owner-photo-opacity-val');
+  if(opValEl) opValEl.textContent = v+'%';
+}
+
+// Avatar (emoji) configurable — se muestra en vez de la inicial en el
+// círculo del login y junto al saludo del dashboard. Vacío = usa la inicial.
+// (Si hay una foto de perfil configurada, esta queda ignorada — ver abajo.)
+function setOwnerAvatar(valor){
+  const v=(valor||'').trim().slice(0,4);
+  state.ownerAvatar=v;
+  saveState();
+  updateLoginBranding();
+  if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')){
+    renderDashboard();
+  }
+  toast(v?'Avatar actualizado':'Avatar restablecido (se usa tu inicial)');
+}
+
+// Foto de perfil real (ej. una captura de tu Memoji/Bitmoji, o cualquier
+// foto). Tiene prioridad sobre el avatar de emoji y la inicial. Se procesa
+// 100% en el navegador: se recorta a un cuadrado centrado ("cover", sin
+// deformar) y se reduce a 200×200 en JPEG antes de guardarla — nunca se
+// guarda el archivo original — para no inflar el documento de Firestore
+// con fotos de varios MB (el estado completo se sincroniza seguido).
+function setOwnerAvatarImg(file){
+  if(!file) return;
+  if(!/^image\//.test(file.type)){ alert('Elige un archivo de imagen (JPG, PNG, HEIC, etc.).'); return; }
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const size = 200; // tamaño final, cuadrado
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side)/2, sy = (img.height - side)/2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        if(dataUrl.length > 350000){ alert('La foto quedó muy pesada incluso comprimida. Prueba con otra imagen (ideal: una foto cuadrada o casi cuadrada).'); return; }
+        state.ownerAvatarImg = dataUrl;
+        saveState();
+        updateLoginBranding();
+        if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+        toast('Foto de perfil actualizada');
+      }catch(err){ alert('No se pudo procesar esa imagen: '+err.message); }
+    };
+    img.onerror = ()=>alert('No se pudo leer esa imagen. Prueba con otro archivo.');
+    img.src = e.target.result;
+  };
+  reader.onerror = ()=>alert('No se pudo leer el archivo.');
+  reader.readAsDataURL(file);
+}
+function removeOwnerAvatarImg(){
+  state.ownerAvatarImg = '';
+  saveState();
+  updateLoginBranding();
+  if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+  toast('Foto de perfil quitada — se usa tu avatar/inicial de nuevo');
 }
 
 function editOwnerName(){
@@ -32519,13 +32911,18 @@ function seedDemo(){
     if(cached){
       const parsed = JSON.parse(cached);
       const name = (parsed.ownerName||'').trim();
-      if(name){
-        const letter = name.charAt(0).toUpperCase();
+      const avatar = (parsed.ownerAvatar||'').trim();
+      const avatarImg = (parsed.ownerAvatarImg||'').trim();
+      if(name || avatarImg){
+        const letter = name ? name.charAt(0).toUpperCase() : 'M';
         document.addEventListener('DOMContentLoaded', function(){
           const logoEl = document.getElementById('login-logo-letter');
           const titleEl = document.getElementById('login-title');
-          if(logoEl) logoEl.textContent = letter;
-          if(titleEl) titleEl.textContent = name+"'s Dashboard";
+          if(logoEl){
+            if(avatarImg) logoEl.innerHTML = `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
+            else logoEl.textContent = avatar || letter;
+          }
+          if(titleEl && name) titleEl.textContent = name+"'s Dashboard";
         });
       }
     }
@@ -32536,6 +32933,52 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.57.0",
+  "fecha": "25/11/26",
+  "cambios": [
+   "✅ PROMOVIDO A PRODUCCIÓN: todo lo que estaba solo en beta (v2.56.0 a v2.56.3) ya está en tu app real, revisado y confirmado. Resumen completo: (1) emoji/nombre editable en las 14 categorías fijas, (2) 3 temas prearmados (Minimalista, Oscuro Pro, Colorido), (3) avatar de perfil — emoji o una FOTO real, con fondo atenuado y transparencia configurable detrás de los relojes mundiales del Dashboard, (4) tu fondo personalizado también se ve en la pantalla de login, (5) tamaño de widget (Normal/Grande) en el editor del Dashboard, (6) accesos rápidos configurables (hasta 4) arriba del Dashboard, (7) widget \"Línea de crédito alta\" (tarjetas con 70%+ de uso), (8) aviso de widgets ocultos cuando hay 3 o más sin activar, (9) micro-animaciones al abrir/cerrar ventanas, (10) reportes PDF (mensual/anual) con encabezado de color y numeración de páginas, (11) paleta de colores de categorías recalculada para ser accesible (daltonismo) — mismos nombres de categoría, solo cambiaron los tonos. De ahora en adelante `index.html` y `beta/index.html` vuelven a ser el mismo archivo."
+  ]
+ },
+ {
+  "v": "v2.56.3",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA: nuevo control deslizante \"Transparencia del fondo\" en Configuración → Apariencia (aparece debajo de Foto de perfil, solo si subiste una) — mueve el slider y el fondo detrás de los relojes del Dashboard cambia al instante, de casi invisible a bien marcado."
+  ]
+ },
+ {
+  "v": "v2.56.2",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA: tu foto de perfil (si la configuraste en Configuración → Apariencia → Foto de perfil) ahora también aparece, atenuada y a toda la altura de la tarjeta, de fondo detrás de los relojes mundiales en el Dashboard — se desvanece hacia el lado del Patrimonio Neto para no tapar las cifras. En pantallas angostas (celular) no se muestra, porque ahí la tarjeta se apila y taparía el texto."
+  ]
+ },
+ {
+  "v": "v2.56.1",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA: nueva \"Foto de perfil\" en Configuración → Apariencia, justo debajo del Avatar (emoji). Permite subir una foto real (tu Memoji/Bitmoji exportado como imagen, o cualquier foto) — se recorta a un cuadrado y se reduce de tamaño en el propio navegador antes de guardarla (nunca se sube el archivo original). Si está configurada, reemplaza al emoji/inicial en el círculo del login y en el saludo del Dashboard. Botón \"🗑️ Quitar\" para volver al emoji/inicial."
+  ]
+ },
+ {
+  "v": "v2.56.0",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA (mnegreteee.github.io/financedb/beta/) — 11 mejoras de diseño y personalización, para probar antes de llevarlas a la app real:",
+   "🏷️ Emoji/nombre editable en las 14 categorías fijas (antes solo se podía en las personalizadas) — se edita igual que cualquier categoría, desde Configuración → Categorías.",
+   "🎨 3 temas prearmados (Minimalista, Oscuro Pro, Colorido) en Configuración → Apariencia: aplican tema claro/oscuro, color de acento y fondo con un clic.",
+   "🙂 Avatar/emoji de perfil configurable (Configuración → tu nombre), se ve en el saludo del Dashboard y la esquina superior.",
+   "🖼️ El fondo personalizado (patrón/color) ahora también se ve en la pantalla de login, no solo adentro de la app.",
+   "↔️ Tamaño de widget (Normal/Grande) en el editor de widgets del Dashboard (⚙️ junto a \"Resumen\").",
+   "⚡ Accesos rápidos configurables (hasta 4) arriba del Dashboard, con su propio editor.",
+   "💳⚠️ Nuevo widget de Dashboard: \"Línea de crédito alta\" — avisa cuando una tarjeta supera 70% de uso de su línea.",
+   "💡 Aviso discreto en el Dashboard cuando hay 3+ widgets ocultos, con acceso directo a activarlos (se puede cerrar y no vuelve a salir).",
+   "✨ Micro-animaciones al abrir/cerrar ventanas (modales) de toda la app.",
+   "📄 Reportes PDF (mensual y resumen anual) con nuevo diseño: encabezado y títulos de sección con tu color de acento, numeración de páginas.",
+   "🎨 Paleta de colores de categorías recalculada con un método de accesibilidad (distinguible para daltonismo) — mismos nombres de categoría, solo cambiaron los colores de las 14 fijas."
+  ]
+ },
  {
   "v": "v2.55.0",
   "fecha": "25/11/26",
@@ -35345,6 +35788,18 @@ if(state.projGoals){
         <button id="ncat-cancel-btn" class="btn" onclick="cancelEditCategoria()" style="display:none">Cancelar</button>
         <button id="ncat-save-btn" class="btn btn-primary" onclick="saveNewCategoria()">+ Agregar categoría</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ACCESOS RÁPIDOS DEL DASHBOARD -->
+<div class="modal-overlay" id="accesos-rapidos-overlay" onclick="if(event.target===this)closeAccesosRapidosModal()">
+  <div class="modal modal-sm">
+    <div class="modal-title"><span>⚡ Accesos rápidos</span><button class="modal-close" onclick="closeAccesosRapidosModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Elige hasta 4 — aparecen como botones arriba del dashboard, para ir directo sin usar el menú.</div>
+    <div id="accesos-rapidos-list" style="display:flex;flex-direction:column;gap:4px;max-height:55vh;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-primary" onclick="guardarAccesosRapidos()">💾 Guardar</button>
     </div>
   </div>
 </div>

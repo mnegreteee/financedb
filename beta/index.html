@@ -4671,9 +4671,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.56.3';
-const APP_VERSION_DATE = '25/11/26 - 21:15'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 Solo en beta: agregado un control deslizante de transparencia para la foto de fondo del Dashboard (Configuración → Apariencia).';
+const APP_VERSION = 'v2.57.0';
+const APP_VERSION_DATE = '25/11/26 - 21:19'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Todas las mejoras que estaban en beta ya están en tu app real: categorías con emoji editable, temas prearmados, avatar/foto de perfil (con fondo y transparencia configurable en el Dashboard), fondo de login personalizado, tamaño de widgets, accesos rápidos, alerta de línea de crédito, aviso de widgets ocultos, micro-animaciones, reportes PDF con diseño y paleta de categorías accesible.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -32933,6 +32933,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.57.0",
+  "fecha": "25/11/26",
+  "cambios": [
+   "✅ PROMOVIDO A PRODUCCIÓN: todo lo que estaba solo en beta (v2.56.0 a v2.56.3) ya está en tu app real, revisado y confirmado. Resumen completo: (1) emoji/nombre editable en las 14 categorías fijas, (2) 3 temas prearmados (Minimalista, Oscuro Pro, Colorido), (3) avatar de perfil — emoji o una FOTO real, con fondo atenuado y transparencia configurable detrás de los relojes mundiales del Dashboard, (4) tu fondo personalizado también se ve en la pantalla de login, (5) tamaño de widget (Normal/Grande) en el editor del Dashboard, (6) accesos rápidos configurables (hasta 4) arriba del Dashboard, (7) widget \"Línea de crédito alta\" (tarjetas con 70%+ de uso), (8) aviso de widgets ocultos cuando hay 3 o más sin activar, (9) micro-animaciones al abrir/cerrar ventanas, (10) reportes PDF (mensual/anual) con encabezado de color y numeración de páginas, (11) paleta de colores de categorías recalculada para ser accesible (daltonismo) — mismos nombres de categoría, solo cambiaron los tonos. De ahora en adelante `index.html` y `beta/index.html` vuelven a ser el mismo archivo."
+  ]
+ },
  {
   "v": "v2.56.3",
   "fecha": "25/11/26",
