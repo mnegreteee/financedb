@@ -890,6 +890,24 @@ body.compact-mode .tc-grid{grid-template-columns:1fr!important;}
 body.compact-mode .modal,.modal-lg{width:95vw!important;}
 body.compact-mode .nav-right .last-updated{display:none!important;}
 body.compact-mode .anual-table{font-size:11px;}
+/* 25/11/26 — densidad real: antes "compact-mode" solo adaptaba columnas del
+   grid; ahora también reduce paddings/alturas en tarjetas, filas de config,
+   tablas y modales en TODA la app, para ver más información de un vistazo. */
+body.compact-mode .card{padding:12px!important;}
+body.compact-mode .config-row{padding:8px 0!important;}
+body.compact-mode .dash-mov-row{padding:6px 0!important;}
+body.compact-mode table td,body.compact-mode table th{padding:5px 6px!important;}
+body.compact-mode .modal-body,body.compact-mode .modal-content{padding:12px!important;}
+body.compact-mode .dash-kpi{padding:10px!important;}
+body.compact-mode .section-title,body.compact-mode .dash-section-title{margin-bottom:6px!important;}
+body.compact-mode .btn,body.compact-mode .config-action-btn{padding:4px 9px!important;font-size:11px!important;}
+/* Modo privacidad — estilo "Difuminado" (25/11/26): alternativa al texto
+   "••••" de siempre. El selector por substring de `style` engancha los ~220
+   montos que ya usan font-family:var(--mono) en toda la app, sin tener que
+   agregarles una clase nueva uno por uno. :hover permite espiar sin apagar
+   el modo (solo en mouse; en celular se apaga con el mismo botón/atajo). */
+body.privacy-blur-active [style*="var(--mono)"]{filter:blur(5px);transition:filter .15s;}
+body.privacy-blur-active [style*="var(--mono)"]:hover{filter:none;}
 
 
 /* ══ DEUDAS / PRÉSTAMOS ══ */
@@ -1552,6 +1570,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
   <div class="nav-scroll-hint" id="nav-scroll-hint">›</div>
   <div class="nav-right">
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    <div id="nav-vistas-favoritas" style="display:none;gap:4px"></div>
     <button class="eye-btn" id="compact-btn" onclick="toggleCompact()" title="Adaptar vista al dispositivo" style="font-size:15px">📱</button>
     <button class="eye-btn" id="search-btn" onclick="abrirBusquedaGlobal()" title="Buscar en toda la app" style="font-size:15px">🔍</button>
     <button class="eye-btn" id="demo-btn" onclick="toggleDemoMode()" title="Modo demo (números aleatorios)" style="font-size:15px">🎭</button>
@@ -1575,6 +1594,13 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" onclick="editOwnerName()">✏ Editar</button>
           </div>
           <div class="config-row">
+            <div class="config-row-label">Saludo del Dashboard<small>Reemplaza el "Buenos días/tardes/noches" automático — déjalo vacío para volver al automático</small></div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="text" id="cfg-owner-saludo" maxlength="40" placeholder="Ej. Qué tal, crack" style="flex:1;min-width:0;height:34px;padding:0 8px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)" onchange="setOwnerSaludo(this.value)">
+              <button class="config-action-btn neutral" onclick="setOwnerSaludo('')">↺</button>
+            </div>
+          </div>
+          <div class="config-row">
             <div class="config-row-label">Avatar<small>Un emoji que te represente — se ve en el login y en el saludo del dashboard (se ignora si subes una foto de perfil)</small></div>
             <div style="display:flex;align-items:center;gap:6px">
               <input type="text" id="cfg-owner-avatar" maxlength="4" placeholder="😀" style="width:52px;height:34px;text-align:center;font-size:18px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text)" onchange="setOwnerAvatar(this.value)">
@@ -1589,6 +1615,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
               <button class="config-action-btn neutral" onclick="document.getElementById('cfg-owner-photo-input').click()">📷 Subir foto</button>
               <button class="config-action-btn neutral" id="cfg-owner-photo-remove" style="display:none" onclick="removeOwnerAvatarImg()">🗑️ Quitar</button>
             </div>
+          </div>
+          <div class="config-row" id="cfg-owner-photo-galeria-row" style="display:none">
+            <div class="config-row-label">Galería de fotos<small>Las que subiste antes — toca una para volver a usarla</small></div>
+            <div id="cfg-owner-photo-galeria" style="display:flex;gap:6px"></div>
           </div>
           <div class="config-row" id="cfg-owner-photo-opacity-row" style="display:none">
             <div class="config-row-label">Transparencia del fondo<small>Qué tanto se ve tu foto detrás de los relojes, en el Dashboard</small></div>
@@ -1618,9 +1648,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" onclick="abrirAccesosRapidosModal()">⚡ Configurar</button>
           </div>
           <div class="config-row">
-            <div class="config-row-label">Color de acento<small>Botones, enlaces y resaltados — elige el que quieras</small></div>
-            <div style="display:flex;align-items:center;gap:6px">
+            <div class="config-row-label">Vistas favoritas<small>Hasta 3 íconos anclados en la barra de arriba — se ven en cualquier página, no solo el Dashboard</small></div>
+            <button class="config-action-btn neutral" onclick="abrirVistasFavoritasModal()">📌 Configurar</button>
+          </div>
+          <div class="config-row" style="flex-direction:column;align-items:stretch;gap:8px">
+            <div class="config-row-label">Color de acento<small>Botones, enlaces y resaltados — elige uno sugerido o el que quieras</small></div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <input type="color" id="cfg-accent-picker" value="#5b8def" style="width:34px;height:30px;padding:2px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer" onchange="setAccentColor(this.value)" title="Elegir color de acento">
+              <div id="cfg-accent-swatches" style="display:flex;gap:5px;flex-wrap:wrap"></div>
               <button class="config-action-btn neutral" onclick="resetAccentColor()">↺ Restablecer</button>
             </div>
           </div>
@@ -1643,8 +1678,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
             <button class="config-action-btn neutral" id="cfg-numeros-compactos-btn" onclick="toggleNumerosCompactosDefault()">🔢 Mostrando compactos (15.4K)</button>
           </div>
           <div class="config-row">
-            <div class="config-row-label">Ocultar cifras<small>Enmascara todos los montos</small></div>
-            <button class="config-action-btn neutral" onclick="toggleHide()">👁 Ocultar / Mostrar</button>
+            <div class="config-row-label">Ocultar cifras<small>Enmascara todos los montos — también con el ícono 👁 de la barra de arriba, o Ctrl/Cmd+Shift+H</small></div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <select id="cfg-privacy-style" onchange="setPrivacyStyle(this.value)" style="padding:5px 6px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:11px">
+                <option value="texto">Texto "••••"</option>
+                <option value="blur">Difuminado</option>
+              </select>
+              <button class="config-action-btn neutral" onclick="toggleHide()">👁 Ocultar / Mostrar</button>
+            </div>
           </div>
           <div class="config-row" style="flex-direction:column;align-items:stretch;gap:8px">
             <div class="config-row-label">Fondo personalizado<small>Elige un patrón sutil de fondo para toda la app</small></div>
@@ -1655,6 +1696,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
                 <option value="cuadricula">▦ Cuadrícula</option>
                 <option value="diagonales">⟋ Líneas diagonales</option>
                 <option value="ondas">〜 Ondas</option>
+                <option value="cruces">✛ Cruces</option>
+                <option value="rombos">◇ Rombos</option>
+                <option value="hexagonos">⬡ Hexágonos</option>
+                <option value="tablero">▣ Tablero</option>
               </select>
             </div>
             <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text3)">
@@ -1670,6 +1715,10 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
           <div class="config-row">
             <div class="config-row-label">Reportes en PDF<small>Resumen de cualquier mes, o resumen anual (wrap-up)</small></div>
             <button class="config-action-btn neutral" onclick="openReportesModal()">📄 Generar reporte</button>
+          </div>
+          <div class="config-row">
+            <div class="config-row-label">Resumen del año<small>Tarjeta visual con tus números más destacados — para ver en un vistazo, no para imprimir</small></div>
+            <button class="config-action-btn neutral" onclick="closeConfig();abrirResumenWrapped()">🎉 Ver resumen</button>
           </div>
           <div class="config-row">
             <div class="config-row-label">Relojes Mundiales<small id="cfg-relojes-count">4 ciudades</small></div>
@@ -2223,9 +2272,14 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 
   <div class="card" style="padding:18px;margin-bottom:32px">
     <div class="section-header">
-      <div class="section-title">Mapa de Gastos del Mes <span style="font-size:10px;color:var(--text3);font-weight:400">(más oscuro = más gastaste ese día)</span></div>
+      <div class="section-title">Mapa de Gastos <span style="font-size:10px;color:var(--text3);font-weight:400">(más oscuro = más gastaste ese día)</span></div>
+      <div class="cp-view-toggle" id="heatmap-vista-toggle">
+        <button data-v="mes" class="active" onclick="heatmapSetVista('mes')">Mes</button>
+        <button data-v="anio" onclick="heatmapSetVista('anio')">Año completo</button>
+      </div>
     </div>
     <div id="heatmap-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-top:14px"></div>
+    <div id="heatmap-anio-grid" style="display:none;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:14px"></div>
     <div style="display:flex;align-items:center;gap:5px;margin-top:12px;font-size:9px;color:var(--text3)">
       <span>Menos</span>
       <div style="width:12px;height:12px;border-radius:3px;background:var(--bg3)"></div>
@@ -4684,9 +4738,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.57.2';
-const APP_VERSION_DATE = '26/11/26 - 05:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🛠️ Arreglo: la franja roja "VERSIÓN DE PRUEBA" (en beta) ya no tapa el botón ⚙ Config ni los demás botones de esa fila en celular — antes no dejaba presionarlos. Ahora se reserva el espacio exacto que ocupa la franja (varía según el ancho de pantalla) para que el menú nunca quede debajo de ella.';
+const APP_VERSION = 'v2.59.0';
+const APP_VERSION_DATE = '26/11/26 - 06:01'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Todas las mejoras que estaban en beta ya están en tu app real: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado, mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped".';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -4824,6 +4878,9 @@ let state={
   ownerAvatar:'',   // emoji de avatar configurable — vacío = usa la inicial del nombre
   ownerAvatarImg:'', // foto de perfil (dataURL JPEG, ya redimensionada/recortada) — si está presente, reemplaza al emoji/inicial
   ownerAvatarImgOpacity:22, // % (0-70) de qué tan visible se ve la foto de fondo detrás de los relojes del Dashboard
+  ownerAvatarImgsGaleria:[], // fotos adicionales de perfil (hasta 2, además de la activa en ownerAvatarImg) — para alternar cuál se usa
+  ownerSaludo:'', // saludo personalizado del Dashboard — vacío = usa "Buenos días/tardes/noches" automático según la hora
+  vistasFavoritas:[], // hasta 3 ids de página (del mismo catálogo que accesosRapidos) ancladas en la barra superior, visibles en CUALQUIER página
   categoriasFijasRenombradas:{}, // {nombreFijoOriginal: nombreNuevo} — categorías fijas (CAT_COLORS) a las que el usuario les cambió nombre/emoji; pasan a vivir en customCategorias
   accesosRapidos:[], // [{icono,label,accion}] — hasta 4 accesos configurables, fijados arriba del dashboard
   tarjetas:[],      // [{id,banco,cat,pago,inicio,cierre,linea,color,movs:{}}]
@@ -6948,6 +7005,7 @@ function setAccentColor(hex){
   // El patrón de fondo usa el color de acento — se recolorea solo al cambiarlo.
   const patronActivo=localStorage.getItem('miguel_mf_fondo_patron');
   if(patronActivo) aplicarFondoPersonalizado(patronActivo, parseInt(localStorage.getItem('miguel_mf_fondo_opacidad')||'8',10));
+  renderAccentSwatches();
 }
 function resetAccentColor(){
   document.documentElement.style.removeProperty('--accent');
@@ -6959,6 +7017,7 @@ function resetAccentColor(){
   if(projChart) renderProyeccion();
   const patronActivo=localStorage.getItem('miguel_mf_fondo_patron');
   if(patronActivo) aplicarFondoPersonalizado(patronActivo, parseInt(localStorage.getItem('miguel_mf_fondo_opacidad')||'8',10));
+  renderAccentSwatches();
 }
 
 // Ícono del botón flotante del chat IA — 100% cosmético, guardado en
@@ -7028,6 +7087,21 @@ function loadAccentColor(){
     document.documentElement.style.setProperty('--accent2', shadeColor(saved,-18));
     if(picker) picker.value=saved;
   }
+  renderAccentSwatches();
+}
+// 8 colores sugeridos — de buen contraste tanto en tema claro como oscuro y
+// con texto blanco encima (botones), para no tener que andar probando a ojo
+// en el selector libre. El selector libre sigue ahí al lado, por si quieres
+// cualquier otro color.
+const ACCENT_SWATCHES=['#5b8def','#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#10b981','#06b6d4'];
+function renderAccentSwatches(){
+  const cont=document.getElementById('cfg-accent-swatches');
+  if(!cont) return;
+  const actual=(getComputedStyle(document.documentElement).getPropertyValue('--accent')||'').trim().toLowerCase();
+  cont.innerHTML=ACCENT_SWATCHES.map(hex=>{
+    const activo=actual===hex.toLowerCase();
+    return `<button onclick="setAccentColor('${hex}');document.getElementById('cfg-accent-picker').value='${hex}';renderAccentSwatches();" title="${hex}" style="width:22px;height:22px;border-radius:50%;background:${hex};border:2px solid ${activo?'var(--text)':'transparent'};cursor:pointer;padding:0;flex-shrink:0"></button>`;
+  }).join('');
 }
 
 // ── FONDO PERSONALIZABLE ─────────────────────────────────
@@ -7043,8 +7117,19 @@ const BG_PATTERNS={
     const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='40' height='20'><path d='M0 10 Q10 0 20 10 T40 10' stroke='${c}' stroke-width='1.5' fill='none'/></svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
   },
+  // ── 4 patrones nuevos (25/11/26) ──
+  cruces:(c)=>{
+    const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><path d='M11 5v12M5 11h12' stroke='${c}' stroke-width='1.3' fill='none'/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  },
+  rombos:(c)=>`repeating-linear-gradient(45deg, ${c} 0, ${c} 1px, transparent 1px, transparent 16px), repeating-linear-gradient(-45deg, ${c} 0, ${c} 1px, transparent 1px, transparent 16px)`,
+  hexagonos:(c)=>{
+    const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='28' height='24'><path d='M7 1 L21 1 L28 12 L21 23 L7 23 L0 12 Z' stroke='${c}' stroke-width='1' fill='none'/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  },
+  tablero:(c)=>`repeating-conic-gradient(${c} 0% 25%, transparent 0% 50%)`,
 };
-const BG_PATTERN_SIZE={ninguno:'auto', puntos:'20px 20px', cuadricula:'24px 24px', diagonales:'auto', ondas:'40px 20px'};
+const BG_PATTERN_SIZE={ninguno:'auto', puntos:'20px 20px', cuadricula:'24px 24px', diagonales:'auto', ondas:'40px 20px', cruces:'22px 22px', rombos:'32px 32px', hexagonos:'28px 24px', tablero:'20px 20px'};
 function aplicarFondoPersonalizado(patron, opacidad){
   const accentHex=(getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#5b8def').trim();
   const rgb=hexToRgb(/^#[0-9a-fA-F]{6}$/.test(accentHex)?accentHex:'#5b8def');
@@ -7094,6 +7179,7 @@ function aplicarTemaPredefinido(key){
   setAccentColor(t.accent);
   const accentPicker=document.getElementById('cfg-accent-picker');
   if(accentPicker) accentPicker.value=t.accent;
+  renderAccentSwatches();
   localStorage.setItem('miguel_mf_fondo_patron', t.patron);
   localStorage.setItem('miguel_mf_fondo_opacidad', t.opacidad);
   aplicarFondoPersonalizado(t.patron, t.opacidad);
@@ -7159,6 +7245,57 @@ function toggleAccesoRapidoTemp(id, checked){
   }
   renderAccesosRapidosEditor();
 }
+// ── VISTAS FAVORITAS ANCLADAS (25/11/26) ─────────────────
+// Mismo catálogo que Accesos Rápidos (reutilizado para no duplicar
+// mantenimiento), pero esto se ancla en la barra superior (nav-right) y por
+// eso se ve en CUALQUIER página — a diferencia de Accesos Rápidos, que solo
+// vive dentro del Dashboard.
+function renderVistasFavoritas(){
+  const cont=document.getElementById('nav-vistas-favoritas');
+  if(!cont) return;
+  const elegidos=(state.vistasFavoritas||[]).map(id=>ACCESOS_RAPIDOS_CATALOGO.find(a=>a.id===id)).filter(Boolean);
+  if(!elegidos.length){ cont.style.display='none'; cont.innerHTML=''; return; }
+  cont.style.display='flex';
+  cont.innerHTML=elegidos.map(a=>
+    `<button class="eye-btn" style="font-size:15px" title="${a.label}" onclick="${a.pagina?`showPage('${a.pagina}')`:a.accion+'()'}">${a.icono}</button>`
+  ).join('');
+}
+let editorVistasFavTemp=null;
+function abrirVistasFavoritasModal(){
+  editorVistasFavTemp=[...(state.vistasFavoritas||[])];
+  renderVistasFavoritasEditor();
+  document.getElementById('vistas-favoritas-overlay').classList.add('open');
+}
+function closeVistasFavoritasModal(){
+  document.getElementById('vistas-favoritas-overlay').classList.remove('open');
+  editorVistasFavTemp=null;
+}
+function renderVistasFavoritasEditor(){
+  const el=document.getElementById('vistas-favoritas-list');
+  el.innerHTML=ACCESOS_RAPIDOS_CATALOGO.map(a=>{
+    const marcado=editorVistasFavTemp.includes(a.id);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:13px;cursor:pointer;border-radius:6px" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <input type="checkbox" ${marcado?'checked':''} onchange="toggleVistaFavTemp('${a.id}',this.checked)" style="width:auto;margin:0">
+      ${a.icono} ${a.label}
+    </label>`;
+  }).join('');
+}
+function toggleVistaFavTemp(id, checked){
+  if(checked){
+    if(editorVistasFavTemp.length>=3){ alert('Máximo 3 vistas favoritas — desmarca una primero.'); renderVistasFavoritasEditor(); return; }
+    editorVistasFavTemp.push(id);
+  } else {
+    editorVistasFavTemp=editorVistasFavTemp.filter(x=>x!==id);
+  }
+  renderVistasFavoritasEditor();
+}
+function guardarVistasFavoritas(){
+  state.vistasFavoritas=editorVistasFavTemp||[];
+  saveState();
+  renderVistasFavoritas();
+  closeVistasFavoritasModal();
+}
+
 function guardarAccesosRapidos(){
   state.accesosRapidos=editorAccesosTemp||[];
   saveState();
@@ -7181,16 +7318,55 @@ function mostrarAvisoWidgetsOcultos(){
 }
 
 // ── HIDE CIFRAS ───────────────────────────────────────
+// ── MODO PRIVACIDAD (25/11/26) ──────────────────────────
+// Ya existía (hiddenMode / toggleHide / M()) pero no se acordaba de un
+// toggle a otro (se reiniciaba en falso al recargar), no tenía atajo de
+// teclado y solo tenía un estilo (texto "••••"). Se agregan las 3 cosas sin
+// tocar cómo funcionaba antes para quien no las usa.
+let hiddenStyle='texto'; // 'texto' (••••, como siempre) | 'blur' (difumina los montos, mismo valor real debajo)
 function toggleHide(){
   hiddenMode=!hiddenMode;
+  localStorage.setItem('miguel_mf_hidden_mode', hiddenMode?'1':'0');
   const btn=document.getElementById('eye-btn');
   if(btn){
     btn.textContent=hiddenMode?'🙈':'👁';
     btn.classList.toggle('hidden-active',hiddenMode);
   }
+  document.body.classList.toggle('privacy-blur-active', hiddenMode && hiddenStyle==='blur');
   render();
 }
-function M(val){return hiddenMode?'••••':(val===undefined||val===null?'—':val);}
+function setPrivacyStyle(style){
+  hiddenStyle = style==='blur' ? 'blur' : 'texto';
+  localStorage.setItem('miguel_mf_privacy_style', hiddenStyle);
+  document.body.classList.toggle('privacy-blur-active', hiddenMode && hiddenStyle==='blur');
+  const sel=document.getElementById('cfg-privacy-style');
+  if(sel) sel.value=hiddenStyle;
+  if(hiddenMode) render();
+}
+// Se llama una vez al arrancar (junto a loadAccentColor/loadCompact/etc.) —
+// recuerda si lo dejaste activado la última vez, en vez de siempre empezar
+// visible.
+function loadHiddenMode(){
+  hiddenStyle = localStorage.getItem('miguel_mf_privacy_style')==='blur' ? 'blur' : 'texto';
+  const sel=document.getElementById('cfg-privacy-style');
+  if(sel) sel.value=hiddenStyle;
+  if(localStorage.getItem('miguel_mf_hidden_mode')==='1'){
+    hiddenMode=true;
+    const btn=document.getElementById('eye-btn');
+    if(btn){ btn.textContent='🙈'; btn.classList.add('hidden-active'); }
+    document.body.classList.toggle('privacy-blur-active', hiddenStyle==='blur');
+  }
+}
+// Atajo de teclado Ctrl/Cmd+Shift+H — en cualquier parte de la app, salvo
+// mientras se escribe dentro de un campo de texto.
+document.addEventListener('keydown', e=>{
+  if(!(e.key==='H'||e.key==='h') || !e.shiftKey || !(e.ctrlKey||e.metaKey)) return;
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='INPUT'||tag==='TEXTAREA') return;
+  e.preventDefault();
+  toggleHide();
+});
+function M(val){return hiddenMode&&hiddenStyle==='texto'?'••••':(val===undefined||val===null?'—':val);}
 
 // ── PAGES ─────────────────────────────────────────────
 function closeAllNavDropdowns(){
@@ -9230,10 +9406,11 @@ function isPageActive(name){ const e=document.getElementById('page-'+name); retu
 
 function render(){
   try{ aplicarOrdenMenu(); }catch(e){ console.warn('Orden del menú omitido:', e&&e.message); }
-  try{ actualizarNavScrollHint(); }catch(e){ console.warn('Aviso de scroll del menú omitido:', e&&e.message); }
   updateRevisionBadge();
   updateTitles();
   renderPaisConfigBtn();
+  try{ renderVistasFavoritas(); }catch(e){ console.warn('Vistas favoritas omitidas:', e&&e.message); } // se ven en cualquier página, por eso van acá y no solo en renderDashboard
+  try{ actualizarNavScrollHint(); }catch(e){ console.warn('Aviso de scroll del menú omitido:', e&&e.message); }
   aplicarChatIAIcono(); // sincroniza el ícono del botón flotante del chat con lo elegido en Config → Apariencia
   aplicarChatIAColor(); // sincroniza el color del botón flotante del chat con lo elegido en Config → Apariencia
   // Las siguientes son específicas de la página Finanzas — evita recalcularlas
@@ -10300,6 +10477,24 @@ function renderTCHeatmap(){
   }
   grid.innerHTML=html;
 }
+// Color del mapa de calor (25/11/26) — antes era un rojo fijo; ahora sigue
+// el color de acento que haya elegido Miguel (escala secuencial: un solo
+// tono, de más clarito a más oscuro, según el método de la skill dataviz),
+// para que combine con el resto de la app en vez de desentonar.
+function heatmapColorRgb(){
+  const accentHex=(getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#5b8def').trim();
+  return hexToRgb(/^#[0-9a-fA-F]{6}$/.test(accentHex)?accentHex:'#5b8def');
+}
+let heatmapVista='mes'; // 'mes' (como siempre) | 'anio' (12 meses chicos, estilo "GitHub")
+function heatmapSetVista(v){
+  heatmapVista=v;
+  document.querySelectorAll('#heatmap-vista-toggle button').forEach(b=>b.classList.toggle('active', b.dataset.v===v));
+  const gridMes=document.getElementById('heatmap-grid');
+  const gridAnio=document.getElementById('heatmap-anio-grid');
+  if(gridMes) gridMes.style.display = v==='mes' ? 'grid' : 'none';
+  if(gridAnio) gridAnio.style.display = v==='anio' ? 'grid' : 'none';
+  if(v==='anio') renderHeatmapAnio();
+}
 function renderHeatmap(){
   const grid=document.getElementById('heatmap-grid');
   if(!grid) return;
@@ -10319,6 +10514,7 @@ function renderHeatmap(){
   const max=Math.max(...porDia.slice(1),0.01);
   const hoy=new Date();
   const esMesActual=hoy.getFullYear()===y && hoy.getMonth()===m;
+  const rgb=heatmapColorRgb();
 
   let html='';
   ['L','M','M','J','V','S','D'].forEach(d=>{
@@ -10328,12 +10524,63 @@ function renderHeatmap(){
   for(let dia=1;dia<=daysInMonth;dia++){
     const gasto=porDia[dia]||0;
     const intensidad=gasto>0?Math.min(1,0.15+(gasto/max)*0.85):0;
-    const bg=gasto>0?`rgba(240,92,92,${intensidad.toFixed(2)})`:'var(--bg3)';
+    const bg=gasto>0?`rgba(${rgb.r},${rgb.g},${rgb.b},${intensidad.toFixed(2)})`:'var(--bg3)';
     const esHoy=esMesActual && hoy.getDate()===dia;
     const title=gasto>0?`${dia}: S/ ${numFmtSigned(gasto,2)}`:`${dia}: sin gastos`;
     html+=`<div title="${title}" onclick="verDiaEnMovimientos(${dia})" style="height:52px;border-radius:8px;background:${bg};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:${intensidad>0.5?'#fff':'var(--text2)'};${esHoy?'box-shadow:0 0 0 2px var(--accent) inset':''}">${dia}</div>`;
   }
   grid.innerHTML=html;
+  if(heatmapVista==='anio') renderHeatmapAnio();
+}
+// Vista "Año completo" (25/11/26) — 12 mini-calendarios de un vistazo (estilo
+// "contribuciones de GitHub"), para ver patrones que el mes individual no
+// muestra (ej. "siempre gasto más en diciembre"). Reutiliza el mismo cálculo
+// de gasto-por-día que la vista mensual, un mes a la vez.
+function renderHeatmapAnio(){
+  const cont=document.getElementById('heatmap-anio-grid');
+  if(!cont) return;
+  const y=state.currentYear;
+  const rgb=heatmapColorRgb();
+  const rate=state.tc?.venta||3.45;
+  // Máximo del AÑO completo (no por mes) para que los colores sean comparables entre meses.
+  let maxAnio=0.01;
+  const porMesDia=[];
+  for(let m=0;m<12;m++){
+    const daysInMonth=new Date(y,m+1,0).getDate();
+    const porDia=Array(daysInMonth+1).fill(0);
+    getMovs(y,m).forEach(mv=>{
+      if(mv.type!=='expense' || esTransferenciaInterna(mv)) return;
+      const dia=new Date(mv.date+'T12:00:00').getDate();
+      const monto=mv.currency==='USD'?mv.amount*rate:mv.amount;
+      porDia[dia]=(porDia[dia]||0)+monto;
+      if(porDia[dia]>maxAnio) maxAnio=porDia[dia];
+    });
+    porMesDia.push(porDia);
+  }
+  const hoy=new Date();
+  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  let html='';
+  for(let m=0;m<12;m++){
+    const daysInMonth=new Date(y,m+1,0).getDate();
+    const firstDow=new Date(y,m,1).getDay();
+    const leadBlank=(firstDow===0)?6:firstDow-1;
+    const porDia=porMesDia[m];
+    const esMesActual=hoy.getFullYear()===y && hoy.getMonth()===m;
+    let celdas='';
+    for(let i=0;i<leadBlank;i++) celdas+='<div></div>';
+    for(let dia=1;dia<=daysInMonth;dia++){
+      const gasto=porDia[dia]||0;
+      const intensidad=gasto>0?Math.min(1,0.15+(gasto/maxAnio)*0.85):0;
+      const bg=gasto>0?`rgba(${rgb.r},${rgb.g},${rgb.b},${intensidad.toFixed(2)})`:'var(--bg3)';
+      const esHoy=esMesActual && hoy.getDate()===dia;
+      celdas+=`<div title="${MESES[m]} ${dia}: S/ ${numFmtSigned(gasto,2)}" onclick="state.currentMonth=${m};state.currentYear=${y};heatmapSetVista('mes');renderHeatmap();verDiaEnMovimientos(${dia})" style="height:13px;border-radius:2px;background:${bg};cursor:pointer;${esHoy?'box-shadow:0 0 0 1px var(--accent) inset':''}"></div>`;
+    }
+    html+=`<div>
+      <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px;text-align:center">${MESES[m]}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${celdas}</div>
+    </div>`;
+  }
+  cont.innerHTML=html;
 }
 function verDiaEnMovimientos(dia){
   const y=state.currentYear, m=state.currentMonth;
@@ -12004,6 +12251,14 @@ document.addEventListener('keydown',e=>{
   try{ if(_modalIsDirty(ov) && !confirm('¿Seguro que quieres salir? Tienes cambios sin guardar.')) return; }catch(err){}
   const btn=ov.querySelector('.modal-close'); if(btn){ btn.click(); } else { ov.classList.remove('open'); }
 });
+// Atajo Ctrl/Cmd+K para abrir la Búsqueda Global desde cualquier parte de la
+// app (25/11/26) — ya existía el botón 🔍 de la barra de arriba, esto solo
+// agrega el acceso por teclado, como en la mayoría de apps.
+document.addEventListener('keydown',e=>{
+  if((e.key!=='k'&&e.key!=='K') || !(e.ctrlKey||e.metaKey)) return;
+  e.preventDefault();
+  abrirBusquedaGlobal();
+});
 // Los cuadros (modales) no se cierran por accidente: si empiezas a seleccionar texto dentro y sueltas el mouse
 // fuera, el clic ya no cuenta como «clic en el fondo»; y si hay cambios sin guardar, el fondo pide confirmación.
 let _ovDownDentro=false;
@@ -13250,14 +13505,25 @@ function buildMetaCardHtml(m){
       <button class="config-action-btn neutral" style="font-size:10px;padding:3px 9px" onclick="event.stopPropagation();openMetaHistorial('${m.id}')">📅 Historial</button>
     </div>`;
   }
+  // Anillo circular de progreso (25/11/26) — mismo % que la barra de abajo,
+  // pero de un vistazo más rápido de leer que una barra larga. Puro CSS
+  // (conic-gradient), sin SVG ni librería — funciona en los dos temas porque
+  // el "hueco" del centro usa var(--bg2), el fondo de las tarjetas.
+  const ringPct=Math.max(0,Math.min(100,pct));
+  const ringHtml=`<div style="width:38px;height:38px;border-radius:50%;flex-shrink:0;background:conic-gradient(${color} ${ringPct*3.6}deg, var(--bg3) 0deg);display:flex;align-items:center;justify-content:center" title="${ringPct.toFixed(0)}% completado">
+    <div style="width:29px;height:29px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${color}">${ringPct.toFixed(0)}%</div>
+  </div>`;
   return `
   <div class="card" style="padding:14px 16px;margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openMetaModal('${m.id}')">
-      <div style="font-weight:600;font-size:13px">${escapeHtml(m.nombre)}${m.esMetaGrande?' 🏠':''}</div>
-      <div style="font-size:12px;color:var(--text3)">${sym} ${numFmtSigned(montoActual,2)} / ${sym} ${numFmtSigned(m.montoObjetivo,2)}</div>
-    </div>
-    <div style="background:var(--bg3);border-radius:8px;height:8px;margin-top:8px;overflow:hidden">
-      <div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer" onclick="openMetaModal('${m.id}')">
+      ${ringHtml}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${escapeHtml(m.nombre)}${m.esMetaGrande?' 🏠':''}</div>
+        <div style="font-size:12px;color:var(--text3)">${sym} ${numFmtSigned(montoActual,2)} / ${sym} ${numFmtSigned(m.montoObjetivo,2)}</div>
+        <div style="background:var(--bg3);border-radius:8px;height:6px;margin-top:6px;overflow:hidden">
+          <div style="background:${color};height:100%;width:${pct}%;transition:width .3s"></div>
+        </div>
+      </div>
     </div>
     ${extraHtml}
   </div>`;
@@ -13583,6 +13849,83 @@ function renderAnioCompleto(){
     `;
   }
 }
+
+// ── RESUMEN DEL AÑO — "WRAPPED" (25/11/26) ───────────────────────────
+// Complementa (no reemplaza) el reporte PDF formal de "Resumen anual": esto
+// es una tarjeta visual, divertida y rápida de ver con los números más
+// destacados del año — pensada para abrir una vez al año y sentir el
+// resumen de un vistazo, no para analizar en detalle (para eso ya está el
+// PDF y la página Año Completo). Reutiliza las mismas fuentes de datos.
+function calcularResumenWrapped(year){
+  const rate=state.tc?.venta||3.45;
+  let totIng=0, totGas=0, nMovs=0;
+  const porCategoria={};
+  let mesTop={m:-1, gas:0};
+  let gastoMayor={monto:0, desc:'', fecha:''};
+  for(let m=0;m<12;m++){
+    const movs=getMovs(year,m);
+    let gasMes=0;
+    movs.forEach(mv=>{
+      if(esTransferenciaInterna(mv)) return;
+      nMovs++;
+      const monto=mv.currency==='USD'?mv.amount*rate:mv.amount;
+      if(mv.type==='income') totIng+=monto;
+      else if(mv.type==='expense'){
+        totGas+=monto; gasMes+=monto;
+        if(mv.cat) porCategoria[mv.cat]=(porCategoria[mv.cat]||0)+monto;
+        if(monto>gastoMayor.monto) gastoMayor={monto, desc:mv.desc||'', fecha:mv.date};
+      }
+    });
+    if(gasMes>mesTop.gas) mesTop={m, gas:gasMes};
+  }
+  const catTopEntry=Object.entries(porCategoria).sort((a,b)=>b[1]-a[1])[0];
+  const nombresMes=tcMesesLong();
+  return {
+    year, totIng, totGas, balance:totIng-totGas, nMovs,
+    catTop: catTopEntry?{nombre:catTopEntry[0], monto:catTopEntry[1]}:null,
+    mesTop: mesTop.m>=0?{nombre:nombresMes[mesTop.m], monto:mesTop.gas}:null,
+    gastoMayor: gastoMayor.monto>0?gastoMayor:null,
+  };
+}
+function abrirResumenWrapped(){
+  const year=state.currentYear||new Date().getFullYear();
+  const d=calcularResumenWrapped(year);
+  document.getElementById('wrapped-title').textContent='🎉 Tu '+year+' en números';
+  const cats=getAllCategorias();
+  const catColor=d.catTop?(cats[d.catTop.nombre]||'var(--accent)'):'var(--accent)';
+  const tiles=[];
+  tiles.push(`<div style="background:${d.balance>=0?'var(--green)':'var(--red)'};border-radius:14px;padding:18px;color:#fff;text-align:center">
+    <div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Balance del año</div>
+    <div style="font-size:28px;font-weight:800;margin-top:4px">${d.balance>=0?'+':'-'}S/ ${numFmtSigned(Math.abs(d.balance),2)}</div>
+    <div style="font-size:11px;opacity:.85;margin-top:4px">↑ S/ ${numFmtSigned(d.totIng,0)} ingresos · ↓ S/ ${numFmtSigned(d.totGas,0)} gastos</div>
+  </div>`);
+  if(d.catTop) tiles.push(`<div style="background:var(--bg2);border-radius:14px;padding:16px;border:1px solid var(--border)">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Tu categoría top</div>
+    <div style="font-size:20px;font-weight:700;margin-top:4px;color:${catColor}">${escapeHtml(d.catTop.nombre)}</div>
+    <div style="font-size:13px;color:var(--text2);margin-top:2px">S/ ${numFmtSigned(d.catTop.monto,2)} en el año</div>
+  </div>`);
+  if(d.mesTop) tiles.push(`<div style="background:var(--bg2);border-radius:14px;padding:16px;border:1px solid var(--border)">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Tu mes de más gasto</div>
+    <div style="font-size:20px;font-weight:700;margin-top:4px">${d.mesTop.nombre}</div>
+    <div style="font-size:13px;color:var(--text2);margin-top:2px">S/ ${numFmtSigned(d.mesTop.monto,2)} ese mes</div>
+  </div>`);
+  if(d.gastoMayor) tiles.push(`<div style="background:var(--bg2);border-radius:14px;padding:16px;border:1px solid var(--border)">
+    <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Tu gasto más grande</div>
+    <div style="font-size:18px;font-weight:700;margin-top:4px">S/ ${numFmtSigned(d.gastoMayor.monto,2)}</div>
+    <div style="font-size:12px;color:var(--text2);margin-top:2px">${escapeHtml(d.gastoMayor.desc)} · ${d.gastoMayor.fecha?new Date(d.gastoMayor.fecha+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'long'}):''}</div>
+  </div>`);
+  tiles.push(`<div style="background:var(--bg2);border-radius:14px;padding:16px;border:1px solid var(--border);text-align:center">
+    <div style="font-size:24px;font-weight:800">${d.nMovs}</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:2px">movimientos registrados en ${year}</div>
+  </div>`);
+  if(!d.nMovs){
+    document.getElementById('wrapped-body').innerHTML='<div class="dash-empty">Todavía no hay movimientos registrados en '+year+' para armar tu resumen.</div>';
+  } else {
+    document.getElementById('wrapped-body').innerHTML=tiles.join('');
+  }
+  document.getElementById('wrapped-overlay').classList.add('open');
+}
+function closeWrapped(){ document.getElementById('wrapped-overlay').classList.remove('open'); }
 
 // Variación genérica cur vs prev: {txt, dir} donde dir=1 (subió), -1 (bajó), 0 (sin cambio/nuevo/neutral).
 // El color (bueno/malo) lo decide quien llama, según qué significa "subir" en esa fila.
@@ -16255,6 +16598,7 @@ function openEditCategoria(name, esFija){
   document.getElementById('ncat-save-btn').textContent='💾 Guardar cambios';
   document.getElementById('ncat-cancel-btn').style.display='inline-flex';
   document.getElementById('ncat-name').scrollIntoView({behavior:'smooth', block:'center'});
+  renderCategoriaEmojiPicker();
 }
 function cancelEditCategoria(){
   editingCategoriaName=null;
@@ -16264,6 +16608,31 @@ function cancelEditCategoria(){
   document.getElementById('ncat-form-title').textContent='Nueva categoría';
   document.getElementById('ncat-save-btn').textContent='+ Agregar categoría';
   document.getElementById('ncat-cancel-btn').style.display='none';
+  renderCategoriaEmojiPicker();
+}
+
+// ── SELECTOR RÁPIDO DE EMOJIS PARA CATEGORÍAS (25/11/26) ──────────────
+// El nombre de categoría siempre fue "emoji + texto" en un solo campo de
+// texto libre — esto no cambia esa estructura (no rompe nada de lo
+// existente), solo agrega una forma rápida de poner/cambiar el emoji sin
+// tener que abrir el selector de emojis del sistema operativo.
+const CATEGORIA_EMOJI_PICKER=['🍔','🚗','🏠','💊','🎮','📱','👗','📚','💪','✈️','🎁','📦','💼','🏦','🎬','🎵','📷','🐶','🎓','🛒','☕','🍺','🏥','🎨','🔧','🧸','👶','💻','🏋️','🚲','⚽','🎉','🧳','✂️','🎂','📺','🪙','🧹','🐱','🎸'];
+function renderCategoriaEmojiPicker(){
+  const el=document.getElementById('ncat-emoji-picker');
+  if(!el) return;
+  el.innerHTML=CATEGORIA_EMOJI_PICKER.map(e=>
+    `<button type="button" onclick="ncatElegirEmoji('${e}')" title="Usar ${e}" style="width:26px;height:26px;font-size:15px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;padding:0">${e}</button>`
+  ).join('');
+}
+// Reemplaza el emoji al inicio del nombre (si ya tenía uno) o lo antepone.
+function ncatElegirEmoji(emoji){
+  const input=document.getElementById('ncat-name');
+  if(!input) return;
+  const actual=input.value||'';
+  // Un emoji inicial (con su posible variante/espacio) seguido del resto del texto.
+  const sinEmojiInicial=actual.replace(/^(\p{Extended_Pictographic}️?\s*)/u,'').trim();
+  input.value=emoji+' '+sinEmojiInicial;
+  input.focus();
 }
 
 // Renombra una categoría en TODOS los lugares donde puede estar referenciada
@@ -20365,14 +20734,21 @@ function renderDashboard(){
 
   // ── Greeting ──────────────────────────────────────
   const hour = now.getHours();
-  const greet = hour<12?'Buenos días':hour<18?'Buenas tardes':'Buenas noches';
+  const saludoAuto = hour<12?'Buenos días':hour<18?'Buenas tardes':'Buenas noches';
+  // Saludo personalizable (25/11/26): si Miguel escribió el suyo en
+  // Configuración → Apariencia, se usa tal cual (sin el nombre pegado al
+  // final — si lo quiere, lo escribe él mismo); si no, sigue el automático
+  // de siempre según la hora + el nombre.
+  const saludoPersonal=(state.ownerSaludo||'').trim();
+  const greet = saludoPersonal || saludoAuto;
   const name  = (state.ownerName||'').trim() || (currentUser ? currentUser.split('@')[0].replace(/^[a-z]/,ch=>ch.toUpperCase()) : '');
   const avatar = (state.ownerAvatar||'').trim();
   const avatarImg = (state.ownerAvatarImg||'').trim();
   const el=document.getElementById('dash-greeting');
+  const textoSaludo = saludoPersonal ? (greet+' 👋') : (greet+' '+name+' 👋');
   if(el){
-    if(avatarImg) el.innerHTML = `<img src="${avatarImg}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-5px;margin-right:6px">`+escapeHtml(greet+' '+name+' 👋');
-    else el.textContent = (avatar?avatar+' ':'')+greet+' '+name+' 👋';
+    if(avatarImg) el.innerHTML = `<img src="${avatarImg}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-5px;margin-right:6px">`+escapeHtml(textoSaludo);
+    else el.textContent = (avatar?avatar+' ':'')+textoSaludo;
   }
   renderRachaRegistro();
   renderAccesosRapidos();
@@ -23248,6 +23624,13 @@ function loadCompact(){
   }
 }
 
+// ── AVISO DE "HAY MÁS PESTAÑAS" EN EL MENÚ MÓVIL (25/11/26) ──────────
+// El menú (Resumen/Finanzas/.../Patrimonio/Otros/Aprobaciones) siempre fue
+// deslizable en celular (overflow-x:auto), pero la barra de scroll está
+// oculta a propósito (scrollbar-width:none) y no quedaba ningún indicio de
+// que había más pestañas a la derecha — Miguel lo reportó el 25/11/26. Esto
+// solo agrega la señal visual (un "›" que aparece si falta contenido por
+// ver a la derecha, y desaparece al llegar al final); no cambia el scroll.
 function actualizarNavScrollHint(){
   const nc=document.querySelector('.nav-center');
   const hint=document.getElementById('nav-scroll-hint');
@@ -23260,6 +23643,8 @@ function initNavScrollHint(){
   if(!nc) return;
   nc.addEventListener('scroll', actualizarNavScrollHint, {passive:true});
   window.addEventListener('resize', actualizarNavScrollHint);
+  // Se recalcula también cuando se reordena el menú (Configuración → Orden
+  // del menú puede cambiar cuántas pestañas quedan sueltas vs. en "Otros").
   setTimeout(actualizarNavScrollHint, 300);
 }
 
@@ -26333,10 +26718,25 @@ function updateLoginBranding(){
   if(cfgEl) cfgEl.textContent = name || 'Sin configurar';
   const avEl = document.getElementById('cfg-owner-avatar');
   if(avEl && document.activeElement!==avEl) avEl.value = avatar;
+  const saludoEl = document.getElementById('cfg-owner-saludo');
+  if(saludoEl && document.activeElement!==saludoEl) saludoEl.value = (state.ownerSaludo||'');
   const prevEl = document.getElementById('cfg-owner-photo-preview');
   if(prevEl) prevEl.innerHTML = avatarImg ? `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover">` : '—';
   const rmBtn = document.getElementById('cfg-owner-photo-remove');
   if(rmBtn) rmBtn.style.display = avatarImg ? '' : 'none';
+  // Galería de fotos de perfil (25/11/26)
+  const galeria=Array.isArray(state.ownerAvatarImgsGaleria)?state.ownerAvatarImgsGaleria:[];
+  const galRow=document.getElementById('cfg-owner-photo-galeria-row');
+  const galEl=document.getElementById('cfg-owner-photo-galeria');
+  if(galRow) galRow.style.display = galeria.length ? 'flex' : 'none';
+  if(galEl){
+    galEl.innerHTML=galeria.map((src,idx)=>
+      `<div style="position:relative">
+        <img src="${src}" onclick="seleccionarFotoGaleria(${idx})" title="Usar esta foto" style="width:34px;height:34px;border-radius:50%;object-fit:cover;cursor:pointer;border:1px solid var(--border)">
+        <button onclick="event.stopPropagation();eliminarFotoGaleria(${idx})" title="Eliminar de la galería" style="position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:9px;line-height:14px;padding:0;cursor:pointer">✕</button>
+      </div>`
+    ).join('');
+  }
   // Foto de fondo, atenuada, detrás de los relojes mundiales en la tarjeta
   // de arriba del Dashboard (pedido de Miguel el 25/11/26) — mismo campo
   // que el avatar del login, solo se muestra/oculta según si hay foto.
@@ -26392,6 +26792,22 @@ function setOwnerAvatar(valor){
   toast(v?'Avatar actualizado':'Avatar restablecido (se usa tu inicial)');
 }
 
+// Saludo personalizable del Dashboard (25/11/26) — reemplaza el "Buenos
+// días/tardes/noches" automático si Miguel escribe el suyo; vacío = vuelve
+// al automático. A diferencia del nombre/avatar, al ser un saludo libre NO
+// se le pega el nombre automáticamente al final (si lo quiere, lo escribe).
+function setOwnerSaludo(valor){
+  const v=limpiarNombreSeguro(valor||'').slice(0,40);
+  state.ownerSaludo=v;
+  saveState();
+  const input=document.getElementById('cfg-owner-saludo');
+  if(input) input.value=v;
+  if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')){
+    renderDashboard();
+  }
+  toast(v?'Saludo actualizado':'Saludo restablecido (automático según la hora)');
+}
+
 // Foto de perfil real (ej. una captura de tu Memoji/Bitmoji, o cualquier
 // foto). Tiene prioridad sobre el avatar de emoji y la inicial. Se procesa
 // 100% en el navegador: se recorta a un cuadrado centrado ("cover", sin
@@ -26415,6 +26831,14 @@ function setOwnerAvatarImg(file){
         ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         if(dataUrl.length > 350000){ alert('La foto quedó muy pesada incluso comprimida. Prueba con otra imagen (ideal: una foto cuadrada o casi cuadrada).'); return; }
+        // Galería (25/11/26): si ya había una foto activa, no se pierde —
+        // pasa a la galería (hasta 2 extra) para poder volver a elegirla
+        // después, en vez de reemplazarla sin más.
+        if(state.ownerAvatarImg && state.ownerAvatarImg!==dataUrl){
+          if(!Array.isArray(state.ownerAvatarImgsGaleria)) state.ownerAvatarImgsGaleria=[];
+          state.ownerAvatarImgsGaleria.unshift(state.ownerAvatarImg);
+          state.ownerAvatarImgsGaleria=state.ownerAvatarImgsGaleria.slice(0,2);
+        }
         state.ownerAvatarImg = dataUrl;
         saveState();
         updateLoginBranding();
@@ -26429,11 +26853,43 @@ function setOwnerAvatarImg(file){
   reader.readAsDataURL(file);
 }
 function removeOwnerAvatarImg(){
-  state.ownerAvatarImg = '';
+  // Si hay fotos en la galería, la primera pasa a ser la activa, en vez de
+  // quedar sin foto de una — así no se "pierde" la galería armada.
+  const galeria=Array.isArray(state.ownerAvatarImgsGaleria)?state.ownerAvatarImgsGaleria:[];
+  if(galeria.length){
+    state.ownerAvatarImg = galeria[0];
+    state.ownerAvatarImgsGaleria = galeria.slice(1);
+  } else {
+    state.ownerAvatarImg = '';
+  }
   saveState();
   updateLoginBranding();
   if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
-  toast('Foto de perfil quitada — se usa tu avatar/inicial de nuevo');
+  toast(state.ownerAvatarImg?'Foto quitada — se usa la siguiente de tu galería':'Foto de perfil quitada — se usa tu avatar/inicial de nuevo');
+}
+// Intercambia la foto activa con una de la galería (clic en una miniatura).
+function seleccionarFotoGaleria(idx){
+  const galeria=Array.isArray(state.ownerAvatarImgsGaleria)?state.ownerAvatarImgsGaleria:[];
+  if(idx<0||idx>=galeria.length) return;
+  const nuevaActiva=galeria[idx];
+  const nuevaGaleria=galeria.slice();
+  nuevaGaleria.splice(idx,1);
+  if(state.ownerAvatarImg) nuevaGaleria.unshift(state.ownerAvatarImg);
+  state.ownerAvatarImg=nuevaActiva;
+  state.ownerAvatarImgsGaleria=nuevaGaleria.slice(0,2);
+  saveState();
+  updateLoginBranding();
+  if(document.getElementById('page-dashboard')&&document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
+  toast('Foto de perfil cambiada');
+}
+function eliminarFotoGaleria(idx){
+  const galeria=Array.isArray(state.ownerAvatarImgsGaleria)?state.ownerAvatarImgsGaleria:[];
+  if(idx<0||idx>=galeria.length) return;
+  galeria.splice(idx,1);
+  state.ownerAvatarImgsGaleria=galeria;
+  saveState();
+  updateLoginBranding();
+  toast('Foto eliminada de la galería');
 }
 
 function editOwnerName(){
@@ -32987,17 +33443,36 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
-  "v": "v2.57.2",
+  "v": "v2.59.0",
   "fecha": "26/11/26",
   "cambios": [
-   "🛠️ Arreglo: la franja roja \"VERSIÓN DE PRUEBA\" (en beta) tapaba el botón ⚙ Config y los demás botones de esa fila en celular y no dejaba presionarlos. Ahora se calcula el alto real de la franja (cambia según el ancho de pantalla) y se reserva ese espacio automáticamente para que el menú de arriba nunca quede debajo de ella."
+   "✅ PROMOVIDO A PRODUCCIÓN: las 12 mejoras que estaban solo en beta (v2.58.0 a v2.58.2) ya están en tu app real, revisadas y confirmadas. Resumen completo: (1) color de acento con 8 sugeridos de un clic además del selector libre, (2) modo compacto que ahora reduce de verdad el espacio en toda la app (no solo el dashboard), (3) 4 patrones de fondo nuevos (Cruces, Rombos, Hexágonos, Tablero), (4) anillo circular de progreso en las metas de ahorro además de la barra, (5) saludo del Dashboard personalizable, (6) vistas favoritas ancladas (hasta 3) visibles en cualquier página de la barra superior, (7) selector de emojis de un clic para el nombre de categorías, (8) galería de hasta 3 fotos de perfil para alternar, (9) modo privacidad mejorado — recuerda tu elección entre sesiones, atajo Ctrl/Cmd+Shift+H, y estilo \"difuminado\" además del de texto, (10) mapa de calor de gastos con tu color de acento y una vista de año completo (12 meses en miniatura), (11) atajo de teclado Ctrl/Cmd+K para la búsqueda global, (12) Resumen del año estilo \"Wrapped\" en pantalla. También incluye los 2 arreglos del menú superior en celular (indicador de scroll + espacio reservado para la franja de beta). De ahora en adelante `index.html` y `beta/index.html` vuelven a ser el mismo archivo."
   ]
  },
  {
-  "v": "v2.57.1",
+  "v": "v2.58.1",
   "fecha": "25/11/26",
   "cambios": [
-   "🛠️ Arreglo de menú superior en celular: cuando la barra de pestañas de arriba no cabe completa en la pantalla, ahora aparece un pequeño indicador (›) en la esquina para que sepas que puedes deslizar el dedo hacia la izquierda y ver las demás opciones (Patrimonio, Otros, Aprobaciones, etc.). Antes no había ninguna señal visual de que se podía deslizar."
+   "🛠️ Arreglo de menú superior en celular: cuando la barra de pestañas de arriba no cabe completa en la pantalla, ahora aparece un pequeño indicador (›) en la esquina para que sepas que puedes deslizar el dedo hacia la izquierda y ver las demás opciones (Patrimonio, Otros, Aprobaciones, etc.). También se redujo un poco el tamaño de la franja roja \"VERSIÓN DE PRUEBA\". Este arreglo también ya está en la app real (v2.57.1)."
+  ]
+ },
+ {
+  "v": "v2.58.0",
+  "fecha": "25/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA (mnegreteee.github.io/financedb/beta/) — 12 mejoras nuevas de diseño, personalización y utilidad, para probar antes de llevarlas a la app real:",
+   "🎨 Color de acento: ahora además del selector libre hay 8 colores sugeridos de un clic, en Configuración → Apariencia.",
+   "🗜️ Modo compacto (el botón 📱 de la barra de arriba) ahora reduce de verdad el espacio de tarjetas, filas, tablas y botones en TODA la app — antes solo ajustaba columnas del dashboard.",
+   "🖼️ 4 patrones de fondo nuevos: Cruces, Rombos, Hexágonos y Tablero, junto a los 4 que ya había.",
+   "🎯 Las metas de ahorro ahora muestran un anillo circular de progreso (%) además de la barra, en Proyección y Deudas.",
+   "👋 Saludo del Dashboard personalizable en Configuración → Apariencia — reemplaza el \"Buenos días/tardes/noches\" automático si escribes el tuyo.",
+   "📌 Vistas favoritas: hasta 3 íconos que puedes anclar en la barra de arriba (Configuración → Apariencia), visibles en CUALQUIER página — a diferencia de los Accesos rápidos, que solo viven en el Dashboard.",
+   "🏷️ Selector rápido de emojis al editar una categoría (Configuración → Categorías) — toca uno de los ~40 sugeridos en vez de buscarlo en el teclado del sistema.",
+   "📷 Galería de fotos de perfil: ahora al subir una foto nueva, la anterior no se pierde — queda en una galería (hasta 2 extra) para volver a elegirla cuando quieras.",
+   "🙈 Modo privacidad mejorado: ahora recuerda si lo dejaste activado (antes se reiniciaba al recargar), tiene atajo de teclado (Ctrl/Cmd+Shift+H) y un nuevo estilo \"Difuminado\" además del texto \"••••\" de siempre.",
+   "🗺️ Mapa de Gastos: ahora usa tu color de acento (antes era rojo fijo) y tiene una vista nueva \"Año completo\" con los 12 meses en miniatura, estilo \"contribuciones de GitHub\", para ver patrones.",
+   "⌨️ Atajo Ctrl/Cmd+K para abrir la Búsqueda Global desde cualquier parte de la app, sin tocar el ícono 🔍.",
+   "🎉 Resumen del año estilo \"Wrapped\": tarjeta visual nueva en Configuración → Apariencia con tus números más destacados del año (categoría top, mes de más gasto, gasto más grande, etc.) — complementa al reporte PDF formal, que sigue igual."
   ]
  },
  {
@@ -34307,7 +34782,7 @@ cfgAgrupar();
 (function(){ const _tc=toggleConfig; toggleConfig=function(e){ const r=_tc.apply(this,arguments); cfgResumenes(); return r; }; })();
 
 // ── INIT ─────────────────────────────────────────────
-loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();renderRelojesMundiales();initNavScrollHint();
+loadTheme();loadCompact();loadAccentColor();loadFondoPersonalizado();loadHiddenMode();renderRelojesMundiales();initNavScrollHint();
 // "Última actividad" del historial de sesiones — cada 5 min mientras la
 // pestaña esté abierta, y también justo antes de que se oculte/cierre (el
 // mejor esfuerzo posible, ya que no existe un evento 100% confiable de
@@ -35851,6 +36326,7 @@ if(state.projGoals){
           <input id="ncat-color" type="color" value="#a78bfa" style="height:38px;padding:2px;cursor:pointer">
         </div>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px" id="ncat-emoji-picker"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
         <button id="ncat-cancel-btn" class="btn" onclick="cancelEditCategoria()" style="display:none">Cancelar</button>
         <button id="ncat-save-btn" class="btn btn-primary" onclick="saveNewCategoria()">+ Agregar categoría</button>
@@ -35867,6 +36343,30 @@ if(state.projGoals){
     <div id="accesos-rapidos-list" style="display:flex;flex-direction:column;gap:4px;max-height:55vh;overflow-y:auto"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:14px">
       <button class="btn btn-primary" onclick="guardarAccesosRapidos()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RESUMEN DEL AÑO — "WRAPPED" (25/11/26) -->
+<div class="modal-overlay" id="wrapped-overlay" onclick="if(event.target===this)closeWrapped()">
+  <div class="modal" style="width:420px;max-height:88vh;overflow-y:auto;background:linear-gradient(160deg, var(--bg2), var(--bg3))">
+    <div class="modal-title"><span id="wrapped-title">🎉 Tu año en números</span><button class="modal-close" onclick="closeWrapped()">✕</button></div>
+    <div id="wrapped-body" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="closeWrapped()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VISTAS FAVORITAS (25/11/26) — como Accesos rápidos, pero anclados
+     en la barra superior y visibles en CUALQUIER página, no solo el Dashboard -->
+<div class="modal-overlay" id="vistas-favoritas-overlay" onclick="if(event.target===this)closeVistasFavoritasModal()">
+  <div class="modal modal-sm">
+    <div class="modal-title"><span>📌 Vistas favoritas</span><button class="modal-close" onclick="closeVistasFavoritasModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Elige hasta 3 — quedan ancladas como íconos en la barra de arriba, visibles sin importar en qué página estés.</div>
+    <div id="vistas-favoritas-list" style="display:flex;flex-direction:column;gap:4px;max-height:55vh;overflow-y:auto"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-primary" onclick="guardarVistasFavoritas()">💾 Guardar</button>
     </div>
   </div>
 </div>

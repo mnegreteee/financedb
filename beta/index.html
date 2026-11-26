@@ -4738,9 +4738,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.58.2';
-const APP_VERSION_DATE = '26/11/26 - 05:56'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 SOLO EN BETA — 12 mejoras nuevas de diseño/personalización/utilidad para probar: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado (recuerda tu elección + atajo Ctrl/Cmd+Shift+H + estilo difuminado), mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped". 🛠️ Además incluye el arreglo del indicador de scroll en el menú superior y ahora también el de la franja roja que tapaba el botón Config (ambos ya están en tu app real).';
+const APP_VERSION = 'v2.59.0';
+const APP_VERSION_DATE = '26/11/26 - 06:01'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Todas las mejoras que estaban en beta ya están en tu app real: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado, mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped".';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -33443,10 +33443,10 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
-  "v": "v2.58.2",
+  "v": "v2.59.0",
   "fecha": "26/11/26",
   "cambios": [
-   "🛠️ Arreglo: la franja roja \"VERSIÓN DE PRUEBA\" tapaba el botón ⚙ Config (y otros botones de esa fila) en celular y no dejaba presionarlos. Ahora se reserva automáticamente el espacio exacto que ocupa la franja (que cambia de alto según el ancho de pantalla) para que el menú de arriba nunca quede debajo de ella. Este arreglo también ya está en la app real."
+   "✅ PROMOVIDO A PRODUCCIÓN: las 12 mejoras que estaban solo en beta (v2.58.0 a v2.58.2) ya están en tu app real, revisadas y confirmadas. Resumen completo: (1) color de acento con 8 sugeridos de un clic además del selector libre, (2) modo compacto que ahora reduce de verdad el espacio en toda la app (no solo el dashboard), (3) 4 patrones de fondo nuevos (Cruces, Rombos, Hexágonos, Tablero), (4) anillo circular de progreso en las metas de ahorro además de la barra, (5) saludo del Dashboard personalizable, (6) vistas favoritas ancladas (hasta 3) visibles en cualquier página de la barra superior, (7) selector de emojis de un clic para el nombre de categorías, (8) galería de hasta 3 fotos de perfil para alternar, (9) modo privacidad mejorado — recuerda tu elección entre sesiones, atajo Ctrl/Cmd+Shift+H, y estilo \"difuminado\" además del de texto, (10) mapa de calor de gastos con tu color de acento y una vista de año completo (12 meses en miniatura), (11) atajo de teclado Ctrl/Cmd+K para la búsqueda global, (12) Resumen del año estilo \"Wrapped\" en pantalla. También incluye los 2 arreglos del menú superior en celular (indicador de scroll + espacio reservado para la franja de beta). De ahora en adelante `index.html` y `beta/index.html` vuelven a ser el mismo archivo."
   ]
  },
  {
