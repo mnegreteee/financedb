@@ -4738,9 +4738,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.59.0';
-const APP_VERSION_DATE = '26/11/26 - 06:01'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '✅ Todas las mejoras que estaban en beta ya están en tu app real: color de acento con sugeridos, modo compacto más denso, 4 fondos nuevos, anillos de progreso en metas, saludo personalizable, vistas favoritas ancladas, selector de emojis por categoría, galería de fotos de perfil, modo privacidad mejorado, mapa de calor con tu color de acento y vista de año completo, atajo Ctrl/Cmd+K para buscar, y Resumen del año estilo "Wrapped".';
+const APP_VERSION = 'v2.59.1';
+const APP_VERSION_DATE = '27/11/26 - 10:46'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🐛 Historial de Pagos Frecuentes: si pagaste un mes por adelantado (ej. "+ Adelantar"), ahora SÍ aparece en el Historial — la ventana de 12 meses se extiende hasta el mes más adelantado que ya pagaste, en vez de cortarse siempre en el mes actual.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -24595,9 +24595,20 @@ function openPFHistorial(id){
   }
 
   const hoy=new Date();
+  // La ventana de 12 meses normalmente termina en el mes actual, pero si hay
+  // un pago registrado para un mes MÁS ADELANTE (pagado por adelantado con
+  // "+ Adelantar"), se extiende hasta ese mes — si no, un pago ya hecho por
+  // adelantado nunca aparecería acá hasta que el calendario lo alcance.
+  let ancY=hoy.getFullYear(), ancM=hoy.getMonth();
+  Object.keys(registrados).forEach(key=>{
+    const mAd=key.match(/^(\d{4})-(\d{2})$/);
+    if(!mAd) return;
+    const yAd=parseInt(mAd[1],10), moAd=parseInt(mAd[2],10)-1;
+    if(yAd>ancY || (yAd===ancY && moAd>ancM)){ ancY=yAd; ancM=moAd; }
+  });
   const meses=[];
   for(let i=0;i<12;i++){
-    let y=hoy.getFullYear(), m=hoy.getMonth()-i;
+    let y=ancY, m=ancM-i;
     while(m<0){m+=12;y--;}
     meses.push({y,m,key:y+'-'+String(m+1).padStart(2,'0')});
   }
@@ -33442,6 +33453,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.59.1",
+  "fecha": "27/11/26",
+  "cambios": [
+   "🐛 Arreglo en el Historial de Pagos Frecuentes (📅): antes, si pagabas un mes por adelantado (botón \"+ Adelantar\"), ese mes no aparecía en el Historial hasta que el calendario llegaba a él, porque la ventana de 12 meses siempre terminaba en el mes actual. Ahora, si el pago más adelantado que registraste es un mes futuro, la ventana de 12 meses se extiende hasta ese mes (en vez de cortarse en el mes actual), para que el adelanto se vea reflejado de inmediato."
+  ]
+ },
  {
   "v": "v2.59.0",
   "fecha": "26/11/26",
