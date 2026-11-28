@@ -2165,7 +2165,27 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
       </div>
     </div>
 
-    <div style="display:flex;gap:10px;margin:14px 0">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0">
+      <div class="card" style="padding:14px">
+        <div style="font-size:11px;color:var(--text3)">Gastado este mes</div>
+        <div class="money" id="ms-stat-gastado" style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--red);margin-top:5px">—</div>
+      </div>
+      <div class="card" style="padding:14px">
+        <div style="font-size:11px;color:var(--text3)">Ingresos este mes</div>
+        <div class="money" id="ms-stat-ingresos" style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green);margin-top:5px">—</div>
+      </div>
+      <div class="card" style="padding:14px">
+        <div style="font-size:11px;color:var(--text3)">Puedes gastar hoy</div>
+        <div class="money" id="ms-stat-hoy" style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);margin-top:5px">—</div>
+      </div>
+      <div class="card" id="ms-stat-proximo-card" style="padding:14px">
+        <div style="font-size:11px;color:var(--text3)">Próximo pago</div>
+        <div id="ms-stat-proximo-nombre" style="font-size:12.5px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+        <div class="money" id="ms-stat-proximo-monto" style="font-family:var(--mono);font-size:13px;margin-top:2px;font-weight:600"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin:0 0 14px">
       <button class="btn" style="flex:1;padding:16px 8px;font-size:14px;font-weight:600;background:var(--red);color:#fff;border-color:var(--red)" onclick="abrirModoSimpleNuevo('expense')">⬇️<br>Registrar<br>un gasto</button>
       <button class="btn" style="flex:1;padding:16px 8px;font-size:14px;font-weight:600;background:var(--green);color:#fff;border-color:var(--green)" onclick="abrirModoSimpleNuevo('income')">⬆️<br>Registrar<br>un ingreso</button>
     </div>
@@ -4814,9 +4834,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.60.2';
-const APP_VERSION_DATE = '27/11/26 - 20:18'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 SOLO EN BETA — el arreglo del Historial con pagos adelantados (v2.60.1) ahora también aplica a los Pagos Frecuentes ANUALES y SEMESTRALES, no solo a los mensuales.';
+const APP_VERSION = 'v2.60.3';
+const APP_VERSION_DATE = '27/11/26 - 21:32'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 SOLO EN BETA — Modo Simple con más información: ahora muestra también cuánto gastaste e ingresaste este mes, cuánto puedes gastar hoy, y tu próximo pago pendiente.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -23743,6 +23763,40 @@ function renderModoSimple(){
   if(wrapUsd) wrapUsd.style.display=Math.abs(usd)>=0.01?'block':'none';
   if(elUsd) elUsd.textContent=M(fmtDS(usd));
 
+  // 4 datos rápidos (gastado/ingresos/recomendado para hoy reutilizan EXACTO
+  // el mismo cálculo ya probado de la pestaña Gastos — gsRecomendado(), que
+  // ya mezcla soles y dólares en un solo número ahí mismo; no es una
+  // conversión nueva, es el mismo dato que Miguel ya ve en esa pestaña).
+  try{
+    const R=gsRecomendado(disp);
+    const elGastado=document.getElementById('ms-stat-gastado'); if(elGastado) elGastado.textContent=M(fmtSS(R.gastado));
+    const elIngresos=document.getElementById('ms-stat-ingresos'); if(elIngresos) elIngresos.textContent=M(fmtSS(R.ingreso));
+    const elHoy=document.getElementById('ms-stat-hoy'); if(elHoy) elHoy.textContent=M(fmtSS(R.porDia));
+  }catch(e){
+    ['ms-stat-gastado','ms-stat-ingresos','ms-stat-hoy'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='—'; });
+  }
+
+  // Próximo pago conocido más cercano (pagos frecuentes + cuotas de deudas
+  // mayores que aún faltan este mes) — en SU propia moneda, sin convertir.
+  const proxCard=document.getElementById('ms-stat-proximo-card'), proxNom=document.getElementById('ms-stat-proximo-nombre'), proxMonto=document.getElementById('ms-stat-proximo-monto');
+  try{
+    const hoyP=new Date();
+    const pendientes=gsPagosConocidos(hoyP.getFullYear(),hoyP.getMonth(),hoyP.getDate()).sort((a,b)=>a.dia-b.dia);
+    if(pendientes.length){
+      const p=pendientes[0], diasFaltan=Math.max(0,p.dia-hoyP.getDate());
+      if(proxCard){ proxCard.style.background='var(--amber-bg)'; proxCard.style.borderColor='var(--amber)'; }
+      if(proxNom) proxNom.textContent=escapeHtml(p.nombre)+' · '+(diasFaltan<=0?'vence hoy':'en '+diasFaltan+' día'+(diasFaltan===1?'':'s'));
+      if(proxMonto){ proxMonto.style.color='var(--amber)'; proxMonto.textContent=M((p.cur==='USD'?fmtD(p.monto):fmtS(p.monto))); }
+    } else {
+      if(proxCard){ proxCard.style.background=''; proxCard.style.borderColor=''; }
+      if(proxNom) proxNom.textContent='✅ Nada pendiente';
+      if(proxMonto){ proxMonto.style.color='var(--text3)'; proxMonto.textContent=''; }
+    }
+  }catch(e){
+    if(proxNom) proxNom.textContent='—';
+    if(proxMonto) proxMonto.textContent='';
+  }
+
   // Saludo (mismo criterio que el Dashboard: saludo personalizado si lo
   // configuró, si no el automático según la hora + su nombre)
   const hour=new Date().getHours();
@@ -23783,8 +23837,12 @@ function renderModoSimple(){
 
   // Gastos por categoría este mes — SOLO en soles (nunca se convierte una
   // moneda a otra para mostrarla, por regla del proyecto: si hay gastos en
-  // dólares categorizados, no entran en esta lista resumida).
-  const movsMes=getMovs(state.currentYear,state.currentMonth).filter(m=>m.type==='expense'&&m.cat&&!esTransferenciaInterna(m)&&(m.currency||'PEN')==='PEN');
+  // dólares categorizados, no entran en esta lista resumida). Usa el mes
+  // REAL de hoy (no state.currentYear/currentMonth, que es el mes que se
+  // esté navegando en la pestaña Finanzas) para que "este mes" siempre
+  // signifique lo mismo que en el resto de Modo Simple.
+  const hoyCat=new Date();
+  const movsMes=getMovs(hoyCat.getFullYear(),hoyCat.getMonth()).filter(m=>m.type==='expense'&&m.cat&&!esTransferenciaInterna(m)&&(m.currency||'PEN')==='PEN');
   const porCat={};
   movsMes.forEach(mv=>{ porCat[mv.cat]=(porCat[mv.cat]||0)+mv.amount; });
   const catOrdenadas=Object.entries(porCat).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -33664,6 +33722,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.60.3",
+  "fecha": "27/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA — Modo Simple rediseñado con más información (a pedido de Miguel, tras ver 3 propuestas de diseño): entre el saldo y los botones de registrar se agregó una cuadrícula con 4 datos — Gastado este mes, Ingresos este mes, Puedes gastar hoy (reutiliza el mismo cálculo ya probado de la pestaña Gastos) y Próximo pago pendiente (en su propia moneda, sin convertir). De paso, la sección de categorías ahora siempre usa el mes real de hoy en vez del mes que se esté navegando en Finanzas."
+  ]
+ },
  {
   "v": "v2.60.2",
   "fecha": "27/11/26",
