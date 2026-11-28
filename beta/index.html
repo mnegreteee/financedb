@@ -4398,6 +4398,7 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
               <option value="desc">Descripción</option>
               <option value="cat">Categoría</option>
               <option value="monto">Monto</option>
+              <option value="moneda">Moneda</option>
             </select>
             <button class="btn" id="tc-sort-dir-btn" style="font-size:11px;padding:5px 8px" onclick="onTCSortDirToggle()" title="Cambiar dirección del orden">▼</button>
           </div>
@@ -4834,9 +4835,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.60.3';
-const APP_VERSION_DATE = '27/11/26 - 21:32'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🧪 SOLO EN BETA — Modo Simple con más información: ahora muestra también cuánto gastaste e ingresaste este mes, cuánto puedes gastar hoy, y tu próximo pago pendiente.';
+const APP_VERSION = 'v2.60.4';
+const APP_VERSION_DATE = '27/11/26 - 21:37'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 SOLO EN BETA — Tarjetas de crédito: en Consumos ahora puedes ordenar también por Moneda (PEN/USD), además de Fecha, Descripción, Categoría y Monto.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -17542,13 +17543,14 @@ function setTCSort(col){
   } else {
     tcSortState.col=col;
     // Fecha y Monto arrancan descendente (más reciente / mayor primero);
-    // Descripción y Categoría arrancan ascendente (A-Z)
+    // Descripción, Categoría y Moneda arrancan ascendente (A-Z / PEN antes que USD)
     tcSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc';
   }
   renderTCDetail();
 }
-function sortTCMovs(movs){
+function sortTCMovs(movs, cardCur){
   if(!tcSortState.col) return movs;
+  cardCur=cardCur||'PEN';
   const {col,dir}=tcSortState;
   return [...movs].sort((a,b)=>{
     let av,bv;
@@ -17556,6 +17558,9 @@ function sortTCMovs(movs){
     else if(col==='cat'){ av=(a.cat||'').toLowerCase(); bv=(b.cat||'').toLowerCase(); }
     else if(col==='fecha'){ av=a.fecha+'T'+(a.hora||'00:00'); bv=b.fecha+'T'+(b.hora||'00:00'); }
     else if(col==='monto'){ av=a.monto; bv=b.monto; }
+    // Un consumo sin "currency" propia es de la moneda de la tarjeta (mismo
+    // criterio que ya usa tcMovAmountFmt() para mostrar el símbolo S//$).
+    else if(col==='moneda'){ av=a.currency||cardCur; bv=b.currency||cardCur; }
     if(av<bv) return dir==='asc'?-1:1;
     if(av>bv) return dir==='asc'?1:-1;
     return 0;
@@ -17740,7 +17745,7 @@ function onTCSortColChange(col){
   if(tcSortState.col!==col){
     tcSortState.col=col;
     // Mismo criterio que al tocar un encabezado: Fecha y Monto arrancan
-    // descendente; Descripción y Categoría arrancan ascendente.
+    // descendente; Descripción, Categoría y Moneda arrancan ascendente.
     tcSortState.dir=(col==='fecha'||col==='monto')?'desc':'asc';
     renderTCDetail();
   }
@@ -17758,9 +17763,9 @@ function updateTCSortControls(){
 
 function renderTCDetail(){
   if(!currentTCId||!currentTCMonth) return;
-  const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth));
   const t=getTarjeta(currentTCId);
   const cardCur=(t&&t.currency)||'PEN';
+  const movs=sortTCMovs(getTCMovs(currentTCId,currentTCMonth), cardCur);
 
   // Mantiene el input y el botón "✕" sincronizados con tcSearchQuery sin
   // importar desde dónde se haya cambiado (escribiendo, o reseteado al
@@ -33722,6 +33727,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.60.4",
+  "fecha": "27/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA — Tarjetas de crédito: el selector de orden de Consumos (junto a \"Tabla/Tarjetas/Agrupado\") ahora incluye \"Moneda\", para ordenar los consumos PEN primero o USD primero (útil en tarjetas con compras en las dos monedas). Un consumo sin moneda propia cuenta como la moneda de la tarjeta, igual que ya hace el resto de la pantalla."
+  ]
+ },
  {
   "v": "v2.60.3",
   "fecha": "27/11/26",
