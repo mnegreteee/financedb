@@ -4739,9 +4739,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.59.4';
-const APP_VERSION_DATE = '28/11/26 - 11:17'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '✅ Tu foto de perfil (Config → Preferencias → "📷 Subir foto") ahora también se ve en el círculo de la pantalla de PIN/Face ID ("Hola, Miguel"), no solo en la de correo y contraseña.';
+const APP_VERSION = 'v2.59.5';
+const APP_VERSION_DATE = '28/11/26 - 14:15'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Arreglado: ya no te cierra la sesión de golpe mientras usas la app activamente. El contador de inactividad no se reiniciaba con clics dentro de ciertos botones (flechas de reordenar, editar/borrar en una fila, menú +) ni con el scroll de listas internas — ahora sí los detecta todos.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -15506,9 +15506,19 @@ document.addEventListener('keydown',(e)=>{ const el=document.getElementById('fac
 document.addEventListener('DOMContentLoaded',actualizarUiPin);
 
 function clearInactivityTimer(){ if(inactivityTimer){clearTimeout(inactivityTimer);inactivityTimer=null;} }
-// Reset on any user interaction
+// Reset on any user interaction — en FASE DE CAPTURA (capture:true), no en la
+// de burbuja: muchos botones de la app (flechitas de reordenar, editar/borrar
+// dentro de una fila, el menú del FAB, etc.) usan event.stopPropagation() para
+// no disparar el onclick de la tarjeta donde viven, y eso tapaba estos
+// listeners si se escuchaban en burbuja — el usuario podía estar tocando la
+// app activamente y aun así el temporizador seguía corriendo como si no
+// hubiera actividad, hasta cerrar sesión de golpe. En captura, el evento pasa
+// por `document` ANTES de llegar al elemento (y de que stopPropagation actúe
+// en la burbuja), así que siempre se detecta. De paso corrige que 'scroll'
+// dentro de una lista interna (no la página) nunca "burbujea" de forma
+// nativa — en captura sí se detecta igual.
 ['click','keydown','touchstart','scroll','mousemove'].forEach(ev=>{
-  document.addEventListener(ev, ()=>{ if(currentUser) resetInactivityTimer(); }, {passive:true});
+  document.addEventListener(ev, ()=>{ if(currentUser) resetInactivityTimer(); }, {passive:true, capture:true});
 });
 
 document.addEventListener('DOMContentLoaded',actualizarUiFaceId);
@@ -33552,6 +33562,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.59.5",
+  "fecha": "28/11/26",
+  "cambios": [
+   "✅ Arreglado: a veces la app te cerraba la sesión por completo (te mandaba a la pantalla de correo y contraseña) aunque la estuvieras usando con normalidad. La causa: el contador de \"cerrar sesión por inactividad\" (Configuración → Seguridad) solo se reiniciaba con clics y toques que llegaban hasta el fondo de la página, pero muchos botones de la app (flechas de reordenar, editar/borrar dentro de una fila, el menú +, cambiar de color, etc.) evitan a propósito que el clic llegue tan lejos — para la app, eso se veía igual que no haber hecho nada. Ahora el contador detecta cualquier clic, toque o scroll (incluido el de listas internas) en cualquier parte de la app, así que solo se cierra la sesión si de verdad pasó todo el tiempo configurado sin tocar nada."
+  ]
+ },
  {
   "v": "v2.59.4",
   "fecha": "28/11/26",
