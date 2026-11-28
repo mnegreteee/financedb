@@ -4814,9 +4814,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.60.1';
-const APP_VERSION_DATE = '27/11/26 - 10:46'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '🐛 Historial de Pagos Frecuentes: si pagaste un mes por adelantado (ej. "+ Adelantar"), ahora SÍ aparece en el Historial — la ventana de 12 meses se extiende hasta el mes más adelantado que ya pagaste, en vez de cortarse siempre en el mes actual.';
+const APP_VERSION = 'v2.60.2';
+const APP_VERSION_DATE = '27/11/26 - 20:18'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '🧪 SOLO EN BETA — el arreglo del Historial con pagos adelantados (v2.60.1) ahora también aplica a los Pagos Frecuentes ANUALES y SEMESTRALES, no solo a los mensuales.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -24706,8 +24706,15 @@ function openPFHistorial(id){
     // corresponde a la fecha exacta configurada (ej. SOAT: 28 de julio).
     const hoy=new Date();
     const anioOrigen=pf.fechaAnual?new Date(pf.fechaAnual+'T12:00:00').getFullYear():hoy.getFullYear();
+    // Igual que en el historial mensual: si hay un ciclo registrado para un
+    // año MÁS ADELANTE (pagado por adelantado), la ventana de 6 años se
+    // extiende hasta ese año en vez de cortarse siempre en el año actual.
+    let ancAnio=hoy.getFullYear();
+    Object.keys(registrados).forEach(k=>{
+      if(/^\d{4}$/.test(k)){ const y2=parseInt(k,10); if(y2>ancAnio) ancAnio=y2; }
+    });
     const anios=[];
-    for(let i=0;i<6;i++) anios.push(hoy.getFullYear()-i);
+    for(let i=0;i<6;i++) anios.push(ancAnio-i);
     let pagadosCount=0, aplicablesCount=0;
     const rows=anios.map(y=>{
       const reg=registrados[String(y)];
@@ -24745,8 +24752,18 @@ function openPFHistorial(id){
     // siquiera aplican.
     const mesesConfig=(pf.meses||[]).slice().sort((a,b)=>a-b);
     const hoyS=new Date();
+    // Igual que en el historial mensual/anual: si hay un ciclo registrado
+    // para un mes-año MÁS ADELANTE (pagado por adelantado), la ventana se
+    // extiende hasta ese ciclo en vez de cortarse siempre en el ciclo actual.
+    let ancYs=hoyS.getFullYear(), ancMs=hoyS.getMonth()+1;
+    Object.keys(registrados).forEach(k=>{
+      const mAd=k.match(/^(\d{4})-(\d{2})$/);
+      if(!mAd) return;
+      const y2=parseInt(mAd[1],10), m2=parseInt(mAd[2],10);
+      if(y2>ancYs || (y2===ancYs && m2>ancMs)){ ancYs=y2; ancMs=m2; }
+    });
     const ciclos=[];
-    let cursorY=hoyS.getFullYear(), cursorM=hoyS.getMonth()+1;
+    let cursorY=ancYs, cursorM=ancMs;
     for(let safety=0; safety<240 && ciclos.length<6; safety++){
       if(mesesConfig.includes(cursorM)) ciclos.push({y:cursorY,m:cursorM});
       cursorM--; if(cursorM<1){cursorM=12;cursorY--;}
@@ -33647,6 +33664,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.60.2",
+  "fecha": "27/11/26",
+  "cambios": [
+   "🧪 SOLO EN BETA — el arreglo del Historial de Pagos Frecuentes con adelantos (v2.60.1) ahora también cubre los pagos ANUALES (ej. SOAT) y SEMESTRALES: si registraste un ciclo/año por adelantado, la ventana de \"últimos 6 años\" o \"últimos 6 ciclos\" se extiende hasta ese ciclo futuro en vez de cortarse siempre en el ciclo actual. Los mensuales ya tenían este arreglo desde v2.60.1."
+  ]
+ },
  {
   "v": "v2.60.1",
   "fecha": "27/11/26",
