@@ -4739,9 +4739,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.59.3';
-const APP_VERSION_DATE = '28/11/26 - 10:49'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '✅ Deudas Mayores: nuevo botón «Liquidar deuda (pago único)» para cuando pagas todo de una sola vez en el banco. Descuenta el monto real que pagaste de la cuenta que elijas, lo registra como gasto, y la deuda queda sin cuotas pendientes.';
+const APP_VERSION = 'v2.59.4';
+const APP_VERSION_DATE = '28/11/26 - 11:17'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Tu foto de perfil (Config → Preferencias → "📷 Subir foto") ahora también se ve en el círculo de la pantalla de PIN/Face ID ("Hola, Miguel"), no solo en la de correo y contraseña.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -26728,6 +26728,14 @@ function updateLoginBranding(){
     if(avatarImg) logoEl.innerHTML = `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
     else logoEl.textContent = avatar || letter;
   }
+  // El círculo de la pantalla de PIN/Face ID (#fl-letter, "Hola, Miguel") usa
+  // la misma foto/inicial que la pantalla de correo y contraseña — un solo
+  // lugar (Config → Preferencias → "📷 Subir foto") para las dos pantallas.
+  const flLetterEl = document.getElementById('fl-letter');
+  if(flLetterEl){
+    if(avatarImg) flLetterEl.innerHTML = `<img src="${avatarImg}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
+    else flLetterEl.textContent = avatar || letter;
+  }
   if(titleEl) titleEl.textContent = name ? name+"'s Dashboard" : 'Finance Dashboard';
   // Update config display
   const cfgEl = document.getElementById('cfg-owner-name-display');
@@ -33544,6 +33552,13 @@ function seedDemo(){
 // Al publicar una versión nueva: agregar una entrada AL INICIO de APP_CHANGELOG
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
+ {
+  "v": "v2.59.4",
+  "fecha": "28/11/26",
+  "cambios": [
+   "✅ Tu foto de perfil (Config → Preferencias → \"📷 Subir foto\") ahora también reemplaza el círculo con tu inicial en la pantalla de PIN/Face ID (\"Hola, Miguel\") al desbloquear la app, no solo en la pantalla de correo y contraseña. Si no tienes foto subida, se sigue viendo tu inicial como antes."
+  ]
+ },
  {
   "v": "v2.59.3",
   "fecha": "28/11/26",
