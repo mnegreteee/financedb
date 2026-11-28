@@ -4739,9 +4739,9 @@ body.compact-mode .fecha-imp-grid{grid-template-columns:repeat(3,1fr)!important;
 //  VERSIÓN DE LA APP — actualizar en cada cambio solicitado
 //  Formato: vMAYOR.MENOR.PARCHE — fecha del último cambio
 // ══════════════════════════════════════════════════════
-const APP_VERSION = 'v2.59.2';
-const APP_VERSION_DATE = '27/11/26 - 21:41'; // hora de Lima, Perú (UTC-5)
-const APP_VERSION_NOTE = '✅ Tarjetas de crédito: en Consumos ahora puedes ordenar también por Moneda (PEN/USD), además de Fecha, Descripción, Categoría y Monto.';
+const APP_VERSION = 'v2.59.3';
+const APP_VERSION_DATE = '28/11/26 - 10:49'; // hora de Lima, Perú (UTC-5)
+const APP_VERSION_NOTE = '✅ Deudas Mayores: nuevo botón «Liquidar deuda (pago único)» para cuando pagas todo de una sola vez en el banco. Descuenta el monto real que pagaste de la cuenta que elijas, lo registra como gasto, y la deuda queda sin cuotas pendientes.';
 
 // ══════════════════════════════════════════════════════
 //  MODO BETA (prueba) — se detecta solo por la URL (/beta/ en la ruta), sin
@@ -28275,6 +28275,85 @@ function dmDeshacerAmort(id){
   try{ renderPagosFrecuentes(); }catch(e){}
 }
 
+// ── LIQUIDAR DEUDA (pago único que salda todo, no cuota por cuota) ────
+// A diferencia de «Amortizar capital», acá el usuario escribe el monto REAL
+// que pagó en el banco (capital + el interés que haya cobrado, portes, etc.
+// — no se recalcula con la tasa del cronograma). Esa plata SALE de una
+// cuenta de verdad (se descuenta y se registra como gasto en Finanzas), y la
+// deuda queda sin cuotas pendientes (saldo pendiente = 0).
+function openDMLiquidarModal(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const pend=dmNoPagadas(d);
+  if(!pend.length){ toast('Esta deuda ya está pagada.','err'); return; }
+  const r=getDMResumen(d);
+  const intRest=d.tipo==='amortizado'?pend.reduce((s,c)=>s+(c.interes||0),0):0;
+  document.getElementById('dml-info').innerHTML='Según el cronograma, el saldo pendiente es <b>'+dmFmt(r.saldoPendiente,d.currency)+'</b> ('+pend.length+' cuota'+(pend.length===1?'':'s')+' restante'+(pend.length===1?'':'s')+')'
+    +(intRest>0.004?' + hasta <b>'+dmFmt(intRest,d.currency)+'</b> de interés si siguieras pagando cuota por cuota.':'.')
+    +' El banco puede haberte cobrado un monto distinto (interés corrido de los días, portes, etc.) — escribe abajo lo que realmente pagaste.';
+  document.getElementById('dml-monto').value='';
+  document.getElementById('dml-fecha').value=todayLocalISO();
+  const cuentaSel=document.getElementById('dml-cuenta');
+  const mon=d.currency==='USD'?'USD':'PEN';
+  let ks=cuentasDeMoneda(mon).filter(k=>!isOtrasCuenta(k));
+  if(!ks.length) ks=getAllAccountKeys().filter(k=>!isOtrasCuenta(k));
+  cuentaSel.innerHTML=optsCuentas(ks);
+  const def=mon==='USD'?'Ahorro Dólares':'BBVA';
+  cuentaSel.value=ks.includes(def)?def:(ks[0]||'');
+  document.getElementById('dml-apply').disabled=true;
+  document.getElementById('dm-liquidar-overlay').classList.add('open');
+}
+function closeDMLiquidarModal(){ document.getElementById('dm-liquidar-overlay').classList.remove('open'); }
+function dmLiquidarPreview(){
+  const monto=parseFloat(document.getElementById('dml-monto').value);
+  document.getElementById('dml-apply').disabled=!(monto>0);
+}
+function dmAplicarLiquidacion(){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const pend=dmNoPagadas(d); if(!pend.length) return;
+  const monto=parseFloat(document.getElementById('dml-monto').value);
+  const fecha=document.getElementById('dml-fecha').value||todayLocalISO();
+  const cuenta=document.getElementById('dml-cuenta').value;
+  if(!(monto>0)){ toast('Ingresa cuánto pagaste en total.','err'); return; }
+  if(!cuenta){ toast('Elige de qué cuenta salió el dinero.','err'); return; }
+  if(!confirm('¿Liquidar toda la deuda «'+d.nombre+'»?\nSe registrará un gasto de '+dmFmt(monto,d.currency)+' desde «'+accLabel(cuenta)+'» y la deuda quedará sin cuotas pendientes.')) return;
+  const pagadas=d.cuotas.filter(c=>c.pagado);
+  const intRest=d.tipo==='amortizado'?pend.reduce((s,c)=>s+(c.interes||0),0):0;
+  const movId='dm-liq-'+Date.now();
+  const reg={id:'am-'+Date.now(),ts:Date.now(),fecha,monto:dmR2(monto),modo:'liquidacion',liquida:true,
+    previas:JSON.parse(JSON.stringify(pend)),plazoPrev:d.plazo,cuotaCalcPrev:d.cuotaCalc,capExtraPrev:d.capitalExtra||0,pagadasAlHacer:pagadas.length,
+    cuotaAntes:pend[0].monto,cuotaDespues:0,restAntes:pend.length,restDespues:0,ahorro:intRest,pfMontoPrev:null,cuenta,movId};
+  if(d.tipo==='amortizado'){ d.capitalExtra=dmR2((d.capitalExtra||0)+pend[0].saldoInicial); d.cuotaCalc=0; }
+  d.cuotas=pagadas;
+  d.plazo=d.cuotas.length;
+  state.cuentas[cuenta]=(state.cuentas[cuenta]||0)-monto;
+  pushMovimiento({id:movId,type:'expense',desc:'Liquidación deuda — '+d.nombre,amount:dmR2(monto),account:cuenta,date:fecha,currency:d.currency,cat:d.cat||'💰 Préstamos'});
+  if(!Array.isArray(d.amortizaciones)) d.amortizaciones=[];
+  d.amortizaciones.push(reg);
+  const pf=dmPFDe(d);
+  logActividad('deuda_mayor_liquidacion',`Deuda liquidada de una vez: ${d.nombre} ${dmFmt(monto,d.currency)} desde ${accLabel(cuenta)}`,{deudaMayorId:d.id,movId,cuenta});
+  saveState(); closeDMLiquidarModal(); openDMDetail(d.id);
+  toast('🏁 «'+d.nombre+'» liquidada — se registró el gasto en «'+accLabel(cuenta)+'»'+(pf?' · recuerda pausar o borrar el pago frecuente «'+pf.nombre+'» vinculado, ya no hay más cuotas que pagar':''));
+  try{ renderPagosFrecuentes(); }catch(e){}
+}
+function dmDeshacerLiquidacion(id){
+  const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
+  const h=d.amortizaciones||[]; const reg=h[h.length-1];
+  if(!reg||reg.id!==id||reg.modo!=='liquidacion'){ toast('Solo se puede deshacer la última liquidación.','err'); return; }
+  const pagadas=d.cuotas.filter(c=>c.pagado);
+  if(pagadas.length!==reg.pagadasAlHacer||!dmPagadasPrefijo(d)){ toast('Desmarca primero las cuotas que pagaste después de esa liquidación.','err'); return; }
+  if(!confirm('¿Deshacer la liquidación de '+dmFmt(reg.monto,d.currency)+' del '+dmFechaCorta(reg.fecha)+'? Se devuelve el dinero a «'+accLabel(reg.cuenta)+'» y se restaura el cronograma con las cuotas pendientes.')) return;
+  const mov=(state.movimientos||[]).find(m=>m.id===reg.movId);
+  if(mov){ revertAccount(mov); _movimientosBorradosExplicitamente.push(mov.id); state.movimientos=state.movimientos.filter(m=>m.id!==mov.id); }
+  else state.cuentas[reg.cuenta]=(state.cuentas[reg.cuenta]||0)+reg.monto;
+  d.cuotas=pagadas.concat(reg.previas);
+  d.plazo=reg.plazoPrev; if(reg.cuotaCalcPrev!==undefined) d.cuotaCalc=reg.cuotaCalcPrev;
+  d.capitalExtra=reg.capExtraPrev; if(!d.capitalExtra) delete d.capitalExtra;
+  d.amortizaciones=h.slice(0,-1);
+  logActividad('deuda_mayor_liquidacion',`Liquidación deshecha: ${d.nombre} ${dmFmt(reg.monto,d.currency)}`,{deudaMayorId:d.id});
+  saveState(); openDMDetail(d.id); toast('Liquidación deshecha — se devolvió el dinero a «'+accLabel(reg.cuenta)+'»');
+  try{ renderPagosFrecuentes(); }catch(e){}
+}
+
 // ── ADELANTAR CUOTAS ──────────────────────────────────
 function openDMAdelantoModal(){
   const d=(state.deudasMayores||[]).find(x=>x.id===currentDMId); if(!d) return;
@@ -28347,6 +28426,7 @@ function dmRenderExtras(d){
   html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
   if(d.tipo==='amortizado') html+='<button type="button" class="btn btn-primary" style="font-size:12px" onclick="openDMAmortModal()">💸 Amortizar capital</button>';
   html+='<button type="button" class="btn" style="font-size:12px" onclick="openDMAdelantoModal()">⏩ Adelantar cuotas</button>';
+  html+='<button type="button" class="btn" style="font-size:12px" onclick="openDMLiquidarModal()">🏁 Liquidar deuda (pago único)</button>';
   if(d.tipo==='amortizado') html+='<button type="button" class="btn" style="font-size:12px" onclick="dmCronoActual()">📄 Cronograma actualizado</button>';
   html+='</div>';
   if(insight) html+=`<div style="font-size:12px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:12px;line-height:1.5">${insight}</div>`;
@@ -28359,7 +28439,13 @@ function dmRenderExtras(d){
     const h=(d.amortizaciones||[]);
     if(!h.length){ hb.style.display='none'; hb.innerHTML=''; }
     else { hb.style.display='block';
-      hb.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px">📜 Historial de amortizaciones</div>'+[...h].reverse().map((x,ix)=>`<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);font-size:12px"><div><b>${dmFechaCorta(x.fecha)}</b> · ${dmFmt(x.monto,cur)} · ${x.liquida?'liquidación':(x.modo==='plazo'?'redujo plazo ('+x.restAntes+'→'+x.restDespues+' cuotas)':'redujo cuota ('+dmFmt(x.cuotaAntes,cur)+' → '+dmFmt(x.cuotaDespues,cur)+')')}<br><span style="color:var(--green);font-size:11px">Ahorro estimado ${dmFmt(x.ahorro,cur)} en intereses</span></div>${ix===0?`<button type="button" class="btn" style="font-size:11px" onclick="dmDeshacerAmort('${x.id}')">↩ Deshacer</button>`:''}</div>`).join('');
+      hb.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:8px">📜 Historial de amortizaciones</div>'+[...h].reverse().map((x,ix)=>{
+        const esLiq=x.modo==='liquidacion';
+        const tipoTxt=esLiq?('pago único — deuda saldada desde «'+accLabel(x.cuenta)+'»'):(x.liquida?'liquidación':(x.modo==='plazo'?'redujo plazo ('+x.restAntes+'→'+x.restDespues+' cuotas)':'redujo cuota ('+dmFmt(x.cuotaAntes,cur)+' → '+dmFmt(x.cuotaDespues,cur)+')'));
+        const undoFn=esLiq?'dmDeshacerLiquidacion':'dmDeshacerAmort';
+        const ahorroTxt=(x.ahorro>0.004)?`<br><span style="color:var(--green);font-size:11px">Ahorro estimado ${dmFmt(x.ahorro,cur)} en intereses</span>`:'';
+        return `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);font-size:12px"><div><b>${dmFechaCorta(x.fecha)}</b> · ${dmFmt(x.monto,cur)} · ${tipoTxt}${ahorroTxt}</div>${ix===0?`<button type="button" class="btn" style="font-size:11px" onclick="${undoFn}('${x.id}')">↩ Deshacer</button>`:''}</div>`;
+      }).join('');
     }
   }
   dmRenderChart(d);
@@ -33459,6 +33545,13 @@ function seedDemo(){
 // y actualizar APP_VERSION / APP_VERSION_DATE (el aviso compara APP_VERSION_DATE).
 const APP_CHANGELOG = [
  {
+  "v": "v2.59.3",
+  "fecha": "28/11/26",
+  "cambios": [
+   "✅ Deudas Mayores: nuevo botón \"🏁 Liquidar deuda (pago único)\" en el detalle de cada deuda, para cuando vas al banco y pagas TODO de una sola vez (no cuota por cuota). Escribes el monto REAL que cobró el banco (capital + el interés que haya cobrado, portes, etc. — no se recalcula con la tasa del cronograma) y de qué cuenta salió: se descuenta de esa cuenta, se registra como gasto en Finanzas, y la deuda queda sin cuotas pendientes. Se puede deshacer desde el historial (devuelve el dinero a la cuenta y restaura el cronograma). Si la deuda estaba vinculada a un Pago Frecuente, se avisa para que lo pauses o borres (no se toca solo)."
+  ]
+ },
+ {
   "v": "v2.59.2",
   "fecha": "27/11/26",
   "cambios": [
@@ -36560,6 +36653,24 @@ if(state.projGoals){
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="btn" onclick="closeDMAdelantoModal()">Cancelar</button>
       <button class="btn btn-primary" id="dmad-apply" onclick="dmAplicarAdelanto()">Adelantar</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL LIQUIDAR DEUDA (pago único) -->
+<div class="modal-overlay" id="dm-liquidar-overlay" onclick="if(event.target===this)closeDMLiquidarModal()">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><span>🏁 Liquidar deuda</span><button class="modal-close" onclick="closeDMLiquidarModal()">✕</button></div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">Para cuando vas al banco y pagas TODO de una sola vez (no cuota por cuota) y la deuda queda saldada. Se descuenta de la cuenta que elijas y queda registrado como un gasto en Finanzas.</div>
+    <div id="dml-info" style="font-size:12px;color:var(--text2);margin-bottom:10px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px"></div>
+    <div class="field-row">
+      <div class="field"><label>Monto TOTAL que pagaste</label><input id="dml-monto" type="number" step="0.01" min="0" placeholder="26860.46" oninput="dmLiquidarPreview()"></div>
+      <div class="field"><label>Fecha de pago</label><input id="dml-fecha" type="date"></div>
+    </div>
+    <div class="field"><label>¿De qué cuenta salió el dinero?</label><select id="dml-cuenta"></select></div>
+    <div style="font-size:10px;color:var(--text3);line-height:1.5">Escribe el monto real que cobró el banco (capital + interés corrido, portes, etc.), no necesariamente el saldo del cronograma. Se puede deshacer desde el historial.</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="closeDMLiquidarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="dml-apply" onclick="dmAplicarLiquidacion()">🏁 Liquidar deuda</button>
     </div>
   </div>
 </div>
